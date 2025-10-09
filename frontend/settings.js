@@ -36,14 +36,47 @@ const defaultSettings = {
     }
 };
 
-// Current settings (loaded from localStorage or backend)
-let currentSettings = JSON.parse(JSON.stringify(defaultSettings));
 
-// Open Settings Modal
-function openSettingsModal() {
-    const modal = document.getElementById('settings-modal');
-    modal.classList.add('show');
     modal.style.display = 'flex';
+
+// Toast notification function
+function showMsg(message, duration = 3000) {
+    const existingToast = document.getElementById('settings-toast');
+    if (existingToast) {
+        existingToast.remove();
+    }
+    
+    const toast = document.createElement('div');
+    toast.id = 'settings-toast';
+    toast.textContent = message;
+    toast.style.position = 'fixed';
+    toast.style.top = '20px';
+    toast.style.right = '20px';
+    toast.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+    toast.style.color = 'white';
+    toast.style.padding = '15px 25px';
+    toast.style.borderRadius = '8px';
+    toast.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
+    toast.style.zIndex = '100000';
+    toast.style.fontSize = '16px';
+    toast.style.fontWeight = '600';
+    toast.style.animation = 'slideInRight 0.3s ease-out';
+    
+    if (!document.getElementById('toast-animations')) {
+        const style = document.createElement('style');
+        style.id = 'toast-animations';
+        style.innerHTML = '@keyframes slideInRight { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } } @keyframes slideOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(400px); opacity: 0; } }';
+        document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideOutRight 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+}
+
     loadSettingsToForm();
 }
 
@@ -106,56 +139,78 @@ function loadSettingsToForm() {
 
 // Save settings
 function saveSettings() {
-    // Collect settings from form
+    console.log('Saving settings...');
+    
+    // Helper function to safely get value
+    const getValue = (id, defaultVal) => {
+        const el = document.getElementById(id);
+        return el ? el.value : defaultVal;
+    };
+    
+    const getChecked = (id, defaultVal) => {
+        const el = document.getElementById(id);
+        return el ? el.checked : defaultVal;
+    };
+    
+    // Collect settings from form (only existing fields)
     currentSettings = {
         general: {
-            language: document.getElementById('setting-language').value,
-            theme: document.getElementById('setting-theme').value,
-            speedUnit: document.getElementById('setting-speed-unit').value,
+            language: getValue('setting-language', 'de'),
+            theme: getValue('setting-theme', 'auto'),
+            speedUnit: getValue('setting-speed-unit', 'kn'),
             distanceUnit: currentSettings.general.distanceUnit,
             depthUnit: currentSettings.general.depthUnit
         },
         navigation: {
-            mapOrientation: document.getElementById('setting-map-orientation')?.value || 'north-up',
-            defaultZoom: parseInt(document.getElementById('setting-default-zoom')?.value || 13),
-            autoTrack: document.getElementById('setting-auto-track')?.checked || false,
-            trackInterval: parseInt(document.getElementById('setting-track-interval')?.value || 10)
+            mapOrientation: getValue('setting-map-orientation', 'north-up'),
+            defaultZoom: 13,
+            autoTrack: false,
+            trackInterval: 10
         },
         gps: {
-            signalkUrl: document.getElementById('setting-signalk-url')?.value || 'http://localhost:3000',
-            gpsInterval: parseInt(document.getElementById('setting-gps-interval')?.value || 1000),
-            gpsFilter: document.getElementById('setting-gps-filter')?.checked || true,
-            minSatellites: parseInt(document.getElementById('setting-min-satellites')?.value || 4)
+            signalkUrl: getValue('setting-signalk-url', 'http://localhost:3000'),
+            gpsInterval: 1000,
+            gpsFilter: true,
+            minSatellites: 4
         },
         weather: {
-            apiKey: document.getElementById('setting-weather-api-key')?.value || '',
-            updateInterval: parseInt(document.getElementById('setting-weather-interval')?.value || 30),
-            tempUnit: document.getElementById('setting-temp-unit')?.value || 'c',
-            windUnit: document.getElementById('setting-wind-unit')?.value || 'kn'
+            apiKey: '',
+            updateInterval: parseInt(getValue('setting-weather-interval', '30')),
+            tempUnit: 'c',
+            windUnit: 'kn'
         },
         sensors: {
-            mqttUrl: document.getElementById('setting-mqtt-url')?.value || '',
-            mqttUser: document.getElementById('setting-mqtt-user')?.value || '',
-            mqttPass: document.getElementById('setting-mqtt-pass')?.value || '',
-            depthAlarm: parseFloat(document.getElementById('setting-depth-alarm')?.value || 2.0),
-            depthAlarmEnable: document.getElementById('setting-depth-alarm-enable')?.checked || false
+            mqttUrl: getValue('setting-mqtt-url', ''),
+            mqttUser: '',
+            mqttPass: '',
+            depthAlarm: 2.0,
+            depthAlarmEnable: false
         }
     };
 
+    console.log('Settings to save:', currentSettings);
+
     // Save to localStorage
-    localStorage.setItem('boatos_settings', JSON.stringify(currentSettings));
+    try {
+        localStorage.setItem('boatos_settings', JSON.stringify(currentSettings));
+        console.log('✅ Saved to localStorage');
+    } catch (e) {
+        console.error('Error saving to localStorage:', e);
+    }
 
     // Apply settings
     applySettings();
 
-    // Show success message
-    showMsg('💾 Einstellungen gespeichert!');
-
-    // Close modal
-    closeSettingsModal();
-
     // Save to backend (optional)
     saveSettingsToBackend();
+    
+    // Show success message and close modal
+    showMsg('💾 Einstellungen gespeichert!');
+    
+    // Close modal after a short delay
+    setTimeout(() => {
+        closeSettingsModal();
+    }, 500);
 }
 
 // Apply settings (update app behavior)
