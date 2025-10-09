@@ -35,6 +35,12 @@ let osmLayer;
 let satelliteLayer;
 let currentBaseLayer = 'osm'; // 'osm' or 'satellite'
 
+// AIS
+let aisVessels = {};  // MMSI -> {marker, data}
+let aisEnabled = false;
+let aisUpdateInterval = null;
+let aisSettings = { enabled: false, apiKey: '', updateInterval: 60, showLabels: true };
+
 // ==================== MAP INIT ====================
 function initMap() {
     // Karte initialisieren
@@ -1061,6 +1067,187 @@ function updateGpsSourceIndicator() {
         gpsStatus.textContent = "GPS ❌";
         if (gpsSourceEl) gpsSourceEl.textContent = "No Signal";
         if (gpsAccuracyEl) gpsAccuracyEl.textContent = "-- m";
+    }
+}
+
+// ==================== AIS ====================
+async function fetchAISVessels() {
+    if (!aisSettings.enabled || !aisSettings.apiKey) {
+        return;
+    }
+
+    try {
+        // Get map bounds
+        const bounds = map.getBounds();
+        const params = new URLSearchParams({
+            lat_min: bounds.getSouth(),
+            lon_min: bounds.getWest(),
+            lat_max: bounds.getNorth(),
+            lon_max: bounds.getEast()
+        });
+
+        const response = await fetch(`${API_URL}/api/ais/vessels?${params}`);
+        if (response.ok) {
+            const data = await response.json();
+            updateAISMarkers(data.vessels);
+        }
+    } catch (error) {
+        console.warn('⚠️ AIS fetch error:', error);
+    }
+}
+
+function updateAISMarkers(vessels) {
+    // Remove old vessels not in update
+    const currentMMSIs = new Set(vessels.map(v => v.mmsi));
+    Object.keys(aisVessels).forEach(mmsi => {
+        if (!currentMMSIs.has(mmsi)) {
+            map.removeLayer(aisVessels[mmsi].marker);
+            delete aisVessels[mmsi];
+        }
+    });
+
+    // Add/update vessels
+    vessels.forEach(vessel => {
+        if (aisVessels[vessel.mmsi]) {
+            // Update existing
+            const { marker } = aisVessels[vessel.mmsi];
+            marker.setLatLng([vessel.lat, vessel.lon]);
+            marker.setRotationAngle(vessel.heading || vessel.cog || 0);
+            aisVessels[vessel.mmsi].data = vessel;
+        } else {
+            // Create new marker
+            const icon = createShipIcon(vessel);
+            const marker = L.marker([vessel.lat, vessel.lon], {
+                icon: icon,
+                rotationAngle: vessel.heading || vessel.cog || 0,
+                rotationOrigin: 'center'
+            });
+
+            marker.bindPopup(() => createAISPopup(vessel));
+            marker.on('click', () => showAISDetails(vessel));
+            marker.addTo(map);
+
+            aisVessels[vessel.mmsi] = { marker, data: vessel };
+        }
+    });
+
+    console.log(`🚢 AIS: ${Object.keys(aisVessels).length} vessels displayed`);
+}
+
+function createShipIcon(vessel) {
+    const color = getShipColor(vessel.navstat);
+    const size = vessel.length > 100 ? 24 : 16;
+
+    const svgIcon = `
+        <svg width="${size}" height="${size}" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2 L20 20 L12 17 L4 20 Z" fill="${color}" stroke="white" stroke-width="1.5"/>
+        </svg>
+    `;
+
+    return L.divIcon({
+        html: svgIcon,
+        className: 'ais-ship-icon',
+        iconSize: [size, size],
+        iconAnchor: [size/2, size/2]
+    });
+}
+
+function getShipColor(navstat) {
+    switch (navstat) {
+        case 0: return '#3498db'; // Under way - blue
+        case 1: return '#2ecc71'; // At anchor - green
+        case 5: return '#2ecc71'; // Moored - green
+        case 6: return '#e74c3c'; // Aground - red
+        case 7: return '#9b59b6'; // Fishing - purple
+        case 8: return '#1abc9c'; // Sailing - teal
+        default: return '#95a5a6'; // Unknown - gray
+    }
+}
+
+function createAISPopup(vessel) {
+    return `
+        <div class="ais-popup">
+            <h4>${vessel.name}</h4>
+            <p><strong>MMSI:</strong> ${vessel.mmsi}</p>
+            <p><strong>Speed:</strong> ${vessel.sog.toFixed(1)} kn</p>
+            <p><strong>Course:</strong> ${Math.round(vessel.cog)}°</p>
+            ${vessel.destination ? `<p><strong>Destination:</strong> ${vessel.destination}</p>` : ''}
+        </div>
+    `;
+}
+
+function showAISDetails(vessel) {
+    const panel = document.getElementById('ais-details-panel');
+    if (!panel) return;
+
+    document.getElementById('ais-name').textContent = vessel.name;
+    document.getElementById('ais-mmsi').textContent = vessel.mmsi;
+    document.getElementById('ais-callsign').textContent = vessel.callsign || 'N/A';
+    document.getElementById('ais-type').textContent = getShipTypeText(vessel.type);
+    document.getElementById('ais-speed').textContent = vessel.sog.toFixed(1) + ' kn';
+    document.getElementById('ais-course').textContent = Math.round(vessel.cog) + '°';
+    document.getElementById('ais-heading').textContent = vessel.heading ? vessel.heading + '°' : 'N/A';
+    document.getElementById('ais-navstat').textContent = getNavstatText(vessel.navstat);
+    document.getElementById('ais-destination').textContent = vessel.destination || 'N/A';
+    document.getElementById('ais-eta').textContent = vessel.eta || 'N/A';
+    document.getElementById('ais-length').textContent = vessel.length ? vessel.length + ' m' : 'N/A';
+    document.getElementById('ais-width').textContent = vessel.width ? vessel.width + ' m' : 'N/A';
+    document.getElementById('ais-draught').textContent = vessel.draught ? vessel.draught.toFixed(1) + ' m' : 'N/A';
+
+    panel.classList.add('show');
+}
+
+function closeAISDetails() {
+    const panel = document.getElementById('ais-details-panel');
+    if (panel) {
+        panel.classList.remove('show');
+    }
+}
+
+function getNavstatText(navstat) {
+    const statuses = {
+        0: "Under way using engine", 1: "At anchor", 2: "Not under command",
+        3: "Restricted manoeuvrability", 4: "Constrained by draught", 5: "Moored",
+        6: "Aground", 7: "Engaged in fishing", 8: "Under way sailing",
+        14: "AIS-SART active", 15: "Undefined"
+    };
+    return statuses[navstat] || "Unknown";
+}
+
+function getShipTypeText(type) {
+    if (type == 0) return "Unknown";
+    if (type >= 20 && type <= 29) return "Wing in ground";
+    if (type == 30) return "Fishing";
+    if (type >= 31 && type <= 32) return "Towing";
+    if (type == 36) return "Sailing";
+    if (type == 37) return "Pleasure craft";
+    if (type >= 40 && type <= 49) return "High speed craft";
+    if (type >= 60 && type <= 69) return "Passenger";
+    if (type >= 70 && type <= 79) return "Cargo";
+    if (type >= 80 && type <= 89) return "Tanker";
+    return "Other";
+}
+
+function updateAISSettings(settings) {
+    aisSettings = settings;
+
+    // Clear interval
+    if (aisUpdateInterval) {
+        clearInterval(aisUpdateInterval);
+        aisUpdateInterval = null;
+    }
+
+    // Remove all markers
+    Object.values(aisVessels).forEach(({marker}) => map.removeLayer(marker));
+    aisVessels = {};
+
+    // Start if enabled
+    if (settings.enabled && settings.apiKey) {
+        fetchAISVessels();
+        aisUpdateInterval = setInterval(fetchAISVessels, settings.updateInterval * 1000);
+        console.log('🚢 AIS enabled');
+    } else {
+        console.log('🚢 AIS disabled');
     }
 }
 

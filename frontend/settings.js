@@ -35,6 +35,13 @@ const defaultSettings = {
         mqttPass: '',
         depthAlarm: 2.0,
         depthAlarmEnable: false
+    },
+    ais: {
+        provider: 'aisstream',  // 'aishub', 'aisstream'
+        apiKey: '',
+        enabled: false,
+        updateInterval: 60,
+        showLabels: true
     }
 };
 
@@ -161,6 +168,19 @@ function loadSettingsToForm() {
     if (document.getElementById('setting-mqtt-url')) {
         document.getElementById('setting-mqtt-url').value = currentSettings.sensors.mqttUrl || '';
     }
+
+    // AIS
+    if (document.getElementById('setting-ais-provider')) {
+        document.getElementById('setting-ais-provider').value = currentSettings.ais.provider || 'openais';
+    }
+    if (document.getElementById('setting-ais-api-key')) {
+        document.getElementById('setting-ais-api-key').value = currentSettings.ais.apiKey || '';
+    }
+    if (document.getElementById('setting-ais-enabled')) {
+        document.getElementById('setting-ais-enabled').checked = currentSettings.ais.enabled !== false;
+    }
+    // Show/hide API key field based on provider
+    updateAISKeyVisibility();
 }
 
 // Save settings
@@ -213,6 +233,13 @@ function saveSettings() {
             mqttPass: '',
             depthAlarm: 2.0,
             depthAlarmEnable: false
+        },
+        ais: {
+            provider: getValue('setting-ais-provider', 'openais'),
+            apiKey: getValue('setting-ais-api-key', ''),
+            enabled: getChecked('setting-ais-enabled', false),
+            updateInterval: 60,
+            showLabels: true
         }
     };
 
@@ -259,6 +286,11 @@ function applySettings() {
     // Apply compass rose visibility (only if map is initialized)
     if (typeof map !== 'undefined' && typeof toggleCompassRose === 'function') {
         toggleCompassRose(currentSettings.navigation.showCompassRose);
+    }
+
+    // Apply AIS settings (only if AIS is initialized)
+    if (typeof updateAISSettings === 'function') {
+        updateAISSettings(currentSettings.ais);
     }
 
     console.log('✅ Settings applied:', currentSettings);
@@ -360,6 +392,17 @@ async function initializeSettings() {
     applySettings();
 
     console.log('⚙️ Settings initialized');
+}
+
+// Update AIS API key field visibility based on provider
+function updateAISKeyVisibility() {
+    const provider = document.getElementById('setting-ais-provider')?.value || 'aisstream';
+    const keyField = document.getElementById('ais-api-key-field');
+
+    if (keyField) {
+        // All providers require API key
+        keyField.style.display = 'block';
+    }
 }
 
 // Export waypoints (placeholder)
