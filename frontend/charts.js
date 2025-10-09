@@ -95,38 +95,78 @@ function updateChartsUI() {
 
 async function toggleChart(chartId, enabled) {
     try {
-        // Update local state immediately
-        const chart = chartLayers.find(c => c.id === chartId);
-        if (chart) {
-            chart.enabled = enabled;
-            updateChartsUI();
-        }
-
         const response = await fetch(`${API_URL}/api/charts/${chartId}?enabled=${enabled}`, {
             method: 'PATCH'
         });
 
         if (response.ok) {
-            loadChartOverlays();
-            showMsg(enabled ? '✅ Karte aktiviert' : '⏸️ Karte deaktiviert');
-        } else {
-            // Revert on error
-            if (chart) {
-                chart.enabled = !enabled;
-                updateChartsUI();
+            const result = await response.json();
+
+            // Check if conversion is needed
+            if (result.status === 'needs_conversion') {
+                showMsg('📊 Konvertiere Karte...');
+                showProgressModal('📊 Konvertiere ENC-Karte...');
+
+                // Start conversion
+                const convertResponse = await fetch(`${API_URL}/api/charts/${chartId}/convert`, {
+                    method: 'POST'
+                });
+
+                if (convertResponse.ok) {
+                    // Poll for conversion status
+                    await pollConversionStatus(chartId);
+                } else {
+                    showMsg('❌ Konvertierung fehlgeschlagen');
+                    closeProgressModal();
+                }
+            } else {
+                // Normal toggle
+                const chart = chartLayers.find(c => c.id === chartId);
+                if (chart) {
+                    chart.enabled = enabled;
+                    updateChartsUI();
+                    loadChartOverlays();
+                    showMsg(enabled ? '✅ Karte aktiviert' : '⏸️ Karte deaktiviert');
+                }
             }
+        } else {
             showMsg('❌ Fehler beim Aktivieren/Deaktivieren');
         }
     } catch (error) {
         console.error('❌ Failed to toggle chart:', error);
-        // Revert on error
-        const chart = chartLayers.find(c => c.id === chartId);
-        if (chart) {
-            chart.enabled = !enabled;
-            updateChartsUI();
-        }
         showMsg('❌ Fehler beim Aktivieren/Deaktivieren');
     }
+}
+
+async function pollConversionStatus(chartId) {
+    let progress = 0;
+    const interval = setInterval(async () => {
+        progress += 5;
+        updateProgress(Math.min(progress, 95), 'Konvertiere...', null);
+
+        // Check if conversion is complete by reloading charts
+        const response = await fetch(`${API_URL}/api/charts`);
+        if (response.ok) {
+            const charts = await response.json();
+            const chart = charts.find(c => c.id === chartId);
+
+            if (chart && chart.converted) {
+                clearInterval(interval);
+                completeProgress('✅ Konvertierung abgeschlossen!');
+                await loadCharts();
+                setTimeout(() => {
+                    closeProgressModal();
+                }, 2000);
+            }
+        }
+
+        // Timeout after 5 minutes
+        if (progress >= 300) {
+            clearInterval(interval);
+            updateProgress(100, '⚠️ Konvertierung dauert länger als erwartet');
+            document.getElementById('progress-close-btn').style.display = 'block';
+        }
+    }, 1000);
 }
 
 async function deleteChart(chartId) {
