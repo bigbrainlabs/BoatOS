@@ -153,7 +153,18 @@ async function pollConversionStatus(chartId) {
             if (chart && chart.converted) {
                 clearInterval(interval);
                 completeProgress('✅ Konvertierung abgeschlossen!');
-                await loadCharts();
+
+                // Enable the chart after conversion
+                const enableResponse = await fetch(`${API_URL}/api/charts/${chartId}?enabled=true`, {
+                    method: 'PATCH'
+                });
+
+                if (enableResponse.ok) {
+                    await loadCharts();
+                    loadChartOverlays();
+                    showMsg('✅ Karte aktiviert');
+                }
+
                 setTimeout(() => {
                     closeProgressModal();
                 }, 2000);
