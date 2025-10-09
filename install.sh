@@ -40,8 +40,8 @@ echo ""
 # System-Pakete installieren
 info "Installiere System-Pakete..."
 sudo apt update
-sudo apt install -y python3 python3-pip python3-venv nginx git curl || error "System-Pakete konnten nicht installiert werden"
-success "System-Pakete installiert"
+sudo apt install -y python3 python3-pip python3-venv nginx git curl gdal-bin python3-gdal || error "System-Pakete konnten nicht installiert werden"
+success "System-Pakete installiert (inkl. GDAL für Kartenkonvertierung)"
 
 # Node.js für SignalK installieren
 info "Installiere Node.js..."
@@ -105,6 +105,13 @@ pip install --upgrade pip
 pip install -r requirements.txt || error "Python-Abhängigkeiten konnten nicht installiert werden"
 success "Backend eingerichtet"
 
+# Datenverzeichnisse erstellen
+info "Erstelle Datenverzeichnisse..."
+mkdir -p $INSTALL_DIR/data/charts
+mkdir -p $INSTALL_DIR/data/enc_downloads
+touch $INSTALL_DIR/data/.gitkeep
+success "Datenverzeichnisse erstellt"
+
 # BoatOS Service erstellen
 info "Erstelle BoatOS Service..."
 sudo tee /etc/systemd/system/boatos.service > /dev/null << BOATOS
@@ -131,47 +138,66 @@ success "BoatOS Service erstellt"
 
 # Nginx konfigurieren
 info "Konfiguriere Nginx..."
-sudo tee /etc/nginx/sites-available/boatos > /dev/null << NGINX
+sudo tee /etc/nginx/sites-available/boatos > /dev/null << 'NGINX'
 server {
     listen 80;
     server_name _;
 
+    # Allow large file uploads for chart files
+    client_max_body_size 2G;
+    client_body_timeout 300s;
+    proxy_read_timeout 300s;
+
     # Frontend
     location / {
-        root $INSTALL_DIR/frontend;
+        root /home/INSTALL_USER_PLACEHOLDER/BoatOS/frontend;
         index index.html;
-        try_files \ \/ /index.html;
+        try_files $uri $uri/ /index.html;
     }
 
     # Backend API
-    location /api/ {
-        proxy_pass http://localhost:8000/api/;
+    location /api {
+        proxy_pass http://localhost:8000;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \;
-        proxy_cache_bypass \;
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+
+        # Large uploads for chart files
+        client_max_body_size 2G;
+        client_body_timeout 300s;
+        proxy_read_timeout 300s;
     }
 
     # WebSocket
     location /ws {
-        proxy_pass http://localhost:8000/ws;
+        proxy_pass http://localhost:8000;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host \;
+        proxy_set_header Host $host;
+    }
+
+    # Charts directory
+    location /charts {
+        alias /home/INSTALL_USER_PLACEHOLDER/BoatOS/data/charts;
+        autoindex off;
     }
 
     # SignalK Proxy
     location /signalk/ {
         proxy_pass http://localhost:3000/;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \;
+        proxy_set_header Host $host;
     }
 }
 NGINX
+
+# Replace placeholder with actual user
+sudo sed -i "s/INSTALL_USER_PLACEHOLDER/$INSTALL_USER/g" /etc/nginx/sites-available/boatos
 
 sudo ln -sf /etc/nginx/sites-available/boatos /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
