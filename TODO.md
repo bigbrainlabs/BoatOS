@@ -39,6 +39,8 @@
   - [x] Track-Historie löschen Funktion
 - [x] **Wetter-Panel** (v1.1.0)
   - [x] 3-Tage-Vorhersage im Weather-Panel
+- [x] **Karten**
+  - [x] Weitere Kartenebenen hinzufügen (Satellit, Topo)
 
 ---
 
@@ -46,7 +48,6 @@
 
 ### Karten
 - [ ] Offline-Karten Caching implementieren
-- [ ] Weitere Kartenebenen hinzufügen (Satellit, Topo)
 
 ### Wetter
 - [ ] Wind-Richtungs-Rose
