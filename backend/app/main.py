@@ -73,6 +73,29 @@ async def get_sensors():
 async def get_gps():
     return gps_service.get_gps_status()
 
+
+@app.get("/api/settings")
+async def get_settings():
+    """Get user settings"""
+    # Try to load from file
+    settings_file = "data/settings.json"
+    try:
+        with open(settings_file, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+@app.post("/api/settings")
+async def save_settings(settings: Dict[str, Any]):
+    """Save user settings"""
+    settings_file = "data/settings.json"
+    try:
+        with open(settings_file, 'w') as f:
+            json.dump(settings, f, indent=2)
+        return {"status": "success", "message": "Settings saved"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.get("/api/waypoints")
 async def get_waypoints():
     return waypoints
