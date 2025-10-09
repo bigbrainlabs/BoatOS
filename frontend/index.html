@@ -93,8 +93,6 @@
         /* Modal Base Styles */
         .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; backdrop-filter: blur(5px); }
         .modal.active { display: flex; justify-content: center; align-items: center; }
-        #charts-modal { display: none !important; }
-        #charts-modal.show { display: flex !important; justify-content: center; align-items: center; }
         .modal-content { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); border-radius: 20px; width: 90%; max-width: 800px; max-height: 90vh; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
         .modal-header { padding: 20px 30px; border-bottom: 2px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; }
         .modal-header h2 { font-size: 28px; margin: 0; }
@@ -103,17 +101,6 @@
         .modal-body { padding: 20px 30px; overflow-y: auto; flex: 1; }
 
         /* Charts Modal Specific */
-        #charts-modal .modal-content { max-width: 600px; }
-        #charts-modal .upload-section { background: rgba(42, 82, 152, 0.2); padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-        #charts-modal .upload-section h3 { margin-bottom: 15px; color: #8892b0; font-size: 16px; }
-        #charts-modal input[type="file"] { margin-bottom: 10px; color: #fff; width: 100%; }
-        #charts-modal input[type="text"] { width: 100%; padding: 10px; margin-bottom: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff; }
-        #charts-modal button.upload-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #2ecc71, #27ae60); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; transition: all 0.3s; }
-        #charts-modal button.upload-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(46, 204, 113, 0.4); }
-        #charts-modal .enc-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
-        #charts-modal .enc-buttons button { padding: 10px 15px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: #fff; cursor: pointer; background: rgba(255, 255, 255, 0.1); transition: all 0.3s; }
-        #charts-modal .enc-buttons button:hover { background: rgba(255, 255, 255, 0.2); }
-        #charts-modal .enc-buttons button:first-child { background: rgba(100, 255, 218, 0.2); border-color: #64ffda; color: #64ffda; }
 
         /* Progress Modal */
         #chart-progress-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 20000; justify-content: center; align-items: center; }
@@ -296,9 +283,8 @@
 </head>
 <body>
     <div id="app">
-        <!-- Header - Simple, NO charts button here -->
+        <!-- Header - Simple -->
         <div id="header">
-            <button onclick="openChartsModal()" style="background: rgba(100, 255, 218, 0.2); border: 2px solid #64ffda; color: #64ffda; font-size: 24px; width: 50px; height: 50px; border-radius: 12px; cursor: pointer; transition: all 0.3s; margin-right: 10px;" title="Karten-Manager">🗺️</button>
             <button onclick="openSettingsModal()" style="background: rgba(100, 255, 218, 0.2); border: 2px solid #64ffda; color: #64ffda; font-size: 24px; width: 50px; height: 50px; border-radius: 12px; cursor: pointer; transition: all 0.3s; margin-right: 15px;" title="Einstellungen">⚙️</button>
             <h1>⚓ BoatOS</h1>
             <div id="status">
@@ -459,42 +445,6 @@
     </div>
 
     <!-- Charts Modal -->
-    <div id="charts-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>📊 Karten-Manager</h2>
-                <button class="modal-close" onclick="closeChartsModal()">×</button>
-            </div>
-            <div class="modal-body">
-                <!-- Charts List -->
-                <div id="charts-list" style="margin-bottom: 20px; max-height: 300px; overflow-y: auto;"></div>
-
-                <!-- Upload Section -->
-                <div class="upload-section">
-                    <h3>Karte hochladen</h3>
-                    <input type="file" id="chart-file-input" accept=".kap,.zip,.mbtiles,.tif,.tiff" webkitdirectory directory multiple>
-                    <input type="text" id="chart-name-input" placeholder="Karten-Name">
-                    <button class="upload-btn" onclick="uploadChart()">📤 Hochladen</button>
-                    <div style="margin-top: 10px; font-size: 12px; color: #8892b0;">Unterstützt: KAP, ZIP (Tiles), MBTiles, GeoTIFF</div>
-                </div>
-
-                <!-- ENC Download Section -->
-                <div class="upload-section">
-                    <h3>Inland ENC herunterladen</h3>
-                    <div class="enc-buttons">
-                        <button onclick="loadENCCatalog()">Katalog laden</button>
-                        <button onclick="selectAllENC()">Alle</button>
-                        <button onclick="deselectAllENC()">Keine</button>
-                    </div>
-                    <div id="enc-catalog-list" style="max-height: 400px; overflow-y: auto; margin-bottom: 15px; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 6px;">
-                        <div style="color: #8892b0; text-align: center; padding: 20px;">Klicke "Katalog laden" um verfügbare Gewässer zu sehen</div>
-                    </div>
-                    <button class="upload-btn" onclick="downloadSelectedENC()" id="download-enc-btn" disabled>Ausgewählte herunterladen</button>
-                    <div id="enc-download-status" style="margin-top: 10px; font-size: 12px; color: #64ffda;"></div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Chart Progress Modal -->
     <div id="chart-progress-modal">
@@ -514,7 +464,7 @@
     <!-- JavaScript Includes -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="i18n.js?v=1760001749"></script>
-    <script src="settings.js?v=1760003999"></script>
+    <script src="settings.js?v=1760005231"></script>
     <script src="logbook.js"></script>
     <script src="charts.js"></script>
     <script src="units.js"></script>
@@ -584,10 +534,35 @@
 
                     <!-- Charts Tab -->
                     <div id="settings-charts" class="settings-tab-content">
-                        <h3>Karten-Einstellungen</h3>
-                        <p style="color: #8892b0;">Karten-Manager wird hier integriert...</p>
-                    </div>
+                        <h3>📊 Karten-Manager</h3>
 
+                        <!-- Charts List -->
+                        <div id="charts-list" style="margin-bottom: 20px; max-height: 300px; overflow-y: auto; background: rgba(42, 82, 152, 0.1); padding: 15px; border-radius: 8px;"></div>
+
+                        <!-- Upload Section -->
+                        <div class="upload-section" style="background: rgba(42, 82, 152, 0.2); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                            <h3 style="margin-bottom: 15px; color: #8892b0; font-size: 16px;">Karte hochladen</h3>
+                            <input type="file" id="chart-file-input" accept=".kap,.zip,.mbtiles,.tif,.tiff" webkitdirectory directory multiple style="margin-bottom: 10px; color: #fff; width: 100%;">
+                            <input type="text" id="chart-name-input" placeholder="Karten-Name" style="width: 100%; padding: 10px; margin-bottom: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff;">
+                            <button class="upload-btn" onclick="uploadChart()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #2ecc71, #27ae60); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; transition: all 0.3s;">📤 Hochladen</button>
+                            <div style="margin-top: 10px; font-size: 12px; color: #8892b0;">Unterstützt: KAP, ZIP (Tiles), MBTiles, GeoTIFF</div>
+                        </div>
+
+                        <!-- ENC Download Section -->
+                        <div class="upload-section" style="background: rgba(42, 82, 152, 0.2); padding: 20px; border-radius: 8px;">
+                            <h3 style="margin-bottom: 15px; color: #8892b0; font-size: 16px;">Inland ENC herunterladen</h3>
+                            <div class="enc-buttons" style="display: flex; gap: 10px; margin-bottom: 15px;">
+                                <button onclick="loadENCCatalog()" style="padding: 10px 15px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: #fff; cursor: pointer; background: rgba(100, 255, 218, 0.2); border-color: #64ffda; color: #64ffda; transition: all 0.3s;">Katalog laden</button>
+                                <button onclick="selectAllENC()" style="padding: 10px 15px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: #fff; cursor: pointer; background: rgba(255, 255, 255, 0.1); transition: all 0.3s;">Alle</button>
+                                <button onclick="deselectAllENC()" style="padding: 10px 15px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: #fff; cursor: pointer; background: rgba(255, 255, 255, 0.1); transition: all 0.3s;">Keine</button>
+                            </div>
+                            <div id="enc-catalog-list" style="max-height: 400px; overflow-y: auto; margin-bottom: 15px; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 6px;">
+                                <div style="color: #8892b0; text-align: center; padding: 20px;">Klicke "Katalog laden" um verfügbare Gewässer zu sehen</div>
+                            </div>
+                            <button class="upload-btn" onclick="downloadSelectedENC()" id="download-enc-btn" disabled style="width: 100%; padding: 12px; background: linear-gradient(135deg, #2ecc71, #27ae60); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; transition: all 0.3s;">Ausgewählte herunterladen</button>
+                            <div id="enc-download-status" style="margin-top: 10px; font-size: 12px; color: #64ffda;"></div>
+                        </div>
+                    </div>
                     <!-- Navigation Tab -->
                     <div id="settings-navigation" class="settings-tab-content">
                         <h3>Navigations-Einstellungen</h3>
