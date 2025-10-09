@@ -1,0 +1,345 @@
+/**
+ * BoatOS Frontend - Marine Dashboard
+ */
+
+const API_URL = window.location.hostname === 'localhost'
+    ? 'http://localhost:8000'
+    : `http://${window.location.hostname}:8000`;
+
+const WS_URL = window.location.hostname === 'localhost'
+    ? 'ws://localhost:8000/ws'
+    : `ws://${window.location.hostname}:8000/ws`;
+
+// ==================== STATE ====================
+let map;
+let boatMarker;
+let waypoints = [];
+let routeLayer;
+let currentPosition = { lat: 50.8, lon: 5.6 }; // Default: Albertkanal
+let ws;
+let routePlanningMode = false;
+
+// ==================== MAP INIT ====================
+function initMap() {
+    // Karte initialisieren
+    map = L.map('map', {
+        zoomControl: false,
+        attributionControl: false
+    }).setView([currentPosition.lat, currentPosition.lon], 13);
+
+    // OpenSeaMap Tiles
+    L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
+        maxZoom: 18
+    }).addTo(map);
+
+    // Base Map (OpenStreetMap)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
+    }).addTo(map);
+
+    // Zoom Control (rechts unten)
+    L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
+    // Boot-Position Marker
+    boatMarker = L.marker([currentPosition.lat, currentPosition.lon], {
+    
+    // Initial GPS Position vom Backend laden
+    fetch(getAPI ? getAPI() + /api/sensors : http:// + window.location.hostname + :8000/api/sensors).then(r=>r.json()).then(d=>{if(d.gps.lat!==0){boatMarker.setLatLng([d.gps.lat,d.gps.lon]);map.setView([d.gps.lat,d.gps.lon],13);}}).catch(e=>console.log(GPS load error,e));
+        icon: L.divIcon({
+            className: 'boat-marker',
+            iconSize: [30, 30]
+        })
+    }).addTo(map);
+
+    // Route Layer
+    routeLayer = L.layerGroup().addTo(map);
+
+    // Click Handler für Wegpunkte
+    map.on('click', onMapClick);
+
+    console.log('✅ Map initialized');
+}
+
+// ==================== WEBSOCKET ====================
+function connectWebSocket() {
+    ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => {
+        console.log('✅ WebSocket connected');
+        document.getElementById('signalk-status').classList.add('connected');
+    };
+
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        updateSensorDisplay(data);
+        updateBoatPosition(data.gps);
+    };
+
+    ws.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
+        document.getElementById('signalk-status').classList.remove('connected');
+    };
+
+    ws.onclose = () => {
+        console.log('⚠️ WebSocket disconnected, reconnecting...');
+        document.getElementById('signalk-status').classList.remove('connected');
+        setTimeout(connectWebSocket, 3000);
+    };
+}
+
+// ==================== SENSOR UPDATES ====================
+function updateSensorDisplay(data) {
+    // Speed
+    if (data.speed !== undefined) {
+        document.getElementById('speed').innerHTML =
+            `${data.speed.toFixed(1)}<span class="tile-unit">kn</span>`;
+    }
+
+    // Heading
+    if (data.heading !== undefined) {
+        document.getElementById('heading').innerHTML =
+            `${Math.round(data.heading)}<span class="tile-unit">°</span>`;
+    }
+
+    // Depth
+    if (data.depth !== undefined) {
+        document.getElementById('depth').innerHTML =
+            `${data.depth.toFixed(1)}<span class="tile-unit">m</span>`;
+    }
+
+    // Wind
+    if (data.wind && data.wind.speed !== undefined) {
+        document.getElementById('wind').innerHTML =
+            `${data.wind.speed.toFixed(0)}<span class="tile-unit">kn</span>`;
+    }
+}
+
+function updateBoatPosition(gps) {
+    if (gps && gps.lat && gps.lon) {
+        currentPosition = { lat: gps.lat, lon: gps.lon };
+
+        // Marker aktualisieren
+        boatMarker.setLatLng([gps.lat, gps.lon]);
+
+        // GPS Status
+        document.getElementById('gps-status').classList.add('connected');
+
+        // Karte folgt Boot (optional - nur wenn nicht manuell gezoomt)
+        // map.setView([gps.lat, gps.lon], map.getZoom());
+    }
+}
+
+// ==================== WEGPUNKTE ====================
+function onMapClick(e) {
+    if (!routePlanningMode) return;
+
+    const waypoint = {
+        lat: e.latlng.lat,
+        lon: e.latlng.lng,
+        name: `WP${waypoints.length + 1}`,
+        timestamp: new Date().toISOString()
+    };
+
+    addWaypoint(waypoint);
+}
+
+function addWaypoint(waypoint) {
+    // Marker auf Karte
+    const marker = L.marker([waypoint.lat, waypoint.lon], {
+        icon: L.divIcon({
+            className: 'waypoint-marker',
+            html: `<div style="color: white; font-size: 10px; text-align: center; margin-top: 22px;">${waypoint.name}</div>`,
+            iconSize: [20, 20]
+        }),
+        draggable: true
+    }).addTo(routeLayer);
+
+    marker.on('drag', () => {
+        updateRoute();
+    });
+
+    marker.on('click', () => {
+        if (confirm(`Wegpunkt ${waypoint.name} löschen?`)) {
+            routeLayer.removeLayer(marker);
+            waypoints = waypoints.filter(w => w.name !== waypoint.name);
+            updateRoute();
+        }
+    });
+
+    waypoints.push({ ...waypoint, marker });
+
+    // An Backend senden
+    fetch(`${API_URL}/api/waypoints`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(waypoint)
+    });
+
+    updateRoute();
+}
+
+function updateRoute() {
+    // Alte Route löschen
+    routeLayer.eachLayer(layer => {
+        if (layer instanceof L.Polyline) {
+            routeLayer.removeLayer(layer);
+        }
+    });
+
+    if (waypoints.length < 2) return;
+
+    // Route zeichnen
+    const points = waypoints.map(w => [w.lat, w.lon]);
+    L.polyline(points, {
+        color: '#3498db',
+        weight: 4,
+        dashArray: '10, 5'
+    }).addTo(routeLayer);
+
+    // Distanz berechnen
+    let totalDistance = 0;
+    for (let i = 0; i < waypoints.length - 1; i++) {
+        const from = L.latLng(waypoints[i].lat, waypoints[i].lon);
+        const to = L.latLng(waypoints[i + 1].lat, waypoints[i + 1].lon);
+        totalDistance += from.distanceTo(to);
+    }
+
+    console.log(`📏 Route Distanz: ${(totalDistance / 1852).toFixed(2)} NM`);
+}
+
+// ==================== CONTROLS ====================
+document.getElementById('btn-waypoint').addEventListener('click', () => {
+    // Wegpunkt an aktueller Boot-Position
+    addWaypoint({
+        lat: currentPosition.lat,
+        lon: currentPosition.lon,
+        name: `WP${waypoints.length + 1}`,
+        timestamp: new Date().toISOString()
+    });
+
+    showMsg(t('notify_waypoint_added'));
+});
+
+document.getElementById('btn-route').addEventListener('click', (e) => {
+    routePlanningMode = !routePlanningMode;
+    e.target.classList.toggle('active');
+
+    if (routePlanningMode) {
+        showMsg(t('notify_route_active'));
+    } else {
+        showMsg(t('notify_route_ended'));
+
+        // Route speichern
+        if (waypoints.length > 0) {
+            saveRoute();
+        }
+    }
+});
+
+document.getElementById("btn-logbook").addEventListener("click", openLogbook);
+
+document.getElementById('btn-sensors').addEventListener('click', () => {
+    showMsg(t('notify_sensors_soon'));
+    // TODO: Sensor-Details-Modal öffnen
+});
+
+function saveRoute() {
+    const route = {
+        name: `Route ${new Date().toLocaleDateString('de-DE')}`,
+        waypoints: waypoints.map(w => ({
+            lat: w.lat,
+            lon: w.lon,
+            name: w.name
+        })),
+        timestamp: new Date().toISOString()
+    };
+
+    fetch(`${API_URL}/api/routes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(route)
+    })
+    .then(res => res.json())
+    .then(data => {
+        console.log('✅ Route gespeichert:', data);
+        showNotification('💾 Route gespeichert');
+    })
+    .catch(err => {
+        console.error('❌ Route speichern fehlgeschlagen:', err);
+    });
+}
+
+// ==================== NOTIFICATIONS ====================
+function showNotification(message) {
+    // Simple Toast-Notification
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed;
+        top: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(46, 204, 113, 0.95);
+        color: white;
+        padding: 15px 30px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        z-index: 10000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    `;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.5s';
+        setTimeout(() => toast.remove(), 500);
+    }, 2000);
+}
+
+// ==================== STARTUP ====================
+window.addEventListener('load', () => {
+    initMap();
+    connectWebSocket();
+
+    // Geolocation API (Browser GPS als Fallback)
+    if (navigator.geolocation) {
+        navigator.geolocation.watchPosition(
+            (position) => {
+                // Nur nutzen wenn SignalK keine Daten liefert
+                if (!currentPosition.lat || currentPosition.lat === 50.8) {
+                    updateBoatPosition({
+                        lat: position.coords.latitude,
+                        lon: position.coords.longitude
+                    });
+                }
+            },
+            (error) => console.warn('⚠️ Geolocation error:', error),
+            { enableHighAccuracy: true }
+        );
+    }
+
+    console.log('🚢 BoatOS Frontend started!');
+});
+
+// ==================== SERVICE WORKER (PWA) ====================
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('✅ Service Worker registered'))
+        .catch(err => console.log('⚠️ Service Worker registration failed:', err));
+}
+
+// ==================== LANGUAGE TOGGLE ====================
+function toggleLanguage() {
+    const newLang = getLanguage() === "de" ? "en" : "de";
+    setLanguage(newLang);
+    document.getElementById("current-lang").textContent = newLang === "de" ? "🇩🇪 DE" : "🇬🇧 EN";
+    showMsg(newLang === "de" ? "Sprache: Deutsch" : "Language: English");
+}
+
+// Init language on load
+window.addEventListener("load", function() {
+    const lang = getLanguage();
+    document.getElementById("current-lang").textContent = lang === "de" ? "🇩🇪 DE" : "🇬🇧 EN";
+    updateUI();
+});

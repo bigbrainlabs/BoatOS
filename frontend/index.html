@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BoatOS</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link rel="stylesheet" href="logbook.css"/>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: sans-serif; background: #0a0e27; color: #fff; overflow: hidden; user-select: none; }
+        #app { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; }
+
+        /* Header - Simple, no charts button */
+        #header { background: linear-gradient(135deg, #1e3c72, #2a5298); padding: 15px 20px; display: flex; justify-content: flex-start; align-items: center; }
+        #header h1 { font-size: 28px; margin: 0; flex: 1; }
+        #status { display: flex; gap: 15px; font-size: 14px; }
+        .status-item { background: rgba(255,255,255,0.1); padding: 5px 12px; border-radius: 20px; cursor: pointer; transition: all 0.3s; }
+        .status-item:active { transform: scale(0.95); }
+        .status-item.connected { background: rgba(46, 213, 115, 0.3); }
+
+        /* Map Container */
+        #map-container { position: relative; flex: 1; }
+        #map { width: 100%; height: 100%; }
+
+        /* Charts Icon Button - Top Left on MAP */
+        .map-control-btn {
+            background: rgba(10, 14, 39, 0.92);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(42, 82, 152, 0.6);
+            color: white;
+            font-size: 24px;
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .map-control-btn:hover { border-color: #64ffda; }
+
+        #charts-btn { position: absolute; top: 20px; left: 20px; z-index: 1000; }
+        #center-btn { position: absolute; bottom: 130px; left: 20px; z-index: 1000; }
+
+        /* Sensor Tiles */
+        #sensor-tiles { position: absolute; top: 20px; right: 20px; display: grid; grid-template-columns: repeat(2, 140px); gap: 12px; z-index: 1000; }
+        .tile { background: rgba(10, 14, 39, 0.92); backdrop-filter: blur(10px); border: 2px solid rgba(42, 82, 152, 0.6); border-radius: 12px; padding: 15px; text-align: center; transition: all 0.3s; cursor: pointer; }
+        .tile:active { transform: scale(0.95); }
+        .weather-tile { grid-column: span 2; }
+        .weather-tile-content { display: flex; align-items: center; justify-content: space-between; }
+        .weather-icon { width: 50px; height: 50px; }
+        .weather-temp { font-size: 28px; font-weight: 700; color: #64ffda; }
+        .weather-desc { font-size: 12px; color: #8892b0; text-transform: capitalize; }
+        .tile-label { font-size: 12px; color: #8892b0; text-transform: uppercase; margin-bottom: 8px; }
+        .tile-value { font-size: 32px; font-weight: 700; color: #64ffda; }
+        .tile-unit { font-size: 16px; color: #8892b0; margin-left: 4px; }
+
+        /* Controls */
+        #controls { background: rgba(10, 14, 39, 0.95); padding: 15px 20px; display: flex; gap: 10px; border-top: 2px solid rgba(42, 82, 152, 0.6); }
+        .control-btn { flex: 1; background: linear-gradient(135deg, #2a5298, #1e3c72); border: none; color: white; padding: 18px; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s; text-transform: uppercase; }
+        .control-btn:active { transform: scale(0.95); }
+        .control-btn.active { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+
+        /* Boat Marker */
+        .boat-marker { width: 40px; height: 40px; background: transparent; display: flex; align-items: center; justify-content: center; font-size: 32px; text-shadow: 0 0 8px rgba(0,0,0,0.8), 0 2px 4px rgba(0,0,0,0.6); transform-origin: center; transition: transform 0.3s; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+
+        /* Panel Styles */
+        .info-panel { display: none; position: absolute; top: 20px; left: 20px; background: rgba(10, 14, 39, 0.95); backdrop-filter: blur(10px); border: 2px solid rgba(42, 82, 152, 0.6); border-radius: 12px; padding: 20px; max-width: 400px; z-index: 1001; }
+        .info-panel h3 { margin-bottom: 15px; color: #64ffda; }
+        .info-details { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; font-size: 14px; }
+        .info-item { background: rgba(42, 82, 152, 0.2); padding: 10px; border-radius: 8px; }
+        .info-label { font-size: 11px; color: #8892b0; text-transform: uppercase; margin-bottom: 5px; }
+        .info-value { font-size: 18px; font-weight: 600; color: #64ffda; }
+        .panel-close { position: absolute; top: 15px; right: 15px; background: none; border: none; color: #8892b0; font-size: 24px; cursor: pointer; }
+        .panel-close:hover { color: #64ffda; }
+
+        /* GPS Panel Specific */
+        #gps-panel .satellite-indicator { display: flex; align-items: center; gap: 10px; background: rgba(42, 82, 152, 0.2); padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+        #gps-panel .satellite-count { font-size: 48px; font-weight: 700; color: #64ffda; }
+        #gps-panel .satellite-label { font-size: 14px; color: #8892b0; }
+        #gps-panel .position-display { background: rgba(42, 82, 152, 0.2); padding: 15px; border-radius: 8px; font-family: monospace; font-size: 14px; color: #64ffda; word-break: break-all; }
+
+        /* Weather Panel */
+        .forecast-container { display: flex; gap: 10px; overflow-x: auto; }
+        .forecast-item { background: rgba(42, 82, 152, 0.3); border-radius: 8px; padding: 10px; text-align: center; min-width: 100px; }
+        .forecast-date { font-size: 12px; color: #8892b0; margin-bottom: 5px; }
+        .forecast-temp { font-size: 16px; font-weight: 600; color: #64ffda; }
+        .forecast-wind { font-size: 12px; color: #8892b0; margin-top: 5px; }
+
+        /* Modal Base Styles */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; backdrop-filter: blur(5px); }
+        .modal.active { display: flex; justify-content: center; align-items: center; }
+        #charts-modal { display: none !important; }
+        #charts-modal.show { display: flex !important; justify-content: center; align-items: center; }
+        .modal-content { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); border-radius: 20px; width: 90%; max-width: 800px; max-height: 90vh; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
+        .modal-header { padding: 20px 30px; border-bottom: 2px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h2 { font-size: 28px; margin: 0; }
+        .modal-close { background: rgba(255,255,255,0.1); border: none; color: white; font-size: 32px; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; transition: all 0.3s; }
+        .modal-close:hover { background: rgba(255,255,255,0.2); transform: rotate(90deg); }
+        .modal-body { padding: 20px 30px; overflow-y: auto; flex: 1; }
+
+        /* Charts Modal Specific */
+        #charts-modal .modal-content { max-width: 600px; }
+        #charts-modal .upload-section { background: rgba(42, 82, 152, 0.2); padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        #charts-modal .upload-section h3 { margin-bottom: 15px; color: #8892b0; font-size: 16px; }
+        #charts-modal input[type="file"] { margin-bottom: 10px; color: #fff; width: 100%; }
+        #charts-modal input[type="text"] { width: 100%; padding: 10px; margin-bottom: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff; }
+        #charts-modal button.upload-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #2ecc71, #27ae60); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        #charts-modal button.upload-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(46, 204, 113, 0.4); }
+        #charts-modal .enc-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
+        #charts-modal .enc-buttons button { padding: 10px 15px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: #fff; cursor: pointer; background: rgba(255, 255, 255, 0.1); transition: all 0.3s; }
+        #charts-modal .enc-buttons button:hover { background: rgba(255, 255, 255, 0.2); }
+        #charts-modal .enc-buttons button:first-child { background: rgba(100, 255, 218, 0.2); border-color: #64ffda; color: #64ffda; }
+
+        /* Progress Modal */
+        #chart-progress-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 20000; justify-content: center; align-items: center; }
+        #chart-progress-modal.active { display: flex; }
+        .progress-content { background: linear-gradient(135deg, #1e3c72, #2a5298); padding: 40px; border-radius: 16px; max-width: 600px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+        .progress-bar-container { background: rgba(255,255,255,0.1); height: 30px; border-radius: 15px; overflow: hidden; margin-bottom: 15px; }
+        #progress-bar { background: linear-gradient(90deg, #2ecc71, #27ae60); height: 100%; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 12px; }
+        #progress-details { font-family: monospace; font-size: 12px; color: #64ffda; max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Header - Simple, NO charts button here -->
+        <div id="header">
+            <button onclick="openChartsModal()" style="background: rgba(100, 255, 218, 0.2); border: 2px solid #64ffda; color: #64ffda; font-size: 24px; width: 50px; height: 50px; border-radius: 12px; cursor: pointer; transition: all 0.3s; margin-right: 15px;" title="Karten-Manager">🗺️</button>
+            <h1>⚓ BoatOS</h1>
+            <div id="status">
+                <div class="status-item" id="lang-switch" onclick="toggleLanguage()">
+                    <span id="current-lang">🇩🇪 DE</span>
+                </div>
+                <div class="status-item" id="signalk-status">SignalK</div>
+                <div class="status-item" id="gps-status" onclick="toggleGpsPanel()">GPS</div>
+            </div>
+        </div>
+
+        <!-- Map Container -->
+        <div id="map-container">
+            <div id="map"></div>
+
+
+            <!-- GPS Details Panel -->
+            <div id="gps-panel" class="info-panel">
+                <button class="panel-close" onclick="toggleGpsPanel()">×</button>
+                <h3>📡 GPS Details</h3>
+
+                <div class="satellite-indicator">
+                    <div class="satellite-count" id="gps-satellites">0</div>
+                    <div class="satellite-label">Satellites<br>in View</div>
+                </div>
+
+                <div class="info-details">
+                    <div class="info-item">
+                        <div class="info-label">Altitude</div>
+                        <div class="info-value" id="gps-altitude">-- m</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Speed</div>
+                        <div class="info-value" id="gps-speed">-- kn</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Heading</div>
+                        <div class="info-value" id="gps-heading">--°</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Fix Status</div>
+                        <div class="info-value" id="gps-fix-status">No Fix</div>
+                    </div>
+                    <div class="info-item" style="grid-column: span 2;">
+                        <div class="info-label">Last Update</div>
+                        <div class="info-value" id="gps-timestamp" style="font-size: 14px;">--</div>
+                    </div>
+                </div>
+
+                <div class="info-label" style="margin-bottom: 8px;">Position</div>
+                <div class="position-display" id="gps-position">--.------, --.------</div>
+            </div>
+
+            <!-- Weather Details Panel -->
+            <div id="weather-panel" class="info-panel">
+                <button class="panel-close" onclick="toggleWeatherPanel()">×</button>
+                <h3>🌦️ Weather Details</h3>
+                <div class="info-details">
+                    <div class="info-item">
+                        <div class="info-label">Temperature</div>
+                        <div class="info-value" id="weather-panel-temp">--</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Feels Like</div>
+                        <div class="info-value" id="weather-panel-feels">--</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Description</div>
+                        <div class="info-value" id="weather-panel-desc" style="font-size: 14px;">--</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Wind</div>
+                        <div class="info-value" id="weather-panel-wind">--</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Pressure</div>
+                        <div class="info-value" id="weather-panel-pressure">--</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Humidity</div>
+                        <div class="info-value" id="weather-panel-humidity">--</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Visibility</div>
+                        <div class="info-value" id="weather-panel-visibility">--</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Clouds</div>
+                        <div class="info-value" id="weather-panel-clouds">--</div>
+                    </div>
+                </div>
+                <h4 style="margin-bottom: 10px; color: #8892b0;">3-Day Forecast</h4>
+                <div class="forecast-container" id="weather-forecast"></div>
+            </div>
+
+            <!-- Sensor Tiles -->
+            <div id="sensor-tiles">
+                <div class="tile weather-tile" onclick="toggleWeatherPanel()">
+                    <div class="weather-tile-content">
+                        <div>
+                            <div class="weather-temp" id="weather-temp">--</div>
+                            <div class="weather-desc" id="weather-desc">Loading...</div>
+                        </div>
+                        <img id="weather-icon" class="weather-icon" src="" alt="Weather">
+                    </div>
+                </div>
+                <div class="tile"><div class="tile-label" data-i18n="sensor_speed">Geschw.</div><div class="tile-value" id="speed">0.0<span class="tile-unit">kn</span></div></div>
+                <div class="tile"><div class="tile-label" data-i18n="sensor_heading">Kurs</div><div class="tile-value" id="heading">---<span class="tile-unit">°</span></div></div>
+                <div class="tile"><div class="tile-label" data-i18n="sensor_depth">Tiefe</div><div class="tile-value" id="depth">--<span class="tile-unit">m</span></div></div>
+                <div class="tile"><div class="tile-label" data-i18n="sensor_wind">Wind</div><div class="tile-value" id="wind">0<span class="tile-unit">kn</span></div></div>
+            </div>
+        </div>
+
+        <!-- Bottom Controls -->
+        <div id="controls">
+            <button class="control-btn" id="btn-waypoint" data-i18n="btn_waypoint">📍 Wegpunkt</button>
+            <button class="control-btn" id="btn-route" data-i18n="btn_route">🛤️ Route</button>
+            <button class="control-btn" id="btn-logbook" data-i18n="btn_logbook">📓 Logbuch</button>
+            <button class="control-btn" id="btn-sensors" data-i18n="btn_sensors">📊 Sensoren</button>
+        </div>
+    </div>
+
+    <!-- Logbook Modal -->
+    <div id="logbook-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📓 <span data-i18n="btn_logbook">Logbuch</span></h2>
+                <button class="modal-close" onclick="closeLogbook()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="track-controls">
+                    <div class="track-status">
+                        <div class="track-info">
+                            <div class="track-stat">
+                                <div class="track-stat-label">Points</div>
+                                <div class="track-stat-value" id="track-points">0</div>
+                            </div>
+                            <div class="track-stat">
+                                <div class="track-stat-label">Distance</div>
+                                <div class="track-stat-value" id="track-distance">0 <span style="font-size:16px">NM</span></div>
+                            </div>
+                        </div>
+                        <div id="recording-indicator" style="display:none">
+                            <div class="recording-indicator"></div>
+                        </div>
+                    </div>
+                    <div class="track-buttons">
+                        <button class="track-btn start" id="btn-track-start" onclick="startTrackRecording()">▶️ Start Recording</button>
+                        <button class="track-btn stop" id="btn-track-stop" onclick="stopTrackRecording()" disabled>⏹️ Stop Recording</button>
+                    </div>
+                </div>
+                <h3 style="margin-bottom: 15px; color: #8892b0;">Previous Tracks</h3>
+                <div class="logbook-entries" id="logbook-entries">
+                    <div class="empty-logbook">No tracks recorded yet</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Modal -->
+    <div id="charts-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📊 Karten-Manager</h2>
+                <button class="modal-close" onclick="closeChartsModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <!-- Charts List -->
+                <div id="charts-list" style="margin-bottom: 20px; max-height: 300px; overflow-y: auto;"></div>
+
+                <!-- Upload Section -->
+                <div class="upload-section">
+                    <h3>Karte hochladen</h3>
+                    <input type="file" id="chart-file-input" accept=".kap,.zip,.mbtiles,.tif,.tiff" webkitdirectory directory multiple>
+                    <input type="text" id="chart-name-input" placeholder="Karten-Name">
+                    <button class="upload-btn" onclick="uploadChart()">📤 Hochladen</button>
+                    <div style="margin-top: 10px; font-size: 12px; color: #8892b0;">Unterstützt: KAP, ZIP (Tiles), MBTiles, GeoTIFF</div>
+                </div>
+
+                <!-- ENC Download Section -->
+                <div class="upload-section">
+                    <h3>Inland ENC herunterladen</h3>
+                    <div class="enc-buttons">
+                        <button onclick="loadENCCatalog()">Katalog laden</button>
+                        <button onclick="selectAllENC()">Alle</button>
+                        <button onclick="deselectAllENC()">Keine</button>
+                    </div>
+                    <div id="enc-catalog-list" style="max-height: 400px; overflow-y: auto; margin-bottom: 15px; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 6px;">
+                        <div style="color: #8892b0; text-align: center; padding: 20px;">Klicke "Katalog laden" um verfügbare Gewässer zu sehen</div>
+                    </div>
+                    <button class="upload-btn" onclick="downloadSelectedENC()" id="download-enc-btn" disabled>Ausgewählte herunterladen</button>
+                    <div id="enc-download-status" style="margin-top: 10px; font-size: 12px; color: #64ffda;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart Progress Modal -->
+    <div id="chart-progress-modal">
+        <div class="progress-content">
+            <h2 style="margin-bottom: 20px; color: #64ffda; text-align: center;" id="progress-title">📊 Verarbeite Karten...</h2>
+            <div style="background: rgba(10, 14, 39, 0.6); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                <div id="progress-status" style="color: #8892b0; margin-bottom: 15px; font-size: 14px; min-height: 20px;">Initialisiere...</div>
+                <div class="progress-bar-container">
+                    <div id="progress-bar">0%</div>
+                </div>
+                <div id="progress-details"></div>
+            </div>
+            <button id="progress-close-btn" onclick="closeProgressModal()" style="display: none; width: 100%; background: linear-gradient(135deg, #2ecc71, #27ae60); border: none; color: white; padding: 12px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer;">✅ Fertig</button>
+        </div>
+    </div>
+
+    <!-- JavaScript Includes -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="i18n.js"></script>
+    <script src="logbook.js"></script>
+    <script src="charts.js"></script>
+    <script src="units.js"></script>
+    <script src="water_routing.js"></script>
+    <script src="app.js"></script>
+
+    <!-- Include Units Modal -->
+    <script>
+        fetch("units_modal.html").then(r => r.text()).then(html => {
+            document.body.insertAdjacentHTML("beforeend", html);
+        });
+    </script>
+</body>
+</html>
