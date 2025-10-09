@@ -1,5 +1,5 @@
 """BoatOS Backend - FastAPI Server with Logbook & Charts"""
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, BackgroundTasks
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -650,13 +650,14 @@ async def get_enc_catalog():
         return []
 
 @app.post("/api/enc/download")
-async def download_enc(waterways: List[Dict[str, Any]]):
+async def download_enc(request: Request):
     """
     Download ENC charts from ELWIS using 3-step process:
     1. Fetch download page HTML from Download?file= URL
     2. Extract File: link from HTML
     3. Download ZIP, extract .000 files, convert to GeoJSON
     """
+    waterways = await request.json()
     results = {"success": 0, "failed": 0, "total": len(waterways), "details": []}
 
     for waterway in waterways:

@@ -279,6 +279,62 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
+        /* Leaflet Layer Control Styling */
+        .leaflet-control-layers {
+            background: rgba(10, 14, 39, 0.95) !important;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(42, 82, 152, 0.6) !important;
+            border-radius: 12px !important;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
+        }
+        .leaflet-control-layers-toggle {
+            background-color: rgba(10, 14, 39, 0.95) !important;
+            background-image: none !important;
+            width: 44px !important;
+            height: 44px !important;
+            border-radius: 12px !important;
+            border: 2px solid rgba(42, 82, 152, 0.6) !important;
+        }
+        .leaflet-control-layers-toggle:before {
+            content: "🗺️";
+            font-size: 24px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .leaflet-control-layers-expanded {
+            padding: 15px !important;
+            color: #fff !important;
+        }
+        .leaflet-control-layers-base label,
+        .leaflet-control-layers-overlays label {
+            color: #fff !important;
+            font-size: 14px !important;
+            padding: 8px 5px !important;
+            margin-bottom: 5px !important;
+            display: flex !important;
+            align-items: center !important;
+            cursor: pointer !important;
+            transition: all 0.2s !important;
+            border-radius: 6px !important;
+        }
+        .leaflet-control-layers-base label:hover,
+        .leaflet-control-layers-overlays label:hover {
+            background: rgba(42, 82, 152, 0.3) !important;
+        }
+        .leaflet-control-layers-separator {
+            border-top: 1px solid rgba(42, 82, 152, 0.4) !important;
+            margin: 10px 0 !important;
+        }
+        .leaflet-control-layers input[type="radio"],
+        .leaflet-control-layers input[type="checkbox"] {
+            margin-right: 8px !important;
+            width: 18px !important;
+            height: 18px !important;
+            cursor: pointer !important;
+        }
+
     </style>
 </head>
 <body>
@@ -288,8 +344,8 @@
             <button onclick="openSettingsModal()" style="background: rgba(100, 255, 218, 0.2); border: 2px solid #64ffda; color: #64ffda; font-size: 24px; width: 50px; height: 50px; border-radius: 12px; cursor: pointer; transition: all 0.3s; margin-right: 15px;" title="Einstellungen">⚙️</button>
             <h1>⚓ BoatOS</h1>
             <div id="status">
-                <div class="status-item" id="lang-switch" onclick="toggleLanguage()">
-                    <span id="current-lang">🇩🇪 DE</span>
+                <div class="status-item" id="map-view-switch" onclick="toggleMapView()">
+                    <span id="current-map-view">🗺️ Karte</span>
                 </div>
                 <div class="status-item" id="signalk-status">SignalK</div>
                 <div class="status-item" id="gps-status" onclick="toggleGpsPanel()">GPS</div>
