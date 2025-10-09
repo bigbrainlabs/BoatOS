@@ -1,6 +1,6 @@
 # BoatOS TODO Liste
 
-## ✅ Abgeschlossen (v1.0.0)
+## ✅ Abgeschlossen (v1.1.0)
 
 - [x] GPS-Integration über SignalK
 - [x] GPS-Panel mit allen Daten (Satelliten, Höhe, Speed, Heading, Fix-Status, Timestamp)
@@ -14,6 +14,23 @@
 - [x] Responsive Design
 - [x] Automatisches Installations-Skript
 - [x] Vollständige Dokumentation
+- [x] **Einstellungen-Screen** (v1.1.0)
+  - [x] Settings-Modal mit Tabs (Allgemein, Karten, Navigation, GPS, Wetter, Sensoren, Daten)
+  - [x] Sprach-Einstellungen (DE/EN)
+  - [x] Theme-Auswahl (Auto, Hell, Dunkel, Nacht)
+  - [x] Einheiten-Konfiguration (Geschwindigkeit, Distanz, Tiefe)
+  - [x] Persistente Speicherung (LocalStorage + Backend)
+- [x] **Karten-Manager** (v1.1.0)
+  - [x] In Einstellungen integriert (Tab "Karten")
+  - [x] KAP-Chart Upload & Konvertierung (GDAL)
+  - [x] ENC-Chart Upload & Konvertierung
+  - [x] ELWIS ENC Download-Integration
+  - [x] Progress-Modal für Konvertierung (1-3 Min. Feedback)
+  - [x] Flexible Upload-Optionen (einzelne Dateien oder Ordner)
+  - [x] Karten aktivieren/deaktivieren
+  - [x] Karten löschen
+  - [x] Nginx 2GB Upload-Limit für große Kartendateien
+  - [x] GDAL-Installation im Installer
 
 ---
 
@@ -27,7 +44,6 @@
 ### Karten
 - [ ] Offline-Karten Caching implementieren
 - [ ] Weitere Kartenebenen hinzufügen (Satellit, Topo)
-- [ ] Karten-Download-Manager
 
 ### Wetter
 - [ ] 3-Tage-Vorhersage im Weather-Panel
@@ -109,27 +125,17 @@
   - POIs (Points of Interest)
 
 ### UI/UX Verbesserungen
-- [ ] **Einstellungen/Setup-Screen**
-  - Hauptmenü-Button für Einstellungen
-  - Einstellungen-Modal/Seite
-  - Tabs/Kategorien:
-    - **Allgemein**: Sprache, Theme, Einheiten
-    - **Karten**: Chart-Ebenen verwalten (aus Charts-Modal), Offline-Karten
-    - **Navigation**: Standardposition, Zoom-Level, Kurs-Up vs North-Up
-    - **GPS**: SignalK-Verbindung, Update-Intervall
-    - **Wetter**: API-Key, Update-Intervall, Einheiten
-    - **Sensoren**: MQTT-Konfiguration, Sensor-Mapping
-    - **Alarme**: Anker-Alarm, Tiefen-Alarm, Kollisions-Alarm
-    - **Daten**: Import/Export, Backup/Restore
-  - Speichern-Button
-  - Reset auf Standardwerte
-  - Persistente Speicherung (LocalStorage + Backend-API)
+- [ ] **Einstellungen erweitern**
+  - [ ] Navigation-Tab: Standardposition, Zoom-Level, Kurs-Up vs North-Up
+  - [ ] GPS-Tab: SignalK-Verbindung testen, Update-Intervall
+  - [ ] Wetter-Tab: API-Key Eingabe, Update-Intervall
+  - [ ] Sensoren-Tab: MQTT-Konfiguration, Sensor-Mapping
+  - [ ] Alarme-Tab: Anker-Alarm, Tiefen-Alarm, Kollisions-Alarm
+  - [ ] Daten-Tab: GPX Import/Export, Backup/Restore
 
-
-- [ ] **Dark Mode**
-  - Dunkles Theme für Nachtfahrten
-  - Automatischer Wechsel bei Sonnenuntergang
-  - Rote Beleuchtung-Modus
+- [ ] **Dark Mode / Night Mode**
+  - [ ] Automatischer Wechsel bei Sonnenuntergang
+  - [ ] Rote Beleuchtung-Modus für Nachtfahrten
 
 - [ ] **PWA Optimierung**
   - Offline-Funktionalität
@@ -223,21 +229,13 @@
 
 ## Prioritäten
 
-### High Priority (Nächste Version)
-1. **Einstellungen/Setup-Screen**
-   - Grundlegende App-Einstellungen
-   - Charts-Manager (aus Modal ausgelagert)
-   - Sprach-Einstellungen
-   - Einheiten-Konfiguration (Knoten/km/h, etc.)
-   - GPS-Einstellungen
-   - Wetter-API-Key Konfiguration
-   - Theme-Auswahl (Hell/Dunkel/Auto)
-   - Speichern in LocalStorage/Backend
-2. Anker-Alarm
-3. AIS-Integration
-4. GPX-Export
-5. Dark Mode
-6. Track-Statistiken
+### High Priority (v1.2.0)
+1. Anker-Alarm
+2. AIS-Integration
+3. GPX-Export
+4. Dark Mode / Night Mode Auto-Switch
+5. Track-Statistiken
+6. Einstellungen-Tabs vervollständigen (GPS, Wetter, Sensoren, Daten)
 
 ### Medium Priority
 1. Tide-Vorhersagen
@@ -256,4 +254,4 @@
 ---
 
 **Stand**: 2025-10-09
-**Version**: 1.0.0
+**Version**: 1.1.0
