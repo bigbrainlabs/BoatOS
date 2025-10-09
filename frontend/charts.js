@@ -488,11 +488,17 @@ async function downloadSelectedENC() {
     statusDiv.textContent = `Downloading ${selectedENC.length} waterways...`;
     downloadBtn.disabled = true;
 
+    // Convert filenames to full waterway objects from catalog
+    const waterways = selectedENC.map(filename => {
+        const enc = encCatalog.find(e => e.filename === filename);
+        return enc ? { name: enc.name, url: enc.url, filename: enc.filename } : null;
+    }).filter(w => w !== null);
+
     try {
         const response = await fetch(`${API_URL}/api/enc/download`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(selectedENC)
+            body: JSON.stringify(waterways)
         });
 
         if (response.ok) {

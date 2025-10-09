@@ -30,6 +30,11 @@ let lastGpsUpdate = null;
 let gpsSource = null; // "backend" or "browser"
 let browserGpsAccuracy = null;
 
+// Map layers (global references)
+let osmLayer;
+let satelliteLayer;
+let currentBaseLayer = 'osm'; // 'osm' or 'satellite'
+
 // ==================== MAP INIT ====================
 function initMap() {
     // Karte initialisieren
@@ -38,21 +43,61 @@ function initMap() {
         attributionControl: false
     }).setView([currentPosition.lat, currentPosition.lon], 13);
 
-    // Base Map (OpenStreetMap)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19
-    }).addTo(map);
-
-    // OpenSeaMap Tiles (nautical markers for coastal areas)
-    L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
-        maxZoom: 18,
-        opacity: 0.8
-    }).addTo(map);
-
-    // OpenRailwayMap - shows bridges
-    L.tileLayer('https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', {
+    // ==================== BASE LAYERS ====================
+    osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        opacity: 0.5
+        attribution: '© OpenStreetMap'
+    });
+
+    satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19,
+        attribution: '© ESRI'
+    });
+
+    // Default base layer
+    osmLayer.addTo(map);
+
+    // ==================== OVERLAY LAYERS ====================
+    const seaMarkLayer = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        opacity: 0.8,
+        attribution: '© OpenSeaMap'
+    });
+
+    const inlandLayer = L.tileLayer('https://tiles.openseamap.org/inland/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        opacity: 0.8,
+        attribution: '© OpenSeaMap Inland'
+    });
+
+    const railwayLayer = L.tileLayer('https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        opacity: 0.5,
+        attribution: '© OpenRailwayMap'
+    });
+
+    const trafficLayer = L.tileLayer('https://tiles.marinetraffic.com/ais_helpers/shiptilesingle.aspx?output=png&sat=1&grouping=shiptype&tile_size=256&legends=1&zoom={z}&X={x}&Y={y}', {
+        maxZoom: 15,
+        opacity: 0.7,
+        attribution: '© MarineTraffic'
+    });
+
+    // Add default overlays
+    seaMarkLayer.addTo(map);
+    inlandLayer.addTo(map);
+    railwayLayer.addTo(map);
+
+    // ==================== LAYER CONTROL ====================
+    const overlays = {
+        "⚓ Seezeichen": seaMarkLayer,
+        "🚢 Binnengewässer": inlandLayer,
+        "🌉 Brücken": railwayLayer,
+        "🚢 Schiffsverkehr": trafficLayer
+    };
+
+    L.control.layers(null, overlays, {
+        position: 'bottomright',
+        collapsed: true
     }).addTo(map);
 
     // Zoom Control (rechts unten)
@@ -289,6 +334,23 @@ function toggleTrackHistory(show) {
         if (map.hasLayer(trackHistoryLayer)) {
             map.removeLayer(trackHistoryLayer);
         }
+    }
+}
+
+// ==================== MAP VIEW TOGGLE ====================
+function toggleMapView() {
+    if (currentBaseLayer === 'osm') {
+        // Switch to satellite
+        map.removeLayer(osmLayer);
+        satelliteLayer.addTo(map);
+        currentBaseLayer = 'satellite';
+        document.getElementById('current-map-view').textContent = '🛰️ Satellit';
+    } else {
+        // Switch to OSM
+        map.removeLayer(satelliteLayer);
+        osmLayer.addTo(map);
+        currentBaseLayer = 'osm';
+        document.getElementById('current-map-view').textContent = '🗺️ Karte';
     }
 }
 
