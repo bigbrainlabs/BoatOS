@@ -18,6 +18,9 @@ let map;
 let boatMarker;
 let waypoints = [];
 let routeLayer;
+let trackHistoryLayer; // GPS track history polyline
+let trackHistory = []; // Array of {lat, lon, timestamp}
+let maxTrackPoints = 500; // Maximum track points to keep
 let currentPosition = { lat: 50.8, lon: 5.6 }; // Default: Albertkanal
 let ws;
 let routePlanningMode = false;
@@ -67,6 +70,20 @@ function initMap() {
 
     // Route Layer
     routeLayer = L.layerGroup().addTo(map);
+
+    // Track History Layer (initially empty polyline)
+    trackHistoryLayer = L.polyline([], {
+        color: '#3498db',
+        weight: 3,
+        opacity: 0.7,
+        smoothFactor: 1
+    }).addTo(map);
+
+    // Check if track history should be shown from settings
+    const settings = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
+    if (settings.showTrackHistory === false) {
+        map.removeLayer(trackHistoryLayer);
+    }
 
     // Click Handler für Wegpunkte
     map.on('click', onMapClick);
@@ -215,6 +232,63 @@ function updateGpsInfo(gps) {
             const date = new Date(gps.timestamp);
             timestampEl.textContent = date.toLocaleTimeString('de-DE');
         }
+
+        // HDOP (Horizontal Dilution of Precision)
+        const hdopEl = document.getElementById('gps-hdop');
+        if (hdopEl && gps.hdop !== undefined) {
+            hdopEl.textContent = gps.hdop.toFixed(2);
+            // Color code: <2 excellent, 2-5 good, 5-10 moderate, >10 poor
+            if (gps.hdop < 2) hdopEl.style.color = '#2ecc71';
+            else if (gps.hdop < 5) hdopEl.style.color = '#f39c12';
+            else if (gps.hdop < 10) hdopEl.style.color = '#e67e22';
+            else hdopEl.style.color = '#e74c3c';
+        }
+
+        // VDOP (Vertical Dilution of Precision)
+        const vdopEl = document.getElementById('gps-vdop');
+        if (vdopEl && gps.vdop !== undefined) {
+            vdopEl.textContent = gps.vdop.toFixed(2);
+            // Color code: <2 excellent, 2-5 good, 5-10 moderate, >10 poor
+            if (gps.vdop < 2) vdopEl.style.color = '#2ecc71';
+            else if (gps.vdop < 5) vdopEl.style.color = '#f39c12';
+            else if (gps.vdop < 10) vdopEl.style.color = '#e67e22';
+            else vdopEl.style.color = '#e74c3c';
+        }
+    }
+}
+
+// ==================== GPS TRACK HISTORY ====================
+function addToTrackHistory(lat, lon) {
+    // Add new point to track history
+    trackHistory.push({ lat, lon, timestamp: Date.now() });
+
+    // Limit track history to maxTrackPoints
+    if (trackHistory.length > maxTrackPoints) {
+        trackHistory.shift(); // Remove oldest point
+    }
+
+    // Update polyline with new points
+    const latLngs = trackHistory.map(point => [point.lat, point.lon]);
+    trackHistoryLayer.setLatLngs(latLngs);
+}
+
+function clearTrackHistory() {
+    trackHistory = [];
+    trackHistoryLayer.setLatLngs([]);
+    if (typeof showMsg === 'function') {
+        showMsg('🗑️ Track-Historie gelöscht');
+    }
+}
+
+function toggleTrackHistory(show) {
+    if (show) {
+        if (!map.hasLayer(trackHistoryLayer)) {
+            map.addLayer(trackHistoryLayer);
+        }
+    } else {
+        if (map.hasLayer(trackHistoryLayer)) {
+            map.removeLayer(trackHistoryLayer);
+        }
     }
 }
 
@@ -246,6 +320,9 @@ function updateBoatPosition(gps) {
 
         currentPosition = { lat: newLat, lon: newLon };
 
+        // Add to track history
+        addToTrackHistory(newLat, newLon);
+
         // Marker aktualisieren
         boatMarker.setLatLng([newLat, newLon]);
 
@@ -255,6 +332,11 @@ function updateBoatPosition(gps) {
             if (markerElement) {
                 markerElement.style.transform = `rotate(${gps.course}deg)`;
             }
+            // Update compass rose with heading
+            updateCompassRose(gps.course);
+        } else if (gps.heading !== undefined) {
+            // Use heading if course not available
+            updateCompassRose(gps.heading);
         }
 
         // GPS Status
@@ -695,6 +777,86 @@ centerButton.onAdd = function() {
     return btn;
 };
 
+// Compass Rose Control
+let compassRoseElement = null;
+let currentHeading = 0;
+
+const compassRose = L.control({ position: 'topleft' });
+compassRose.onAdd = function() {
+    const container = L.DomUtil.create('div', 'compass-rose-container');
+    container.style.cssText = 'width: 100px; height: 100px; background: rgba(255,255,255,0.9); border: 3px solid rgba(0,0,0,0.3); border-radius: 50%; position: relative; box-shadow: 0 2px 10px rgba(0,0,0,0.3);';
+
+    // Compass rose SVG
+    container.innerHTML = `
+        <svg width="100" height="100" viewBox="0 0 100 100" style="position: absolute; top: 0; left: 0; transition: transform 0.5s ease-out;">
+            <!-- Background circle -->
+            <circle cx="50" cy="50" r="48" fill="#fff" stroke="#333" stroke-width="2"/>
+
+            <!-- Cardinal directions -->
+            <text x="50" y="15" text-anchor="middle" font-size="14" font-weight="bold" fill="#e74c3c">N</text>
+            <text x="85" y="54" text-anchor="middle" font-size="12" font-weight="bold" fill="#34495e">E</text>
+            <text x="50" y="92" text-anchor="middle" font-size="12" font-weight="bold" fill="#34495e">S</text>
+            <text x="15" y="54" text-anchor="middle" font-size="12" font-weight="bold" fill="#34495e">W</text>
+
+            <!-- Needle (North pointer - red) -->
+            <polygon points="50,10 45,55 50,50 55,55" fill="#e74c3c" stroke="#c0392b" stroke-width="1"/>
+
+            <!-- Needle (South pointer - white/gray) -->
+            <polygon points="50,90 45,45 50,50 55,45" fill="#ecf0f1" stroke="#95a5a6" stroke-width="1"/>
+
+            <!-- Center dot -->
+            <circle cx="50" cy="50" r="4" fill="#2c3e50"/>
+
+            <!-- Degree markings -->
+            <g id="compass-markings">
+                ${Array.from({length: 12}, (_, i) => {
+                    const angle = i * 30;
+                    const rad = (angle - 90) * Math.PI / 180;
+                    const x1 = 50 + 40 * Math.cos(rad);
+                    const y1 = 50 + 40 * Math.sin(rad);
+                    const x2 = 50 + 45 * Math.cos(rad);
+                    const y2 = 50 + 45 * Math.sin(rad);
+                    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#7f8c8d" stroke-width="2"/>`;
+                }).join('')}
+            </g>
+        </svg>
+        <div style="position: absolute; bottom: -25px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); color: #64ffda; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; white-space: nowrap; font-family: monospace;" id="compass-heading">000°</div>
+    `;
+
+    compassRoseElement = container.querySelector('svg');
+    return container;
+};
+
+function updateCompassRose(heading) {
+    if (compassRoseElement && heading !== undefined && heading !== null) {
+        currentHeading = heading;
+        // Rotate compass to show heading (negative rotation because compass rotates opposite to heading)
+        compassRoseElement.style.transform = `rotate(${-heading}deg)`;
+
+        // Update heading text
+        const headingText = document.getElementById('compass-heading');
+        if (headingText) {
+            headingText.textContent = `${Math.round(heading).toString().padStart(3, '0')}°`;
+        }
+    }
+}
+
+function toggleCompassRose(show) {
+    const compassContainer = document.querySelector('.compass-rose-container');
+
+    if (show) {
+        // Add compass if not already on map
+        if (!compassContainer || !compassContainer.parentElement) {
+            compassRose.addTo(map);
+        }
+    } else {
+        // Remove compass from map
+        if (compassContainer && compassContainer.parentElement) {
+            map.removeControl(compassRose);
+        }
+    }
+}
+
 function saveRoute() {
     const route = {
         name: `Route ${new Date().toLocaleDateString('de-DE')}`,
@@ -756,6 +918,12 @@ window.addEventListener('load', () => {
 
     // Add center button to map
     centerButton.addTo(map);
+
+    // Add compass rose to map (check settings first)
+    const settings = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
+    if (settings.navigation?.showCompassRose !== false) {
+        compassRose.addTo(map);
+    }
 
     // Weather laden und alle 30min aktualisieren
     fetchWeather();
