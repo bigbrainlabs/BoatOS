@@ -1,68 +1,23 @@
-/* Logbook Modal */
+/* Logbook Modal - Specific styles only, generic .modal* styles are in index.html */
 #logbook-modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.85);
-    z-index: 10000;
-    backdrop-filter: blur(5px);
+    display: none !important;
 }
 
 #logbook-modal.active {
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    display: flex !important;
 }
 
-.modal-content {
-    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-    border-radius: 20px;
-    width: 90%;
-    max-width: 800px;
-    max-height: 90vh;
-    overflow: hidden;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-    display: flex;
-    flex-direction: column;
+#logbook-modal .modal-content {
+    max-width: 1200px !important;
+    width: 95% !important;
 }
 
-.modal-header {
-    padding: 20px 30px;
-    border-bottom: 2px solid rgba(255,255,255,0.1);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+#manual-entry-modal {
+    display: none !important;
 }
 
-.modal-header h2 {
-    font-size: 28px;
-    margin: 0;
-}
-
-.modal-close {
-    background: rgba(255,255,255,0.1);
-    border: none;
-    color: white;
-    font-size: 32px;
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: all 0.3s;
-}
-
-.modal-close:active {
-    transform: scale(0.9);
-    background: rgba(255,255,255,0.2);
-}
-
-.modal-body {
-    padding: 30px;
-    overflow-y: auto;
-    flex: 1;
+#manual-entry-modal.active {
+    display: flex !important;
 }
 
 /* Track Recording Controls */
@@ -151,39 +106,103 @@
     cursor: not-allowed;
 }
 
-/* Logbook Entries */
+/* Logbook Entries with Timeline */
 .logbook-entries {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 0;
+    position: relative;
+    padding-left: 40px;
+}
+
+/* Timeline line */
+.logbook-entries::before {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: 30px;
+    bottom: 30px;
+    width: 3px;
+    background: linear-gradient(180deg, #64ffda 0%, rgba(100, 255, 218, 0.2) 100%);
+    border-radius: 2px;
 }
 
 .logbook-entry {
-    background: rgba(255,255,255,0.05);
-    border-radius: 12px;
-    padding: 20px;
-    border-left: 4px solid #64ffda;
-    transition: all 0.3s;
+    position: relative;
+    margin-bottom: 25px;
+    animation: slideIn 0.4s ease-out;
 }
 
-.logbook-entry:active {
-    transform: scale(0.98);
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Timeline marker */
+.timeline-marker {
+    position: absolute;
+    left: -28px;
+    top: 22px;
+    width: 16px;
+    height: 16px;
+    background: #64ffda;
+    border: 3px solid #0a0e27;
+    border-radius: 50%;
+    box-shadow: 0 0 0 4px rgba(100, 255, 218, 0.2);
+    z-index: 2;
+}
+
+.entry-content {
+    background: rgba(255,255,255,0.05);
+    border-radius: 16px;
+    padding: 20px;
+    border: 2px solid rgba(100, 255, 218, 0.1);
+    transition: all 0.3s;
+    backdrop-filter: blur(10px);
+}
+
+.entry-content:hover {
+    border-color: rgba(100, 255, 218, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
 .entry-header {
     display: flex;
-    justify-content: space-between;
+    gap: 15px;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.entry-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.entry-header-text {
+    flex: 1;
 }
 
 .entry-title {
     font-size: 18px;
     font-weight: 600;
+    margin-bottom: 4px;
 }
 
 .entry-time {
-    font-size: 14px;
+    font-size: 13px;
     color: #8892b0;
 }
 
@@ -212,8 +231,62 @@
     transition: all 0.3s;
 }
 
+.entry-btn.small {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+.entry-btn.delete {
+    background: rgba(231, 76, 60, 0.2);
+    color: #e74c3c;
+}
+
 .entry-btn:active {
     transform: scale(0.95);
+}
+
+.entry-notes {
+    font-size: 15px;
+    line-height: 1.5;
+    color: #ccd6f6;
+    margin-bottom: 12px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+}
+
+.entry-position {
+    font-size: 13px;
+    color: #8892b0;
+    font-family: monospace;
+    margin-bottom: 10px;
+}
+
+.entry-weather {
+    display: flex;
+    gap: 15px;
+    font-size: 13px;
+    color: #8892b0;
+    margin-bottom: 12px;
+    padding: 10px;
+    background: rgba(52, 152, 219, 0.1);
+    border-radius: 8px;
+    flex-wrap: wrap;
+}
+
+.entry-weather span {
+    white-space: nowrap;
+}
+
+.entry-stats {
+    display: flex;
+    gap: 20px;
+    font-size: 14px;
+    color: #64ffda;
+    margin-bottom: 12px;
+    padding: 12px;
+    background: rgba(100, 255, 218, 0.05);
+    border-radius: 8px;
 }
 
 .empty-logbook {
@@ -221,4 +294,90 @@
     padding: 50px;
     color: #8892b0;
     font-size: 16px;
+}
+
+/* Weather Display */
+.entry-weather {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 16px;
+    padding: 16px;
+    background: rgba(52, 152, 219, 0.08);
+    border-radius: 12px;
+    border-left: 4px solid #3498db;
+}
+
+.weather-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.weather-icon {
+    font-size: 32px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+.weather-icon.wind-arrow {
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.weather-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.weather-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #64ffda;
+}
+
+.weather-label {
+    font-size: 12px;
+    color: #8892b0;
+    text-transform: capitalize;
+}
+
+/* Stats Grid */
+.entry-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.stat-tile {
+    padding: 16px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    transition: all 0.3s;
+}
+
+.stat-tile:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+}
+
+.stat-icon {
+    font-size: 28px;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+.stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 4px;
+}
+
+.stat-label {
+    font-size: 11px;
+    color: rgba(255,255,255,0.8);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }

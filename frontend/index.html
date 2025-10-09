@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>BoatOS</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-    <link rel="stylesheet" href="logbook.css"/>
+    <link rel="stylesheet" href="logbook.css?v=2.1"/>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: sans-serif; background: #0a0e27; color: #fff; overflow: hidden; user-select: none; }
@@ -576,10 +576,41 @@
                         <button class="track-btn stop" id="btn-track-stop" onclick="stopTrackRecording()" disabled>⏹️ Stop Recording</button>
                     </div>
                 </div>
-                <h3 style="margin-bottom: 15px; color: #8892b0;">Previous Tracks</h3>
-                <div class="logbook-entries" id="logbook-entries">
-                    <div class="empty-logbook">No tracks recorded yet</div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0; color: #8892b0;">Logbuch-Einträge</h3>
+                    <button class="track-btn" onclick="openManualEntryModal()" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); padding: 10px 20px;">📝 Neuer Eintrag</button>
                 </div>
+                <div class="logbook-entries" id="logbook-entries">
+                    <div class="empty-logbook">Noch keine Logbuch-Einträge</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manual Entry Modal -->
+    <div id="manual-entry-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>📝 Neuer Logbuch-Eintrag</h2>
+                <button class="modal-close" onclick="closeManualEntryModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="manual-entry-form" onsubmit="event.preventDefault(); submitManualEntry();">
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 8px; color: #8892b0; font-size: 14px;">Notizen</label>
+                        <textarea id="manual-entry-notes" rows="6" style="width: 100%; padding: 12px; background: rgba(42, 82, 152, 0.2); border: 2px solid rgba(42, 82, 152, 0.4); border-radius: 8px; color: white; font-family: sans-serif; font-size: 14px; resize: vertical;" placeholder="Was möchtest du festhalten?"></textarea>
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: flex; align-items: center; gap: 10px; color: #8892b0; cursor: pointer;">
+                            <input type="checkbox" id="manual-entry-weather" checked style="width: 20px; height: 20px; cursor: pointer;">
+                            <span>🌡️ Aktuelles Wetter speichern</span>
+                        </label>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="submit" class="track-btn start" style="flex: 1;">✅ Speichern</button>
+                        <button type="button" class="track-btn stop" onclick="closeManualEntryModal()" style="flex: 1;">❌ Abbrechen</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

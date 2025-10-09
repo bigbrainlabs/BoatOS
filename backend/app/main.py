@@ -891,10 +891,35 @@ async def get_logbook():
 
 @app.post("/api/logbook")
 async def add_logbook_entry(entry: Dict[str, Any]):
+    """Add a manual logbook entry"""
     entry["id"] = len(logbook_entries) + 1
     entry["timestamp"] = datetime.now().isoformat()
+
+    # Add current position if not provided
+    if "position" not in entry:
+        entry["position"] = {
+            "lat": sensor_data["gps"]["lat"],
+            "lon": sensor_data["gps"]["lon"]
+        }
+
+    # Add current weather if requested and not provided
+    if entry.get("include_weather", False) and "weather" not in entry:
+        entry["weather"] = {
+            "temp": weather_data.get("current", {}).get("temp"),
+            "description": weather_data.get("current", {}).get("description"),
+            "wind_speed": weather_data.get("current", {}).get("wind_speed"),
+            "wind_deg": weather_data.get("current", {}).get("wind_deg")
+        } if weather_data else None
+
     logbook_entries.append(entry)
     return entry
+
+@app.delete("/api/logbook/{entry_id}")
+async def delete_logbook_entry(entry_id: int):
+    """Delete a logbook entry"""
+    global logbook_entries
+    logbook_entries = [e for e in logbook_entries if e["id"] != entry_id]
+    return {"status": "deleted"}
 
 @app.get("/api/track/status")
 async def get_track_status():
@@ -905,16 +930,54 @@ async def start_track_recording():
     global track_recording, current_track
     track_recording = True
     current_track = []
-    return {"status": "started", "timestamp": datetime.now().isoformat()}
+
+    # Create automatic logbook entry for trip start with weather
+    entry = {
+        "id": len(logbook_entries) + 1,
+        "type": "trip_start",
+        "timestamp": datetime.now().isoformat(),
+        "position": {
+            "lat": sensor_data["gps"]["lat"],
+            "lon": sensor_data["gps"]["lon"]
+        },
+        "weather": {
+            "temp": weather_data.get("current", {}).get("temp"),
+            "description": weather_data.get("current", {}).get("description"),
+            "wind_speed": weather_data.get("current", {}).get("wind_speed"),
+            "wind_deg": weather_data.get("current", {}).get("wind_deg")
+        } if weather_data else None,
+        "notes": "Fahrt gestartet"
+    }
+    logbook_entries.append(entry)
+
+    return {"status": "started", "timestamp": datetime.now().isoformat(), "entry": entry}
 
 @app.post("/api/track/stop")
 async def stop_track_recording():
     global track_recording
     track_recording = False
     if len(current_track) > 0:
-        entry = {"id": len(logbook_entries) + 1, "type": "track", "timestamp": datetime.now().isoformat(),
-                 "points": len(current_track), "distance": calculate_track_distance(),
-                 "duration": calculate_track_duration(), "track_data": current_track[:1000]}
+        # Create trip_end entry with weather and statistics
+        entry = {
+            "id": len(logbook_entries) + 1,
+            "type": "trip_end",
+            "timestamp": datetime.now().isoformat(),
+            "position": {
+                "lat": sensor_data["gps"]["lat"],
+                "lon": sensor_data["gps"]["lon"]
+            },
+            "weather": {
+                "temp": weather_data.get("current", {}).get("temp"),
+                "description": weather_data.get("current", {}).get("description"),
+                "wind_speed": weather_data.get("current", {}).get("wind_speed"),
+                "wind_deg": weather_data.get("current", {}).get("wind_deg")
+            } if weather_data else None,
+            "points": len(current_track),
+            "distance": calculate_track_distance(),
+            "duration": calculate_track_duration(),
+            "track_data": current_track[:1000],
+            "notes": f"Fahrt beendet - {calculate_track_distance()} NM"
+        }
         logbook_entries.append(entry)
         return entry
     return {"status": "stopped", "points": 0}
