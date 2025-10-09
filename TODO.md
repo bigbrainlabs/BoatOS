@@ -109,6 +109,23 @@
   - POIs (Points of Interest)
 
 ### UI/UX Verbesserungen
+- [ ] **Einstellungen/Setup-Screen**
+  - Hauptmenü-Button für Einstellungen
+  - Einstellungen-Modal/Seite
+  - Tabs/Kategorien:
+    - **Allgemein**: Sprache, Theme, Einheiten
+    - **Karten**: Chart-Ebenen verwalten (aus Charts-Modal), Offline-Karten
+    - **Navigation**: Standardposition, Zoom-Level, Kurs-Up vs North-Up
+    - **GPS**: SignalK-Verbindung, Update-Intervall
+    - **Wetter**: API-Key, Update-Intervall, Einheiten
+    - **Sensoren**: MQTT-Konfiguration, Sensor-Mapping
+    - **Alarme**: Anker-Alarm, Tiefen-Alarm, Kollisions-Alarm
+    - **Daten**: Import/Export, Backup/Restore
+  - Speichern-Button
+  - Reset auf Standardwerte
+  - Persistente Speicherung (LocalStorage + Backend-API)
+
+
 - [ ] **Dark Mode**
   - Dunkles Theme für Nachtfahrten
   - Automatischer Wechsel bei Sonnenuntergang
@@ -207,11 +224,20 @@
 ## Prioritäten
 
 ### High Priority (Nächste Version)
-1. Anker-Alarm
-2. AIS-Integration
-3. GPX-Export
-4. Dark Mode
-5. Track-Statistiken
+1. **Einstellungen/Setup-Screen**
+   - Grundlegende App-Einstellungen
+   - Charts-Manager (aus Modal ausgelagert)
+   - Sprach-Einstellungen
+   - Einheiten-Konfiguration (Knoten/km/h, etc.)
+   - GPS-Einstellungen
+   - Wetter-API-Key Konfiguration
+   - Theme-Auswahl (Hell/Dunkel/Auto)
+   - Speichern in LocalStorage/Backend
+2. Anker-Alarm
+3. AIS-Integration
+4. GPX-Export
+5. Dark Mode
+6. Track-Statistiken
 
 ### Medium Priority
 1. Tide-Vorhersagen
