@@ -328,6 +328,14 @@
                         <div class="info-label" data-i18n="gps_fix_status">Fix Status</div>
                         <div class="info-value" id="gps-fix-status">No Fix</div>
                     </div>
+                    <div class="info-item">
+                        <div class="info-label" data-i18n="gps_hdop">HDOP</div>
+                        <div class="info-value" id="gps-hdop">--</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label" data-i18n="gps_vdop">VDOP</div>
+                        <div class="info-value" id="gps-vdop">--</div>
+                    </div>
                     <div class="info-item" style="grid-column: span 2;">
                         <div class="info-label" data-i18n="gps_last_update">Last Update</div>
                         <div class="info-value" id="gps-timestamp" style="font-size: 14px;">--</div>
@@ -572,12 +580,34 @@
                     <!-- Navigation Tab -->
                     <div id="settings-navigation" class="settings-tab-content">
                         <h3>Navigations-Einstellungen</h3>
-                        
+
                         <div class="setting-item">
                             <label>Karten-Ausrichtung</label>
                             <select id="setting-map-orientation">
                                 <option value="north-up">North-Up (Norden oben)</option>
                                 <option value="course-up">Course-Up (Kurs oben)</option>
+                            </select>
+                        </div>
+
+                        <div class="setting-item">
+                            <label>GPS-Track-Historie anzeigen</label>
+                            <select id="setting-show-track-history">
+                                <option value="true">An</option>
+                                <option value="false">Aus</option>
+                            </select>
+                        </div>
+
+                        <div class="setting-item">
+                            <button onclick="clearTrackHistory()" style="padding: 10px 20px; background: rgba(231, 76, 60, 0.8); border: none; border-radius: 6px; color: white; cursor: pointer;">
+                                🗑️ Track-Historie löschen
+                            </button>
+                        </div>
+
+                        <div class="setting-item">
+                            <label>Kompass-Rose anzeigen</label>
+                            <select id="setting-show-compass-rose">
+                                <option value="true">An</option>
+                                <option value="false">Aus</option>
                             </select>
                         </div>
                     </div>

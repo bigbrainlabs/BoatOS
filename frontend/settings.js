@@ -13,7 +13,9 @@ const defaultSettings = {
         mapOrientation: 'north-up',
         defaultZoom: 13,
         autoTrack: false,
-        trackInterval: 10
+        trackInterval: 10,
+        showTrackHistory: true,
+        showCompassRose: true
     },
     gps: {
         signalkUrl: 'http://localhost:3000',
@@ -138,6 +140,12 @@ function loadSettingsToForm() {
     if (document.getElementById('setting-map-orientation')) {
         document.getElementById('setting-map-orientation').value = currentSettings.navigation.mapOrientation || 'north-up';
     }
+    if (document.getElementById('setting-show-track-history')) {
+        document.getElementById('setting-show-track-history').value = String(currentSettings.navigation.showTrackHistory !== false);
+    }
+    if (document.getElementById('setting-show-compass-rose')) {
+        document.getElementById('setting-show-compass-rose').value = String(currentSettings.navigation.showCompassRose !== false);
+    }
 
     // GPS
     if (document.getElementById('setting-signalk-url')) {
@@ -183,7 +191,9 @@ function saveSettings() {
             mapOrientation: getValue('setting-map-orientation', 'north-up'),
             defaultZoom: 13,
             autoTrack: false,
-            trackInterval: 10
+            trackInterval: 10,
+            showTrackHistory: getValue('setting-show-track-history', 'true') === 'true',
+            showCompassRose: getValue('setting-show-compass-rose', 'true') === 'true'
         },
         gps: {
             signalkUrl: getValue('setting-signalk-url', 'http://localhost:3000'),
@@ -240,6 +250,16 @@ function applySettings() {
 
     // Apply theme
     applyTheme(currentSettings.general.theme);
+
+    // Apply track history visibility (only if map is initialized)
+    if (typeof map !== 'undefined' && typeof toggleTrackHistory === 'function') {
+        toggleTrackHistory(currentSettings.navigation.showTrackHistory);
+    }
+
+    // Apply compass rose visibility (only if map is initialized)
+    if (typeof map !== 'undefined' && typeof toggleCompassRose === 'function') {
+        toggleCompassRose(currentSettings.navigation.showCompassRose);
+    }
 
     console.log('✅ Settings applied:', currentSettings);
 }

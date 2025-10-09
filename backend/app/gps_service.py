@@ -15,6 +15,8 @@ gps_data = {
     'heading': None,  # in degrees
     'altitude': None,
     'satellites': 0,
+    'hdop': None,  # Horizontal Dilution of Precision
+    'vdop': None,  # Vertical Dilution of Precision
     'fix': False,
     'timestamp': None
 }
@@ -62,7 +64,11 @@ async def read_gps_from_signalk(signalk_url='http://localhost:3000'):
                         # GNSS info
                         gnss = nav.get('gnss', {})
                         gps_data['satellites'] = gnss.get('satellites', {}).get('value', 0)
-                        
+
+                        # HDOP and VDOP
+                        gps_data['hdop'] = gnss.get('horizontalDilution', {}).get('value')
+                        gps_data['vdop'] = gnss.get('verticalDilution', {}).get('value')
+
                         # Check if we have a valid fix
                         quality = gnss.get('methodQuality', {}).get('value', '')
                         gps_data['fix'] = 'Fix' in quality and gps_data['lat'] is not None
@@ -97,6 +103,8 @@ async def broadcast_gps_data():
             'heading': gps_data['heading'] or 0,
             'altitude': gps_data['altitude'] or 0,
             'satellites': gps_data['satellites'],
+            'hdop': gps_data['hdop'],
+            'vdop': gps_data['vdop'],
             'fix': gps_data['fix'],
             'timestamp': gps_data['timestamp']
         }
@@ -125,5 +133,7 @@ def get_gps_status():
         'speed': gps_data['speed'] or 0,
         'heading': gps_data['heading'] or 0,
         'altitude': gps_data['altitude'] or 0,
+        'hdop': gps_data['hdop'],
+        'vdop': gps_data['vdop'],
         'timestamp': gps_data['timestamp']
     }

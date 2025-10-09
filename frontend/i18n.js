@@ -12,6 +12,7 @@ const translations = {
         notify_route_saved: "💾 Route gespeichert",
         notify_logbook_soon: "📓 Logbuch - Demnächst verfügbar\!",
         notify_sensors_soon: "📊 Sensor-Details - Demnächst verfügbar\!",
+        gps_hdop: "HDOP", gps_vdop: "VDOP",
         charts_manager: "📊 Karten-Manager",
         elwis_enc_download: "ELWIS ENC herunterladen",
         load_catalog: "Katalog laden",
@@ -135,3 +136,5 @@ translations.en.gps_last_update = 'Last Update';
 translations.en.gps_position = 'Position';
 translations.en.gps_fix = 'GPS Fix';
 translations.en.gps_no_fix = 'No Fix';
+translations.en.gps_hdop = 'HDOP';
+translations.en.gps_vdop = 'VDOP';
