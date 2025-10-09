@@ -369,7 +369,9 @@ function toggleGpsPanel() {
         weatherPanel.style.display = 'none';
     }
 
-    if (panel.style.display === 'none' || !panel.style.display) {
+    // Check computed style to handle CSS display property
+    const currentDisplay = window.getComputedStyle(panel).display;
+    if (currentDisplay === 'none') {
         panel.style.display = 'block';
     } else {
         panel.style.display = 'none';
