@@ -192,7 +192,7 @@ async function deleteChart(chartId) {
             chartLayers = chartLayers.filter(c => c.id !== chartId);
             loadChartOverlays();
             updateChartsUI();
-            showNotification('🗑️ Karte gelöscht');
+            showMsg('🗑️ Karte gelöscht');
         }
     } catch (error) {
         console.error('❌ Failed to delete chart:', error);
@@ -251,7 +251,7 @@ async function uploadChart() {
             if (response.ok) {
                 const chart = await response.json();
                 chartLayers.push(chart);
-                showNotification(`✅ ${chartName} hochgeladen`);
+                showMsg(`✅ ${chartName} hochgeladen`);
             } else {
                 const error = await response.json();
                 alert(`Fehler: ${error.error || 'Upload fehlgeschlagen'}`);
