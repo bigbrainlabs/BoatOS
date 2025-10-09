@@ -1,0 +1,185 @@
+<!-- Units Settings Modal -->
+<div id="units-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>⚙️ Maßeinheiten</h2>
+            <button onclick="closeUnitsSettings()" class="modal-close">×</button>
+        </div>
+
+        <div class="modal-body">
+            <!-- Distance Unit -->
+            <div class="setting-item">
+                <label for="unit-distance">Distanz</label>
+                <select id="unit-distance" class="unit-select">
+                    <option value="nm">Seemeilen (NM)</option>
+                    <option value="km">Kilometer (km)</option>
+                    <option value="sm">Meilen (SM)</option>
+                </select>
+            </div>
+
+            <!-- Speed Unit -->
+            <div class="setting-item">
+                <label for="unit-speed">Geschwindigkeit</label>
+                <select id="unit-speed" class="unit-select">
+                    <option value="kn">Knoten (kn)</option>
+                    <option value="km/h">km/h</option>
+                    <option value="mph">mph</option>
+                </select>
+            </div>
+
+            <!-- Depth Unit -->
+            <div class="setting-item">
+                <label for="unit-depth">Tiefe</label>
+                <select id="unit-depth" class="unit-select">
+                    <option value="m">Meter (m)</option>
+                    <option value="ft">Fuß (ft)</option>
+                    <option value="fathom">Faden (fathom)</option>
+                </select>
+            </div>
+
+            <!-- Temperature Unit -->
+            <div class="setting-item">
+                <label for="unit-temperature">Temperatur</label>
+                <select id="unit-temperature" class="unit-select">
+                    <option value="C">Celsius (°C)</option>
+                    <option value="F">Fahrenheit (°F)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button onclick="saveUnitsSettings()" class="btn-primary">Speichern</button>
+            <button onclick="closeUnitsSettings()" class="btn-secondary">Abbrechen</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: linear-gradient(135deg, #0a0e27 0%, #1a1e37 100%);
+    border: 2px solid rgba(42, 82, 152, 0.6);
+    border-radius: 16px;
+    padding: 0;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 25px;
+    border-bottom: 1px solid rgba(42, 82, 152, 0.3);
+}
+
+.modal-header h2 {
+    margin: 0;
+    color: #64ffda;
+    font-size: 22px;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: #8892b0;
+    font-size: 32px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close:hover {
+    color: #64ffda;
+}
+
+.modal-body {
+    padding: 25px;
+}
+
+.setting-item {
+    margin-bottom: 20px;
+}
+
+.setting-item label {
+    display: block;
+    color: #8892b0;
+    font-size: 14px;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.unit-select {
+    width: 100%;
+    background: rgba(42, 82, 152, 0.2);
+    border: 1px solid rgba(42, 82, 152, 0.4);
+    border-radius: 8px;
+    padding: 12px 15px;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.unit-select:focus {
+    outline: none;
+    border-color: #64ffda;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 10px;
+    padding: 20px 25px;
+    border-top: 1px solid rgba(42, 82, 152, 0.3);
+}
+
+.btn-primary {
+    flex: 1;
+    background: linear-gradient(135deg, #2a5298 0%, #1e3c72 100%);
+    border: none;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #3462b8 0%, #2a4c92 100%);
+}
+
+.btn-secondary {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #8892b0;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+}
+</style>

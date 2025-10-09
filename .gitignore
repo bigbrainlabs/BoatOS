@@ -1,0 +1,51 @@
+# Python
+backend/venv/
+backend/__pycache__/
+backend/app/__pycache__/
+*.pyc
+*.pyo
+*.egg-info
+.Python
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Data directories
+data/*
+!data/.gitkeep
+backend/data/*
+!backend/data/.gitkeep
+
+# Routing engines (zu groß)
+brouter/
+valhalla/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.backup
+*.backup_*
+*.broken*
+*.before-*
+*.old
+
+# SSL certificates
+*.key
+*.crt
+*.pem
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temp files
+*.tmp
+.cache/
