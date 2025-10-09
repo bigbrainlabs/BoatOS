@@ -325,6 +325,10 @@ class AISService:
             if not all([mmsi, lat, lon]):
                 return
 
+            # Log first few vessels
+            if len(self.vessels) < 5:
+                print(f"📍 AIS vessel: {mmsi} at ({lat:.4f}, {lon:.4f})")
+
             # Update cache
             self.vessels[mmsi] = {
                 'mmsi': mmsi,

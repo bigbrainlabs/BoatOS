@@ -1072,7 +1072,7 @@ function updateGpsSourceIndicator() {
 
 // ==================== AIS ====================
 async function fetchAISVessels() {
-    if (!aisSettings.enabled || !aisSettings.apiKey) {
+    if (!aisSettings.enabled) {
         return;
     }
 
@@ -1112,7 +1112,9 @@ function updateAISMarkers(vessels) {
             // Update existing
             const { marker } = aisVessels[vessel.mmsi];
             marker.setLatLng([vessel.lat, vessel.lon]);
-            marker.setRotationAngle(vessel.heading || vessel.cog || 0);
+            if (marker.setRotationAngle) {
+                marker.setRotationAngle(vessel.heading || vessel.cog || 0);
+            }
             aisVessels[vessel.mmsi].data = vessel;
         } else {
             // Create new marker
@@ -1130,8 +1132,6 @@ function updateAISMarkers(vessels) {
             aisVessels[vessel.mmsi] = { marker, data: vessel };
         }
     });
-
-    console.log(`🚢 AIS: ${Object.keys(aisVessels).length} vessels displayed`);
 }
 
 function createShipIcon(vessel) {

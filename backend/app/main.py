@@ -1118,9 +1118,20 @@ async def startup_event():
     load_chart_layers()
     init_waterway_router()
 
-    # Start AISStream WebSocket if configured
-    if ais_service.provider == 'aisstream' and ais_service.enabled:
-        asyncio.create_task(ais_service.start_aisstream_websocket())
+    # Load settings and configure AIS
+    try:
+        with open("data/settings.json", 'r') as f:
+            settings = json.load(f)
+            if 'ais' in settings:
+                provider = settings['ais'].get('provider', 'aisstream')
+                api_key = settings['ais'].get('apiKey', '')
+                ais_service.configure(provider=provider, api_key=api_key)
+
+                # Start AISStream WebSocket if configured
+                if ais_service.provider == 'aisstream' and ais_service.enabled:
+                    asyncio.create_task(ais_service.start_aisstream_websocket())
+    except FileNotFoundError:
+        print("⚠️ No settings file found, AIS not configured")
 
     print("🚢 BoatOS Backend started!")
 
