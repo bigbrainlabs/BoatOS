@@ -1,0 +1,13 @@
+[Unit]
+Description=BoatOS Backend
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/BoatOS/backend
+ExecStart=/home/pi/BoatOS/backend/venv/bin/python app/main.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
