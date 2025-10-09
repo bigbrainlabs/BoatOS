@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>BoatOS - Marine Dashboard</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="logbook.css"/>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0e27;
+            color: #fff;
+            overflow: hidden;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        /* Layout */
+        #app {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            height: 100vh;
+        }
+
+        /* Header */
+        #header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        #header h1 {
+            font-size: 28px;
+            font-weight: 600;
+        }
+
+        #status {
+            display: flex;
+            gap: 15px;
+            font-size: 14px;
+        }
+
+        .status-item {
+            background: rgba(255,255,255,0.1);
+            padding: 5px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.3s;
+        }
+
+        .status-item:active {
+            transform: scale(0.95);
+        }
+
+        .status-item.connected {
+            background: rgba(46, 213, 115, 0.3);
+        }
+
+        /* Map Container */
+        #map-container {
+            position: relative;
+            flex: 1;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Sensor Tiles Overlay */
+        #sensor-tiles {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: grid;
+            grid-template-columns: repeat(2, 140px);
+            gap: 12px;
+            z-index: 1000;
+        }
+
+        .tile {
+            background: rgba(10, 14, 39, 0.92);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(42, 82, 152, 0.6);
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            transition: all 0.3s;
+        }
+
+        .tile:active {
+            transform: scale(0.95);
+        }
+
+        .tile-label {
+            font-size: 12px;
+            color: #8892b0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .tile-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #64ffda;
+        }
+
+        .tile-unit {
+            font-size: 16px;
+            color: #8892b0;
+            margin-left: 4px;
+        }
+
+        /* Bottom Controls */
+        #controls {
+            background: rgba(10, 14, 39, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-around;
+            gap: 10px;
+            border-top: 2px solid rgba(42, 82, 152, 0.6);
+        }
+
+        .control-btn {
+            flex: 1;
+            background: linear-gradient(135deg, #2a5298 0%, #1e3c72 100%);
+            border: none;
+            color: white;
+            padding: 18px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .control-btn.active {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+        }
+
+        /* Waypoint Marker */
+        .waypoint-marker {
+            background: #e74c3c;
+            border: 3px solid white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+        }
+
+        /* Route Line */
+        .route-line {
+            stroke: #3498db;
+            stroke-width: 4;
+            stroke-dasharray: 10, 5;
+        }
+
+        /* GPS Position Marker */
+        .boat-marker {
+            width: 30px;
+            height: 30px;
+            background: #2ecc71;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(46, 204, 113, 0.8);
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <div id="header">
+            <h1>⚓ BoatOS</h1>
+            <div id="status">
+                <div class="status-item" id="lang-switch" onclick="toggleLanguage()">
+                    <span id="current-lang">🇩🇪 DE</span>
+                </div>
+                <div class="status-item" id="signalk-status">SignalK</div>
+                <div class="status-item" id="gps-status">GPS</div>
+            </div>
+        </div>
+
+        <!-- Map with Sensor Overlay -->
+        <div id="map-container">
+            <div id="map"></div>
+
+            <!-- Sensor Tiles -->
+            <div id="sensor-tiles">
+                <div class="tile">
+                    <div class="tile-label" data-i18n="sensor_speed">Geschw.</div>
+                    <div class="tile-value" id="speed">0.0<span class="tile-unit">kn</span></div>
+                </div>
+                <div class="tile">
+                    <div class="tile-label" data-i18n="sensor_heading">Kurs</div>
+                    <div class="tile-value" id="heading">---<span class="tile-unit">°</span></div>
+                </div>
+                <div class="tile">
+                    <div class="tile-label" data-i18n="sensor_depth">Tiefe</div>
+                    <div class="tile-value" id="depth">--<span class="tile-unit">m</span></div>
+                </div>
+                <div class="tile">
+                    <div class="tile-label" data-i18n="sensor_wind">Wind</div>
+                    <div class="tile-value" id="wind">0<span class="tile-unit">kn</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Controls -->
+        <div id="controls">
+            <button class="control-btn" id="btn-waypoint" data-i18n="btn_waypoint">📍 Wegpunkt</button>
+            <button class="control-btn" id="btn-route" data-i18n="btn_route">🛤️ Route</button>
+            <button class="control-btn" id="btn-logbook" data-i18n="btn_logbook">📓 Logbuch</button>
+            <button class="control-btn" id="btn-sensors" data-i18n="btn_sensors">📊 Sensoren</button>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- i18n -->
+    <script src="i18n.js"></script>
+
+    <!-- App -->
+<script src="logbook.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+
+    <!-- Logbook Modal -->
+    <div id="logbook-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📓 <span data-i18n="btn_logbook">Logbuch</span></h2>
+                <button class="modal-close" onclick="closeLogbook()">×</button>
+            </div>
+            <div class="modal-body">
+                <!-- Track Recording Controls -->
+                <div class="track-controls">
+                    <div class="track-status">
+                        <div class="track-info">
+                            <div class="track-stat">
+                                <div class="track-stat-label">Points</div>
+                                <div class="track-stat-value" id="track-points">0</div>
+                            </div>
+                            <div class="track-stat">
+                                <div class="track-stat-label">Distance</div>
+                                <div class="track-stat-value" id="track-distance">0 <span style="font-size:16px">NM</span></div>
+                            </div>
+                        </div>
+                        <div id="recording-indicator" style="display:none">
+                            <div class="recording-indicator"></div>
+                        </div>
+                    </div>
+                    <div class="track-buttons">
+                        <button class="track-btn start" id="btn-track-start" onclick="startTrackRecording()">
+                            ▶️ Start Recording
+                        </button>
+                        <button class="track-btn stop" id="btn-track-stop" onclick="stopTrackRecording()" disabled>
+                            ⏹️ Stop Recording
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Logbook Entries -->
+                <h3 style="margin-bottom: 15px; color: #8892b0;">Previous Tracks</h3>
+                <div class="logbook-entries" id="logbook-entries">
+                    <div class="empty-logbook">No tracks recorded yet</div>
+                </div>
+            </div>
+        </div>
+    </div>

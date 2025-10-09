@@ -1,0 +1,300 @@
+"""BoatOS Backend - FastAPI Server with Logbook"""
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+import asyncio, json, websockets
+from datetime import datetime
+from typing import List, Dict, Any
+import paho.mqtt.client as mqtt
+from math import radians, sin, cos, sqrt, atan2
+import aiohttp
+
+app = FastAPI(title="BoatOS API", version="1.0.0")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+active_connections: List[WebSocket] = []
+sensor_data: Dict[str, Any] = {"gps": {"lat": 50.833, "lon": 5.663}, "speed": 0, "heading": 0, "depth": 0, "wind": {"speed": 0, "direction": 0}, "engine": {"rpm": 0, "temp": 0, "oil_pressure": 0}, "battery": {"voltage": 0, "current": 0}}
+routes, waypoints = {}, []
+logbook_entries = []
+current_track = []
+track_recording = False
+weather_data: Dict[str, Any] = {}
+
+# OpenWeatherMap API Configuration
+OPENWEATHER_API_KEY = "bfe93865949cf3e87b49a29c13a526c4"
+OPENWEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5"
+
+# ==================== WEBSOCKET ====================
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    active_connections.append(websocket)
+    try:
+        while True:
+            await websocket.send_json(sensor_data)
+            await asyncio.sleep(0.5)
+    except WebSocketDisconnect:
+        active_connections.remove(websocket)
+
+# ==================== REST API ====================
+@app.get("/")
+async def root():
+    return {"name": "BoatOS", "version": "1.0.0", "status": "running", "timestamp": datetime.now().isoformat()}
+
+@app.get("/api/sensors")
+async def get_sensors():
+    return sensor_data
+
+@app.get("/api/waypoints")
+async def get_waypoints():
+    return waypoints
+
+@app.post("/api/waypoints")
+async def add_waypoint(waypoint: Dict[str, Any]):
+    waypoint["id"] = len(waypoints) + 1
+    waypoint["timestamp"] = datetime.now().isoformat()
+    waypoints.append(waypoint)
+    return waypoint
+
+@app.delete("/api/waypoints/{waypoint_id}")
+async def delete_waypoint(waypoint_id: int):
+    global waypoints
+    waypoints = [w for w in waypoints if w["id"] != waypoint_id]
+    return {"status": "deleted"}
+
+@app.get("/api/routes")
+async def get_routes():
+    return routes
+
+@app.post("/api/routes")
+async def save_route(route: Dict[str, Any]):
+    route_id = route.get("name", f"route_{len(routes)+1}")
+    routes[route_id] = route
+    return {"status": "saved"}
+
+# ==================== WEATHER ====================
+@app.get("/api/weather")
+async def get_weather(lang: str = "de"):
+    """Get weather data with optional language parameter (de/en)"""
+    # If lang changed, trigger immediate refresh
+    if lang != weather_data.get("lang", "de"):
+        asyncio.create_task(fetch_weather_once(lang))
+    return weather_data
+
+async def fetch_weather_once(lang: str = "de"):
+    """Fetch weather data once with specified language"""
+    global weather_data
+    try:
+        lat = sensor_data["gps"]["lat"]
+        lon = sensor_data["gps"]["lon"]
+
+        if lat == 0 or lon == 0:
+            return
+
+        async with aiohttp.ClientSession() as session:
+            # Current Weather
+            current_url = f"{OPENWEATHER_BASE_URL}/weather?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang={lang}"
+            async with session.get(current_url) as resp:
+                if resp.status == 200:
+                    current = await resp.json()
+
+                    # 5-Day Forecast
+                    forecast_url = f"{OPENWEATHER_BASE_URL}/forecast?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang={lang}"
+                    async with session.get(forecast_url) as fresp:
+                        if fresp.status == 200:
+                            forecast = await fresp.json()
+
+                            # Parse and store weather data
+                            weather_data = {
+                                "lang": lang,
+                                "current": {
+                                    "temp": round(current["main"]["temp"], 1),
+                                    "feels_like": round(current["main"]["feels_like"], 1),
+                                    "pressure": current["main"]["pressure"],
+                                    "humidity": current["main"]["humidity"],
+                                    "description": current["weather"][0]["description"],
+                                    "icon": current["weather"][0]["icon"],
+                                    "wind_speed": round(current["wind"]["speed"] * 1.94384, 1),  # m/s to knots
+                                    "wind_deg": current["wind"].get("direction", 0),
+                                    "clouds": current["clouds"]["all"],
+                                    "visibility": current.get("visibility", 0) / 1852,  # meters to nautical miles
+                                    "timestamp": datetime.fromtimestamp(current["dt"]).isoformat()
+                                },
+                                "forecast": []
+                            }
+
+                            # Get next 3 days (8 intervals per day, take noon forecast)
+                            for i in range(0, min(24, len(forecast["list"])), 8):
+                                f = forecast["list"][i]
+                                weather_data["forecast"].append({
+                                    "date": f["dt_txt"].split(" ")[0],
+                                    "temp": round(f["main"]["temp"], 1),
+                                    "description": f["weather"][0]["description"],
+                                    "icon": f["weather"][0]["icon"],
+                                    "wind_speed": round(f["wind"]["speed"] * 1.94384, 1),
+                                    "wind_deg": f["wind"].get("deg", 0)
+                                })
+
+                            print(f"✅ Weather updated ({lang}): {weather_data['current']['temp']}°C, {weather_data['current']['description']}")
+                else:
+                    print(f"⚠️ Weather API error: {resp.status}")
+    except Exception as e:
+        print(f"⚠️ Weather fetch error: {e}")
+
+async def fetch_weather():
+    """Periodic weather fetch loop"""
+    while True:
+        await fetch_weather_once("de")
+        await asyncio.sleep(1800)  # Update every 30 minutes
+
+# ==================== LOGBOOK ====================
+@app.get("/api/logbook")
+async def get_logbook():
+    return logbook_entries
+
+@app.post("/api/logbook")
+async def add_logbook_entry(entry: Dict[str, Any]):
+    entry["id"] = len(logbook_entries) + 1
+    entry["timestamp"] = datetime.now().isoformat()
+    logbook_entries.append(entry)
+    return entry
+
+@app.get("/api/track/status")
+async def get_track_status():
+    return {"recording": track_recording, "points": len(current_track), "distance": calculate_track_distance()}
+
+@app.post("/api/track/start")
+async def start_track_recording():
+    global track_recording, current_track
+    track_recording = True
+    current_track = []
+    return {"status": "started", "timestamp": datetime.now().isoformat()}
+
+@app.post("/api/track/stop")
+async def stop_track_recording():
+    global track_recording
+    track_recording = False
+    if len(current_track) > 0:
+        entry = {"id": len(logbook_entries) + 1, "type": "track", "timestamp": datetime.now().isoformat(),
+                 "points": len(current_track), "distance": calculate_track_distance(),
+                 "duration": calculate_track_duration(), "track_data": current_track[:1000]}
+        logbook_entries.append(entry)
+        return entry
+    return {"status": "stopped", "points": 0}
+
+@app.get("/api/track/current")
+async def get_current_track():
+    return {"recording": track_recording, "points": current_track}
+
+@app.get("/api/track/export/{entry_id}")
+async def export_track_gpx(entry_id: int):
+    entry = next((e for e in logbook_entries if e["id"] == entry_id), None)
+    if not entry or "track_data" not in entry:
+        return {"error": "Track not found"}
+    gpx = generate_gpx(entry["track_data"], entry["timestamp"])
+    return Response(content=gpx, media_type="application/gpx+xml",
+                    headers={"Content-Disposition": f"attachment; filename=track_{entry_id}.gpx"})
+
+def calculate_track_distance():
+    if len(current_track) < 2:
+        return 0
+    distance = 0
+    for i in range(1, len(current_track)):
+        lat1, lon1 = current_track[i-1]["lat"], current_track[i-1]["lon"]
+        lat2, lon2 = current_track[i]["lat"], current_track[i]["lon"]
+        R = 3440.065
+        dlat = radians(lat2 - lat1)
+        dlon = radians(lon2 - lon1)
+        a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+        c = 2 * atan2(sqrt(a), sqrt(1-a))
+        distance += R * c
+    return round(distance, 2)
+
+def calculate_track_duration():
+    if len(current_track) < 2:
+        return "0:00"
+    start = datetime.fromisoformat(current_track[0]["timestamp"])
+    end = datetime.fromisoformat(current_track[-1]["timestamp"])
+    duration = end - start
+    hours = duration.seconds // 3600
+    minutes = (duration.seconds % 3600) // 60
+    return f"{hours}:{minutes:02d}"
+
+def generate_gpx(track_data, timestamp):
+    gpx = f"""<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="BoatOS"><metadata><name>BoatOS Track</name><time>{timestamp}</time></metadata><trk><name>Track {timestamp}</name><trkseg>
+"""
+    for point in track_data:
+        gpx += f'<trkpt lat="{point["lat"]}" lon="{point["lon"]}"><time>{point["timestamp"]}</time></trkpt>\n'
+    gpx += "</trkseg></trk></gpx>"
+    return gpx
+
+# ==================== SIGNALK ====================
+async def signalk_listener():
+    uri = "ws://localhost:3000/signalk/v1/stream?subscribe=all"
+    while True:
+        try:
+            async with websockets.connect(uri) as ws:
+                print("✅ SignalK connected")
+                async for message in ws:
+                    data = json.loads(message)
+                    if "updates" in data:
+                        for update in data["updates"]:
+                            if "values" in update:
+                                for value in update["values"]:
+                                    path, val = value.get("path"), value.get("value")
+                                    if path == "navigation.position":
+                                        sensor_data["gps"] = {"lat": val.get("latitude", 0), "lon": val.get("longitude", 0)}
+                                    elif path == "navigation.speedOverGround":
+                                        sensor_data["speed"] = round(val * 1.94384, 1)
+                                    elif path == "navigation.headingTrue":
+                                        sensor_data["heading"] = round(val * 180 / 3.14159, 0)
+                                    elif path == "environment.depth.belowTransducer":
+                                        sensor_data["depth"] = round(val, 1)
+        except Exception as e:
+            print(f"⚠️ SignalK: {e}")
+            await asyncio.sleep(5)
+
+# ==================== TRACK RECORDING ====================
+async def track_recording_loop():
+    global current_track
+    while True:
+        await asyncio.sleep(10)
+        if track_recording and sensor_data["gps"]["lat"] != 0:
+            point = {"lat": sensor_data["gps"]["lat"], "lon": sensor_data["gps"]["lon"],
+                     "timestamp": datetime.now().isoformat(), "speed": sensor_data["speed"],
+                     "heading": sensor_data["heading"]}
+            current_track.append(point)
+
+# ==================== MQTT ====================
+def on_mqtt_message(client, userdata, msg):
+    topic, payload = msg.topic, msg.payload.decode()
+    try:
+        if "heater" in topic:
+            sensor_data["heater"] = json.loads(payload)
+        elif "engine" in topic:
+            sensor_data["engine"].update(json.loads(payload))
+    except: pass
+
+def mqtt_client_init():
+    client = mqtt.Client()
+    client.on_message = on_mqtt_message
+    try:
+        client.connect("localhost", 1883, 60)
+        client.subscribe("boat/#")
+        client.loop_start()
+        print("✅ MQTT connected")
+    except: pass
+
+# ==================== STARTUP ====================
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(signalk_listener())
+    asyncio.create_task(track_recording_loop())
+    asyncio.create_task(fetch_weather())
+    mqtt_client_init()
+    print("🚢 BoatOS Backend started!")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
