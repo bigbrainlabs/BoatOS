@@ -31,15 +31,16 @@
   - [x] Karten löschen
   - [x] Nginx 2GB Upload-Limit für große Kartendateien
   - [x] GDAL-Installation im Installer
+- [x] **GPS & Navigation Verbesserungen** (v1.1.0)
+  - [x] GPS-Qualitätsanzeige (HDOP/VDOP) mit Farbcodierung
+  - [x] GPS-Track-Historie auf Karte (max. 500 Punkte, blaue Polyline)
+  - [x] Kompass-Rose mit Heading-Anzeige (SVG, rotierend, top-left)
+  - [x] Settings-Toggle für Track-Historie und Kompass-Rose
+  - [x] Track-Historie löschen Funktion
 
 ---
 
 ## 🚧 In Arbeit
-
-### GPS & Navigation
-- [ ] GPS-Qualitätsanzeige verbessern (HDOP/VDOP)
-- [ ] GPS-Track-Historie auf Karte anzeigen
-- [ ] Kompass-Rose mit Heading-Anzeige
 
 ### Karten
 - [ ] Offline-Karten Caching implementieren
