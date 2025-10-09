@@ -111,7 +111,20 @@ function switchSettingsTab(tabName) {
     }
 
     // Add active class to clicked tab
-    event.target.classList.add('active');
+    if (event && event.target) {
+        event.target.classList.add('active');
+    } else {
+        // If called programmatically, find and activate the correct tab button
+        const tabButton = document.querySelector(`[onclick="switchSettingsTab('${tabName}')"]`);
+        if (tabButton) {
+            tabButton.classList.add('active');
+        }
+    }
+
+    // Load charts if charts tab is selected
+    if (tabName === 'charts' && typeof loadCharts === 'function') {
+        loadCharts();
+    }
 }
 
 // Load settings into form

@@ -197,13 +197,16 @@ async function uploadChart() {
     nameInput.value = '';
 }
 
+// Charts modal is now integrated into settings
 function openChartsModal() {
-    document.getElementById("charts-modal").classList.add("show");
+    openSettingsModal();
+    // Switch to charts tab
+    switchSettingsTab('charts');
     loadCharts();
 }
 
 function closeChartsModal() {
-    document.getElementById("charts-modal").classList.remove("show");
+    // No longer needed - charts are in settings
 }
 
 // Add Layer Control to Map
