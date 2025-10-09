@@ -122,178 +122,13 @@
         .progress-bar-container { background: rgba(255,255,255,0.1); height: 30px; border-radius: 15px; overflow: hidden; margin-bottom: 15px; }
         #progress-bar { background: linear-gradient(90deg, #2ecc71, #27ae60); height: 100%; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 12px; }
         #progress-details { font-family: monospace; font-size: 12px; color: #64ffda; max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; white-space: pre-wrap; }
-
-        /* Settings Modal */
-        #settings-modal { display: none !important; }
-        #settings-modal.show { display: flex !important; }
-        .settings-tabs {
-            display: flex;
-            gap: 5px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid rgba(100, 255, 218, 0.2);
-            flex-wrap: wrap;
-        }
-
-        .settings-tab {
-            background: rgba(42, 82, 152, 0.2);
-            border: none;
-            color: #8892b0;
-            padding: 12px 20px;
-            cursor: pointer;
-            transition: all 0.3s;
-            border-radius: 8px 8px 0 0;
-            font-size: 14px;
-        }
-
-        .settings-tab:hover {
-            background: rgba(42, 82, 152, 0.4);
-            color: #ccd6f6;
-        }
-
-        .settings-tab.active {
-            background: rgba(100, 255, 218, 0.2);
-            color: #64ffda;
-            border-bottom: 2px solid #64ffda;
-        }
-
-        .settings-content {
-            min-height: 400px;
-        }
-
-        .settings-tab-content {
-            display: none;
-            animation: fadeIn 0.3s;
-        }
-
-        .settings-tab-content.active {
-            display: block;
-        }
-
-        .setting-item {
-            margin-bottom: 20px;
-            padding: 15px;
-            background: rgba(42, 82, 152, 0.1);
-            border-radius: 8px;
-        }
-
-        .setting-item label {
-            display: block;
-            color: #ccd6f6;
-            font-weight: 600;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-
-        .setting-item input[type="text"],
-        .setting-item input[type="number"],
-        .setting-item input[type="password"],
-        .setting-item select {
-            width: 100%;
-            padding: 10px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 4px;
-            color: #fff;
-            font-size: 14px;
-        }
-
-        .setting-item input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            margin-right: 10px;
-            cursor: pointer;
-        }
-
-        .checkbox-label {
-            color: #8892b0;
-            font-size: 14px;
-            vertical-align: middle;
-        }
-
-        .setting-item small {
-            display: block;
-            color: #8892b0;
-            font-size: 12px;
-            margin-top: 5px;
-        }
-
-        .setting-item small a {
-            color: #64ffda;
-            text-decoration: none;
-        }
-
-        .settings-actions {
-            display: flex;
-            gap: 15px;
-            justify-content: flex-end;
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 2px solid rgba(100, 255, 218, 0.2);
-        }
-
-        .save-btn, .cancel-btn, .data-btn {
-            padding: 12px 30px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-
-        .save-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .save-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(100, 255, 218, 0.3);
-        }
-
-        .cancel-btn {
-            background: rgba(255, 255, 255, 0.1);
-            color: #ccd6f6;
-        }
-
-        .cancel-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .data-btn {
-            background: rgba(100, 255, 218, 0.2);
-            color: #64ffda;
-            border: 2px solid #64ffda;
-            width: 100%;
-        }
-
-        .data-btn:hover {
-            background: rgba(100, 255, 218, 0.3);
-        }
-
-        .data-btn.danger {
-            background: rgba(231, 76, 60, 0.2);
-            color: #e74c3c;
-            border: 2px solid #e74c3c;
-        }
-
-        .data-btn.danger:hover {
-            background: rgba(231, 76, 60, 0.3);
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
     </style>
 </head>
 <body>
     <div id="app">
         <!-- Header - Simple, NO charts button here -->
         <div id="header">
-            <button onclick="openChartsModal()" style="background: rgba(100, 255, 218, 0.2); border: 2px solid #64ffda; color: #64ffda; font-size: 24px; width: 50px; height: 50px; border-radius: 12px; cursor: pointer; transition: all 0.3s; margin-right: 10px;" title="Karten-Manager">🗺️</button>
-            <button onclick="openSettingsModal()" style="background: rgba(100, 255, 218, 0.2); border: 2px solid #64ffda; color: #64ffda; font-size: 24px; width: 50px; height: 50px; border-radius: 12px; cursor: pointer; transition: all 0.3s; margin-right: 15px;" title="Einstellungen">⚙️</button>
+            <button onclick="openChartsModal()" style="background: rgba(100, 255, 218, 0.2); border: 2px solid #64ffda; color: #64ffda; font-size: 24px; width: 50px; height: 50px; border-radius: 12px; cursor: pointer; transition: all 0.3s; margin-right: 15px;" title="Karten-Manager">🗺️</button>
             <h1>⚓ BoatOS</h1>
             <div id="status">
                 <div class="status-item" id="lang-switch" onclick="toggleLanguage()">
@@ -507,13 +342,12 @@
 
     <!-- JavaScript Includes -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="i18n.js?v=1760001749"></script>
-    <script src="settings.js?v=1760002567"></script>
+    <script src="i18n.js?v=1759996368"></script>
     <script src="logbook.js"></script>
     <script src="charts.js"></script>
     <script src="units.js"></script>
     <script src="water_routing.js"></script>
-    <script src="app.js?v=1760001749"></script>
+    <script src="app.js?v=1759996368"></script>
 
     <!-- Include Units Modal -->
     <script>
@@ -521,133 +355,5 @@
             document.body.insertAdjacentHTML("beforeend", html);
         });
     </script>
-
-    <!-- Settings Modal -->
-    <div id="settings-modal" class="modal">
-        <div class="modal-content" style="max-width: 900px;">
-            <div class="modal-header">
-                <h2>⚙️ Einstellungen</h2>
-                <button class="modal-close" onclick="closeSettingsModal()">×</button>
-            </div>
-            <div class="modal-body">
-                <!-- Settings Tabs -->
-                <div class="settings-tabs">
-                    <button class="settings-tab active" onclick="switchSettingsTab('general')">Allgemein</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('charts')">Karten</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('navigation')">Navigation</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('gps')">GPS</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('weather')">Wetter</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('sensors')">Sensoren</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('data')">Daten</button>
-                </div>
-
-                <!-- Tab Content -->
-                <div class="settings-content">
-                    
-                    <!-- General Tab -->
-                    <div id="settings-general" class="settings-tab-content active">
-                        <h3>Allgemeine Einstellungen</h3>
-                        
-                        <div class="setting-item">
-                            <label>Sprache / Language</label>
-                            <select id="setting-language">
-                                <option value="de">🇩🇪 Deutsch</option>
-                                <option value="en">🇬🇧 English</option>
-                            </select>
-                        </div>
-
-                        <div class="setting-item">
-                            <label>Theme</label>
-                            <select id="setting-theme">
-                                <option value="auto">Automatisch (System)</option>
-                                <option value="light">Hell</option>
-                                <option value="dark">Dunkel</option>
-                                <option value="night">Nacht (Rot)</option>
-                            </select>
-                        </div>
-
-                        <div class="setting-item">
-                            <label>Geschwindigkeits-Einheit</label>
-                            <select id="setting-speed-unit">
-                                <option value="kn">Knoten (kn)</option>
-                                <option value="kmh">km/h</option>
-                                <option value="mph">mph</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Charts Tab -->
-                    <div id="settings-charts" class="settings-tab-content">
-                        <h3>Karten-Einstellungen</h3>
-                        <p style="color: #8892b0;">Karten-Manager wird hier integriert...</p>
-                    </div>
-
-                    <!-- Navigation Tab -->
-                    <div id="settings-navigation" class="settings-tab-content">
-                        <h3>Navigations-Einstellungen</h3>
-                        
-                        <div class="setting-item">
-                            <label>Karten-Ausrichtung</label>
-                            <select id="setting-map-orientation">
-                                <option value="north-up">North-Up (Norden oben)</option>
-                                <option value="course-up">Course-Up (Kurs oben)</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- GPS Tab -->
-                    <div id="settings-gps" class="settings-tab-content">
-                        <h3>GPS-Einstellungen</h3>
-                        
-                        <div class="setting-item">
-                            <label>SignalK Server URL</label>
-                            <input type="text" id="setting-signalk-url" value="http://localhost:3000">
-                        </div>
-                    </div>
-
-                    <!-- Weather Tab -->
-                    <div id="settings-weather" class="settings-tab-content">
-                        <h3>Wetter-Einstellungen</h3>
-                        
-                        <div class="setting-item">
-                            <label>Wetter Update-Intervall (Minuten)</label>
-                            <input type="number" id="setting-weather-interval" min="5" max="120" value="30">
-                        </div>
-                    </div>
-
-                    <!-- Sensors Tab -->
-                    <div id="settings-sensors" class="settings-tab-content">
-                        <h3>Sensor-Einstellungen</h3>
-                        
-                        <div class="setting-item">
-                            <label>MQTT Broker URL</label>
-                            <input type="text" id="setting-mqtt-url" placeholder="mqtt://localhost:1883">
-                        </div>
-                    </div>
-
-                    <!-- Data Tab -->
-                    <div id="settings-data" class="settings-tab-content">
-                        <h3>Daten-Verwaltung</h3>
-                        
-                        <div class="setting-item">
-                            <button onclick="exportSettings()" class="data-btn">📥 Einstellungen exportieren</button>
-                        </div>
-
-                        <div class="setting-item">
-                            <button onclick="resetSettings()" class="data-btn">🔄 Auf Standardwerte zurücksetzen</button>
-                        </div>
-                    </div>
-
-                </div>
-
-                <!-- Save/Cancel Buttons -->
-                <div class="settings-actions">
-                    <button onclick="saveSettings()" class="save-btn">💾 Speichern</button>
-                    <button onclick="closeSettingsModal()" class="cancel-btn">Abbrechen</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
 </body>
 </html>
