@@ -75,10 +75,13 @@
   - Windwinkel-Modus (für Segelboote)
 
 ### Sensoren & Daten
-- [ ] **AIS-Integration**
-  - AIS-Schiffe auf Karte anzeigen
-  - Kollisionswarnung (CPA/TCPA)
-  - AIS-Details-Panel
+- [x] **AIS-Integration** (v1.2.0)
+  - [x] AIS-Schiffe auf Karte anzeigen (AISStream WebSocket + AISHub)
+  - [x] AIS-Details-Panel (Name, MMSI, Speed, Heading, Destination)
+  - [x] Farbcodierte Ship-Icons nach Navigation Status
+  - [x] Multi-Provider Support (AISStream/AISHub)
+  - [x] Auto-Update alle 60 Sekunden
+  - [ ] Kollisionswarnung (CPA/TCPA)
   
 - [ ] **Tiefenmesser-Integration**
   - Aktuelle Tiefe anzeigen
@@ -234,7 +237,7 @@
 
 ### High Priority (v1.2.0)
 1. Anker-Alarm
-2. AIS-Integration
+2. ~~AIS-Integration~~ ✅ **Abgeschlossen**
 3. GPX-Export
 4. Dark Mode / Night Mode Auto-Switch
 5. Track-Statistiken
@@ -257,4 +260,4 @@
 ---
 
 **Stand**: 2025-10-09
-**Version**: 1.1.0
+**Version**: 1.2.0 (in Entwicklung)
