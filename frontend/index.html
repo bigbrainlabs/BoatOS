@@ -335,6 +335,22 @@
             cursor: pointer !important;
         }
 
+        /* AIS Ship Icons */
+        .ais-ship-icon {
+            background: transparent !important;
+            border: none !important;
+        }
+
+        .ais-popup h4 {
+            margin: 0 0 10px 0;
+            color: #3498db;
+        }
+
+        .ais-popup p {
+            margin: 5px 0;
+            font-size: 13px;
+        }
+
     </style>
 </head>
 <body>
@@ -462,6 +478,66 @@
             </div>
         </div>
 
+        <!-- AIS Details Panel -->
+        <div id="ais-details-panel" class="info-panel">
+            <button class="panel-close" onclick="closeAISDetails()">×</button>
+            <h3>🚢 AIS Vessel Details</h3>
+            <div class="info-details">
+                <div class="info-item">
+                    <div class="info-label">Name</div>
+                    <div class="info-value" id="ais-name">--</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">MMSI</div>
+                    <div class="info-value" id="ais-mmsi">--</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Callsign</div>
+                    <div class="info-value" id="ais-callsign">--</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Type</div>
+                    <div class="info-value" id="ais-type">--</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Speed</div>
+                    <div class="info-value" id="ais-speed">--</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Course (COG)</div>
+                    <div class="info-value" id="ais-course">--</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Heading</div>
+                    <div class="info-value" id="ais-heading">--</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Status</div>
+                    <div class="info-value" id="ais-navstat">--</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Destination</div>
+                    <div class="info-value" id="ais-destination">--</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">ETA</div>
+                    <div class="info-value" id="ais-eta">--</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Length</div>
+                    <div class="info-value" id="ais-length">--</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Width</div>
+                    <div class="info-value" id="ais-width">--</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Draught</div>
+                    <div class="info-value" id="ais-draught">--</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Bottom Controls -->
         <div id="controls">
             <button class="control-btn" id="btn-waypoint" data-i18n="btn_waypoint">📍 Wegpunkt</button>
@@ -558,6 +634,7 @@
                     <button class="settings-tab" onclick="switchSettingsTab('gps')">GPS</button>
                     <button class="settings-tab" onclick="switchSettingsTab('weather')">Wetter</button>
                     <button class="settings-tab" onclick="switchSettingsTab('sensors')">Sensoren</button>
+                    <button class="settings-tab" onclick="switchSettingsTab('ais')">AIS</button>
                     <button class="settings-tab" onclick="switchSettingsTab('data')">Daten</button>
                 </div>
 
@@ -691,10 +768,60 @@
                     <!-- Sensors Tab -->
                     <div id="settings-sensors" class="settings-tab-content">
                         <h3>Sensor-Einstellungen</h3>
-                        
+
                         <div class="setting-item">
                             <label>MQTT Broker URL</label>
                             <input type="text" id="setting-mqtt-url" placeholder="mqtt://localhost:1883">
+                        </div>
+                    </div>
+
+                    <!-- AIS Tab -->
+                    <div id="settings-ais" class="settings-tab-content">
+                        <h3>🚢 AIS-Einstellungen</h3>
+
+                        <div class="setting-item">
+                            <label>
+                                <input type="checkbox" id="setting-ais-enabled">
+                                AIS-Integration aktivieren
+                            </label>
+                        </div>
+
+                        <div class="setting-item">
+                            <label>AIS-Datenquelle</label>
+                            <select id="setting-ais-provider" onchange="updateAISKeyVisibility()" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white;">
+                                <option value="aisstream">AISStream (kostenlos, API-Key erforderlich)</option>
+                                <option value="aishub">AISHub (API-Key erforderlich)</option>
+                            </select>
+                            <small style="color: #7f8c8d; display: block; margin-top: 5px;">
+                                ℹ️ AISStream: Kostenlos bei <a href="https://aisstream.io" target="_blank" style="color: #3498db;">aisstream.io</a> registrieren
+                            </small>
+                        </div>
+
+                        <div class="setting-item" id="ais-api-key-field">
+                            <label>API-Key</label>
+                            <input type="text" id="setting-ais-api-key" placeholder="API-Key hier eingeben">
+                            <small style="color: #7f8c8d; display: block; margin-top: 5px;">
+                                📌 Erforderlich für beide Provider
+                            </small>
+                        </div>
+
+                        <div class="setting-item" style="margin-top: 20px; padding: 15px; background: rgba(52, 152, 219, 0.1); border-radius: 8px;">
+                            <h4 style="margin-top: 0;">ℹ️ AIS-Integration</h4>
+                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7;">
+                                <strong>Was ist AIS?</strong><br>
+                                AIS (Automatic Identification System) zeigt Positionen und Details anderer Schiffe in Echtzeit auf der Karte.
+                            </p>
+                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px;">
+                                <strong>Funktionen:</strong><br>
+                                • Schiffspositionen als Icons auf der Karte<br>
+                                • Schiffsdetails (Name, MMSI, Kurs, Geschwindigkeit)<br>
+                                • Navigationsstatus (unterwegs, vor Anker, etc.)<br>
+                                • Auto-Update alle 60 Sekunden
+                            </p>
+                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px;">
+                                <strong>🔵 AISStream:</strong> Kostenlos, WebSocket-basiert, weltweite Abdeckung<br>
+                                <strong>🟡 AISHub:</strong> Benötigt API-Key (Registrierung erforderlich)
+                            </p>
                         </div>
                     </div>
 

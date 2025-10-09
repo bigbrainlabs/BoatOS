@@ -13,6 +13,7 @@ import requests
 from bs4 import BeautifulSoup
 from pathlib import Path
 import gps_service
+from ais_service import ais_service
 
 app = FastAPI(title="BoatOS API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -92,6 +93,13 @@ async def save_settings(settings: Dict[str, Any]):
     try:
         with open(settings_file, 'w') as f:
             json.dump(settings, f, indent=2)
+
+        # Apply AIS settings
+        if 'ais' in settings:
+            provider = settings['ais'].get('provider', 'aishub')
+            api_key = settings['ais'].get('apiKey', '')
+            ais_service.configure(provider=provider, api_key=api_key)
+
         return {"status": "success", "message": "Settings saved"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -122,6 +130,13 @@ async def save_route(route: Dict[str, Any]):
     route_id = route.get("name", f"route_{len(routes)+1}")
     routes[route_id] = route
     return {"status": "saved"}
+
+# ==================== AIS ====================
+@app.get("/api/ais/vessels")
+async def get_ais_vessels(lat_min: float, lon_min: float, lat_max: float, lon_max: float):
+    """Get AIS vessels in bounding box"""
+    vessels = await ais_service.fetch_vessels(lat_min, lon_min, lat_max, lon_max)
+    return {"vessels": vessels, "count": len(vessels)}
 
 # ==================== CHARTS ====================
 @app.get("/api/charts")
@@ -1102,6 +1117,11 @@ async def startup_event():
     mqtt_client_init()
     load_chart_layers()
     init_waterway_router()
+
+    # Start AISStream WebSocket if configured
+    if ais_service.provider == 'aisstream' and ais_service.enabled:
+        asyncio.create_task(ais_service.start_aisstream_websocket())
+
     print("🚢 BoatOS Backend started!")
 
 if __name__ == "__main__":
