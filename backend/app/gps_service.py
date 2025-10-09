@@ -95,6 +95,9 @@ async def broadcast_gps_data():
     """Broadcast GPS data to all connected WebSocket clients"""
     if not websocket_clients:
         return
+    # Only broadcast if we have a GPS fix
+    if not gps_data["fix"] or gps_data["lat"] is None:
+        return
 
     data = {
         'type': 'gps_update',
