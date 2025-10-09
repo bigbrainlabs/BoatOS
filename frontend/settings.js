@@ -36,8 +36,8 @@ const defaultSettings = {
     }
 };
 
-
-    modal.style.display = 'flex';
+// Current settings (loaded from localStorage or backend)
+let currentSettings = JSON.parse(JSON.stringify(defaultSettings));
 
 // Toast notification function
 function showMsg(message, duration = 3000) {
@@ -77,6 +77,11 @@ function showMsg(message, duration = 3000) {
     }, duration);
 }
 
+// Open Settings Modal
+function openSettingsModal() {
+    const modal = document.getElementById('settings-modal');
+    modal.classList.add('show');
+    modal.style.display = 'flex';
     loadSettingsToForm();
 }
 
