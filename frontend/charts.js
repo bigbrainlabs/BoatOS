@@ -201,15 +201,18 @@ async function deleteChart(chartId) {
 
 async function uploadChart() {
     const fileInput = document.getElementById('chart-file-input');
+    const folderInput = document.getElementById('chart-folder-input');
     const nameInput = document.getElementById('chart-name-input');
 
-    const files = fileInput.files;
+    // Check which input has files
+    let files = fileInput.files.length > 0 ? fileInput.files : folderInput.files;
+
     if (!files || files.length === 0) {
         alert('Bitte wähle Dateien oder einen Ordner aus');
         return;
     }
 
-    showNotification('📤 Lade Karten hoch...');
+    showMsg('📤 Lade Karten hoch...');
 
     // Group files by directory
     const filesByDir = {};
@@ -262,7 +265,24 @@ async function uploadChart() {
     loadChartOverlays();
     updateChartsUI();
     fileInput.value = '';
+    folderInput.value = '';
     nameInput.value = '';
+    updateFileInfo();
+}
+
+// Update file selection info
+function updateFileInfo() {
+    const fileInput = document.getElementById('chart-file-input');
+    const folderInput = document.getElementById('chart-folder-input');
+    const infoDiv = document.getElementById('selected-files-info');
+
+    const fileCount = fileInput.files.length + folderInput.files.length;
+    if (fileCount > 0) {
+        infoDiv.textContent = `${fileCount} Datei(en) ausgewählt`;
+        infoDiv.style.color = '#64ffda';
+    } else {
+        infoDiv.textContent = '';
+    }
 }
 
 // Charts modal is now integrated into settings
