@@ -177,11 +177,11 @@ async def upload_chart(files: List[UploadFile] = File(...), name: str = "", laye
                     import subprocess
                     # Convert KAP to VRT
                     vrt_file = kap_file.with_suffix('.vrt')
-                    subprocess.run(['gdal_translate', '-of', 'VRT', str(kap_file), str(vrt_file)], check=True)
+                    subprocess.run(['/usr/bin/gdal_translate', '-of', 'VRT', str(kap_file), str(vrt_file)], check=True)
 
                     # Generate tiles using gdal2tiles
                     subprocess.run([
-                        'gdal2tiles.py',
+                        '/usr/bin/gdal2tiles.py',
                         '-z', '0-18',
                         '--processes=4',
                         str(vrt_file),
@@ -209,7 +209,7 @@ async def upload_chart(files: List[UploadFile] = File(...), name: str = "", laye
                     # Use ogr2ogr to convert S-57 to shapefile first, then rasterize
                     # Or use direct GDAL rendering of S-57
                     subprocess.run([
-                        'gdal_rasterize',
+                        '/usr/bin/gdal_rasterize',
                         '-of', 'GTiff',
                         '-tr', '0.0001', '0.0001',  # Resolution
                         '-a_srs', 'EPSG:4326',
@@ -219,7 +219,7 @@ async def upload_chart(files: List[UploadFile] = File(...), name: str = "", laye
 
                     # Convert GeoTIFF to tiles
                     subprocess.run([
-                        'gdal2tiles.py',
+                        '/usr/bin/gdal2tiles.py',
                         '-z', '0-18',
                         '--processes=4',
                         str(geotiff_file),
@@ -233,7 +233,7 @@ async def upload_chart(files: List[UploadFile] = File(...), name: str = "", laye
                     try:
                         geojson_file = enc_file.with_suffix('.geojson')
                         subprocess.run([
-                            'ogr2ogr',
+                            '/usr/bin/ogr2ogr',
                             '-f', 'GeoJSON',
                             str(geojson_file),
                             str(enc_file)
