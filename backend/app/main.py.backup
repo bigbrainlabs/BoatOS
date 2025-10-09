@@ -1,0 +1,399 @@
+"""
+BoatOS Backend - FastAPI Server
+Marine Navigation & Monitoring System
+"""
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import asyncio
+import json
+from datetime import datetime
+from typing import List, Dict, Any
+import websockets
+import paho.mqtt.client as mqtt
+
+app = FastAPI(title="BoatOS API", version="1.0.0")
+
+# CORS für Frontend-Zugriff von anderen Geräten
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# WebSocket Clients für Live-Updates
+active_connections: List[WebSocket] = []
+
+# Sensor-Daten Cache
+sensor_data: Dict[str, Any] = {
+    "gps": {"lat": 0, "lon": 0, "timestamp": None},
+    "speed": 0,
+    "heading": 0,
+    "depth": 0,
+    "wind": {"speed": 0, "direction": 0},
+    "engine": {"rpm": 0, "temp": 0, "oil_pressure": 0},
+    "battery": {"voltage": 0, "current": 0},
+}
+
+# Routen-Speicher
+routes: Dict[str, Any] = {}
+waypoints: List[Dict[str, Any]] = []
+
+
+# ==================== WEBSOCKET ====================
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket für Live-Daten an Frontend"""
+    await websocket.accept()
+    active_connections.append(websocket)
+    try:
+        while True:
+            # Sende aktuelle Sensor-Daten alle 500ms
+            await websocket.send_json(sensor_data)
+            await asyncio.sleep(0.5)
+    except WebSocketDisconnect:
+        active_connections.remove(websocket)
+
+
+# ==================== REST API ====================
+
+@app.get("/")
+async def root():
+    """API Status"""
+    return {
+        "name": "BoatOS",
+        "version": "1.0.0",
+        "status": "running",
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/sensors")
+async def get_sensors():
+    """Aktuelle Sensor-Daten"""
+    return sensor_data
+
+
+@app.get("/api/waypoints")
+async def get_waypoints():
+    """Alle Wegpunkte"""
+    return waypoints
+
+
+@app.post("/api/waypoints")
+async def add_waypoint(waypoint: Dict[str, Any]):
+    """Neuen Wegpunkt hinzufügen"""
+    waypoint["id"] = len(waypoints) + 1
+    waypoint["timestamp"] = datetime.now().isoformat()
+    waypoints.append(waypoint)
+    return waypoint
+
+
+@app.delete("/api/waypoints/{waypoint_id}")
+async def delete_waypoint(waypoint_id: int):
+    """Wegpunkt löschen"""
+    global waypoints
+    waypoints = [w for w in waypoints if w["id"] != waypoint_id]
+    return {"status": "deleted", "id": waypoint_id}
+
+
+@app.get("/api/routes")
+async def get_routes():
+    """Alle gespeicherten Routen"""
+    return routes
+
+
+@app.post("/api/routes")
+async def save_route(route: Dict[str, Any]):
+    """Route speichern"""
+    route_id = route.get("name", f"route_{len(routes)+1}")
+    route["timestamp"] = datetime.now().isoformat()
+    routes[route_id] = route
+    return {"status": "saved", "route": route}
+
+
+# ==================== SIGNALK INTEGRATION ====================
+
+async def signalk_listener():
+    """SignalK WebSocket Client - empfängt Live-Daten"""
+    uri = "ws://localhost:3000/signalk/v1/stream?subscribe=all"
+
+    while True:
+        try:
+            async with websockets.connect(uri) as ws:
+                print("✅ SignalK connected")
+                async for message in ws:
+                    data = json.loads(message)
+
+                    # Parse SignalK Updates
+                    if "updates" in data:
+                        for update in data["updates"]:
+                            if "values" in update:
+                                for value in update["values"]:
+                                    path = value.get("path", "")
+                                    val = value.get("value")
+
+                                    # GPS Position
+                                    if path == "navigation.position":
+                                        sensor_data["gps"] = {
+                                            "lat": val.get("latitude", 0),
+                                            "lon": val.get("longitude", 0),
+                                            "timestamp": datetime.now().isoformat()
+                                        }
+
+                                    # Speed (m/s → Knoten)
+                                    elif path == "navigation.speedOverGround":
+                                        sensor_data["speed"] = round(val * 1.94384, 1)
+
+                                    # Heading (Radiant → Grad)
+                                    elif path == "navigation.headingTrue":
+                                        sensor_data["heading"] = round(val * 180 / 3.14159, 0)
+
+                                    # Depth
+                                    elif path == "environment.depth.belowTransducer":
+                                        sensor_data["depth"] = round(val, 1)
+
+                                    # Wind
+                                    elif path == "environment.wind.speedApparent":
+                                        sensor_data["wind"]["speed"] = round(val * 1.94384, 1)
+                                    elif path == "environment.wind.angleApparent":
+                                        sensor_data["wind"]["direction"] = round(val * 180 / 3.14159, 0)
+
+        except Exception as e:
+            print(f"⚠️ SignalK disconnected: {e}")
+            await asyncio.sleep(5)  # Reconnect nach 5s
+
+
+# ==================== MQTT INTEGRATION (ESP32) ====================
+
+def on_mqtt_message(client, userdata, msg):
+    """MQTT Nachrichten von ESP32-Sensoren"""
+    topic = msg.topic
+    payload = msg.payload.decode()
+
+    try:
+        # ESP32 Heizung
+        if "heater" in topic:
+            sensor_data["heater"] = json.loads(payload)
+
+        # ESP32 Motor-Sensoren
+        elif "engine" in topic:
+            data = json.loads(payload)
+            sensor_data["engine"].update(data)
+
+        # ESP32 Tank-Sensoren
+        elif "tank" in topic:
+            sensor_data["tanks"] = json.loads(payload)
+
+    except Exception as e:
+        print(f"⚠️ MQTT parse error: {e}")
+
+
+def mqtt_client_init():
+    """MQTT Client für ESP32-Sensoren"""
+    client = mqtt.Client()
+    client.on_message = on_mqtt_message
+
+    try:
+        client.connect("localhost", 1883, 60)
+        client.subscribe("boat/#")  # Alle Topics unter "boat/"
+        client.loop_start()
+        print("✅ MQTT Broker connected")
+    except Exception as e:
+        print(f"⚠️ MQTT connection failed: {e}")
+
+
+# ==================== STARTUP ====================
+
+@app.on_event("startup")
+async def startup_event():
+    """Background Tasks beim Start"""
+    # SignalK Listener starten
+    asyncio.create_task(signalk_listener())
+    asyncio.create_task(track_recording_loop())
+
+    # MQTT Client starten
+    mqtt_client_init()
+
+    print("🚢 BoatOS Backend started!")
+    print("📡 SignalK: ws://localhost:3000")
+    print("📨 MQTT: localhost:1883")
+    print("🌐 API: http://localhost:8000")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+# ==================== LOGBOOK & TRACK RECORDING ====================
+
+from datetime import datetime
+import os
+
+# Track Storage
+current_track = []
+track_recording = False
+logbook_entries = []
+
+@app.get("/api/logbook")
+async def get_logbook():
+    """Alle Logbuch-Einträge"""
+    return logbook_entries
+
+@app.post("/api/logbook")
+async def add_logbook_entry(entry: Dict[str, Any]):
+    """Neuen Logbuch-Eintrag hinzufügen"""
+    entry["id"] = len(logbook_entries) + 1
+    entry["timestamp"] = datetime.now().isoformat()
+    logbook_entries.append(entry)
+    return entry
+
+@app.get("/api/track/status")
+async def get_track_status():
+    """Track-Recording Status"""
+    return {
+        "recording": track_recording,
+        "points": len(current_track),
+        "distance": calculate_track_distance()
+    }
+
+@app.post("/api/track/start")
+async def start_track_recording():
+    """Track-Aufzeichnung starten"""
+    global track_recording, current_track
+    track_recording = True
+    current_track = []
+    return {"status": "started", "timestamp": datetime.now().isoformat()}
+
+@app.post("/api/track/stop")
+async def stop_track_recording():
+    """Track-Aufzeichnung stoppen"""
+    global track_recording
+    track_recording = False
+    
+    # Als Logbuch-Eintrag speichern
+    if len(current_track) > 0:
+        entry = {
+            "id": len(logbook_entries) + 1,
+            "type": "track",
+            "timestamp": datetime.now().isoformat(),
+            "points": len(current_track),
+            "distance": calculate_track_distance(),
+            "duration": calculate_track_duration(),
+            "track_data": current_track[:1000]  # Begrenzen auf 1000 Punkte
+        }
+        logbook_entries.append(entry)
+        return entry
+    
+    return {"status": "stopped", "points": 0}
+
+@app.get("/api/track/current")
+async def get_current_track():
+    """Aktuellen Track abrufen"""
+    return {
+        "recording": track_recording,
+        "points": current_track
+    }
+
+@app.get("/api/track/export/{entry_id}")
+async def export_track_gpx(entry_id: int):
+    """Track als GPX exportieren"""
+    entry = next((e for e in logbook_entries if e["id"] == entry_id), None)
+    if not entry or "track_data" not in entry:
+        return {"error": "Track not found"}
+    
+    gpx = generate_gpx(entry["track_data"], entry["timestamp"])
+    
+    from fastapi.responses import Response
+    return Response(
+        content=gpx,
+        media_type="application/gpx+xml",
+        headers={"Content-Disposition": f"attachment; filename=track_{entry_id}.gpx"}
+    )
+
+def calculate_track_distance():
+    """Berechne Distanz des aktuellen Tracks in Nautischen Meilen"""
+    if len(current_track) < 2:
+        return 0
+    
+    distance = 0
+    for i in range(1, len(current_track)):
+        lat1, lon1 = current_track[i-1]["lat"], current_track[i-1]["lon"]
+        lat2, lon2 = current_track[i]["lat"], current_track[i]["lon"]
+        
+        # Haversine Formel (vereinfacht)
+        from math import radians, sin, cos, sqrt, atan2
+        R = 3440.065  # Erdradius in Nautischen Meilen
+        
+        dlat = radians(lat2 - lat1)
+        dlon = radians(lon2 - lon1)
+        a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+        c = 2 * atan2(sqrt(a), sqrt(1-a))
+        distance += R * c
+    
+    return round(distance, 2)
+
+def calculate_track_duration():
+    """Berechne Dauer des Tracks"""
+    if len(current_track) < 2:
+        return "0:00"
+    
+    start = datetime.fromisoformat(current_track[0]["timestamp"])
+    end = datetime.fromisoformat(current_track[-1]["timestamp"])
+    duration = end - start
+    
+    hours = duration.seconds // 3600
+    minutes = (duration.seconds % 3600) // 60
+    return f"{hours}:{minutes:02d}"
+
+def generate_gpx(track_data, timestamp):
+    """Generiere GPX-Datei aus Track-Daten"""
+    gpx_header = """<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="BoatOS" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>BoatOS Track</name>
+    <time>{timestamp}</time>
+  </metadata>
+  <trk>
+    <name>Track {timestamp}</name>
+    <trkseg>
+""".format(timestamp=timestamp)
+    
+    gpx_points = ""
+    for point in track_data:
+        gpx_points += f"""      <trkpt lat="{point[lat]}" lon="{point[lon]}">
+        <time>{point[timestamp]}</time>
+      </trkpt>
+"""
+    
+    gpx_footer = """    </trkseg>
+  </trk>
+</gpx>"""
+    
+    return gpx_header + gpx_points + gpx_footer
+
+
+# Track-Recording Loop (fügt GPS-Punkte automatisch hinzu)
+async def track_recording_loop():
+    """Zeichnet Track auf wenn aktiv"""
+    global current_track
+    
+    while True:
+        await asyncio.sleep(10)  # Alle 10 Sekunden
+        
+        if track_recording and sensor_data["gps"]["lat"] != 0:
+            point = {
+                "lat": sensor_data["gps"]["lat"],
+                "lon": sensor_data["gps"]["lon"],
+                "timestamp": datetime.now().isoformat(),
+                "speed": sensor_data["speed"],
+                "heading": sensor_data["heading"]
+            }
+            current_track.append(point)
+
+# Track Recording Loop beim Start aktivieren (in startup_event hinzufügen)

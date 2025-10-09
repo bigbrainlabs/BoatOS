@@ -1,0 +1,661 @@
+"""BoatOS Backend - FastAPI Server with Logbook & Charts"""
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response, FileResponse
+from fastapi.staticfiles import StaticFiles
+import asyncio, json, websockets, os, shutil
+from datetime import datetime
+from typing import List, Dict, Any
+import paho.mqtt.client as mqtt
+from math import radians, sin, cos, sqrt, atan2
+import aiohttp
+import requests
+from bs4 import BeautifulSoup
+import subprocess
+from pathlib import Path
+
+app = FastAPI(title="BoatOS API", version="1.0.0")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# Charts directory
+CHARTS_DIR = Path("/home/arielle/BoatOS/data/charts")
+CHARTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Mount charts directory for static serving
+app.mount("/charts", StaticFiles(directory=str(CHARTS_DIR)), name="charts")
+
+active_connections: List[WebSocket] = []
+sensor_data: Dict[str, Any] = {"gps": {"lat": 50.833, "lon": 5.663, "satellites": 0, "altitude": 0, "course": 0}, "speed": 0, "heading": 0, "depth": 0, "wind": {"speed": 0, "direction": 0}, "engine": {"rpm": 0, "temp": 0, "oil_pressure": 0}, "battery": {"voltage": 0, "current": 0}}
+routes, waypoints = {}, []
+logbook_entries = []
+current_track = []
+track_recording = False
+weather_data: Dict[str, Any] = {}
+gps_module_data: Dict[str, Any] = {}
+chart_layers: List[Dict[str, Any]] = []
+
+# OpenWeatherMap API Configuration
+OPENWEATHER_API_KEY = "bfe93865949cf3e87b49a29c13a526c4"
+OPENWEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5"
+
+# ==================== WEBSOCKET ====================
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    active_connections.append(websocket)
+    try:
+        while True:
+            await websocket.send_json(sensor_data)
+            await asyncio.sleep(0.5)
+    except WebSocketDisconnect:
+        active_connections.remove(websocket)
+
+# ==================== REST API ====================
+@app.get("/")
+async def root():
+    return {"name": "BoatOS", "version": "1.0.0", "status": "running", "timestamp": datetime.now().isoformat()}
+
+@app.get("/api/sensors")
+async def get_sensors():
+    return sensor_data
+
+@app.get("/api/waypoints")
+async def get_waypoints():
+    return waypoints
+
+@app.post("/api/waypoints")
+async def add_waypoint(waypoint: Dict[str, Any]):
+    waypoint["id"] = len(waypoints) + 1
+    waypoint["timestamp"] = datetime.now().isoformat()
+    waypoints.append(waypoint)
+    return waypoint
+
+@app.delete("/api/waypoints/{waypoint_id}")
+async def delete_waypoint(waypoint_id: int):
+    global waypoints
+    waypoints = [w for w in waypoints if w["id"] != waypoint_id]
+    return {"status": "deleted"}
+
+@app.get("/api/routes")
+async def get_routes():
+    return routes
+
+@app.post("/api/routes")
+async def save_route(route: Dict[str, Any]):
+    route_id = route.get("name", f"route_{len(routes)+1}")
+    routes[route_id] = route
+    return {"status": "saved"}
+
+# ==================== CHARTS ====================
+@app.get("/api/charts")
+async def get_charts():
+    """List all available chart layers"""
+    load_chart_layers()
+    return chart_layers
+
+@app.post("/api/charts/upload")
+async def upload_chart(files: List[UploadFile] = File(...), name: str = "", layer_type: str = "tiles"):
+    """
+    Upload chart overlay (single file or directory)
+    Supported types:
+    - tiles: Directory with tile structure (z/x/y.png) or ZIP
+    - kap: BSB/KAP nautical charts (will be converted to tiles)
+    - enc: Inland ENC (.000 files, S-57 format) (will be converted to tiles)
+    - mbtiles: MBTiles file
+    - image: Single GeoTIFF or georeferenced image
+    """
+    try:
+        # Determine chart name
+        first_file = files[0]
+        chart_name = name or first_file.filename.split('.')[0].split('/')[0]
+        chart_id = f"chart_{len(chart_layers) + 1}"
+        chart_path = CHARTS_DIR / chart_id
+        chart_path.mkdir(parents=True, exist_ok=True)
+
+        # Save all uploaded files
+        kap_files = []
+        enc_files = []
+        for file in files:
+            # Preserve directory structure from webkitRelativePath
+            file_path = chart_path / file.filename
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(file_path, "wb") as buffer:
+                content = await file.read()
+                buffer.write(content)
+
+            if file.filename.endswith('.kap'):
+                kap_files.append(file_path)
+            elif file.filename.endswith('.000'):
+                enc_files.append(file_path)
+
+        # Process KAP files if present
+        if kap_files and layer_type == 'kap':
+            print(f"📊 Converting {len(kap_files)} KAP file(s) to tiles...")
+            tiles_path = chart_path / "tiles"
+            tiles_path.mkdir(exist_ok=True)
+
+            for kap_file in kap_files:
+                try:
+                    import subprocess
+                    # Convert KAP to VRT
+                    vrt_file = kap_file.with_suffix('.vrt')
+                    subprocess.run(['gdal_translate', '-of', 'VRT', str(kap_file), str(vrt_file)], check=True)
+
+                    # Generate tiles using gdal2tiles
+                    subprocess.run([
+                        'gdal2tiles.py',
+                        '-z', '0-18',
+                        '--processes=4',
+                        str(vrt_file),
+                        str(tiles_path)
+                    ], check=True)
+
+                    print(f"✅ Converted {kap_file.name} to tiles")
+                except Exception as e:
+                    print(f"⚠️ KAP conversion failed for {kap_file.name}: {e}")
+
+            layer_type = 'tiles'  # Change type to tiles after conversion
+
+        # Process Inland ENC files if present
+        if enc_files and layer_type == 'enc':
+            print(f"📊 Converting {len(enc_files)} Inland ENC file(s) to tiles...")
+            tiles_path = chart_path / "tiles"
+            tiles_path.mkdir(exist_ok=True)
+
+            for enc_file in enc_files:
+                try:
+                    import subprocess
+                    # Convert S-57 ENC to GeoTIFF
+                    geotiff_file = enc_file.with_suffix('.tif')
+
+                    # Use ogr2ogr to convert S-57 to shapefile first, then rasterize
+                    # Or use direct GDAL rendering of S-57
+                    subprocess.run([
+                        'gdal_rasterize',
+                        '-of', 'GTiff',
+                        '-tr', '0.0001', '0.0001',  # Resolution
+                        '-a_srs', 'EPSG:4326',
+                        str(enc_file),
+                        str(geotiff_file)
+                    ], check=True)
+
+                    # Convert GeoTIFF to tiles
+                    subprocess.run([
+                        'gdal2tiles.py',
+                        '-z', '0-18',
+                        '--processes=4',
+                        str(geotiff_file),
+                        str(tiles_path)
+                    ], check=True)
+
+                    print(f"✅ Converted {enc_file.name} to tiles")
+                except Exception as e:
+                    print(f"⚠️ ENC conversion failed for {enc_file.name}: {e}")
+                    # Try alternative: serve as vector tiles via ogr2ogr
+                    try:
+                        geojson_file = enc_file.with_suffix('.geojson')
+                        subprocess.run([
+                            'ogr2ogr',
+                            '-f', 'GeoJSON',
+                            str(geojson_file),
+                            str(enc_file)
+                        ], check=True)
+                        print(f"✅ Converted {enc_file.name} to GeoJSON (alternative)")
+                    except Exception as e2:
+                        print(f"⚠️ GeoJSON conversion also failed: {e2}")
+
+            layer_type = 'tiles'  # Change type to tiles after conversion
+
+        # Handle ZIP extraction
+        zip_files = list(chart_path.glob('*.zip'))
+        if zip_files:
+            import zipfile
+            for zip_file in zip_files:
+                with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+                    zip_ref.extractall(chart_path)
+                os.remove(zip_file)
+
+        # Create layer metadata
+        layer = {
+            "id": chart_id,
+            "name": chart_name,
+            "type": layer_type,
+            "path": str(chart_path),
+            "url": f"/charts/{chart_id}",
+            "enabled": True,
+            "uploaded": datetime.now().isoformat()
+        }
+
+        chart_layers.append(layer)
+        save_chart_metadata()
+
+        print(f"✅ Chart uploaded: {chart_name} ({layer_type})")
+        return layer
+
+    except Exception as e:
+        print(f"❌ Chart upload failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
+@app.delete("/api/charts/{chart_id}")
+async def delete_chart(chart_id: str):
+    """Delete a chart layer"""
+    global chart_layers
+    chart = next((c for c in chart_layers if c["id"] == chart_id), None)
+
+    if chart:
+        # Delete files
+        chart_path = Path(chart["path"])
+        if chart_path.exists():
+            shutil.rmtree(chart_path)
+
+        # Remove from list
+        chart_layers = [c for c in chart_layers if c["id"] != chart_id]
+        save_chart_metadata()
+
+        return {"status": "deleted"}
+
+    return {"error": "Chart not found"}
+
+@app.patch("/api/charts/{chart_id}")
+async def toggle_chart(chart_id: str, enabled: bool):
+    """Toggle chart visibility"""
+    chart = next((c for c in chart_layers if c["id"] == chart_id), None)
+
+    if chart:
+        chart["enabled"] = enabled
+        save_chart_metadata()
+        return chart
+
+    return {"error": "Chart not found"}
+
+def load_chart_layers():
+    """Load chart metadata from disk"""
+    global chart_layers
+    metadata_file = CHARTS_DIR / "layers.json"
+
+    if metadata_file.exists():
+        with open(metadata_file, 'r') as f:
+            chart_layers = json.load(f)
+    else:
+        chart_layers = []
+
+def save_chart_metadata():
+    """Save chart metadata to disk"""
+    metadata_file = CHARTS_DIR / "layers.json"
+    with open(metadata_file, 'w') as f:
+        json.dump(chart_layers, f, indent=2)
+
+# ==================== ENC DOWNLOAD ====================
+import requests
+from bs4 import BeautifulSoup
+import subprocess
+
+BASE_URL = "https://www.elwis.de"
+IENC_URL = f"{BASE_URL}/DE/dynamisch/IENC/"
+ENC_DOWNLOAD_DIR = Path("/home/arielle/BoatOS/data/enc_downloads")
+ENC_DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+@app.get("/api/enc/catalog")
+async def get_enc_catalog():
+    """Get list of available German Inland ENC from ELWIS"""
+    try:
+        response = requests.get(IENC_URL, timeout=10)
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        enc_files = []
+        for link in soup.find_all("a", href=True):
+            href = link["href"]
+            if "Download?file=" in href:
+                filename = link.text.strip() or href.split("file=")[-1]
+                safe_filename = filename.replace("/", "_").replace(" ", "_")
+                if not safe_filename.endswith(".000"):
+                    safe_filename += ".000"
+                enc_files.append({
+                    "id": len(enc_files) + 1,
+                    "name": filename,
+                    "filename": safe_filename,
+                    "url": BASE_URL + href if not href.startswith("http") else href,
+                    "downloaded": (ENC_DOWNLOAD_DIR / safe_filename).exists()
+                })
+        
+        print(f"ENC Catalog: Found {len(enc_files)} waterways")
+        return enc_files
+    except Exception as e:
+        print(f"ENC Catalog error: {e}")
+        return {"error": str(e)}
+
+@app.post("/api/enc/download")
+async def download_enc_files(selected: List[str]):
+    """Download and import selected ENC files"""
+    results = []
+    
+    try:
+        response = requests.get(IENC_URL, timeout=10)
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        enc_map = {}
+        for link in soup.find_all("a", href=True):
+            href = link["href"]
+            if "Download?file=" in href:
+                filename = link.text.strip() or href.split("file=")[-1]
+                safe_name = filename.replace("/", "_").replace(" ", "_")
+                if not safe_name.endswith(".000"):
+                    safe_name += ".000"
+                enc_map[safe_name] = BASE_URL + href if not href.startswith("http") else href
+        
+        for filename in selected:
+            if filename not in enc_map:
+                results.append({"file": filename, "status": "not_found"})
+                continue
+            
+            try:
+                filepath = ENC_DOWNLOAD_DIR / filename
+                print(f"Downloading {filename}...")
+                
+                r = requests.get(enc_map[filename], timeout=30)
+                if r.status_code == 200 and len(r.content) > 1000:
+                    filepath.write_bytes(r.content)
+                    print(f"Downloaded {filename} ({len(r.content)/1024:.1f} KB)")
+                    
+                    chart_id = f"enc_{filename.replace(".000", "").replace(".", "_")}"
+                    chart_path = CHARTS_DIR / chart_id
+                    chart_path.mkdir(parents=True, exist_ok=True)
+                    
+                    shutil.copy(filepath, chart_path / filename)
+                    
+                    tiles_path = chart_path / "tiles"
+                    tiles_path.mkdir(exist_ok=True)
+                    
+                    try:
+                        geojson_file = chart_path / "data.geojson"
+                        subprocess.run(["ogr2ogr", "-f", "GeoJSON", 
+                                      str(geojson_file), str(chart_path / filename)], 
+                                      check=True, capture_output=True)
+                        
+                        chart_data = {
+                            "id": chart_id,
+                            "name": filename.replace(".000", "").replace("_", " "),
+                            "type": "enc",
+                            "url": f"/charts/{chart_id}",
+                            "uploaded": datetime.now().isoformat(),
+                            "enabled": False
+                        }
+                        
+                        chart_layers.append(chart_data)
+                        save_chart_metadata()
+                        
+                        results.append({"file": filename, "status": "success", "chart_id": chart_id})
+                        print(f"Imported {filename} as chart {chart_id}")
+                    except Exception as conv_error:
+                        print(f"Conversion failed for {filename}: {conv_error}")
+                        results.append({"file": filename, "status": "conversion_failed", "error": str(conv_error)})
+                else:
+                    results.append({"file": filename, "status": "download_failed"})
+            except Exception as file_error:
+                print(f"Error downloading {filename}: {file_error}")
+                results.append({"file": filename, "status": "error", "error": str(file_error)})
+        
+        return {"results": results, "total": len(selected), "success": len([r for r in results if r.get("status") == "success"])}
+    except Exception as e:
+        print(f"ENC Download error: {e}")
+        return {"error": str(e), "results": results}
+
+
+# ==================== WEATHER ====================
+@app.get("/api/weather")
+async def get_weather(lang: str = "de"):
+    """Get weather data with optional language parameter (de/en)"""
+    if lang != weather_data.get("lang", "de"):
+        asyncio.create_task(fetch_weather_once(lang))
+    return weather_data
+
+async def fetch_weather_once(lang: str = "de"):
+    """Fetch weather data once with specified language"""
+    global weather_data
+    try:
+        lat = sensor_data["gps"]["lat"]
+        lon = sensor_data["gps"]["lon"]
+
+        if lat == 0 or lon == 0:
+            return
+
+        async with aiohttp.ClientSession() as session:
+            current_url = f"{OPENWEATHER_BASE_URL}/weather?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang={lang}"
+            async with session.get(current_url) as resp:
+                if resp.status == 200:
+                    current = await resp.json()
+
+                    forecast_url = f"{OPENWEATHER_BASE_URL}/forecast?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang={lang}"
+                    async with session.get(forecast_url) as fresp:
+                        if fresp.status == 200:
+                            forecast = await fresp.json()
+
+                            weather_data = {
+                                "lang": lang,
+                                "current": {
+                                    "temp": round(current["main"]["temp"], 1),
+                                    "feels_like": round(current["main"]["feels_like"], 1),
+                                    "pressure": current["main"]["pressure"],
+                                    "humidity": current["main"]["humidity"],
+                                    "description": current["weather"][0]["description"],
+                                    "icon": current["weather"][0]["icon"],
+                                    "wind_speed": round(current["wind"]["speed"] * 1.94384, 1),
+                                    "wind_deg": current["wind"].get("direction", 0),
+                                    "clouds": current["clouds"]["all"],
+                                    "visibility": current.get("visibility", 0) / 1852,
+                                    "timestamp": datetime.fromtimestamp(current["dt"]).isoformat()
+                                },
+                                "forecast": []
+                            }
+
+                            for i in range(0, min(24, len(forecast["list"])), 8):
+                                f = forecast["list"][i]
+                                weather_data["forecast"].append({
+                                    "date": f["dt_txt"].split(" ")[0],
+                                    "temp": round(f["main"]["temp"], 1),
+                                    "description": f["weather"][0]["description"],
+                                    "icon": f["weather"][0]["icon"],
+                                    "wind_speed": round(f["wind"]["speed"] * 1.94384, 1),
+                                    "wind_deg": f["wind"].get("deg", 0)
+                                })
+
+                            print(f"✅ Weather updated ({lang}): {weather_data['current']['temp']}°C, {weather_data['current']['description']}")
+                else:
+                    print(f"⚠️ Weather API error: {resp.status}")
+    except Exception as e:
+        print(f"⚠️ Weather fetch error: {e}")
+
+async def fetch_weather():
+    """Periodic weather fetch loop"""
+    while True:
+        await fetch_weather_once("de")
+        await asyncio.sleep(1800)
+
+# ==================== LOGBOOK ====================
+@app.get("/api/logbook")
+async def get_logbook():
+    return logbook_entries
+
+@app.post("/api/logbook")
+async def add_logbook_entry(entry: Dict[str, Any]):
+    entry["id"] = len(logbook_entries) + 1
+    entry["timestamp"] = datetime.now().isoformat()
+    logbook_entries.append(entry)
+    return entry
+
+@app.get("/api/track/status")
+async def get_track_status():
+    return {"recording": track_recording, "points": len(current_track), "distance": calculate_track_distance()}
+
+@app.post("/api/track/start")
+async def start_track_recording():
+    global track_recording, current_track
+    track_recording = True
+    current_track = []
+    return {"status": "started", "timestamp": datetime.now().isoformat()}
+
+@app.post("/api/track/stop")
+async def stop_track_recording():
+    global track_recording
+    track_recording = False
+    if len(current_track) > 0:
+        entry = {"id": len(logbook_entries) + 1, "type": "track", "timestamp": datetime.now().isoformat(),
+                 "points": len(current_track), "distance": calculate_track_distance(),
+                 "duration": calculate_track_duration(), "track_data": current_track[:1000]}
+        logbook_entries.append(entry)
+        return entry
+    return {"status": "stopped", "points": 0}
+
+@app.get("/api/track/current")
+async def get_current_track():
+    return {"recording": track_recording, "points": current_track}
+
+@app.get("/api/track/export/{entry_id}")
+async def export_track_gpx(entry_id: int):
+    entry = next((e for e in logbook_entries if e["id"] == entry_id), None)
+    if not entry or "track_data" not in entry:
+        return {"error": "Track not found"}
+    gpx = generate_gpx(entry["track_data"], entry["timestamp"])
+    return Response(content=gpx, media_type="application/gpx+xml",
+                    headers={"Content-Disposition": f"attachment; filename=track_{entry_id}.gpx"})
+
+def calculate_track_distance():
+    if len(current_track) < 2:
+        return 0
+    distance = 0
+    for i in range(1, len(current_track)):
+        lat1, lon1 = current_track[i-1]["lat"], current_track[i-1]["lon"]
+        lat2, lon2 = current_track[i]["lat"], current_track[i]["lon"]
+        R = 3440.065
+        dlat = radians(lat2 - lat1)
+        dlon = radians(lon2 - lon1)
+        a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+        c = 2 * atan2(sqrt(a), sqrt(1-a))
+        distance += R * c
+    return round(distance, 2)
+
+def calculate_track_duration():
+    if len(current_track) < 2:
+        return "0:00"
+    start = datetime.fromisoformat(current_track[0]["timestamp"])
+    end = datetime.fromisoformat(current_track[-1]["timestamp"])
+    duration = end - start
+    hours = duration.seconds // 3600
+    minutes = (duration.seconds % 3600) // 60
+    return f"{hours}:{minutes:02d}"
+
+def generate_gpx(track_data, timestamp):
+    gpx = f"""<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="BoatOS"><metadata><name>BoatOS Track</name><time>{timestamp}</time></metadata><trk><name>Track {timestamp}</name><trkseg>
+"""
+    for point in track_data:
+        gpx += f'<trkpt lat="{point["lat"]}" lon="{point["lon"]}"><time>{point["timestamp"]}</time></trkpt>\n'
+    gpx += "</trkseg></trk></gpx>"
+    return gpx
+
+# ==================== SIGNALK ====================
+async def signalk_listener():
+    uri = "ws://localhost:3000/signalk/v1/stream?subscribe=all"
+    while True:
+        try:
+            async with websockets.connect(uri) as ws:
+                print("✅ SignalK connected")
+                async for message in ws:
+                    data = json.loads(message)
+                    if "updates" in data:
+                        for update in data["updates"]:
+                            if "values" in update:
+                                for value in update["values"]:
+                                    path, val = value.get("path"), value.get("value")
+                                    if path == "navigation.position":
+                                        sensor_data["gps"] = {"lat": val.get("latitude", 0), "lon": val.get("longitude", 0)}
+                                    elif path == "navigation.speedOverGround":
+                                        sensor_data["speed"] = round(val * 1.94384, 1)
+                                    elif path == "navigation.headingTrue":
+                                        sensor_data["heading"] = round(val * 180 / 3.14159, 0)
+                                    elif path == "environment.depth.belowTransducer":
+                                        sensor_data["depth"] = round(val, 1)
+        except Exception as e:
+            print(f"⚠️ SignalK: {e}")
+            await asyncio.sleep(5)
+
+# ==================== TRACK RECORDING ====================
+async def track_recording_loop():
+    global current_track
+    while True:
+        await asyncio.sleep(10)
+        if track_recording and sensor_data["gps"]["lat"] != 0:
+            point = {"lat": sensor_data["gps"]["lat"], "lon": sensor_data["gps"]["lon"],
+                     "timestamp": datetime.now().isoformat(), "speed": sensor_data["speed"],
+                     "heading": sensor_data["heading"]}
+            current_track.append(point)
+
+# ==================== MQTT ====================
+def on_mqtt_message(client, userdata, msg):
+    topic, payload = msg.topic, msg.payload.decode()
+    try:
+        if topic == "boat/gps/latitude":
+            gps_module_data["latitude"] = float(payload)
+            update_gps_from_module()
+        elif topic == "boat/gps/longitude":
+            gps_module_data["longitude"] = float(payload)
+            update_gps_from_module()
+        elif topic == "boat/gps/satellites":
+            gps_module_data["satellites"] = int(payload)
+            sensor_data["gps"]["satellites"] = int(payload)
+        elif topic == "boat/gps/altitude":
+            gps_module_data["altitude"] = float(payload)
+            sensor_data["gps"]["altitude"] = float(payload)
+        elif topic == "boat/gps/speed":
+            gps_module_data["speed"] = float(payload)
+            sensor_data["speed"] = float(payload)
+        elif topic == "boat/gps/course":
+            gps_module_data["course"] = float(payload)
+            sensor_data["gps"]["course"] = float(payload)
+            sensor_data["heading"] = float(payload)
+        elif "heater" in topic:
+            sensor_data["heater"] = json.loads(payload)
+        elif "engine" in topic:
+            sensor_data["engine"].update(json.loads(payload)
+
+)
+    except Exception as e:
+        print(f"⚠️ MQTT parse error ({topic}): {e}")
+
+def update_gps_from_module():
+    """Update GPS position from collected MQTT data"""
+    if "latitude" in gps_module_data and "longitude" in gps_module_data:
+        lat = gps_module_data["latitude"]
+        lon = gps_module_data["longitude"]
+        if lat != 0 and lon != 0:
+            sensor_data["gps"]["lat"] = lat
+            sensor_data["gps"]["lon"] = lon
+            print(f"📍 GPS: {lat:.6f}, {lon:.6f} ({gps_module_data.get('satellites', 0)} sats)")
+
+def mqtt_client_init():
+    client = mqtt.Client()
+    client.on_message = on_mqtt_message
+    try:
+        client.connect("localhost", 1883, 60)
+        client.subscribe("boat/#")
+        client.loop_start()
+        print("✅ MQTT connected (boat/#)")
+    except Exception as e:
+        print(f"⚠️ MQTT connection failed: {e}")
+
+# ==================== STARTUP ====================
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(signalk_listener())
+    asyncio.create_task(track_recording_loop())
+    asyncio.create_task(fetch_weather())
+    mqtt_client_init()
+    load_chart_layers()
+    print("🚢 BoatOS Backend started!")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
