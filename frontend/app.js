@@ -775,7 +775,7 @@ window.addEventListener('load', () => {
                 }
                 
                 // Nur nutzen wenn keine GPS-Daten vom Backend kommen
-                if (!lastGpsUpdate || (Date.now() - lastGpsUpdate) > 30000) {
+                if (gpsSource !== "backend") {
                     gpsSource = 'browser';
                     updateBoatPosition({
                         lat: position.coords.latitude,
