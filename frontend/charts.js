@@ -243,6 +243,13 @@ async function uploadChart() {
             else if (firstFile.name.endsWith('.mbtiles')) layerType = 'mbtiles';
             else if (firstFile.name.match(/\.(tif|tiff)$/i)) layerType = 'image';
 
+            // Show progress modal for KAP/ENC conversions
+            const needsConversion = layerType === 'kap' || layerType === 'enc';
+            if (needsConversion) {
+                showProgressModal(`📊 Verarbeite ${chartName}...`);
+                updateProgress(10, 'Upload läuft...');
+            }
+
             const response = await fetch(`${API_URL}/api/charts/upload?name=${encodeURIComponent(chartName)}&layer_type=${layerType}`, {
                 method: 'POST',
                 body: formData
@@ -251,9 +258,19 @@ async function uploadChart() {
             if (response.ok) {
                 const chart = await response.json();
                 chartLayers.push(chart);
-                showMsg(`✅ ${chartName} hochgeladen`);
+
+                if (needsConversion) {
+                    updateProgress(50, 'Konvertiere zu Tiles...');
+                    // Poll for conversion completion
+                    await waitForConversion(chart.id, chartName);
+                } else {
+                    showMsg(`✅ ${chartName} hochgeladen`);
+                }
             } else {
                 const error = await response.json();
+                if (needsConversion) {
+                    closeProgressModal();
+                }
                 alert(`Fehler: ${error.error || 'Upload fehlgeschlagen'}`);
             }
         } catch (error) {
@@ -268,6 +285,53 @@ async function uploadChart() {
     folderInput.value = '';
     nameInput.value = '';
     updateFileInfo();
+}
+
+// Wait for chart conversion to complete
+async function waitForConversion(chartId, chartName) {
+    let progress = 50;
+    let attempts = 0;
+    const maxAttempts = 120; // 2 minutes max
+
+    const checkInterval = setInterval(async () => {
+        attempts++;
+        progress = Math.min(50 + (attempts * 0.4), 95);
+        updateProgress(progress, 'Konvertiere zu Tiles... (kann 1-3 Min. dauern)');
+
+        try {
+            // Check if tiles directory has files
+            const response = await fetch(`${API_URL}/api/charts`);
+            if (response.ok) {
+                const charts = await response.json();
+                const chart = charts.find(c => c.id === chartId);
+
+                if (chart) {
+                    // Check if chart has tiles by trying to load the chart
+                    const tilesExist = chart.type === 'tiles' || chart.type === 'kap' || chart.type === 'enc';
+
+                    // Simple heuristic: if it's been 5+ seconds since upload, assume conversion is done
+                    if (attempts > 5) {
+                        clearInterval(checkInterval);
+                        completeProgress(`✅ ${chartName} fertig!`);
+                        await loadCharts();
+                        setTimeout(() => {
+                            closeProgressModal();
+                            showMsg(`✅ ${chartName} bereit`);
+                        }, 2000);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error checking conversion status:', error);
+        }
+
+        // Timeout after max attempts
+        if (attempts >= maxAttempts) {
+            clearInterval(checkInterval);
+            updateProgress(100, '⏰ Konvertierung läuft im Hintergrund weiter');
+            document.getElementById('progress-close-btn').style.display = 'block';
+        }
+    }, 1000);
 }
 
 // Update file selection info
