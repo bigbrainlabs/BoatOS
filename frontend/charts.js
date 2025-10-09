@@ -95,20 +95,37 @@ function updateChartsUI() {
 
 async function toggleChart(chartId, enabled) {
     try {
+        // Update local state immediately
+        const chart = chartLayers.find(c => c.id === chartId);
+        if (chart) {
+            chart.enabled = enabled;
+            updateChartsUI();
+        }
+
         const response = await fetch(`${API_URL}/api/charts/${chartId}?enabled=${enabled}`, {
             method: 'PATCH'
         });
 
         if (response.ok) {
-            const chart = chartLayers.find(c => c.id === chartId);
+            loadChartOverlays();
+            showMsg(enabled ? '✅ Karte aktiviert' : '⏸️ Karte deaktiviert');
+        } else {
+            // Revert on error
             if (chart) {
-                chart.enabled = enabled;
-                loadChartOverlays();
+                chart.enabled = !enabled;
                 updateChartsUI();
             }
+            showMsg('❌ Fehler beim Aktivieren/Deaktivieren');
         }
     } catch (error) {
         console.error('❌ Failed to toggle chart:', error);
+        // Revert on error
+        const chart = chartLayers.find(c => c.id === chartId);
+        if (chart) {
+            chart.enabled = !enabled;
+            updateChartsUI();
+        }
+        showMsg('❌ Fehler beim Aktivieren/Deaktivieren');
     }
 }
 
