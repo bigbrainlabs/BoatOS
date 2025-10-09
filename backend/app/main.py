@@ -179,12 +179,16 @@ async def upload_chart(files: List[UploadFile] = File(...), name: str = "", laye
                     vrt_file = kap_file.with_suffix('.vrt')
                     subprocess.run(['/usr/bin/gdal_translate', '-of', 'VRT', str(kap_file), str(vrt_file)], check=True)
 
+                    # Expand palette to RGBA (required for gdal2tiles)
+                    rgba_vrt = kap_file.parent / f"{kap_file.stem}_rgba.vrt"
+                    subprocess.run(['/usr/bin/gdal_translate', '-of', 'VRT', '-expand', 'rgba', str(vrt_file), str(rgba_vrt)], check=True)
+
                     # Generate tiles using gdal2tiles
                     subprocess.run([
                         '/usr/bin/gdal2tiles.py',
                         '-z', '0-18',
                         '--processes=4',
-                        str(vrt_file),
+                        str(rgba_vrt),
                         str(tiles_path)
                     ], check=True)
 
