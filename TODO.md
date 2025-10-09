@@ -37,6 +37,8 @@
   - [x] Kompass-Rose mit Heading-Anzeige (SVG, rotierend, top-left)
   - [x] Settings-Toggle für Track-Historie und Kompass-Rose
   - [x] Track-Historie löschen Funktion
+- [x] **Wetter-Panel** (v1.1.0)
+  - [x] 3-Tage-Vorhersage im Weather-Panel
 
 ---
 
@@ -47,7 +49,6 @@
 - [ ] Weitere Kartenebenen hinzufügen (Satellit, Topo)
 
 ### Wetter
-- [ ] 3-Tage-Vorhersage im Weather-Panel
 - [ ] Wind-Richtungs-Rose
 - [ ] Tide-Vorhersagen integrieren
 - [ ] Wetter-Alarme bei extremen Bedingungen
