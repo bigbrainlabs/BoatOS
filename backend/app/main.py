@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 from pathlib import Path
 import gps_service
 import logbook_storage
+import pdf_export
 from ais_service import ais_service
 
 app = FastAPI(title="BoatOS API", version="1.0.0")
@@ -927,9 +928,17 @@ async def add_logbook_entry(entry: Dict[str, Any]):
 @app.delete("/api/logbook/{entry_id}")
 async def delete_logbook_entry(entry_id: int):
     """Delete a logbook entry"""
-    global current_session_entries
+    global current_session_entries, completed_trips
+    
+    # Delete from memory lists
     current_session_entries = [e for e in current_session_entries if e["id"] != entry_id]
-    return {"status": "deleted"}
+    completed_trips = [e for e in completed_trips if e["id"] != entry_id]
+    
+    # Delete from persistent storage
+    success = logbook_storage.delete_logbook_entry(entry_id)
+    
+    return {"status": "deleted" if success else "not_found", "id": entry_id}
+
 
 @app.get("/api/track/status")
 async def get_track_status():
@@ -1067,6 +1076,23 @@ async def export_track_gpx(entry_id: int):
     return Response(content=gpx, media_type="application/gpx+xml",
                     headers={"Content-Disposition": f"attachment; filename=track_{entry_id}.gpx"})
 
+
+@app.get("/api/trip/pdf/{trip_id}")
+async def export_trip_pdf(trip_id: int):
+    """Export trip as PDF"""
+    trip = logbook_storage.get_logbook_entry(trip_id)
+    if not trip:
+        return {"error": "Trip not found"}
+    
+    pdf_buffer = pdf_export.generate_trip_pdf(trip)
+    
+    from datetime import datetime
+    start_date = datetime.fromisoformat(trip["trip_start"]).strftime("%Y-%m-%d")
+    filename = f"logbuch_{start_date}.pdf"
+    
+    return Response(content=pdf_buffer.getvalue(),
+                    media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename={filename}"})
 def calculate_track_distance():
     if len(current_track) < 2:
         return 0
