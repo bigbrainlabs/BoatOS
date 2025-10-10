@@ -13,6 +13,7 @@ import requests
 from bs4 import BeautifulSoup
 from pathlib import Path
 import gps_service
+import logbook_storage
 from ais_service import ais_service
 
 app = FastAPI(title="BoatOS API", version="1.0.0")
@@ -28,7 +29,10 @@ app.mount("/charts", StaticFiles(directory=str(CHARTS_DIR)), name="charts")
 active_connections: List[WebSocket] = []
 sensor_data: Dict[str, Any] = {"gps": {"lat": 0, "lon": 0, "satellites": 0, "altitude": 0, "course": 0}, "speed": 0, "heading": 0, "depth": 0, "wind": {"speed": 0, "direction": 0}, "engine": {"rpm": 0, "temp": 0, "oil_pressure": 0}, "battery": {"voltage": 0, "current": 0}}
 routes, waypoints = {}, []
-logbook_entries = []
+# Current session entries (cleared on stop)
+current_session_entries = []
+# Completed trips loaded from disk
+completed_trips = logbook_storage.load_logbook_entries()
 current_track = []
 track_recording = False
 track_paused = False
@@ -888,12 +892,12 @@ async def fetch_weather():
 # ==================== LOGBOOK ====================
 @app.get("/api/logbook")
 async def get_logbook():
-    return logbook_entries
+    return current_session_entries
 
 @app.post("/api/logbook")
 async def add_logbook_entry(entry: Dict[str, Any]):
     """Add a manual logbook entry"""
-    entry["id"] = len(logbook_entries) + 1
+    entry["id"] = len(current_session_entries) + 1
     entry["timestamp"] = datetime.now().isoformat()
 
     # Add current position if not provided
@@ -912,14 +916,14 @@ async def add_logbook_entry(entry: Dict[str, Any]):
             "wind_deg": weather_data.get("current", {}).get("wind_deg")
         } if weather_data else None
 
-    logbook_entries.append(entry)
+    current_session_entries.append(entry)
     return entry
 
 @app.delete("/api/logbook/{entry_id}")
 async def delete_logbook_entry(entry_id: int):
     """Delete a logbook entry"""
-    global logbook_entries
-    logbook_entries = [e for e in logbook_entries if e["id"] != entry_id]
+    global current_session_entries
+    current_session_entries = [e for e in current_session_entries if e["id"] != entry_id]
     return {"status": "deleted"}
 
 @app.get("/api/track/status")
@@ -931,10 +935,11 @@ async def start_track_recording():
     global track_recording, current_track
     track_recording = True
     current_track = []
+    current_session_entries.clear()  # Clear session on new start
 
     # Create automatic logbook entry for trip start with weather
     entry = {
-        "id": len(logbook_entries) + 1,
+        "id": len(current_session_entries) + 1,
         "type": "trip_start",
         "timestamp": datetime.now().isoformat(),
         "position": {
@@ -949,7 +954,7 @@ async def start_track_recording():
         } if weather_data else None,
         "notes": "Fahrt gestartet"
     }
-    logbook_entries.append(entry)
+    current_session_entries.append(entry)
 
     return {"status": "started", "timestamp": datetime.now().isoformat(), "entry": entry}
 
@@ -960,7 +965,7 @@ async def stop_track_recording():
     if len(current_track) > 0:
         # Create trip_end entry with weather and statistics
         entry = {
-            "id": len(logbook_entries) + 1,
+            "id": len(current_session_entries) + 1,
             "type": "trip_end",
             "timestamp": datetime.now().isoformat(),
             "position": {
@@ -976,10 +981,25 @@ async def stop_track_recording():
             "points": len(current_track),
             "distance": calculate_track_distance(),
             "duration": calculate_track_duration(),
-            "track_data": current_track[:1000],
+            "track_data": current_track.copy(),
             "notes": f"Fahrt beendet - {calculate_track_distance()} NM"
         }
-        logbook_entries.append(entry)
+        current_session_entries.append(entry)
+        
+        # Save complete trip with all session entries
+        trip = {
+            "id": len(completed_trips) + 1,
+            "trip_start": current_session_entries[0]["timestamp"] if current_session_entries else None,
+            "trip_end": entry["timestamp"],
+            "entries": current_session_entries.copy(),
+            "track_data": current_track.copy(),
+            "distance": entry.get("distance"),
+            "duration": entry.get("duration"),
+            "points": entry.get("points")
+        }
+        logbook_storage.save_logbook_entry(trip)
+        completed_trips.append(trip)
+        current_session_entries.clear()  # Clear session after saving
         return entry
     return {"status": "stopped", "points": 0}
 
@@ -993,7 +1013,7 @@ async def pause_track_recording():
     
     # Create logbook entry for pause
     entry = {
-        "id": len(logbook_entries) + 1,
+        "id": len(current_session_entries) + 1,
         "type": "trip_pause",
         "timestamp": datetime.now().isoformat(),
         "position": {
@@ -1002,7 +1022,7 @@ async def pause_track_recording():
         },
         "notes": "Aufzeichnung pausiert"
     }
-    logbook_entries.append(entry)
+    current_session_entries.append(entry)
     
     return {"status": "paused", "timestamp": datetime.now().isoformat(), "entry": entry}
 
@@ -1016,7 +1036,7 @@ async def resume_track_recording():
     
     # Create logbook entry for resume
     entry = {
-        "id": len(logbook_entries) + 1,
+        "id": len(current_session_entries) + 1,
         "type": "trip_resume",
         "timestamp": datetime.now().isoformat(),
         "position": {
@@ -1025,7 +1045,7 @@ async def resume_track_recording():
         },
         "notes": "Aufzeichnung fortgesetzt"
     }
-    logbook_entries.append(entry)
+    current_session_entries.append(entry)
     
     return {"status": "resumed", "timestamp": datetime.now().isoformat(), "entry": entry}
 
@@ -1035,7 +1055,7 @@ async def get_current_track():
 
 @app.get("/api/track/export/{entry_id}")
 async def export_track_gpx(entry_id: int):
-    entry = next((e for e in logbook_entries if e["id"] == entry_id), None)
+    entry = next((e for e in current_session_entries if e["id"] == entry_id), None)
     if not entry or "track_data" not in entry:
         return {"error": "Track not found"}
     gpx = generate_gpx(entry["track_data"], entry["timestamp"])
@@ -1049,6 +1069,9 @@ def calculate_track_distance():
     for i in range(1, len(current_track)):
         lat1, lon1 = current_track[i-1]["lat"], current_track[i-1]["lon"]
         lat2, lon2 = current_track[i]["lat"], current_track[i]["lon"]
+        # Skip if any coordinate is None
+        if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
+            continue
         R = 3440.065
         dlat = radians(lat2 - lat1)
         dlon = radians(lon2 - lon1)
