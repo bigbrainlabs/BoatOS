@@ -41,7 +41,9 @@ function renderLogbookEntry(entry) {
     const entryTypes = {
         'trip_start': { icon: '🚢', label: 'Fahrt gestartet', color: 'linear-gradient(135deg, #2ecc71, #27ae60)' },
         'trip_end': { icon: '⚓', label: 'Fahrt beendet', color: 'linear-gradient(135deg, #3498db, #2980b9)' },
-        'manual': { icon: '📝', label: 'Manueller Eintrag', color: 'linear-gradient(135deg, #9b59b6, #8e44ad)' }
+        'manual': { icon: '📝', label: 'Manueller Eintrag', color: 'linear-gradient(135deg, #9b59b6, #8e44ad)' },
+        'trip_pause': { icon: '⏸️', label: 'Aufzeichnung pausiert', color: 'linear-gradient(135deg, #f39c12, #e67e22)' },
+        'trip_resume': { icon: '▶️', label: 'Aufzeichnung fortgesetzt', color: 'linear-gradient(135deg, #16a085, #1abc9c)' }
     };
 
     const type = entryTypes[entry.type] || entryTypes['manual'];
@@ -179,10 +181,21 @@ async function updateTrackStatus() {
             document.getElementById("recording-indicator").style.display = "block";
             document.getElementById("btn-track-start").disabled = true;
             document.getElementById("btn-track-stop").disabled = false;
+            
+            // Handle pause/resume buttons
+            if (status.paused) {
+                document.getElementById("btn-track-pause").disabled = true;
+                document.getElementById("btn-track-resume").disabled = false;
+            } else {
+                document.getElementById("btn-track-pause").disabled = false;
+                document.getElementById("btn-track-resume").disabled = true;
+            }
         } else {
             document.getElementById("recording-indicator").style.display = "none";
             document.getElementById("btn-track-start").disabled = false;
             document.getElementById("btn-track-stop").disabled = true;
+            document.getElementById("btn-track-pause").disabled = true;
+            document.getElementById("btn-track-resume").disabled = true;
         }
     } catch (error) {
         console.error("Error updating track status:", error);
@@ -216,6 +229,32 @@ async function stopTrackRecording() {
     } catch (error) {
         console.error("Error stopping track:", error);
         if (typeof showMsg === 'function') showMsg("❌ Fehler beim Beenden der Aufzeichnung");
+    }
+}
+
+async function pauseTrackRecording() {
+    try {
+        const response = await fetch(`${getAPI()}/api/track/pause`, { method: "POST" });
+        const result = await response.json();
+        if (typeof showMsg === 'function') showMsg("⏸️ Aufzeichnung pausiert");
+        updateTrackStatus();
+        loadLogbookEntries();
+    } catch (error) {
+        console.error("Error pausing track:", error);
+        if (typeof showMsg === 'function') showMsg("❌ Fehler beim Pausieren");
+    }
+}
+
+async function resumeTrackRecording() {
+    try {
+        const response = await fetch(`${getAPI()}/api/track/resume`, { method: "POST" });
+        const result = await response.json();
+        if (typeof showMsg === 'function') showMsg("▶️ Aufzeichnung fortgesetzt");
+        updateTrackStatus();
+        loadLogbookEntries();
+    } catch (error) {
+        console.error("Error resuming track:", error);
+        if (typeof showMsg === 'function') showMsg("❌ Fehler beim Fortsetzen");
     }
 }
 

@@ -97,6 +97,16 @@
     color: white;
 }
 
+.track-btn.pause {
+    background: linear-gradient(135deg, #f39c12, #e67e22);
+    color: white;
+}
+
+.track-btn.resume {
+    background: linear-gradient(135deg, #16a085, #1abc9c);
+    color: white;
+}
+
 .track-btn:active {
     transform: scale(0.95);
 }
