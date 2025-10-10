@@ -894,6 +894,11 @@ async def fetch_weather():
 async def get_logbook():
     return current_session_entries
 
+@app.get("/api/logbook/trips")
+async def get_trips():
+    """Get all completed trips"""
+    return completed_trips
+
 @app.post("/api/logbook")
 async def add_logbook_entry(entry: Dict[str, Any]):
     """Add a manual logbook entry"""

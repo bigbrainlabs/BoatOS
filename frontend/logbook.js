@@ -340,3 +340,113 @@ document.addEventListener("click", function(e) {
     if (e.target.id === "logbook-modal") closeLogbook();
     if (e.target.id === "manual-entry-modal") closeManualEntryModal();
 });
+
+// Tab switching
+function switchLogbookTab(tab) {
+    // Update tab buttons
+    document.querySelectorAll('.logbook-tab').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    // Update tab content
+    document.querySelectorAll('.logbook-tab-content').forEach(content => content.classList.remove('active'));
+    document.getElementById('logbook-tab-' + tab).classList.add('active');
+    
+    // Load trips when switching to archive tab
+    if (tab === 'archive') {
+        loadArchivedTrips();
+    }
+}
+
+async function loadArchivedTrips() {
+    try {
+        const response = await fetch(getAPI() + '/api/logbook/trips');
+        const trips = await response.json();
+        const container = document.getElementById("trips-list");
+        
+        if (trips.length === 0) {
+            container.innerHTML = '<div class="empty-trips">Noch keine archivierten Fahrten</div>';
+            return;
+        }
+        
+        container.innerHTML = trips.reverse().map(trip => renderTripCard(trip)).join("");
+    } catch (error) {
+        console.error("Error loading trips:", error);
+    }
+}
+
+function renderTripCard(trip) {
+    const startDate = new Date(trip.trip_start);
+    const endDate = new Date(trip.trip_end);
+    
+    const dateStr = startDate.toLocaleDateString('de-DE', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric' 
+    });
+    
+    const startTime = startDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    const endTime = endDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    
+    return '<div class="trip-card" onclick="viewTripDetails(' + trip.id + ')">' +
+        '<div class="trip-header">' +
+            '<div>' +
+                '<div class="trip-date">🚢 ' + dateStr + '</div>' +
+                '<div class="trip-time">' + startTime + ' - ' + endTime + '</div>' +
+            '</div>' +
+        '</div>' +
+        '<div class="trip-stats">' +
+            '<div class="trip-stat">' +
+                '<div class="trip-stat-value">' + (trip.distance || 0) + '</div>' +
+                '<div class="trip-stat-label">NM</div>' +
+            '</div>' +
+            '<div class="trip-stat">' +
+                '<div class="trip-stat-value">' + (trip.duration || '0:00') + '</div>' +
+                '<div class="trip-stat-label">Dauer</div>' +
+            '</div>' +
+            '<div class="trip-stat">' +
+                '<div class="trip-stat-value">' + (trip.points || 0) + '</div>' +
+                '<div class="trip-stat-label">Punkte</div>' +
+            '</div>' +
+        '</div>' +
+        '<div class="trip-actions" onclick="event.stopPropagation()">' +
+            '<button class="entry-btn small" onclick="exportTrip(' + trip.id + ')">💾 GPX Export</button>' +
+            '<button class="entry-btn small delete" onclick="deleteTrip(' + trip.id + ')">🗑️ Löschen</button>' +
+        '</div>' +
+    '</div>';
+}
+
+function viewTripDetails(tripId) {
+    // TODO: Show trip details in a separate modal or expand card
+    if (typeof showMsg === 'function') showMsg("🗺️ Trip-Details - Coming soon!");
+}
+
+async function exportTrip(tripId) {
+    try {
+        window.open(getAPI() + '/api/track/export/' + tripId, "_blank");
+        if (typeof showMsg === 'function') showMsg("💾 Downloading GPX file...");
+    } catch (error) {
+        console.error("Error exporting trip:", error);
+    }
+}
+
+async function deleteTrip(tripId) {
+    if (!confirm("Trip wirklich löschen?")) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(getAPI() + '/api/logbook/' + tripId, {
+            method: "DELETE"
+        });
+        
+        if (response.ok) {
+            if (typeof showMsg === 'function') showMsg("🗑️ Trip gelöscht");
+            loadArchivedTrips(); // Reload list
+        } else {
+            if (typeof showMsg === 'function') showMsg("❌ Fehler beim Löschen");
+        }
+    } catch (error) {
+        console.error("Error deleting trip:", error);
+        if (typeof showMsg === 'function') showMsg("❌ Fehler beim Löschen");
+    }
+}

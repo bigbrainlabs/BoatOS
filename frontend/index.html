@@ -554,42 +554,55 @@
                 <h2>📓 <span data-i18n="btn_logbook">Logbuch</span></h2>
                 <button class="modal-close" onclick="closeLogbook()">×</button>
             </div>
+            
+            <!-- Tabs -->
+            <div class="logbook-tabs">
+                <button class="logbook-tab active" onclick="switchLogbookTab('current')">Aktuelle Fahrt</button>
+                <button class="logbook-tab" onclick="switchLogbookTab('archive')">Vergangene Fahrten</button>
+            </div>
+            
             <div class="modal-body">
-                <div class="track-controls">
-                    <div class="track-status">
-                        <div class="track-info">
-                            <div class="track-stat">
-                                <div class="track-stat-label">Points</div>
-                                <div class="track-stat-value" id="track-points">0</div>
+                <!-- Current Trip Tab -->
+                <div id="logbook-tab-current" class="logbook-tab-content active">
+                    <div class="track-controls">
+                        <div class="track-status">
+                            <div class="track-info">
+                                <div class="track-stat">
+                                    <div class="track-stat-label">Points</div>
+                                    <div class="track-stat-value" id="track-points">0</div>
+                                </div>
+                                <div class="track-stat">
+                                    <div class="track-stat-label">Distance</div>
+                                    <div class="track-stat-value" id="track-distance">0 <span style="font-size:16px">NM</span></div>
+                                </div>
                             </div>
-                            <div class="track-stat">
-                                <div class="track-stat-label">Distance</div>
-                                <div class="track-stat-value" id="track-distance">0 <span style="font-size:16px">NM</span></div>
+                            <div id="recording-indicator" style="display:none">
+                                <div class="recording-indicator"></div>
                             </div>
                         </div>
-                        <div id="recording-indicator" style="display:none">
-                            <div class="recording-indicator"></div>
+                        <div class="track-buttons">
+                            <button class="track-btn start" id="btn-track-start" onclick="startTrackRecording()">▶️ Start</button>
+                            <button class="track-btn pause" id="btn-track-pause" onclick="pauseTrackRecording()" disabled>⏸️ Pause</button>
+                            <button class="track-btn resume" id="btn-track-resume" onclick="resumeTrackRecording()" disabled>▶️ Resume</button>
+                            <button class="track-btn stop" id="btn-track-stop" onclick="stopTrackRecording()" disabled>⏹️ Stop</button>
                         </div>
                     </div>
-                    <div class="track-buttons">
-                        <button class="track-btn start" id="btn-track-start" onclick="startTrackRecording()">▶️ Start</button>
-                        <button class="track-btn pause" id="btn-track-pause" onclick="pauseTrackRecording()" disabled>⏸️ Pause</button>
-                        <button class="track-btn resume" id="btn-track-resume" onclick="resumeTrackRecording()" disabled>▶️ Resume</button>
-                        <button class="track-btn stop" id="btn-track-stop" onclick="stopTrackRecording()" disabled>⏹️ Stop</button>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="margin: 0; color: #8892b0;">Logbuch-Einträge</h3>
+                        <button class="track-btn" onclick="openManualEntryModal()" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); padding: 10px 20px;">📝 Neuer Eintrag</button>
+                    </div>
+                    <div class="logbook-entries" id="logbook-entries">
+                        <div class="empty-logbook">Noch keine Logbuch-Einträge</div>
                     </div>
                 </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0; color: #8892b0;">Logbuch-Einträge</h3>
-                    <button class="track-btn" onclick="openManualEntryModal()" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); padding: 10px 20px;">📝 Neuer Eintrag</button>
-                </div>
-                <div class="logbook-entries" id="logbook-entries">
-                    <div class="empty-logbook">Noch keine Logbuch-Einträge</div>
+                
+                <!-- Archive Tab -->
+                <div id="logbook-tab-archive" class="logbook-tab-content">
+                    <div id="trips-list"></div>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Manual Entry Modal -->
     <div id="manual-entry-modal" class="modal">
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
