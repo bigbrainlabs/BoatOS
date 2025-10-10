@@ -391,3 +391,118 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
+
+/* Logbook Tabs */
+.logbook-tabs {
+    display: flex;
+    gap: 10px;
+    padding: 20px 20px 0 20px;
+    border-bottom: 2px solid rgba(100, 255, 218, 0.1);
+}
+
+.logbook-tab {
+    padding: 12px 24px;
+    border: none;
+    background: transparent;
+    color: #8892b0;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s;
+}
+
+.logbook-tab:hover {
+    color: #64ffda;
+}
+
+.logbook-tab.active {
+    color: #64ffda;
+    border-bottom-color: #64ffda;
+}
+
+.logbook-tab-content {
+    display: none;
+}
+
+.logbook-tab-content.active {
+    display: block;
+}
+
+/* Trips List */
+#trips-list {
+    padding: 20px 0;
+}
+
+.trip-card {
+    background: rgba(255,255,255,0.05);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 15px;
+    border: 2px solid rgba(100, 255, 218, 0.1);
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+.trip-card:hover {
+    border-color: rgba(100, 255, 218, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.trip-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.trip-date {
+    font-size: 18px;
+    font-weight: 600;
+    color: #64ffda;
+}
+
+.trip-time {
+    font-size: 13px;
+    color: #8892b0;
+}
+
+.trip-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+}
+
+.trip-stat {
+    text-align: center;
+    padding: 10px;
+    background: rgba(100, 255, 218, 0.05);
+    border-radius: 8px;
+}
+
+.trip-stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #64ffda;
+    margin-bottom: 4px;
+}
+
+.trip-stat-label {
+    font-size: 11px;
+    color: #8892b0;
+    text-transform: uppercase;
+}
+
+.trip-actions {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+}
+
+.empty-trips {
+    text-align: center;
+    padding: 50px;
+    color: #8892b0;
+    font-size: 16px;
+}
