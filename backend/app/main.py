@@ -31,6 +31,7 @@ routes, waypoints = {}, []
 logbook_entries = []
 current_track = []
 track_recording = False
+track_paused = False
 weather_data: Dict[str, Any] = {}
 gps_module_data: Dict[str, Any] = {}
 chart_layers: List[Dict[str, Any]] = []
@@ -923,7 +924,7 @@ async def delete_logbook_entry(entry_id: int):
 
 @app.get("/api/track/status")
 async def get_track_status():
-    return {"recording": track_recording, "points": len(current_track), "distance": calculate_track_distance()}
+    return {"recording": track_recording, "paused": track_paused, "points": len(current_track), "distance": calculate_track_distance()}
 
 @app.post("/api/track/start")
 async def start_track_recording():
@@ -981,6 +982,52 @@ async def stop_track_recording():
         logbook_entries.append(entry)
         return entry
     return {"status": "stopped", "points": 0}
+
+@app.post("/api/track/pause")
+async def pause_track_recording():
+    global track_paused
+    if not track_recording:
+        return {"error": "No active recording"}
+    
+    track_paused = True
+    
+    # Create logbook entry for pause
+    entry = {
+        "id": len(logbook_entries) + 1,
+        "type": "trip_pause",
+        "timestamp": datetime.now().isoformat(),
+        "position": {
+            "lat": sensor_data["gps"]["lat"],
+            "lon": sensor_data["gps"]["lon"]
+        },
+        "notes": "Aufzeichnung pausiert"
+    }
+    logbook_entries.append(entry)
+    
+    return {"status": "paused", "timestamp": datetime.now().isoformat(), "entry": entry}
+
+@app.post("/api/track/resume")
+async def resume_track_recording():
+    global track_paused
+    if not track_recording:
+        return {"error": "No active recording"}
+    
+    track_paused = False
+    
+    # Create logbook entry for resume
+    entry = {
+        "id": len(logbook_entries) + 1,
+        "type": "trip_resume",
+        "timestamp": datetime.now().isoformat(),
+        "position": {
+            "lat": sensor_data["gps"]["lat"],
+            "lon": sensor_data["gps"]["lon"]
+        },
+        "notes": "Aufzeichnung fortgesetzt"
+    }
+    logbook_entries.append(entry)
+    
+    return {"status": "resumed", "timestamp": datetime.now().isoformat(), "entry": entry}
 
 @app.get("/api/track/current")
 async def get_current_track():
@@ -1060,7 +1107,7 @@ async def track_recording_loop():
     global current_track
     while True:
         await asyncio.sleep(10)
-        if track_recording and sensor_data["gps"]["lat"] != 0:
+        if track_recording and not track_paused and sensor_data["gps"]["lat"] != 0:
             point = {"lat": sensor_data["gps"]["lat"], "lon": sensor_data["gps"]["lon"],
                      "timestamp": datetime.now().isoformat(), "speed": sensor_data["speed"],
                      "heading": sensor_data["heading"]}
