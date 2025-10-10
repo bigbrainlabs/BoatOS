@@ -409,7 +409,8 @@ function renderTripCard(trip) {
             '</div>' +
         '</div>' +
         '<div class="trip-actions" onclick="event.stopPropagation()">' +
-            '<button class="entry-btn small" onclick="exportTrip(' + trip.id + ')">💾 GPX Export</button>' +
+            '<button class="entry-btn small" onclick="exportTrip(' + trip.id + ')">💾 GPX</button>' +
+            '<button class="entry-btn small" onclick="exportTripPDF(' + trip.id + ')">📄 PDF</button>' +
             '<button class="entry-btn small delete" onclick="deleteTrip(' + trip.id + ')">🗑️ Löschen</button>' +
         '</div>' +
     '</div>';
@@ -426,6 +427,16 @@ async function exportTrip(tripId) {
         if (typeof showMsg === 'function') showMsg("💾 Downloading GPX file...");
     } catch (error) {
         console.error("Error exporting trip:", error);
+    }
+}
+
+
+async function exportTripPDF(tripId) {
+    try {
+        window.open(getAPI() + '/api/trip/pdf/' + tripId, "_blank");
+        if (typeof showMsg === 'function') showMsg("📄 Downloading PDF...");
+    } catch (error) {
+        console.error("Error exporting PDF:", error);
     }
 }
 
