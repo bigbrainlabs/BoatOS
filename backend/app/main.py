@@ -16,6 +16,7 @@ import gps_service
 import logbook_storage
 import pdf_export
 from ais_service import ais_service
+from waterway_infrastructure import waterway_infrastructure
 
 app = FastAPI(title="BoatOS API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -143,6 +144,24 @@ async def get_ais_vessels(lat_min: float, lon_min: float, lat_max: float, lon_ma
     """Get AIS vessels in bounding box"""
     vessels = await ais_service.fetch_vessels(lat_min, lon_min, lat_max, lon_max)
     return {"vessels": vessels, "count": len(vessels)}
+
+# ==================== WATERWAY INFRASTRUCTURE ====================
+@app.get("/api/infrastructure")
+async def get_infrastructure(lat_min: float, lon_min: float, lat_max: float, lon_max: float,
+                            types: str = "lock,bridge,harbor,weir,dam"):
+    """
+    Get waterway infrastructure POIs from OpenStreetMap
+
+    Parameters:
+    - lat_min, lon_min, lat_max, lon_max: Bounding box
+    - types: Comma-separated list of types (lock, bridge, harbor, weir, dam)
+
+    Returns:
+    - List of infrastructure POIs with details
+    """
+    type_list = [t.strip() for t in types.split(',') if t.strip()]
+    pois = waterway_infrastructure.fetch_infrastructure(lat_min, lon_min, lat_max, lon_max, type_list)
+    return {"pois": pois, "count": len(pois)}
 
 # ==================== CHARTS ====================
 @app.get("/api/charts")

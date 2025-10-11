@@ -42,6 +42,10 @@ const defaultSettings = {
         enabled: false,
         updateInterval: 60,
         showLabels: true
+    },
+    infrastructure: {
+        enabled: false,
+        types: ['lock', 'bridge', 'harbor']
     }
 };
 
@@ -181,6 +185,19 @@ function loadSettingsToForm() {
     }
     // Show/hide API key field based on provider
     updateAISKeyVisibility();
+
+    // Infrastructure
+    if (document.getElementById('setting-infrastructure-enabled')) {
+        document.getElementById('setting-infrastructure-enabled').checked = currentSettings.infrastructure?.enabled || false;
+    }
+    if (document.getElementById('setting-infrastructure-locks')) {
+        const types = currentSettings.infrastructure?.types || ['lock', 'bridge', 'harbor'];
+        document.getElementById('setting-infrastructure-locks').checked = types.includes('lock');
+        document.getElementById('setting-infrastructure-bridges').checked = types.includes('bridge');
+        document.getElementById('setting-infrastructure-harbors').checked = types.includes('harbor');
+        document.getElementById('setting-infrastructure-weirs').checked = types.includes('weir');
+        document.getElementById('setting-infrastructure-dams').checked = types.includes('dam');
+    }
 }
 
 // Save settings
@@ -240,8 +257,19 @@ function saveSettings() {
             enabled: getChecked('setting-ais-enabled', false),
             updateInterval: 60,
             showLabels: true
+        },
+        infrastructure: {
+            enabled: getChecked('setting-infrastructure-enabled', false),
+            types: []
         }
     };
+
+    // Collect infrastructure types
+    if (getChecked('setting-infrastructure-locks', false)) currentSettings.infrastructure.types.push('lock');
+    if (getChecked('setting-infrastructure-bridges', false)) currentSettings.infrastructure.types.push('bridge');
+    if (getChecked('setting-infrastructure-harbors', false)) currentSettings.infrastructure.types.push('harbor');
+    if (getChecked('setting-infrastructure-weirs', false)) currentSettings.infrastructure.types.push('weir');
+    if (getChecked('setting-infrastructure-dams', false)) currentSettings.infrastructure.types.push('dam');
 
     console.log('Settings to save:', currentSettings);
 
@@ -291,6 +319,11 @@ function applySettings() {
     // Apply AIS settings (only if AIS is initialized)
     if (typeof updateAISSettings === 'function') {
         updateAISSettings(currentSettings.ais);
+    }
+
+    // Apply Infrastructure settings (only if infrastructure is initialized)
+    if (typeof updateInfrastructureSettings === 'function') {
+        updateInfrastructureSettings(currentSettings.infrastructure);
     }
 
     console.log('✅ Settings applied:', currentSettings);

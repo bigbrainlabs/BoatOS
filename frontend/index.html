@@ -478,6 +478,15 @@
             </div>
         </div>
 
+        <!-- Infrastructure Details Panel -->
+        <div id="infrastructure-details-panel" class="info-panel">
+            <button class="panel-close" onclick="closeInfrastructureDetails()">×</button>
+            <h3 id="infrastructure-details-title">🔒 Infrastructure Details</h3>
+            <div class="info-details" id="infrastructure-details-content">
+                <!-- Details will be populated by JavaScript -->
+            </div>
+        </div>
+
         <!-- AIS Details Panel -->
         <div id="ais-details-panel" class="info-panel">
             <button class="panel-close" onclick="closeAISDetails()">×</button>
@@ -829,6 +838,42 @@
                                 <option value="true">An</option>
                                 <option value="false">Aus</option>
                             </select>
+                        </div>
+
+                        <h3 style="margin-top: 30px; margin-bottom: 15px;">🏗️ Infrastruktur-Layer</h3>
+
+                        <div class="setting-item">
+                            <label>
+                                <input type="checkbox" id="setting-infrastructure-enabled">
+                                Infrastruktur auf Karte anzeigen
+                            </label>
+                            <small>Zeigt Schleusen, Brücken, Häfen und andere Wasserstraßen-Infrastruktur aus OpenStreetMap</small>
+                        </div>
+
+                        <div class="setting-item">
+                            <label>Anzeigen:</label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                                <label style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox" id="setting-infrastructure-locks" checked>
+                                    <span>🔒 Schleusen</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox" id="setting-infrastructure-bridges" checked>
+                                    <span>🌉 Brücken</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox" id="setting-infrastructure-harbors" checked>
+                                    <span>⚓ Häfen/Marinas</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox" id="setting-infrastructure-weirs">
+                                    <span>〰️ Wehre</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox" id="setting-infrastructure-dams">
+                                    <span>🏗️ Dämme</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
 
