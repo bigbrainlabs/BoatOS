@@ -339,6 +339,7 @@ async function deleteLogbookEntry(entryId) {
 document.addEventListener("click", function(e) {
     if (e.target.id === "logbook-modal") closeLogbook();
     if (e.target.id === "manual-entry-modal") closeManualEntryModal();
+    if (e.target.id === "trip-details-modal") closeTripDetails();
 });
 
 // Tab switching
@@ -416,9 +417,47 @@ function renderTripCard(trip) {
     '</div>';
 }
 
-function viewTripDetails(tripId) {
-    // TODO: Show trip details in a separate modal or expand card
-    if (typeof showMsg === 'function') showMsg("🗺️ Trip-Details - Coming soon!");
+async function viewTripDetails(tripId) {
+    try {
+        // Fetch trip details from backend
+        const response = await fetch(getAPI() + '/api/logbook/trip/' + tripId);
+        if (!response.ok) {
+            if (typeof showMsg === 'function') showMsg("❌ Fehler beim Laden der Trip-Details");
+            return;
+        }
+
+        const trip = await response.json();
+
+        // Update modal title
+        const startDate = new Date(trip.trip_start);
+        const title = `Fahrt vom ${startDate.toLocaleDateString('de-DE')}`;
+        document.getElementById('trip-details-title').textContent = title;
+
+        // Update summary stats
+        document.getElementById('trip-detail-distance').textContent = trip.distance || '0';
+        document.getElementById('trip-detail-duration').textContent = trip.duration || '0:00';
+        document.getElementById('trip-detail-points').textContent = trip.points || '0';
+        document.getElementById('trip-detail-entries').textContent = trip.entries ? trip.entries.length : '0';
+
+        // Render timeline
+        const timelineContainer = document.getElementById('trip-details-timeline');
+        if (trip.entries && trip.entries.length > 0) {
+            timelineContainer.innerHTML = trip.entries.map(entry => renderLogbookEntry(entry)).join("");
+        } else {
+            timelineContainer.innerHTML = '<div class="empty-logbook">Keine Einträge vorhanden</div>';
+        }
+
+        // Show modal
+        document.getElementById('trip-details-modal').classList.add('active');
+
+    } catch (error) {
+        console.error("Error loading trip details:", error);
+        if (typeof showMsg === 'function') showMsg("❌ Fehler beim Laden der Trip-Details");
+    }
+}
+
+function closeTripDetails() {
+    document.getElementById('trip-details-modal').classList.remove('active');
 }
 
 async function exportTrip(tripId) {

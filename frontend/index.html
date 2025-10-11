@@ -630,6 +630,47 @@
         </div>
     </div>
 
+    <!-- Trip Details Modal -->
+    <div id="trip-details-modal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h2>🚢 <span id="trip-details-title">Trip Details</span></h2>
+                <button class="modal-close" onclick="closeTripDetails()">×</button>
+            </div>
+            <div class="modal-body">
+                <!-- Trip Summary Stats -->
+                <div class="trip-details-summary">
+                    <div class="trip-detail-stat">
+                        <div class="trip-detail-icon">📏</div>
+                        <div class="trip-detail-value" id="trip-detail-distance">--</div>
+                        <div class="trip-detail-label">Distanz (NM)</div>
+                    </div>
+                    <div class="trip-detail-stat">
+                        <div class="trip-detail-icon">⏱️</div>
+                        <div class="trip-detail-value" id="trip-detail-duration">--</div>
+                        <div class="trip-detail-label">Dauer</div>
+                    </div>
+                    <div class="trip-detail-stat">
+                        <div class="trip-detail-icon">📊</div>
+                        <div class="trip-detail-value" id="trip-detail-points">--</div>
+                        <div class="trip-detail-label">Track-Punkte</div>
+                    </div>
+                    <div class="trip-detail-stat">
+                        <div class="trip-detail-icon">📝</div>
+                        <div class="trip-detail-value" id="trip-detail-entries">--</div>
+                        <div class="trip-detail-label">Einträge</div>
+                    </div>
+                </div>
+
+                <!-- Trip Timeline -->
+                <h3 style="margin: 20px 0 15px 0; color: #8892b0;">Timeline</h3>
+                <div class="trip-details-timeline" id="trip-details-timeline">
+                    <!-- Timeline entries will be inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Charts Modal -->
 
     <!-- Chart Progress Modal -->
