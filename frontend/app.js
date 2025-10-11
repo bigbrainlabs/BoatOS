@@ -1001,6 +1001,11 @@ window.addEventListener('load', () => {
         compassRose.addTo(map);
     }
 
+    // Apply infrastructure settings on startup
+    if (settings.infrastructure) {
+        updateInfrastructureSettings(settings.infrastructure);
+    }
+
     // Weather laden und alle 30min aktualisieren
     fetchWeather();
     setInterval(fetchWeather, 1800000); // 30 min
@@ -1259,6 +1264,248 @@ function updateAISSettings(settings) {
         console.log('🚢 AIS enabled');
     } else {
         console.log('🚢 AIS disabled');
+    }
+}
+
+// ==================== WATERWAY INFRASTRUCTURE ====================
+let infrastructurePOIs = {};  // id -> {marker, data}
+let infrastructureEnabled = false;
+let infrastructureUpdateInterval = null;
+let infrastructureSettings = { enabled: false, types: ['lock', 'bridge', 'harbor'] };
+
+async function fetchInfrastructurePOIs() {
+    if (!infrastructureSettings.enabled) {
+        return;
+    }
+
+    try {
+        // Get map bounds
+        const bounds = map.getBounds();
+        const types = infrastructureSettings.types.join(',');
+        const params = new URLSearchParams({
+            lat_min: bounds.getSouth(),
+            lon_min: bounds.getWest(),
+            lat_max: bounds.getNorth(),
+            lon_max: bounds.getEast(),
+            types: types
+        });
+
+        const response = await fetch(`${API_URL}/api/infrastructure?${params}`);
+        if (response.ok) {
+            const data = await response.json();
+            updateInfrastructureMarkers(data.pois);
+        }
+    } catch (error) {
+        console.warn('⚠️ Infrastructure fetch error:', error);
+    }
+}
+
+function updateInfrastructureMarkers(pois) {
+    // Remove old POIs not in update
+    const currentIDs = new Set(pois.map(p => p.id));
+    Object.keys(infrastructurePOIs).forEach(id => {
+        if (!currentIDs.has(parseInt(id))) {
+            map.removeLayer(infrastructurePOIs[id].marker);
+            delete infrastructurePOIs[id];
+        }
+    });
+
+    // Add/update POIs
+    pois.forEach(poi => {
+        if (infrastructurePOIs[poi.id]) {
+            // Update existing marker position (if changed)
+            const { marker } = infrastructurePOIs[poi.id];
+            marker.setLatLng([poi.lat, poi.lon]);
+            infrastructurePOIs[poi.id].data = poi;
+        } else {
+            // Create new marker
+            const icon = createInfrastructureIcon(poi.type);
+            const marker = L.marker([poi.lat, poi.lon], {
+                icon: icon,
+                title: poi.name
+            });
+
+            marker.bindPopup(() => createInfrastructurePopup(poi));
+            marker.on('click', () => showInfrastructureDetails(poi));
+            marker.addTo(map);
+
+            infrastructurePOIs[poi.id] = { marker, data: poi };
+        }
+    });
+}
+
+function createInfrastructureIcon(type) {
+    const icons = {
+        'lock': '🔒',
+        'bridge': '🌉',
+        'harbor': '⚓',
+        'weir': '〰️',
+        'dam': '🏗️'
+    };
+
+    const colors = {
+        'lock': '#e74c3c',
+        'bridge': '#3498db',
+        'harbor': '#2ecc71',
+        'weir': '#9b59b6',
+        'dam': '#f39c12'
+    };
+
+    const emoji = icons[type] || '📍';
+    const color = colors[type] || '#95a5a6';
+
+    return L.divIcon({
+        html: `<div style="font-size: 20px; text-shadow: 0 0 3px ${color}, 0 0 5px rgba(0,0,0,0.8); filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));">${emoji}</div>`,
+        className: 'infrastructure-icon',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+}
+
+function createInfrastructurePopup(poi) {
+    const typeNames = {
+        'lock': '🔒 Schleuse',
+        'bridge': '🌉 Brücke',
+        'harbor': '⚓ Hafen',
+        'weir': '〰️ Wehr',
+        'dam': '🏗️ Damm'
+    };
+
+    let html = `<div style="min-width: 150px;">
+        <h4 style="margin: 0 0 8px 0; color: #2c3e50;">${typeNames[poi.type] || poi.type}</h4>
+        <p style="margin: 0; font-weight: 600;">${poi.name}</p>`;
+
+    // Add key properties
+    if (poi.properties.height) {
+        html += `<p style="margin: 4px 0; font-size: 12px;">Höhe: ${poi.properties.height}</p>`;
+    }
+    if (poi.properties.clearance_height || poi.properties.max_height) {
+        html += `<p style="margin: 4px 0; font-size: 12px;">Durchfahrtshöhe: ${poi.properties.clearance_height || poi.properties.max_height}</p>`;
+    }
+    if (poi.properties.length) {
+        html += `<p style="margin: 4px 0; font-size: 12px;">Länge: ${poi.properties.length}</p>`;
+    }
+    if (poi.properties.vhf_channel) {
+        html += `<p style="margin: 4px 0; font-size: 12px;">VHF: ${poi.properties.vhf_channel}</p>`;
+    }
+
+    html += `</div>`;
+    return html;
+}
+
+function showInfrastructureDetails(poi) {
+    const panel = document.getElementById('infrastructure-details-panel');
+    if (!panel) return;
+
+    const typeNames = {
+        'lock': '🔒 Schleuse',
+        'bridge': '🌉 Brücke',
+        'harbor': '⚓ Hafen/Marina',
+        'weir': '〰️ Wehr',
+        'dam': '🏗️ Damm'
+    };
+
+    // Update title
+    document.getElementById('infrastructure-details-title').textContent = typeNames[poi.type] || poi.type;
+
+    // Build details HTML
+    let detailsHtml = `
+        <div class="info-item" style="grid-column: span 2;">
+            <div class="info-label">Name</div>
+            <div class="info-value">${poi.name}</div>
+        </div>
+    `;
+
+    // Add properties based on type
+    const props = poi.properties;
+
+    if (props.operator) {
+        detailsHtml += `
+            <div class="info-item" style="grid-column: span 2;">
+                <div class="info-label">Betreiber</div>
+                <div class="info-value">${props.operator}</div>
+            </div>
+        `;
+    }
+
+    if (poi.type === 'lock') {
+        if (props.height) detailsHtml += `<div class="info-item"><div class="info-label">Hubhöhe</div><div class="info-value">${props.height}</div></div>`;
+        if (props.length) detailsHtml += `<div class="info-item"><div class="info-label">Länge</div><div class="info-value">${props.length}</div></div>`;
+        if (props.width) detailsHtml += `<div class="info-item"><div class="info-label">Breite</div><div class="info-value">${props.width}</div></div>`;
+        if (props.lock_type) detailsHtml += `<div class="info-item"><div class="info-label">Typ</div><div class="info-value">${props.lock_type}</div></div>`;
+    }
+
+    if (poi.type === 'bridge') {
+        if (props.clearance_height) detailsHtml += `<div class="info-item"><div class="info-label">Durchfahrtshöhe</div><div class="info-value">${props.clearance_height}</div></div>`;
+        if (props.max_height) detailsHtml += `<div class="info-item"><div class="info-label">Max. Höhe</div><div class="info-value">${props.max_height}</div></div>`;
+        if (props.structure) detailsHtml += `<div class="info-item"><div class="info-label">Bauart</div><div class="info-value">${props.structure}</div></div>`;
+        if (props.movable) detailsHtml += `<div class="info-item"><div class="info-label">Beweglich</div><div class="info-value">${props.movable === 'yes' ? 'Ja' : 'Nein'}</div></div>`;
+    }
+
+    if (poi.type === 'harbor') {
+        if (props.capacity) detailsHtml += `<div class="info-item"><div class="info-label">Kapazität</div><div class="info-value">${props.capacity} Plätze</div></div>`;
+        if (props.berths) detailsHtml += `<div class="info-item"><div class="info-label">Liegeplätze</div><div class="info-value">${props.berths}</div></div>`;
+        if (props.fuel) detailsHtml += `<div class="info-item"><div class="info-label">Treibstoff</div><div class="info-value">${props.fuel === 'yes' ? 'Ja' : 'Nein'}</div></div>`;
+        if (props.electricity) detailsHtml += `<div class="info-item"><div class="info-label">Strom</div><div class="info-value">${props.electricity === 'yes' ? 'Ja' : 'Nein'}</div></div>`;
+    }
+
+    if (props.opening_hours) {
+        detailsHtml += `<div class="info-item" style="grid-column: span 2;"><div class="info-label">Öffnungszeiten</div><div class="info-value">${props.opening_hours}</div></div>`;
+    }
+
+    if (props.vhf_channel) {
+        detailsHtml += `<div class="info-item"><div class="info-label">VHF Kanal</div><div class="info-value">${props.vhf_channel}</div></div>`;
+    }
+
+    if (props.phone) {
+        detailsHtml += `<div class="info-item"><div class="info-label">Telefon</div><div class="info-value">${props.phone}</div></div>`;
+    }
+
+    if (props.website) {
+        detailsHtml += `<div class="info-item" style="grid-column: span 2;"><div class="info-label">Website</div><div class="info-value"><a href="${props.website}" target="_blank" style="color: #64ffda;">${props.website}</a></div></div>`;
+    }
+
+    // Position
+    detailsHtml += `
+        <div class="info-item" style="grid-column: span 2;">
+            <div class="info-label">Position</div>
+            <div class="info-value" style="font-family: monospace; font-size: 12px;">${poi.lat.toFixed(6)}, ${poi.lon.toFixed(6)}</div>
+        </div>
+    `;
+
+    document.getElementById('infrastructure-details-content').innerHTML = detailsHtml;
+    panel.style.display = 'block';
+}
+
+function closeInfrastructureDetails() {
+    const panel = document.getElementById('infrastructure-details-panel');
+    if (panel) {
+        panel.style.display = 'none';
+    }
+}
+
+function updateInfrastructureSettings(settings) {
+    infrastructureSettings = settings;
+
+    // Clear interval
+    if (infrastructureUpdateInterval) {
+        clearInterval(infrastructureUpdateInterval);
+        infrastructureUpdateInterval = null;
+    }
+
+    // Remove all markers
+    Object.values(infrastructurePOIs).forEach(({marker}) => map.removeLayer(marker));
+    infrastructurePOIs = {};
+
+    // Start if enabled
+    if (settings.enabled) {
+        fetchInfrastructurePOIs();
+        // Refresh on map move/zoom
+        map.on('moveend', fetchInfrastructurePOIs);
+        console.log('🏗️ Infrastructure layer enabled');
+    } else {
+        map.off('moveend', fetchInfrastructurePOIs);
+        console.log('🏗️ Infrastructure layer disabled');
     }
 }
 
