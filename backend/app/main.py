@@ -17,6 +17,7 @@ import logbook_storage
 import pdf_export
 from ais_service import ais_service
 from waterway_infrastructure import waterway_infrastructure
+from pegelonline import pegelonline
 
 app = FastAPI(title="BoatOS API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -162,6 +163,21 @@ async def get_infrastructure(lat_min: float, lon_min: float, lat_max: float, lon
     type_list = [t.strip() for t in types.split(',') if t.strip()]
     pois = waterway_infrastructure.fetch_infrastructure(lat_min, lon_min, lat_max, lon_max, type_list)
     return {"pois": pois, "count": len(pois)}
+
+# ==================== WATER LEVEL GAUGES (PEGELONLINE) ====================
+@app.get("/api/gauges")
+async def get_water_level_gauges(lat_min: float, lon_min: float, lat_max: float, lon_max: float):
+    """
+    Get water level gauges from PEGELONLINE (German waterways)
+
+    Parameters:
+    - lat_min, lon_min, lat_max, lon_max: Bounding box
+
+    Returns:
+    - List of gauge stations with current water levels
+    """
+    gauges = pegelonline.fetch_gauges(lat_min, lon_min, lat_max, lon_max)
+    return {"gauges": gauges, "count": len(gauges)}
 
 # ==================== CHARTS ====================
 @app.get("/api/charts")

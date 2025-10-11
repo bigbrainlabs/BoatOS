@@ -46,6 +46,9 @@ const defaultSettings = {
     infrastructure: {
         enabled: false,
         types: ['lock', 'bridge', 'harbor']
+    },
+    waterLevel: {
+        enabled: false
     }
 };
 
@@ -198,6 +201,11 @@ function loadSettingsToForm() {
         document.getElementById('setting-infrastructure-weirs').checked = types.includes('weir');
         document.getElementById('setting-infrastructure-dams').checked = types.includes('dam');
     }
+
+    // Water Level
+    if (document.getElementById('setting-waterLevel-enabled')) {
+        document.getElementById('setting-waterLevel-enabled').checked = currentSettings.waterLevel?.enabled || false;
+    }
 }
 
 // Save settings
@@ -261,6 +269,9 @@ function saveSettings() {
         infrastructure: {
             enabled: getChecked('setting-infrastructure-enabled', false),
             types: []
+        },
+        waterLevel: {
+            enabled: getChecked('setting-waterLevel-enabled', false)
         }
     };
 
@@ -324,6 +335,11 @@ function applySettings() {
     // Apply Infrastructure settings (only if infrastructure is initialized)
     if (typeof updateInfrastructureSettings === 'function') {
         updateInfrastructureSettings(currentSettings.infrastructure);
+    }
+
+    // Apply Water Level settings (only if water level is initialized)
+    if (typeof updateWaterLevelSettings === 'function') {
+        updateWaterLevelSettings(currentSettings.waterLevel);
     }
 
     console.log('✅ Settings applied:', currentSettings);
