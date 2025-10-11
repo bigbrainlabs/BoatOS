@@ -107,6 +107,7 @@
   - Fahrzeit vs. Gesamtzeit
 
 - [ ] **Logbuch-Einträge**
+  - Details je Track anzeigen (Statistiken, Timeline, Wetter)
   - Manuelle Einträge mit Zeitstempel
   - Fotos zu Einträgen
   - Crew-Management
