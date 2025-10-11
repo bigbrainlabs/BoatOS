@@ -159,12 +159,18 @@ function connectWebSocket() {
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         updateSensorDisplay(data);
-        
-        // Mark GPS source as backend if we receive valid GPS data
+
+        // Backend GPS has priority - always use it if valid
         if (data.gps && data.gps.lat !== 0 && data.gps.lon !== 0) {
             gpsSource = "backend";
             updateBoatPosition(data.gps);
             updateGpsSourceIndicator();
+        } else {
+            // Backend GPS invalid or missing - clear backend source
+            if (gpsSource === "backend") {
+                gpsSource = null;
+                updateGpsSourceIndicator();
+            }
         }
     };
 
@@ -1014,18 +1020,21 @@ window.addEventListener('load', () => {
                     map.setView([position.coords.latitude, position.coords.longitude], 15);
                     console.log('✅ Centered map on browser location');
                 }
-                
-                // Nur nutzen wenn keine GPS-Daten vom Backend kommen
+
+                // Only use browser GPS as fallback when backend GPS is not available
                 if (gpsSource !== "backend") {
                     gpsSource = 'browser';
                     updateBoatPosition({
                         lat: position.coords.latitude,
-                        lon: position.coords.longitude
+                        lon: position.coords.longitude,
+                        speed: position.coords.speed ? position.coords.speed * 1.94384 : 0, // m/s to knots
+                        heading: position.coords.heading || 0
                     });
-                    
+
                     // Update GPS source indicator
                     updateGpsSourceIndicator();
                 }
+                // If backend GPS was available before, it will take over again automatically
             },
             (error) => {
                 console.error('❌ Geolocation error:', error.code, error.message);
