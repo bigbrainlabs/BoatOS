@@ -138,17 +138,53 @@ class WaterwayInfrastructure:
         if not lat or not lon:
             return None
 
+        # Generate a good name
+        name = self._get_poi_name(tags, poi_type, element.get('id'))
+
         # Extract relevant properties
         poi = {
             'id': element.get('id'),
             'type': poi_type,
             'lat': lat,
             'lon': lon,
-            'name': tags.get('name', tags.get('ref', f"{poi_type.capitalize()} #{element.get('id')}")),
+            'name': name,
             'properties': self._extract_properties(tags, poi_type)
         }
 
         return poi
+
+    def _get_poi_name(self, tags: Dict[str, str], poi_type: str, osm_id: int) -> str:
+        """Generate a good name for the POI"""
+        # Try various name tags
+        if 'name' in tags:
+            return tags['name']
+        if 'name:de' in tags:
+            return tags['name:de']
+        if 'ref' in tags:
+            return tags['ref']
+        if 'description' in tags:
+            return tags['description']
+
+        # Check for waterway name (for locks/bridges on a waterway)
+        if 'waterway:name' in tags:
+            type_names = {
+                'lock': 'Schleuse',
+                'bridge': 'Brücke',
+                'harbor': 'Hafen',
+                'weir': 'Wehr',
+                'dam': 'Damm'
+            }
+            return f"{type_names.get(poi_type, poi_type)} {tags['waterway:name']}"
+
+        # Fallback: use German type name without ID
+        type_names = {
+            'lock': 'Schleuse',
+            'bridge': 'Brücke',
+            'harbor': 'Hafen',
+            'weir': 'Wehr',
+            'dam': 'Damm'
+        }
+        return type_names.get(poi_type, poi_type.capitalize())
 
     def _determine_type(self, tags: Dict[str, str]) -> Optional[str]:
         """Determine POI type from OSM tags"""
