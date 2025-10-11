@@ -52,57 +52,39 @@ class WaterwayInfrastructure:
 
         # Locks (Schleusen)
         if 'lock' in types:
-            query_parts.append(f"""
-                (
-                  node["waterway"="lock_gate"]({bbox});
-                  node["lock"="yes"]({bbox});
-                  way["waterway"="lock_gate"]({bbox});
-                  way["lock"="yes"]({bbox});
-                );
-            """)
+            query_parts.append(f'node["waterway"="lock_gate"]({bbox});')
+            query_parts.append(f'node["lock"="yes"]({bbox});')
+            query_parts.append(f'way["waterway"="lock_gate"]({bbox});')
+            query_parts.append(f'way["lock"="yes"]({bbox});')
 
-        # Bridges (Brücken)
+        # Bridges (Brücken) - only bridges over waterways
         if 'bridge' in types:
-            query_parts.append(f"""
-                (
-                  way["bridge"="yes"]["waterway"]({bbox});
-                  way["man_made"="bridge"]["waterway"]({bbox});
-                );
-            """)
+            query_parts.append(f'way["bridge"="yes"]["waterway"]({bbox});')
+            query_parts.append(f'way["man_made"="bridge"]["waterway"]({bbox});')
 
         # Harbors/Marinas (Häfen)
         if 'harbor' in types:
-            query_parts.append(f"""
-                (
-                  node["harbour"="yes"]({bbox});
-                  node["amenity"="marina"]({bbox});
-                  way["harbour"="yes"]({bbox});
-                  way["amenity"="marina"]({bbox});
-                );
-            """)
+            query_parts.append(f'node["harbour"="yes"]({bbox});')
+            query_parts.append(f'node["amenity"="marina"]({bbox});')
+            query_parts.append(f'way["harbour"="yes"]({bbox});')
+            query_parts.append(f'way["amenity"="marina"]({bbox});')
 
         # Weirs (Wehre)
         if 'weir' in types:
-            query_parts.append(f"""
-                (
-                  node["waterway"="weir"]({bbox});
-                  way["waterway"="weir"]({bbox});
-                );
-            """)
+            query_parts.append(f'node["waterway"="weir"]({bbox});')
+            query_parts.append(f'way["waterway"="weir"]({bbox});')
 
         # Dams (Staudämme)
         if 'dam' in types:
-            query_parts.append(f"""
-                (
-                  node["waterway"="dam"]({bbox});
-                  way["waterway"="dam"]({bbox});
-                );
-            """)
+            query_parts.append(f'node["waterway"="dam"]({bbox});')
+            query_parts.append(f'way["waterway"="dam"]({bbox});')
 
-        # Combine query
+        # Combine query with union
         query = f"""
         [out:json][timeout:25];
-        {' '.join(query_parts)}
+        (
+          {' '.join(query_parts)}
+        );
         out center;
         """
 
