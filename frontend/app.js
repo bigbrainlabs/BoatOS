@@ -1006,6 +1006,11 @@ window.addEventListener('load', () => {
         updateInfrastructureSettings(settings.infrastructure);
     }
 
+    // Apply water level settings on startup
+    if (settings.waterLevel) {
+        updateWaterLevelSettings(settings.waterLevel);
+    }
+
     // Weather laden und alle 30min aktualisieren
     fetchWeather();
     setInterval(fetchWeather, 1800000); // 30 min
@@ -1506,6 +1511,116 @@ function updateInfrastructureSettings(settings) {
     } else {
         map.off('moveend', fetchInfrastructurePOIs);
         console.log('🏗️ Infrastructure layer disabled');
+    }
+}
+
+// ==================== WATER LEVEL GAUGES (PEGELONLINE) ====================
+let waterLevelGauges = {};  // id -> {marker, data}
+let waterLevelSettings = { enabled: false };
+
+async function fetchWaterLevelGauges() {
+    if (!waterLevelSettings.enabled) {
+        return;
+    }
+
+    try {
+        const bounds = map.getBounds();
+        const params = new URLSearchParams({
+            lat_min: bounds.getSouth(),
+            lon_min: bounds.getWest(),
+            lat_max: bounds.getNorth(),
+            lon_max: bounds.getEast()
+        });
+
+        const response = await fetch(`${API_URL}/api/gauges?${params}`);
+        if (response.ok) {
+            const data = await response.json();
+            updateWaterLevelMarkers(data.gauges);
+        }
+    } catch (error) {
+        console.warn('⚠️ Water level fetch error:', error);
+    }
+}
+
+function updateWaterLevelMarkers(gauges) {
+    // Remove old gauges not in update
+    const currentIDs = new Set(gauges.map(g => g.id));
+    Object.keys(waterLevelGauges).forEach(id => {
+        if (!currentIDs.has(id)) {
+            map.removeLayer(waterLevelGauges[id].marker);
+            delete waterLevelGauges[id];
+        }
+    });
+
+    // Add/update gauges
+    gauges.forEach(gauge => {
+        if (waterLevelGauges[gauge.id]) {
+            // Update existing marker
+            const { marker } = waterLevelGauges[gauge.id];
+            marker.setLatLng([gauge.lat, gauge.lon]);
+            // Update icon with new water level
+            marker.setIcon(createWaterLevelIcon(gauge));
+            waterLevelGauges[gauge.id].data = gauge;
+        } else {
+            // Create new marker
+            const icon = createWaterLevelIcon(gauge);
+            const marker = L.marker([gauge.lat, gauge.lon], {
+                icon: icon,
+                title: gauge.name
+            });
+
+            marker.bindPopup(() => createWaterLevelPopup(gauge));
+            marker.addTo(map);
+
+            waterLevelGauges[gauge.id] = { marker, data: gauge };
+        }
+    });
+}
+
+function createWaterLevelIcon(gauge) {
+    const level = gauge.water_level_cm;
+
+    return L.divIcon({
+        html: `<div style="background: rgba(10, 14, 39, 0.95); border: 2px solid #3498db; border-radius: 8px; padding: 4px 8px; font-size: 11px; font-weight: bold; color: #64ffda; text-align: center; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.4);">
+            📊 ${level} cm
+        </div>`,
+        className: 'water-level-icon',
+        iconSize: [70, 24],
+        iconAnchor: [35, 12]
+    });
+}
+
+function createWaterLevelPopup(gauge) {
+    const date = new Date(gauge.timestamp);
+    const timeStr = date.toLocaleString('de-DE');
+
+    return `
+        <div style="min-width: 200px;">
+            <h4 style="margin: 0 0 8px 0; color: #2c3e50;">📊 Pegel</h4>
+            <p style="margin: 0; font-weight: 600;">${gauge.name}</p>
+            <p style="margin: 4px 0; font-size: 12px;"><strong>Gewässer:</strong> ${gauge.water}</p>
+            <p style="margin: 4px 0; font-size: 14px; color: #3498db;"><strong>Wasserstand:</strong> ${gauge.water_level_m} m (${gauge.water_level_cm} cm)</p>
+            <p style="margin: 4px 0; font-size: 11px; color: #7f8c8d;">${timeStr}</p>
+        </div>
+    `;
+}
+
+function updateWaterLevelSettings(settings) {
+    waterLevelSettings = settings;
+
+    // Remove all markers
+    Object.values(waterLevelGauges).forEach(({marker}) => map.removeLayer(marker));
+    waterLevelGauges = {};
+
+    // Start if enabled
+    if (settings.enabled) {
+        fetchWaterLevelGauges();
+        // Refresh on map move/zoom
+        map.on('moveend', fetchWaterLevelGauges);
+        console.log('📊 Water level gauges enabled');
+    } else {
+        map.off('moveend', fetchWaterLevelGauges);
+        console.log('📊 Water level gauges disabled');
     }
 }
 

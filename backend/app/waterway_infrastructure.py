@@ -155,15 +155,11 @@ class WaterwayInfrastructure:
 
     def _get_poi_name(self, tags: Dict[str, str], poi_type: str, osm_id: int) -> str:
         """Generate a good name for the POI"""
-        # Try various name tags
-        if 'name' in tags:
-            return tags['name']
-        if 'name:de' in tags:
-            return tags['name:de']
-        if 'ref' in tags:
-            return tags['ref']
-        if 'description' in tags:
-            return tags['description']
+        # Try various name tags in order of preference
+        name_tags = ['name', 'name:de', 'loc_name', 'alt_name', 'official_name', 'ref', 'noref', 'description']
+        for tag in name_tags:
+            if tag in tags and tags[tag]:
+                return tags[tag]
 
         # Check for waterway name (for locks/bridges on a waterway)
         if 'waterway:name' in tags:
@@ -175,6 +171,20 @@ class WaterwayInfrastructure:
                 'dam': 'Damm'
             }
             return f"{type_names.get(poi_type, poi_type)} {tags['waterway:name']}"
+
+        # Try to build name from operator and location
+        if 'operator' in tags:
+            type_names_short = {
+                'lock': 'Schleuse',
+                'bridge': 'Brücke',
+                'harbor': 'Hafen',
+                'weir': 'Wehr',
+                'dam': 'Damm'
+            }
+            # Extract short operator name (e.g. "WSA Magdeburg" -> "Magdeburg")
+            operator = tags['operator'].split()[-1] if ' ' in tags['operator'] else tags['operator']
+            if len(operator) > 3:  # Only use if meaningful
+                return f"{type_names_short.get(poi_type, poi_type)} {operator}"
 
         # Fallback: use German type name without ID
         type_names = {
