@@ -900,6 +900,14 @@ async def get_trips():
     """Get all completed trips"""
     return completed_trips
 
+@app.get("/api/logbook/trip/{trip_id}")
+async def get_trip_details(trip_id: int):
+    """Get details for a specific trip including all entries"""
+    trip = logbook_storage.get_logbook_entry(trip_id)
+    if not trip:
+        return {"error": "Trip not found"}
+    return trip
+
 @app.post("/api/logbook")
 async def add_logbook_entry(entry: Dict[str, Any]):
     """Add a manual logbook entry"""
