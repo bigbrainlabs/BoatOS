@@ -1305,9 +1305,8 @@ async def calculate_route(request: dict):
                 }
             }
 
-        # Calculate route using OSM data
-        route = waterway_router.route(waypoints)
-        route["properties"]["routing_type"] = "osm_waterway"
+        # Calculate route using OSM data (async call)
+        route = await waterway_router.route(waypoints)
         return route
 
     except Exception as e:
