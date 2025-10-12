@@ -40,7 +40,7 @@ echo ""
 # System-Pakete installieren
 info "Installiere System-Pakete..."
 sudo apt update
-sudo apt install -y python3 python3-pip python3-venv nginx git curl gdal-bin python3-gdal || error "System-Pakete konnten nicht installiert werden"
+sudo apt install -y python3 python3-pip python3-venv nginx git curl gdal-bin python3-gdal openssl || error "System-Pakete konnten nicht installiert werden"
 success "System-Pakete installiert (inkl. GDAL für Kartenkonvertierung)"
 
 # Node.js für SignalK installieren
@@ -97,7 +97,9 @@ info "Richte Backend ein..."
 cd $INSTALL_DIR/backend
 
 if [ ! -d "venv" ]; then
-    python3 -m venv venv || error "Virtual Environment konnte nicht erstellt werden"
+    # Use --system-site-packages to access GDAL Python bindings
+    python3 -m venv --system-site-packages venv || error "Virtual Environment konnte nicht erstellt werden"
+    success "Virtual Environment mit System-Paketen erstellt (für GDAL)"
 fi
 
 source venv/bin/activate
@@ -128,9 +130,66 @@ if [ "$(uname -m)" = "aarch64" ]; then
         sudo mv osrm-routed osrm-extract osrm-partition osrm-customize /usr/local/bin/
         sudo chmod +x /usr/local/bin/osrm-*
         success "OSRM Binaries installiert"
-        info "  🚀 OSRM Server verfügbar für schnelles Routing"
-        info "     - Benötigt noch: OSM PBF Datei + Daten-Extraktion"
-        info "     - Siehe: INSTALL.md für Details"
+
+        # Clone OSRM Backend for profiles
+        if [ ! -d "$HOME/osrm-backend" ]; then
+            info "Clone OSRM Backend Repository für Profiles..."
+            cd $HOME
+            git clone https://github.com/Project-OSRM/osrm-backend.git || error "OSRM Backend Clone fehlgeschlagen"
+            success "OSRM Backend gecloned"
+        fi
+
+        # Copy waterway profile
+        info "Kopiere Waterway Profile..."
+        cp "$INSTALL_DIR/profiles/waterway_working.lua" "$HOME/osrm-backend/profiles/waterway.lua"
+        success "Waterway Profile installiert"
+
+        # Download Sachsen-Anhalt OSM data as default (for Elbe testing)
+        info "Lade Sachsen-Anhalt OSM Daten herunter (für Elbe-Tests)..."
+        mkdir -p "$HOME/osrm_regions"
+        cd "$HOME/osrm_regions"
+
+        if [ ! -f "sachsen-anhalt-latest.osm.pbf" ]; then
+            wget -q --show-progress https://download.geofabrik.de/europe/germany/sachsen-anhalt-latest.osm.pbf || error "OSM Download fehlgeschlagen"
+            success "Sachsen-Anhalt OSM Daten heruntergeladen"
+        fi
+
+        # Extract OSRM data with waterway profile
+        info "Extrahiere OSRM Waterway-Daten (kann einige Minuten dauern)..."
+        osrm-extract -p "$HOME/osrm-backend/profiles/waterway.lua" sachsen-anhalt-latest.osm.pbf || error "OSRM Extract fehlgeschlagen"
+        osrm-partition sachsen-anhalt-latest.osrm || error "OSRM Partition fehlgeschlagen"
+        osrm-customize sachsen-anhalt-latest.osrm || error "OSRM Customize fehlgeschlagen"
+
+        # Copy OSRM data to BoatOS data directory
+        cp sachsen-anhalt-latest.osrm* "$INSTALL_DIR/data/osrm/"
+        success "OSRM Waterway-Daten extrahiert"
+
+        # Create OSRM Service
+        info "Erstelle OSRM Service..."
+        sudo tee /etc/systemd/system/osrm.service > /dev/null << OSRM
+[Unit]
+Description=OSRM Routing Engine
+After=network.target
+
+[Service]
+Type=simple
+User=$INSTALL_USER
+WorkingDirectory=$INSTALL_DIR/data/osrm
+ExecStart=/usr/local/bin/osrm-routed --algorithm=MLD $INSTALL_DIR/data/osrm/sachsen-anhalt-latest.osrm --port 5000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+OSRM
+
+        sudo systemctl daemon-reload
+        sudo systemctl enable osrm
+        success "OSRM Service erstellt"
+
+        info "  🚀 OSRM Server konfiguriert für Waterway-Routing"
+        info "     - Region: Sachsen-Anhalt (Elbe)"
+        info "     - Weitere Bundesländer können mit dem extract-Skript hinzugefügt werden"
     else
         info "Optional für bessere Performance:"
         info "  🚀 OSRM Server (lokales, schnelles Routing)"
@@ -143,7 +202,7 @@ else
     info "     - Erfordert: OSM PBF Datei + Kompilierung von OSRM"
     info "     - Nur für ARM64/64-bit OS verfügbar"
 fi
-success "Waterway Routing konfiguriert (PyRouteLib3)"
+success "Waterway Routing konfiguriert (PyRouteLib3 + OSRM)"
 
 # BoatOS Service erstellen
 info "Erstelle BoatOS Service..."
@@ -169,12 +228,38 @@ sudo systemctl daemon-reload
 sudo systemctl enable boatos
 success "BoatOS Service erstellt"
 
+# SSL-Zertifikat erstellen
+info "Erstelle selbstsigniertes SSL-Zertifikat..."
+if [ ! -f "/etc/ssl/certs/boatos-selfsigned.crt" ]; then
+    sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+        -keyout /etc/ssl/private/boatos-selfsigned.key \
+        -out /etc/ssl/certs/boatos-selfsigned.crt \
+        -subj "/C=DE/ST=State/L=City/O=BoatOS/CN=$(hostname -I | awk '{print $1}')" || error "SSL-Zertifikat konnte nicht erstellt werden"
+    success "SSL-Zertifikat erstellt"
+else
+    info "SSL-Zertifikat existiert bereits"
+fi
+
 # Nginx konfigurieren
 info "Konfiguriere Nginx..."
 sudo tee /etc/nginx/sites-available/boatos > /dev/null << 'NGINX'
+# HTTP Server - Redirect to HTTPS
 server {
     listen 80;
     server_name _;
+    return 301 https://$host$request_uri;
+}
+
+# HTTPS Server
+server {
+    listen 443 ssl;
+    server_name _;
+
+    # SSL Configuration
+    ssl_certificate /etc/ssl/certs/boatos-selfsigned.crt;
+    ssl_certificate_key /etc/ssl/private/boatos-selfsigned.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
 
     # Allow large file uploads for chart files
     client_max_body_size 2G;
@@ -212,8 +297,8 @@ server {
         proxy_set_header Host $host;
     }
 
-    # Charts directory
-    location /charts {
+    # Charts directory - CRITICAL: trailing slash prevents matching /charts.js
+    location /charts/ {
         alias /home/INSTALL_USER_PLACEHOLDER/BoatOS/data/charts;
         autoindex off;
     }
@@ -242,6 +327,13 @@ info "Starte Services..."
 sudo systemctl start signalk
 sudo systemctl start boatos
 sudo systemctl restart nginx
+
+# Start OSRM if available
+if systemctl list-unit-files | grep -q osrm.service; then
+    sudo systemctl start osrm
+    success "OSRM Service gestartet"
+fi
+
 success "Services gestartet"
 
 echo ""
@@ -249,8 +341,10 @@ echo "============================="
 echo -e "${GREEN}🎉 BoatOS erfolgreich installiert!${NC}"
 echo ""
 echo "Zugriff:"
-echo "  - BoatOS UI: http://$(hostname -I | awk '{print $1}')/"
+echo "  - BoatOS UI: https://$(hostname -I | awk '{print $1}')/"
 echo "  - SignalK:   http://$(hostname -I | awk '{print $1}'):3000/"
+echo ""
+echo -e "${YELLOW}⚠️  Hinweis: Selbstsigniertes SSL-Zertifikat - Browser-Warnung ignorieren${NC}"
 echo ""
 echo "Nächste Schritte:"
 echo "  1. GPS-Device identifizieren: ls -la /dev/ttyACM*"
@@ -258,8 +352,17 @@ echo "  2. SignalK GPS konfigurieren (siehe INSTALL.md)"
 echo "  3. SignalK neu starten: sudo systemctl restart signalk"
 echo "  4. BoatOS neu starten: sudo systemctl restart boatos"
 echo ""
+if systemctl list-unit-files | grep -q osrm.service; then
+echo "OSRM Waterway Routing:"
+echo "  - Status: sudo systemctl status osrm"
+echo "  - Weitere Bundesländer hinzufügen: siehe scripts/extract_regions.sh"
+echo ""
+fi
 echo "Status prüfen:"
 echo "  sudo systemctl status signalk"
 echo "  sudo systemctl status boatos"
+if systemctl list-unit-files | grep -q osrm.service; then
+echo "  sudo systemctl status osrm"
+fi
 echo ""
 echo -e "${YELLOW}⚠️  WICHTIG: Bitte melde dich ab und wieder an, damit die dialout-Gruppe wirksam wird!${NC}"
