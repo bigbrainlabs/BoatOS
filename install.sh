@@ -118,11 +118,31 @@ info "Waterway Routing wird konfiguriert..."
 info "Installiert:"
 info "  ✅ PyRouteLib3 (Overpass API Routing - funktioniert sofort)"
 info ""
-info "Optional für bessere Performance:"
-info "  🚀 OSRM Server (lokales, schnelles Routing)"
-info "     - Erfordert: OSM PBF Datei + Kompilierung von OSRM"
-info "     - Empfohlen: 64-bit OS für ARM-Systeme"
-info "     - Siehe: https://github.com/Project-OSRM/osrm-backend"
+
+# Install pre-compiled OSRM binaries (ARM64 only)
+if [ "$(uname -m)" = "aarch64" ]; then
+    if [ -f "$INSTALL_DIR/osrm-binaries/osrm-arm64-binaries.tar.gz" ]; then
+        info "Installiere vorkompilierte OSRM ARM64 Binaries..."
+        cd /tmp
+        tar xzf "$INSTALL_DIR/osrm-binaries/osrm-arm64-binaries.tar.gz"
+        sudo mv osrm-routed osrm-extract osrm-partition osrm-customize /usr/local/bin/
+        sudo chmod +x /usr/local/bin/osrm-*
+        success "OSRM Binaries installiert"
+        info "  🚀 OSRM Server verfügbar für schnelles Routing"
+        info "     - Benötigt noch: OSM PBF Datei + Daten-Extraktion"
+        info "     - Siehe: INSTALL.md für Details"
+    else
+        info "Optional für bessere Performance:"
+        info "  🚀 OSRM Server (lokales, schnelles Routing)"
+        info "     - Erfordert: OSM PBF Datei + Kompilierung von OSRM"
+        info "     - Siehe: https://github.com/Project-OSRM/osrm-backend"
+    fi
+else
+    info "Optional für bessere Performance:"
+    info "  🚀 OSRM Server (lokales, schnelles Routing)"
+    info "     - Erfordert: OSM PBF Datei + Kompilierung von OSRM"
+    info "     - Nur für ARM64/64-bit OS verfügbar"
+fi
 success "Waterway Routing konfiguriert (PyRouteLib3)"
 
 # BoatOS Service erstellen
