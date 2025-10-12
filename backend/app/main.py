@@ -482,33 +482,50 @@ def convert_enc_to_tiles(chart: dict):
                     continue
 
                 for layer_idx in range(ds.GetLayerCount()):
-                    layer = ds.GetLayerByIndex(layer_idx)
-                    layer_name = layer.GetName()
+                    try:
+                        layer = ds.GetLayerByIndex(layer_idx)
+                        if not layer:
+                            continue
+                        layer_name = layer.GetName()
 
-                    # Skip metadata layers
-                    if layer_name in ['DSID', 'DSPM']:
-                        continue
-
-                    for feature in layer:
-                        geom = feature.GetGeometryRef()
-                        if not geom:
+                        # Skip metadata layers
+                        if layer_name in ['DSID', 'DSPM']:
                             continue
 
-                        # Get feature type and properties
-                        feat_data = {
-                            'layer': layer_name,
-                            'geom': geom.Clone(),
-                            'type': geom.GetGeometryName(),
-                            'style': get_layer_style(layer_name)
-                        }
-                        all_features.append(feat_data)
+                        # Reset reading to start
+                        layer.ResetReading()
 
-                        # Update bounds
-                        env = geom.GetEnvelope()
-                        min_lon = min(min_lon, env[0])
-                        max_lon = max(max_lon, env[1])
-                        min_lat = min(min_lat, env[2])
-                        max_lat = max(max_lat, env[3])
+                        while True:
+                            try:
+                                feature = layer.GetNextFeature()
+                                if not feature:
+                                    break
+
+                                geom = feature.GetGeometryRef()
+                                if not geom:
+                                    continue
+
+                                # Get feature type and properties
+                                feat_data = {
+                                    'layer': layer_name,
+                                    'geom': geom.Clone(),
+                                    'type': geom.GetGeometryName(),
+                                    'style': get_layer_style(layer_name)
+                                }
+                                all_features.append(feat_data)
+
+                                # Update bounds
+                                env = geom.GetEnvelope()
+                                min_lon = min(min_lon, env[0])
+                                max_lon = max(max_lon, env[1])
+                                min_lat = min(min_lat, env[2])
+                                max_lat = max(max_lat, env[3])
+                            except Exception as feat_err:
+                                # Skip features that can't be read (GDAL S-57 issues)
+                                continue
+                    except Exception as layer_err:
+                        print(f"    ⚠️ Error reading layer {layer_idx}: {layer_err}")
+                        continue
 
                 ds = None
             except Exception as e:
