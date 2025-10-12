@@ -109,8 +109,21 @@ success "Backend eingerichtet"
 info "Erstelle Datenverzeichnisse..."
 mkdir -p $INSTALL_DIR/data/charts
 mkdir -p $INSTALL_DIR/data/enc_downloads
+mkdir -p $INSTALL_DIR/data/osrm
 touch $INSTALL_DIR/data/.gitkeep
 success "Datenverzeichnisse erstellt"
+
+# Waterway Routing Setup
+info "Waterway Routing wird konfiguriert..."
+info "Installiert:"
+info "  ✅ PyRouteLib3 (Overpass API Routing - funktioniert sofort)"
+info ""
+info "Optional für bessere Performance:"
+info "  🚀 OSRM Server (lokales, schnelles Routing)"
+info "     - Erfordert: OSM PBF Datei + Kompilierung von OSRM"
+info "     - Empfohlen: 64-bit OS für ARM-Systeme"
+info "     - Siehe: https://github.com/Project-OSRM/osrm-backend"
+success "Waterway Routing konfiguriert (PyRouteLib3)"
 
 # BoatOS Service erstellen
 info "Erstelle BoatOS Service..."
