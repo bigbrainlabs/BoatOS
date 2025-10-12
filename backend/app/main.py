@@ -1194,9 +1194,9 @@ async def signalk_listener():
                                     if path == "navigation.position":
                                         sensor_data["gps"] = {"lat": val.get("latitude", 0), "lon": val.get("longitude", 0)}
                                     elif path == "navigation.speedOverGround":
-                                        sensor_data["speed"] = round(val * 1.94384, 1)
+                                        sensor_data["speed"] = round(val * 1.94384, 1) if val is not None else 0
                                     elif path == "navigation.headingTrue":
-                                        sensor_data["heading"] = round(val * 180 / 3.14159, 0)
+                                        sensor_data["heading"] = round(val * 180 / 3.14159, 0) if val is not None else 0
                                     elif path == "environment.depth.belowTransducer":
                                         sensor_data["depth"] = round(val, 1)
         except Exception as e:
