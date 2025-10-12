@@ -10,3 +10,4 @@ aiohttp==3.10.11
 requests==2.32.5
 python-multipart==0.0.20
 networkx==3.2.1
+pyroutelib3>=2.0.0
