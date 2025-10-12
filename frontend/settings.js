@@ -100,6 +100,17 @@ function showMsg(message, duration = 3000) {
 
 // Open Settings Modal
 function openSettingsModal() {
+    // Reload from localStorage to get saved values
+    const stored = localStorage.getItem('boatos_settings');
+    if (stored) {
+        try {
+            currentSettings = { ...defaultSettings, ...JSON.parse(stored) };
+            console.log('📂 Settings loaded from localStorage:', currentSettings);
+        } catch (e) {
+            console.error('Error parsing stored settings:', e);
+        }
+    }
+
     const modal = document.getElementById('settings-modal');
     modal.classList.add('show');
     modal.style.display = 'flex';
@@ -143,8 +154,18 @@ function switchSettingsTab(tabName) {
     }
 
     // Load charts if charts tab is selected
-    if (tabName === 'charts' && typeof loadCharts === 'function') {
-        loadCharts();
+    if (tabName === 'charts') {
+        if (typeof loadCharts === 'function') {
+            loadCharts();
+        }
+        // Auto-load ENC catalog with a small delay to ensure charts.js is loaded
+        setTimeout(() => {
+            if (typeof loadENCCatalog === 'function') {
+                loadENCCatalog();
+            } else {
+                console.warn('loadENCCatalog not yet available');
+            }
+        }, 100);
     }
 }
 
@@ -412,6 +433,52 @@ function exportSettings() {
     showMsg('📥 Einstellungen exportiert');
 }
 
+// Import settings
+function importSettings() {
+    // Create a hidden file input element
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+
+    input.onchange = async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        try {
+            const text = await file.text();
+            const importedSettings = JSON.parse(text);
+
+            // Validate settings structure
+            if (!importedSettings.general || !importedSettings.navigation) {
+                showMsg('❌ Ungültige Einstellungsdatei');
+                return;
+            }
+
+            // Merge with default settings to ensure all keys exist
+            currentSettings = { ...defaultSettings, ...importedSettings };
+
+            // Save to localStorage
+            localStorage.setItem('boatos_settings', JSON.stringify(currentSettings));
+
+            // Save to backend
+            await saveSettingsToBackend();
+
+            // Apply settings
+            applySettings();
+
+            // Reload form
+            loadSettingsToForm();
+
+            showMsg('✅ Einstellungen importiert');
+        } catch (error) {
+            console.error('Import error:', error);
+            showMsg('❌ Fehler beim Importieren');
+        }
+    };
+
+    input.click();
+}
+
 // Save settings to backend
 async function saveSettingsToBackend() {
     try {
@@ -461,10 +528,10 @@ async function initializeSettings() {
         }
     }
 
-    // Apply settings
+    // Apply settings to the application
     applySettings();
 
-    console.log('⚙️ Settings initialized');
+    console.log('⚙️ Settings initialized:', currentSettings);
 }
 
 // Update AIS API key field visibility based on provider
