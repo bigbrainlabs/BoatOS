@@ -303,7 +303,7 @@ function updateGpsInfo(gps) {
 
         // VDOP (Vertical Dilution of Precision)
         const vdopEl = document.getElementById('gps-vdop');
-        if (vdopEl && gps.vdop !== undefined) {
+        if (vdopEl && gps.vdop !== undefined && gps.vdop !== null) {
             vdopEl.textContent = gps.vdop.toFixed(2);
             // Color code: <2 excellent, 2-5 good, 5-10 moderate, >10 poor
             if (gps.vdop < 2) vdopEl.style.color = '#2ecc71';
@@ -451,16 +451,23 @@ function onMapClick(e) {
 }
 
 function addWaypoint(waypoint) {
-    // Marker auf Karte
+    const waypointNumber = waypoints.length + 1;
+
+    // Schöner Marker mit Pin-Design - direkt zur Karte hinzufügen
     const marker = L.marker([waypoint.lat, waypoint.lon], {
         icon: L.divIcon({
-            html: '⛵',
+            html: `
+                <div style="display: flex; flex-direction: column; align-items: center; width: 40px;">
+                    <div style="background: #3498db; color: white; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.4); margin-bottom: 4px;">${waypoint.name}</div>
+                    <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); border: 4px solid white; border-radius: 50%; box-shadow: 0 3px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; color: white;">${waypointNumber}</div>
+                </div>
+            `,
             className: 'waypoint-marker',
-            html: `<div style="color: white; font-size: 10px; text-align: center; margin-top: 22px;">${waypoint.name}</div>`,
-            iconSize: [20, 20]
+            iconSize: [40, 60],
+            iconAnchor: [20, 60]
         }),
         draggable: true
-    }).addTo(routeLayer);
+    }).addTo(map);  // Direkt zur Karte statt zu routeLayer
 
     marker.on('drag', () => {
         updateRoute();
@@ -468,7 +475,7 @@ function addWaypoint(waypoint) {
 
     marker.on('click', () => {
         if (confirm(`Wegpunkt ${waypoint.name} löschen?`)) {
-            routeLayer.removeLayer(marker);
+            map.removeLayer(marker);  // Von der Karte entfernen statt von routeLayer
             waypoints = waypoints.filter(w => w.name !== waypoint.name);
             updateRoute();
         }
@@ -496,6 +503,9 @@ async function updateRoute() {
 
     if (waypoints.length < 2) return;
 
+    // Zeige Loading-Indikator
+    showRoutingLoader();
+
     // Versuche ENC-basiertes Wasserrouting
     try {
         const coordinates = waypoints.map(w => {
@@ -511,10 +521,15 @@ async function updateRoute() {
 
         if (response.ok) {
             const routeData = await response.json();
+            console.log('🔍 Backend response:', routeData);
+            console.log('🔍 Properties:', routeData.properties);
+            console.log('🔍 routing_type:', routeData.properties?.routing_type);
+            console.log('🔍 waterway_routed:', routeData.properties?.waterway_routed);
 
             if (routeData.error) {
                 console.warn('⚠️ Routing error:', routeData.error);
                 drawDirectRoute();
+                hideRoutingLoader();
                 return;
             }
 
@@ -527,9 +542,12 @@ async function updateRoute() {
                 const isWaterwayRouted = routeData.properties?.waterway_routed || false;
                 const routingType = routeData.properties?.routing_type || 'waterway';
 
+                console.log('🔍 Evaluated: routingType =', routingType, ', isWaterwayRouted =', isWaterwayRouted);
+
                 if (routingType === 'direct' || !isWaterwayRouted) {
                     console.log('📍 Using direct routing (ENC routing not available)');
                     drawDirectRoute();
+                    hideRoutingLoader();
                     return;
                 }
 
@@ -574,6 +592,7 @@ async function updateRoute() {
 
                 console.log(`🌊 Waterway Route: ${distanceNM.toFixed(2)} NM`);
                 showRouteInfo(distanceNM.toFixed(2), etaHoursInt, etaMinutes, routeInfo, false, true);
+                hideRoutingLoader();
                 return;
             }
         }
@@ -583,6 +602,7 @@ async function updateRoute() {
 
     // Fallback auf direkte Route
     drawDirectRoute();
+    hideRoutingLoader();
 }
 
 function drawDirectRoute() {
@@ -709,18 +729,79 @@ function showRouteInfo(totalNM, hours, minutes, segments, isDirect, isWaterway) 
 }
 
 function clearRoute() {
+    // Entferne Wegpunkt-Marker von der Karte
     waypoints.forEach(w => {
         if (w.marker) {
-            routeLayer.removeLayer(w.marker);
+            map.removeLayer(w.marker);  // Von der Karte entfernen
         }
     });
     waypoints = [];
+
+    // Entferne Routen-Linien vom routeLayer
     routeLayer.clearLayers();
 
     const panel = document.getElementById('route-info-panel');
     if (panel) panel.remove();
 
     showNotification('🗑️ Route gelöscht');
+}
+
+// ==================== ROUTING LOADER ====================
+function showRoutingLoader() {
+    // Entferne alten Loader falls vorhanden
+    hideRoutingLoader();
+
+    const loader = document.createElement('div');
+    loader.id = 'routing-loader';
+    loader.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(10, 14, 39, 0.95);
+        backdrop-filter: blur(10px);
+        border: 2px solid rgba(52, 152, 219, 0.6);
+        border-radius: 12px;
+        padding: 20px 30px;
+        z-index: 10000;
+        color: white;
+        font-size: 16px;
+        font-weight: 600;
+        text-align: center;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    `;
+
+    loader.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <div style="width: 30px; height: 30px; border: 3px solid rgba(52, 152, 219, 0.3); border-top-color: #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <div>
+                <div style="color: #64ffda; margin-bottom: 5px;">Route wird berechnet...</div>
+                <div style="font-size: 12px; color: #8892b0;">Berechne Wasserwege</div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(loader);
+
+    // Add CSS animation for spinner
+    if (!document.getElementById('routing-loader-style')) {
+        const style = document.createElement('style');
+        style.id = 'routing-loader-style';
+        style.textContent = `
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+function hideRoutingLoader() {
+    const loader = document.getElementById('routing-loader');
+    if (loader) {
+        loader.remove();
+    }
 }
 
 
