@@ -731,6 +731,7 @@
                     <button class="settings-tab" onclick="switchSettingsTab('weather')">Wetter</button>
                     <button class="settings-tab" onclick="switchSettingsTab('sensors')">Sensoren</button>
                     <button class="settings-tab" onclick="switchSettingsTab('ais')">AIS</button>
+                    <button class="settings-tab" onclick="switchSettingsTab('routing')">Routing</button>
                     <button class="settings-tab" onclick="switchSettingsTab('data')">Daten</button>
                 </div>
 
@@ -963,6 +964,92 @@
                             <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px;">
                                 <strong>🔵 AISStream:</strong> Kostenlos, WebSocket-basiert, weltweite Abdeckung<br>
                                 <strong>🟡 AISHub:</strong> Benötigt API-Key (Registrierung erforderlich)
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Routing Tab -->
+                    <div id="settings-routing" class="settings-tab-content">
+                        <h3>🛤️ Routing-Einstellungen</h3>
+
+                        <div class="setting-item">
+                            <label>Routing-Methode</label>
+                            <select id="setting-routing-provider" onchange="updateRoutingProviderVisibility()">
+                                <option value="osrm">OSRM (Lokal, Offline)</option>
+                                <option value="graphhopper">GraphHopper (Cloud API)</option>
+                                <option value="direct">Direkte Linie (Rhumbline)</option>
+                            </select>
+                            <small style="color: #7f8c8d; display: block; margin-top: 5px;">
+                                Wähle die Methode zur Routenberechnung
+                            </small>
+                        </div>
+
+                        <!-- OSRM Settings -->
+                        <div id="osrm-url-field" class="setting-item">
+                            <label>OSRM Server-URL</label>
+                            <input type="text" id="setting-osrm-url" placeholder="http://localhost:5000">
+                            <small style="color: #7f8c8d; display: block; margin-top: 5px;">
+                                URL des lokalen OSRM-Servers
+                            </small>
+                        </div>
+
+                        <!-- GraphHopper Settings -->
+                        <div id="graphhopper-api-key-field" class="setting-item">
+                            <label>GraphHopper API-Key</label>
+                            <input type="text" id="setting-graphhopper-api-key" placeholder="Kostenlos auf graphhopper.com">
+                            <small style="color: #7f8c8d; display: block; margin-top: 5px;">
+                                🌊 Für Cloud-basierte Routen (500 Anfragen/Tag kostenlos)<br>
+                                🔗 API-Key bei <a href="https://graphhopper.com/" target="_blank" style="color: #64ffda;">graphhopper.com</a> registrieren
+                            </small>
+                        </div>
+
+                        <!-- OSRM Info Box -->
+                        <div id="osrm-info-box" class="setting-item" style="margin-top: 20px; padding: 15px; background: rgba(46, 204, 113, 0.1); border-radius: 8px;">
+                            <h4 style="margin-top: 0;">🚀 OSRM Routing (Empfohlen)</h4>
+                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7;">
+                                <strong>Was ist OSRM?</strong><br>
+                                Open Source Routing Machine - Lokaler Routing-Server auf dem Raspberry Pi, der speziell für Wasserwege konfiguriert ist.
+                            </p>
+                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px;">
+                                <strong>Vorteile:</strong><br>
+                                ⚡ Blitzschnell (< 100ms)<br>
+                                🌊 Folgt echten Wasserwegen (Flüsse, Kanäle, Fairways)<br>
+                                📡 Komplett offline<br>
+                                ♾️ Unbegrenzte Anfragen<br>
+                                🆓 Kostenlos
+                            </p>
+                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px;">
+                                <strong>Installation:</strong><br>
+                                OSRM kann auf dem Raspberry Pi installiert werden. Nach der Installation wird es automatisch beim Booten gestartet.
+                            </p>
+                        </div>
+
+                        <!-- GraphHopper Info Box -->
+                        <div id="graphhopper-info-box" class="setting-item" style="margin-top: 20px; padding: 15px; background: rgba(52, 152, 219, 0.1); border-radius: 8px;">
+                            <h4 style="margin-top: 0;">☁️ GraphHopper Routing</h4>
+                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7;">
+                                <strong>Was ist GraphHopper?</strong><br>
+                                Cloud-basierter Routing-Service über API.
+                            </p>
+                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px;">
+                                <strong>Hinweis:</strong><br>
+                                ⚠️ Kostenlose Version routet über Land, nicht über Wasserwege<br>
+                                📶 Benötigt Internetverbindung<br>
+                                🔢 Begrenzt auf 500 Anfragen/Tag
+                            </p>
+                        </div>
+
+                        <!-- Direct Line Info Box -->
+                        <div id="direct-info-box" class="setting-item" style="margin-top: 20px; padding: 15px; background: rgba(155, 89, 182, 0.1); border-radius: 8px;">
+                            <h4 style="margin-top: 0;">📏 Direkte Linie (Rhumbline)</h4>
+                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7;">
+                                <strong>Einfachste Methode:</strong><br>
+                                Berechnet direkte Linien zwischen Wegpunkten ohne Wasserwege zu berücksichtigen.
+                            </p>
+                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px;">
+                                ✅ Funktioniert immer<br>
+                                📡 Offline<br>
+                                ⚠️ Ignoriert Wasserwege und Hindernisse
                             </p>
                         </div>
                     </div>

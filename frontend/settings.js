@@ -49,6 +49,11 @@ const defaultSettings = {
     },
     waterLevel: {
         enabled: false
+    },
+    routing: {
+        provider: 'osrm',  // 'osrm', 'direct'
+        osrmUrl: 'http://localhost:5000',
+        graphhopperApiKey: ''
     }
 };
 
@@ -206,6 +211,20 @@ function loadSettingsToForm() {
     if (document.getElementById('setting-waterLevel-enabled')) {
         document.getElementById('setting-waterLevel-enabled').checked = currentSettings.waterLevel?.enabled || false;
     }
+
+    // Routing
+    if (document.getElementById('setting-routing-provider')) {
+        document.getElementById('setting-routing-provider').value = currentSettings.routing?.provider || 'osrm';
+    }
+    if (document.getElementById('setting-osrm-url')) {
+        document.getElementById('setting-osrm-url').value = currentSettings.routing?.osrmUrl || 'http://localhost:5000';
+    }
+    if (document.getElementById('setting-graphhopper-api-key')) {
+        document.getElementById('setting-graphhopper-api-key').value = currentSettings.routing?.graphhopperApiKey || '';
+    }
+
+    // Update routing provider visibility
+    updateRoutingProviderVisibility();
 }
 
 // Save settings
@@ -272,6 +291,11 @@ function saveSettings() {
         },
         waterLevel: {
             enabled: getChecked('setting-waterLevel-enabled', false)
+        },
+        routing: {
+            provider: getValue('setting-routing-provider', 'osrm'),
+            osrmUrl: getValue('setting-osrm-url', 'http://localhost:5000'),
+            graphhopperApiKey: getValue('setting-graphhopper-api-key', '')
         }
     };
 
@@ -451,6 +475,35 @@ function updateAISKeyVisibility() {
     if (keyField) {
         // All providers require API key
         keyField.style.display = 'block';
+    }
+}
+
+// Update routing provider settings visibility
+function updateRoutingProviderVisibility() {
+    const provider = document.getElementById('setting-routing-provider')?.value || 'osrm';
+    const osrmField = document.getElementById('osrm-url-field');
+    const graphhopperField = document.getElementById('graphhopper-api-key-field');
+    const osrmInfoBox = document.getElementById('osrm-info-box');
+    const graphhopperInfoBox = document.getElementById('graphhopper-info-box');
+    const directInfoBox = document.getElementById('direct-info-box');
+
+    // Show/hide input fields
+    if (osrmField) {
+        osrmField.style.display = (provider === 'osrm') ? 'block' : 'none';
+    }
+    if (graphhopperField) {
+        graphhopperField.style.display = (provider === 'graphhopper') ? 'block' : 'none';
+    }
+
+    // Show/hide info boxes
+    if (osrmInfoBox) {
+        osrmInfoBox.style.display = (provider === 'osrm') ? 'block' : 'none';
+    }
+    if (graphhopperInfoBox) {
+        graphhopperInfoBox.style.display = (provider === 'graphhopper') ? 'block' : 'none';
+    }
+    if (directInfoBox) {
+        directInfoBox.style.display = (provider === 'direct') ? 'block' : 'none';
     }
 }
 

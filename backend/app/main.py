@@ -108,6 +108,10 @@ async def save_settings(settings: Dict[str, Any]):
             api_key = settings['ais'].get('apiKey', '')
             ais_service.configure(provider=provider, api_key=api_key)
 
+        # Apply Routing settings
+        if 'routing' in settings:
+            init_waterway_router()  # Reinitialize router with new API key
+
         return {"status": "success", "message": "Settings saved"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -1264,23 +1268,69 @@ def mqtt_client_init():
         print(f"⚠️ MQTT connection failed: {e}")
 
 # ==================== WATERWAY ROUTING ====================
-waterway_router = None
+osrm_router = None
+pyroutelib_router = None
 
 def init_waterway_router():
-    """Initialize waterway router with OSM data"""
-    global waterway_router
+    """
+    Initialize waterway routers with fallback strategy:
+    1. OSRM (fast, local server, best for waterways)
+    2. PyRouteLib (Python-based OSM routing, slower but works)
+    3. Direct line (Rhumbline fallback)
+    """
+    global osrm_router, pyroutelib_router
+
+    # Load settings
+    osrm_url = "http://localhost:5000"
+    routing_provider = "osrm"  # Default
+    osm_file = None
+
     try:
-        from osm_routing import OSMWaterwayRouter
-        waterway_router = OSMWaterwayRouter()
-        print(f"✅ OSM Waterway router initialized")
+        with open("data/settings.json", 'r') as f:
+            settings = json.load(f)
+            routing_config = settings.get('routing', {})
+            osrm_url = routing_config.get('osrmUrl', osrm_url)
+            routing_provider = routing_config.get('provider', 'osrm')
+            osm_file = routing_config.get('osmFile', '/home/arielle/osrm_data/germany-latest.osm.pbf')
+    except:
+        pass
+
+    # Try to initialize OSRM
+    try:
+        from osrm_routing import OSRMRouter
+        osrm_router = OSRMRouter(osrm_url=osrm_url)
+        print(f"✅ OSRM router initialized ({osrm_url})")
+
+        # Check OSRM health in background
+        asyncio.create_task(osrm_router.check_health())
     except Exception as e:
-        print(f"⚠️ Waterway router initialization failed: {e}")
+        print(f"⚠️ OSRM router initialization failed: {e}")
+        osrm_router = None
+
+    # Try to initialize PyRouteLib as fallback
+    try:
+        from pyroutelib_routing import PyRouteLibRouter
+        pyroutelib_router = PyRouteLibRouter(osm_file=osm_file if osm_file and Path(osm_file).exists() else None)
+        print(f"✅ PyRouteLib router initialized (fallback)")
+    except Exception as e:
+        print(f"⚠️ PyRouteLib router initialization failed: {e}")
+        pyroutelib_router = None
 
 @app.post("/api/route")
 async def calculate_route(request: dict):
     """
-    Calculate route through waterways
+    Calculate route through waypoints using multi-tier waterway routing
+
     Request body: {"waypoints": [[lon, lat], [lon, lat], ...]}
+
+    Strategy (priority order):
+    1. OSRM waterway routing (fast <100ms, local, follows waterways)
+    2. PyRouteLib OSM routing (slow 5-30s, follows waterways via Overpass)
+    3. Direct line (Rhumbline - instant fallback)
+
+    Returns:
+    - GeoJSON Feature with route geometry
+    - Properties: distance_m, distance_nm, routing_type
     """
     try:
         waypoints_raw = request.get("waypoints", [])
@@ -1288,29 +1338,39 @@ async def calculate_route(request: dict):
         if len(waypoints_raw) < 2:
             return {"error": "Need at least 2 waypoints"}
 
-        # Convert to tuples
+        # Convert to tuples (lon, lat)
         waypoints = [(float(wp[0]), float(wp[1])) for wp in waypoints_raw]
 
-        if waterway_router is None:
-            # Fallback: return direct route
-            return {
-                "type": "Feature",
-                "geometry": {
-                    "type": "LineString",
-                    "coordinates": [[wp[0], wp[1]] for wp in waypoints]
-                },
-                "properties": {
-                    "routing_type": "direct",
-                    "message": "Waterway router not initialized"
-                }
-            }
+        # Strategy 1: Try OSRM (fastest, best)
+        if osrm_router and osrm_router.enabled:
+            try:
+                print("🚀 Trying OSRM waterway routing...")
+                route = await osrm_router.route(waypoints)
+                if route.get("properties", {}).get("routing_type") == "osrm":
+                    return route
+            except Exception as e:
+                print(f"⚠️ OSRM routing failed: {e}")
 
-        # Calculate route using OSM data (async call)
-        route = await waterway_router.route(waypoints)
-        return route
+        # Strategy 2: Try PyRouteLib (slower but follows waterways)
+        if pyroutelib_router and pyroutelib_router.enabled:
+            try:
+                print("🚤 Trying PyRouteLib waterway routing...")
+                route = await pyroutelib_router.route(waypoints)
+                if route.get("properties", {}).get("routing_type") == "pyroutelib":
+                    return route
+            except Exception as e:
+                print(f"⚠️ PyRouteLib routing failed: {e}")
+
+        # Strategy 3: Direct line fallback
+        print("📏 Using direct line routing (fallback)")
+        from osrm_routing import OSRMRouter
+        fallback = OSRMRouter()
+        return fallback._direct_route(waypoints)
 
     except Exception as e:
         print(f"❌ Routing error: {e}")
+        import traceback
+        traceback.print_exc()
         return {"error": str(e)}
 
 # ==================== STARTUP ====================
