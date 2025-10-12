@@ -180,53 +180,69 @@ class OSMWaterwayRouter:
 
     async def route(self, waypoints: List[Tuple[float, float]]) -> dict:
         """
-        Calculate route using OSM waterway network
+        Calculate route using OSM waterway network with segment-based approach
         Falls back to direct routing if OSM routing fails
         """
         if len(waypoints) < 2:
             return {"error": "Need at least 2 waypoints"}
 
-        # Calculate bounding box center for graph fetching
-        lats = [wp[1] for wp in waypoints]
-        lons = [wp[0] for wp in waypoints]
-        center_lat = sum(lats) / len(lats)
-        center_lon = sum(lons) / len(lons)
+        route_coords = []
+        total_distance = 0
+        any_waterway_routed = False
 
-        # Calculate radius (distance from center to farthest waypoint + buffer)
-        max_distance = 0
-        for lon, lat in waypoints:
-            dist = self.haversine_distance(center_lon, center_lat, lon, lat)
-            max_distance = max(max_distance, dist)
+        # Route each segment individually with its own local graph
+        for i in range(len(waypoints) - 1):
+            start_lon, start_lat = waypoints[i]
+            end_lon, end_lat = waypoints[i + 1]
 
-        radius_km = (max_distance / 1000) + 5  # Add 5km buffer
+            # Calculate segment distance
+            segment_distance = self.haversine_distance(start_lon, start_lat, end_lon, end_lat)
+            segment_distance_km = segment_distance / 1000
 
-        try:
-            # Get or build OSM graph for region
-            G = await self.get_or_build_graph(center_lat, center_lon, radius_km)
+            # Only use OSM routing for short distances (<8km)
+            # For longer distances, Overpass API is too slow
+            if segment_distance_km > 8:
+                print(f"⚠️ Segment {i+1}: {segment_distance_km:.2f}km too long for OSM routing, using direct line")
+                route_coords.append([start_lon, start_lat])
+                if i == len(waypoints) - 2:
+                    route_coords.append([end_lon, end_lat])
+                total_distance += segment_distance
+                continue
 
-            if G.number_of_nodes() == 0:
-                print("⚠️ No waterway nodes found, falling back to direct routing")
-                return self._direct_route(waypoints)
+            # Calculate segment midpoint and radius
+            mid_lat = (start_lat + end_lat) / 2
+            mid_lon = (start_lon + end_lon) / 2
 
-            # Find nearest nodes for all waypoints
-            waypoint_nodes = []
-            for lon, lat in waypoints:
-                nearest = self.find_nearest_node(G, lat, lon)
-                if nearest is None:
-                    print(f"⚠️ No node found near ({lat}, {lon}), falling back to direct routing")
-                    return self._direct_route(waypoints)
-                waypoint_nodes.append(nearest)
+            # Use segment length + 2km buffer, max 12km for performance
+            radius_km = min(segment_distance_km + 2, 12)
+            print(f"🔍 Segment {i+1}: {segment_distance_km:.2f}km direct, searching radius {radius_km:.2f}km")
 
-            # Route between consecutive waypoint nodes using A*
-            route_coords = []
-            total_distance = 0
+            try:
+                # Get or build OSM graph for this segment
+                G = await self.get_or_build_graph(mid_lat, mid_lon, radius_km)
 
-            for i in range(len(waypoint_nodes) - 1):
-                start_node = waypoint_nodes[i]
-                end_node = waypoint_nodes[i + 1]
+                if G.number_of_nodes() == 0:
+                    print(f"⚠️ No waterway nodes in segment {i+1}, using direct line")
+                    route_coords.append([start_lon, start_lat])
+                    if i == len(waypoints) - 2:
+                        route_coords.append([end_lon, end_lat])
+                    total_distance += segment_distance
+                    continue
 
+                # Find nearest nodes for start and end of segment
+                start_node = self.find_nearest_node(G, start_lat, start_lon)
+                end_node = self.find_nearest_node(G, end_lat, end_lon)
+
+                if start_node is None or end_node is None:
+                    print(f"⚠️ No nodes near waypoints in segment {i+1}, using direct line")
+                    route_coords.append([start_lon, start_lat])
+                    if i == len(waypoints) - 2:
+                        route_coords.append([end_lon, end_lat])
+                    total_distance += segment_distance
+                    continue
+
+                # Try A* pathfinding for this segment
                 try:
-                    # A* pathfinding on waterway graph
                     path = nx.astar_path(
                         G,
                         start_node,
@@ -239,42 +255,55 @@ class OSMWaterwayRouter:
                     )
 
                     # Convert path to coordinates
+                    segment_coords = []
                     for node in path:
                         lat = G.nodes[node]['lat']
                         lon = G.nodes[node]['lon']
-                        route_coords.append([lon, lat])
+                        segment_coords.append([lon, lat])
+
+                    # Avoid duplicate coordinates between segments
+                    if i > 0 and route_coords and segment_coords:
+                        if route_coords[-1] == segment_coords[0]:
+                            segment_coords = segment_coords[1:]
+
+                    route_coords.extend(segment_coords)
 
                     # Calculate segment distance
+                    segment_dist = 0
                     for j in range(len(path) - 1):
                         n1, n2 = path[j], path[j + 1]
-                        total_distance += G[n1][n2]['weight']
+                        segment_dist += G[n1][n2]['weight']
+                    total_distance += segment_dist
+                    any_waterway_routed = True
+                    print(f"✅ Segment {i+1}: {segment_dist/1852:.2f} NM via waterways")
 
                 except nx.NetworkXNoPath:
-                    print(f"⚠️ No path found between waypoints {i} and {i+1}, using direct line")
-                    # Fallback to direct line for this segment
-                    start_lon, start_lat = waypoints[i]
-                    end_lon, end_lat = waypoints[i + 1]
+                    print(f"⚠️ No waterway path in segment {i+1}, using direct line")
                     route_coords.append([start_lon, start_lat])
+                    if i == len(waypoints) - 2:
+                        route_coords.append([end_lon, end_lat])
+                    total_distance += segment_distance
+
+            except Exception as e:
+                print(f"❌ Error routing segment {i+1}: {e}, using direct line")
+                route_coords.append([start_lon, start_lat])
+                if i == len(waypoints) - 2:
                     route_coords.append([end_lon, end_lat])
-                    total_distance += self.haversine_distance(start_lon, start_lat, end_lon, end_lat)
+                total_distance += segment_distance
 
-            return {
-                "type": "Feature",
-                "geometry": {
-                    "type": "LineString",
-                    "coordinates": route_coords
-                },
-                "properties": {
-                    "distance_m": total_distance,
-                    "distance_nm": total_distance / 1852,
-                    "waterway_routed": True,
-                    "routing_type": "waterway"
-                }
+        return {
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": route_coords
+            },
+            "properties": {
+                "distance_m": total_distance,
+                "distance_nm": total_distance / 1852,
+                "waterway_routed": any_waterway_routed,
+                "routing_type": "waterway" if any_waterway_routed else "direct"
             }
-
-        except Exception as e:
-            print(f"❌ OSM routing error: {e}")
-            return self._direct_route(waypoints)
+        }
 
     def _direct_route(self, waypoints: List[Tuple[float, float]]) -> dict:
         """Fallback direct line routing"""
