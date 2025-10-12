@@ -268,8 +268,37 @@ async function exportTrack(entryId) {
 }
 
 async function viewTrackOnMap(entryId) {
-    closeLogbook();
-    if (typeof showMsg === 'function') showMsg("🗺️ Track view - Coming soon!");
+    try {
+        // Fetch track data from backend
+        const response = await fetch(`${getAPI()}/api/logbook/${entryId}`);
+        if (!response.ok) {
+            if (typeof showMsg === 'function') showMsg("❌ Fehler beim Laden des Tracks");
+            return;
+        }
+
+        const entry = await response.json();
+
+        // Check if track_data exists
+        if (!entry.track_data || entry.track_data.length === 0) {
+            if (typeof showMsg === 'function') showMsg("⚠️ Keine Track-Daten verfügbar");
+            return;
+        }
+
+        // Close logbook modal
+        closeLogbook();
+
+        // Draw track on map
+        if (typeof window.showTrackOnMap === 'function') {
+            window.showTrackOnMap(entry.track_data, entry);
+            if (typeof showMsg === 'function') showMsg(`🗺️ Track angezeigt: ${entry.track_data.length} Punkte`);
+        } else {
+            if (typeof showMsg === 'function') showMsg("❌ Map-Funktion nicht verfügbar");
+        }
+
+    } catch (error) {
+        console.error("Error viewing track:", error);
+        if (typeof showMsg === 'function') showMsg("❌ Fehler beim Anzeigen des Tracks");
+    }
 }
 
 function openManualEntryModal() {

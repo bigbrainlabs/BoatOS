@@ -1624,6 +1624,114 @@ function updateWaterLevelSettings(settings) {
     }
 }
 
+// ==================== TRACK VISUALIZATION ====================
+let displayedTrackLayer = null;
+
+window.showTrackOnMap = function(trackData, entry) {
+    // Remove previous track if exists
+    if (displayedTrackLayer) {
+        map.removeLayer(displayedTrackLayer);
+    }
+
+    // Convert track data to LatLng array
+    const trackPoints = trackData.map(point => [point.lat, point.lon]);
+
+    // Create polyline for the track
+    displayedTrackLayer = L.polyline(trackPoints, {
+        color: '#9b59b6',  // Purple color to distinguish from live track
+        weight: 4,
+        opacity: 0.8,
+        smoothFactor: 1
+    }).addTo(map);
+
+    // Add start marker
+    if (trackPoints.length > 0) {
+        const startIcon = L.divIcon({
+            html: '<div style="background: #2ecc71; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.4);">▶</div>',
+            className: 'track-start-marker',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+        });
+        L.marker(trackPoints[0], { icon: startIcon }).addTo(map)
+            .bindPopup(`<b>Start</b><br>${new Date(trackData[0].timestamp).toLocaleString('de-DE')}`);
+    }
+
+    // Add end marker
+    if (trackPoints.length > 1) {
+        const endIcon = L.divIcon({
+            html: '<div style="background: #e74c3c; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.4);">⏹</div>',
+            className: 'track-end-marker',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+        });
+        L.marker(trackPoints[trackPoints.length - 1], { icon: endIcon }).addTo(map)
+            .bindPopup(`<b>Ende</b><br>${new Date(trackData[trackData.length - 1].timestamp).toLocaleString('de-DE')}`);
+    }
+
+    // Zoom map to fit track bounds
+    if (trackPoints.length > 0) {
+        const bounds = L.latLngBounds(trackPoints);
+        map.fitBounds(bounds, { padding: [50, 50] });
+    }
+
+    // Add info panel with track statistics
+    const oldPanel = document.getElementById('track-view-panel');
+    if (oldPanel) oldPanel.remove();
+
+    const panel = document.createElement('div');
+    panel.id = 'track-view-panel';
+    panel.style.cssText = 'position: absolute; top: 20px; left: 20px; background: rgba(10, 14, 39, 0.95); backdrop-filter: blur(10px); border: 2px solid rgba(155, 89, 182, 0.6); border-radius: 12px; padding: 15px; z-index: 1001; min-width: 280px; color: white; font-size: 14px;';
+
+    const startTime = new Date(trackData[0].timestamp);
+    const endTime = new Date(trackData[trackData.length - 1].timestamp);
+    const duration = Math.round((endTime - startTime) / 1000 / 60); // minutes
+
+    panel.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="margin: 0; color: #64ffda; font-size: 16px;">📍 Track-Ansicht</h3>
+            <button onclick="clearDisplayedTrack()" style="background: rgba(231, 76, 60, 0.3); border: none; color: white; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;">Schließen</button>
+        </div>
+        <div style="background: rgba(155, 89, 182, 0.15); padding: 8px; border-radius: 6px; margin-bottom: 10px; font-size: 12px; color: #bb8fce;">
+            ${startTime.toLocaleDateString('de-DE')} • ${startTime.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} - ${endTime.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div style="background: rgba(42, 82, 152, 0.2); padding: 10px; border-radius: 8px;">
+                <div style="font-size: 20px; font-weight: 700; color: #64ffda;">${trackData.length}</div>
+                <div style="font-size: 11px; color: #8892b0;">Punkte</div>
+            </div>
+            <div style="background: rgba(42, 82, 152, 0.2); padding: 10px; border-radius: 8px;">
+                <div style="font-size: 20px; font-weight: 700; color: #64ffda;">${entry.distance || '?'}</div>
+                <div style="font-size: 11px; color: #8892b0;">Distanz (NM)</div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('map-container').appendChild(panel);
+
+    console.log(`✅ Track displayed: ${trackData.length} points`);
+};
+
+window.clearDisplayedTrack = function() {
+    if (displayedTrackLayer) {
+        map.removeLayer(displayedTrackLayer);
+        displayedTrackLayer = null;
+    }
+
+    // Remove markers (start/end)
+    map.eachLayer(layer => {
+        if (layer.options && layer.options.icon &&
+            (layer.options.icon.options.className === 'track-start-marker' ||
+             layer.options.icon.options.className === 'track-end-marker')) {
+            map.removeLayer(layer);
+        }
+    });
+
+    const panel = document.getElementById('track-view-panel');
+    if (panel) panel.remove();
+
+    console.log('✅ Track view cleared');
+};
+
 // ==================== SERVICE WORKER (PWA) ====================
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js')
