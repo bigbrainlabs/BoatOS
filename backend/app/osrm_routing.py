@@ -4,6 +4,7 @@ Fast routing using local OSRM server with custom waterway profile
 """
 from typing import List, Tuple, Optional
 import aiohttp
+import asyncio
 import math
 
 class OSRMRouter:
@@ -21,14 +22,19 @@ class OSRMRouter:
         """Check if OSRM server is available"""
         try:
             async with aiohttp.ClientSession() as session:
+                # OSRM doesn't have /health endpoint, test with a simple route request
+                # Use Magdeburg coordinates as test point
+                test_url = f"{self.osrm_url}/route/v1/driving/11.6167,52.1205;11.6267,52.1305?overview=false"
                 async with session.get(
-                    f"{self.osrm_url}/health",
-                    timeout=aiohttp.ClientTimeout(total=2)
+                    test_url,
+                    timeout=aiohttp.ClientTimeout(total=3)
                 ) as response:
                     if response.status == 200:
-                        self.enabled = True
-                        print(f"✅ OSRM server available at {self.osrm_url}")
-                        return True
+                        data = await response.json()
+                        if data.get("code") == "Ok":
+                            self.enabled = True
+                            print(f"✅ OSRM server available at {self.osrm_url}")
+                            return True
         except Exception as e:
             print(f"⚠️ OSRM server not available: {e}")
 
