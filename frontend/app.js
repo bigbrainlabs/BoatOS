@@ -29,6 +29,11 @@ let autoFollow = true; // Auto-follow boot position
 let lastGpsUpdate = null;
 let gpsSource = null; // "backend" or "browser"
 let browserGpsAccuracy = null;
+let lowSatelliteStartTime = null; // Timestamp when satellite count first dropped below 4
+let LOW_SATELLITE_THRESHOLD = 15000; // 15 seconds in milliseconds (can be changed in settings)
+let lastBackendGpsTime = null; // Track when we last received valid backend GPS
+let backendGpsUnavailableStartTime = null; // Track when backend GPS first became unavailable
+const BACKEND_GPS_FALLBACK_DELAY = 30000; // Wait 30 seconds before falling back to browser GPS (only as true fallback)
 
 // Map layers (global references)
 let osmLayer;
@@ -162,12 +167,22 @@ function connectWebSocket() {
 
         // Backend GPS has priority - always use it if valid
         if (data.gps && data.gps.lat !== 0 && data.gps.lon !== 0) {
-            gpsSource = "backend";
+            lastBackendGpsTime = Date.now();
+            backendGpsUnavailableStartTime = null; // Reset unavailable timer
+            if (gpsSource !== "backend") {
+                gpsSource = "backend";
+                updateGpsSourceIndicator();
+            }
             updateBoatPosition(data.gps);
-            updateGpsSourceIndicator();
         } else {
-            // Backend GPS invalid or missing - clear backend source
-            if (gpsSource === "backend") {
+            // Backend GPS invalid or missing
+            // Start tracking how long it's been unavailable
+            if (backendGpsUnavailableStartTime === null) {
+                backendGpsUnavailableStartTime = Date.now();
+            }
+
+            // Only clear source after 5 seconds of no valid data
+            if (gpsSource === "backend" && lastBackendGpsTime && (Date.now() - lastBackendGpsTime) > 5000) {
                 gpsSource = null;
                 updateGpsSourceIndicator();
             }
@@ -193,8 +208,12 @@ function updateSensorDisplay(data) {
 
     // Speed
     if (data.speed !== undefined) {
+        const speedFormatted = typeof formatSpeed === 'function'
+            ? formatSpeed(data.speed)
+            : `${data.speed.toFixed(1)} kn`;
+        const parts = speedFormatted.split(' ');
         document.getElementById('speed').innerHTML =
-            `${data.speed.toFixed(1)}<span class="tile-unit">kn</span>`;
+            `${parts[0]}<span class="tile-unit">${parts.slice(1).join(' ')}</span>`;
     }
 
     // Heading (use GPS course if available, otherwise use heading)
@@ -209,14 +228,22 @@ function updateSensorDisplay(data) {
 
     // Depth
     if (data.depth !== undefined) {
+        const depthFormatted = typeof formatDepth === 'function'
+            ? formatDepth(data.depth)
+            : `${data.depth.toFixed(1)} m`;
+        const parts = depthFormatted.split(' ');
         document.getElementById('depth').innerHTML =
-            `${data.depth.toFixed(1)}<span class="tile-unit">m</span>`;
+            `${parts[0]}<span class="tile-unit">${parts.slice(1).join(' ')}</span>`;
     }
 
     // Wind
     if (data.wind && data.wind.speed !== undefined) {
+        const windFormatted = typeof formatSpeed === 'function'
+            ? formatSpeed(data.wind.speed)
+            : `${data.wind.speed.toFixed(0)} kn`;
+        const parts = windFormatted.split(' ');
         document.getElementById('wind').innerHTML =
-            `${data.wind.speed.toFixed(0)}<span class="tile-unit">kn</span>`;
+            `${parts[0]}<span class="tile-unit">${parts.slice(1).join(' ')}</span>`;
     }
 
     // GPS Info (satellites, altitude)
@@ -226,18 +253,38 @@ function updateSensorDisplay(data) {
 }
 
 function updateGpsInfo(gps) {
-    // Satellites indicator
+    const gpsStatus = document.getElementById('gps-status');
+
+    // Satellites indicator with time delay for low satellite count
+    // Only use satellite-based logic if we have satellite data (backend GPS)
     if (gps.satellites !== undefined) {
-        const gpsStatus = document.getElementById('gps-status');
         const satCount = gps.satellites;
+        const now = Date.now();
 
         if (satCount >= 4) {
+            // Good satellite count - immediately show connected
             gpsStatus.classList.add('connected');
             gpsStatus.title = `GPS: ${satCount} Satelliten`;
+            // Reset low satellite timer
+            lowSatelliteStartTime = null;
         } else {
-            gpsStatus.classList.remove('connected');
+            // Low satellite count - only remove 'connected' after threshold time
+            if (lowSatelliteStartTime === null) {
+                // First time below 4 satellites - start timer
+                lowSatelliteStartTime = now;
+            } else if (now - lowSatelliteStartTime >= LOW_SATELLITE_THRESHOLD) {
+                // Below 4 satellites for more than threshold time - show disconnected
+                gpsStatus.classList.remove('connected');
+            }
+            // Always update title to show current count
             gpsStatus.title = `GPS: ${satCount} Satelliten (kein Fix)`;
         }
+    } else if (gpsSource === "browser") {
+        // Browser GPS - no satellite data available
+        // Assume connected if we're receiving browser GPS data
+        gpsStatus.classList.add('connected');
+        gpsStatus.title = `GPS: Browser/Phone`;
+        lowSatelliteStartTime = null; // Reset timer for browser GPS
     }
 
     // Update GPS detail info if panel exists
@@ -255,14 +302,19 @@ function updateGpsInfo(gps) {
 
         // Position
         if (gps.lat !== undefined && gps.lon !== undefined) {
-            document.getElementById('gps-position').textContent =
-                `${gps.lat.toFixed(6)}, ${gps.lon.toFixed(6)}`;
+            const posFormatted = typeof formatCoordinates === 'function'
+                ? formatCoordinates(gps.lat, gps.lon)
+                : `${gps.lat.toFixed(6)}, ${gps.lon.toFixed(6)}`;
+            document.getElementById('gps-position').textContent = posFormatted;
         }
 
         // Speed
         const speedEl = document.getElementById('gps-speed');
         if (speedEl && gps.speed !== undefined) {
-            speedEl.textContent = `${gps.speed.toFixed(1)} kn`;
+            const speedFormatted = typeof formatSpeed === 'function'
+                ? formatSpeed(gps.speed)
+                : `${gps.speed.toFixed(1)} kn`;
+            speedEl.textContent = speedFormatted;
         }
 
         // Heading
@@ -415,8 +467,8 @@ function updateBoatPosition(gps) {
             updateCompassRose(gps.heading);
         }
 
-        // GPS Status
-        document.getElementById('gps-status').classList.add('connected');
+        // GPS Status is now handled by updateGpsInfo() based on satellite count
+        // Don't override it here
 
         // Karte folgt Boot wenn auto-follow aktiv
         if (autoFollow) {
@@ -651,11 +703,16 @@ function drawDirectRoute() {
         const midLat = (from.lat + to.lat) / 2;
         const midLng = (from.lng + to.lng) / 2;
 
+        // Format segment distance with units
+        const segmentDistFormatted = typeof formatDistance === 'function'
+            ? formatDistance(segmentDistance)
+            : `${(segmentDistance / 1852).toFixed(2)} NM`;
+
         L.marker([midLat, midLng], {
             icon: L.divIcon({
                 className: 'route-label',
                 html: '<div style="background: rgba(52, 152, 219, 0.95); color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; white-space: nowrap; box-shadow: 0 3px 6px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.3);">' +
-                    (segmentDistance / 1852).toFixed(2) + ' NM<br>' +
+                    segmentDistFormatted + '<br>' +
                     Math.round(bearing) + '°' +
                     '</div>',
                 iconSize: [90, 35],
@@ -701,6 +758,11 @@ function showRouteInfo(totalNM, hours, minutes, segments, isDirect, isWaterway) 
     const routeTitle = isWaterway ? 'Route (Wasserwege)' : 'Route (Rhumbline)';
     const routeDesc = isWaterway ? '✓ Route folgt Wasserwegen aus ENC-Karten' : 'ℹ️ Direkte Kurslinien zwischen Wegpunkten';
 
+    // Format total distance with units
+    const totalDistFormatted = typeof formatDistance === 'function'
+        ? formatDistance(parseFloat(totalNM) * 1852)  // Convert NM to meters first
+        : `${totalNM} NM`;
+
     const panel = document.createElement('div');
     panel.id = 'route-info-panel';
     panel.style.cssText = 'position: absolute; bottom: 80px; left: 20px; background: rgba(10, 14, 39, 0.95); backdrop-filter: blur(10px); border: 2px solid ' + routeColor + '; border-radius: 12px; padding: 15px; z-index: 1001; min-width: 300px; max-width: 350px; color: white; font-size: 14px;';
@@ -713,16 +775,20 @@ function showRouteInfo(totalNM, hours, minutes, segments, isDirect, isWaterway) 
         routeDesc +
         '</div>' +
         '<div style="background: rgba(42, 82, 152, 0.2); padding: 10px; border-radius: 8px; margin-bottom: 10px;">' +
-        '<div style="font-size: 24px; font-weight: 700; color: #64ffda;">' + totalNM + ' NM</div>' +
+        '<div style="font-size: 24px; font-weight: 700; color: #64ffda;">' + totalDistFormatted + '</div>' +
         '<div style="font-size: 12px; color: #8892b0;">ETA: ' + hours + 'h ' + minutes + 'min @ 5kn</div>' +
         '</div>' +
         '<div style="max-height: 200px; overflow-y: auto;">' +
-        segments.map(s =>
-            '<div style="background: rgba(42, 82, 152, 0.15); padding: 8px; border-radius: 6px; margin-bottom: 5px; font-size: 12px;">' +
-            '<div style="color: #64ffda; font-weight: 600;">' + s.from + ' → ' + s.to + '</div>' +
-            '<div style="color: #8892b0; margin-top: 3px;">' + s.distance + ' NM • ' + s.bearing + '°</div>' +
-            '</div>'
-        ).join('') +
+        segments.map(s => {
+            // Format segment distance with units
+            const segDistFormatted = typeof formatDistance === 'function'
+                ? formatDistance(parseFloat(s.distance) * 1852)  // Convert NM to meters first
+                : `${s.distance} NM`;
+            return '<div style="background: rgba(42, 82, 152, 0.15); padding: 8px; border-radius: 6px; margin-bottom: 5px; font-size: 12px;">' +
+                '<div style="color: #64ffda; font-weight: 600;">' + s.from + ' → ' + s.to + '</div>' +
+                '<div style="color: #8892b0; margin-top: 3px;">' + segDistFormatted + ' • ' + s.bearing + '°</div>' +
+                '</div>';
+        }).join('') +
         '</div>';
 
     document.getElementById('map-container').appendChild(panel);
@@ -852,25 +918,50 @@ function updateWeatherPanel() {
 
     const current = weatherData.current;
 
-    // Current Weather Details
-    document.getElementById('weather-panel-temp').textContent = `${current.temp.toFixed(1)}°C`;
-    document.getElementById('weather-panel-feels').textContent = `${current.feels_like.toFixed(1)}°C`;
+    // Current Weather Details with unit formatting
+    const tempFormatted = typeof formatTemperature === 'function'
+        ? formatTemperature(current.temp)
+        : `${current.temp.toFixed(1)}°C`;
+    const feelsFormatted = typeof formatTemperature === 'function'
+        ? formatTemperature(current.feels_like)
+        : `${current.feels_like.toFixed(1)}°C`;
+    const windFormatted = typeof formatSpeed === 'function'
+        ? formatSpeed(current.wind_speed)
+        : `${current.wind_speed.toFixed(1)} kn`;
+    const pressureFormatted = typeof formatPressure === 'function'
+        ? formatPressure(current.pressure)
+        : `${current.pressure} hPa`;
+    const visibilityFormatted = typeof formatDistance === 'function'
+        ? formatDistance(current.visibility * 1852) // Convert NM to meters first
+        : `${current.visibility.toFixed(1)} NM`;
+
+    document.getElementById('weather-panel-temp').textContent = tempFormatted;
+    document.getElementById('weather-panel-feels').textContent = feelsFormatted;
     document.getElementById('weather-panel-desc').textContent = current.description;
-    document.getElementById('weather-panel-wind').textContent = `${current.wind_speed.toFixed(1)} kn`;
-    document.getElementById('weather-panel-pressure').textContent = `${current.pressure} hPa`;
+    document.getElementById('weather-panel-wind').textContent = windFormatted;
+    document.getElementById('weather-panel-pressure').textContent = pressureFormatted;
     document.getElementById('weather-panel-humidity').textContent = `${current.humidity}%`;
-    document.getElementById('weather-panel-visibility').textContent = `${current.visibility.toFixed(1)} NM`;
+    document.getElementById('weather-panel-visibility').textContent = visibilityFormatted;
     document.getElementById('weather-panel-clouds').textContent = `${current.clouds}%`;
 
-    // Forecast
-    const forecastHtml = weatherData.forecast.map(f => `
-        <div class="forecast-item">
-            <div class="forecast-date">${f.date}</div>
-            <img src="https://openweathermap.org/img/wn/${f.icon}.png" alt="${f.description}" style="width:50px">
-            <div class="forecast-temp">${f.temp.toFixed(1)}°C</div>
-            <div class="forecast-wind">${f.wind_speed.toFixed(0)} kn</div>
-        </div>
-    `).join('');
+    // Forecast with unit formatting
+    const forecastHtml = weatherData.forecast.map(f => {
+        const fTempFormatted = typeof formatTemperature === 'function'
+            ? formatTemperature(f.temp)
+            : `${f.temp.toFixed(1)}°C`;
+        const fWindFormatted = typeof formatSpeed === 'function'
+            ? formatSpeed(f.wind_speed)
+            : `${f.wind_speed.toFixed(0)} kn`;
+
+        return `
+            <div class="forecast-item">
+                <div class="forecast-date">${f.date}</div>
+                <img src="https://openweathermap.org/img/wn/${f.icon}.png" alt="${f.description}" style="width:50px">
+                <div class="forecast-temp">${fTempFormatted}</div>
+                <div class="forecast-wind">${fWindFormatted}</div>
+            </div>
+        `;
+    }).join('');
 
     document.getElementById('weather-forecast').innerHTML = forecastHtml;
 }
@@ -1092,6 +1183,12 @@ window.addEventListener('load', () => {
         updateWaterLevelSettings(settings.waterLevel);
     }
 
+    // Apply GPS threshold setting
+    if (settings.gps && settings.gps.lowSatelliteThreshold) {
+        LOW_SATELLITE_THRESHOLD = settings.gps.lowSatelliteThreshold * 1000; // Convert seconds to milliseconds
+        console.log(`📡 GPS low satellite threshold set to ${settings.gps.lowSatelliteThreshold}s`);
+    }
+
     // Weather laden und alle 30min aktualisieren
     fetchWeather();
     setInterval(fetchWeather, 1800000); // 30 min
@@ -1112,19 +1209,33 @@ window.addEventListener('load', () => {
                     console.log('✅ Centered map on browser location');
                 }
 
-                // Only use browser GPS as fallback when backend GPS is not available
+                // Only use browser GPS as fallback when backend GPS has been unavailable for enough time
                 if (gpsSource !== "backend") {
-                    gpsSource = 'browser';
-                    updateBoatPosition({
-                        lat: position.coords.latitude,
-                        lon: position.coords.longitude,
-                        speed: position.coords.speed ? position.coords.speed * 1.94384 : 0, // m/s to knots
-                        heading: position.coords.heading || 0
-                    });
+                    // Check if backend GPS has been unavailable long enough
+                    const backendUnavailableDuration = backendGpsUnavailableStartTime
+                        ? (Date.now() - backendGpsUnavailableStartTime)
+                        : 0;
 
-                    // Update GPS source indicator
-                    updateGpsSourceIndicator();
+                    // Only switch to browser GPS after the fallback delay
+                    // AND only if backend GPS was seen before (backendGpsUnavailableStartTime is set)
+                    if (backendGpsUnavailableStartTime !== null && backendUnavailableDuration >= BACKEND_GPS_FALLBACK_DELAY) {
+                        if (gpsSource !== 'browser') {
+                            gpsSource = 'browser';
+                            updateGpsSourceIndicator();
+                            console.log('⚠️ Switching to browser GPS fallback (backend unavailable for ' + Math.round(backendUnavailableDuration / 1000) + 's)');
+                        }
+                        const browserGps = {
+                            lat: position.coords.latitude,
+                            lon: position.coords.longitude,
+                            speed: position.coords.speed ? position.coords.speed * 1.94384 : 0, // m/s to knots
+                            heading: position.coords.heading || 0
+                        };
+                        updateBoatPosition(browserGps);
+                        updateGpsInfo(browserGps); // Update GPS status for browser GPS
+                    }
+                    // Otherwise: Don't use browser GPS at all - wait for backend GPS
                 }
+                // If backend GPS is active, don't override GPS status with browser GPS
                 // If backend GPS was available before, it will take over again automatically
             },
             (error) => {
@@ -1151,21 +1262,20 @@ function updateGpsSourceIndicator() {
     const gpsStatus = document.getElementById("gps-status");
     const gpsSourceEl = document.getElementById("gps-source");
     const gpsAccuracyEl = document.getElementById("gps-accuracy");
-    
+
+    // Don't override background - let updateGpsInfo() handle it via 'connected' class
+    // Only update the icon/emoji based on GPS source
     if (gpsSource === "backend") {
-        gpsStatus.style.background = "rgba(46, 213, 115, 0.3)";
         gpsStatus.textContent = "GPS 📡";
         if (gpsSourceEl) gpsSourceEl.textContent = "Backend Module";
         if (gpsAccuracyEl) gpsAccuracyEl.textContent = "High";
     } else if (gpsSource === "browser") {
-        gpsStatus.style.background = "rgba(52, 152, 219, 0.3)";
         gpsStatus.textContent = "GPS 📱";
         if (gpsSourceEl) gpsSourceEl.textContent = "Browser/Phone";
         if (gpsAccuracyEl && browserGpsAccuracy) {
             gpsAccuracyEl.textContent = Math.round(browserGpsAccuracy) + " m";
         }
     } else {
-        gpsStatus.style.background = "rgba(231, 76, 60, 0.3)";
         gpsStatus.textContent = "GPS ❌";
         if (gpsSourceEl) gpsSourceEl.textContent = "No Signal";
         if (gpsAccuracyEl) gpsAccuracyEl.textContent = "-- m";
