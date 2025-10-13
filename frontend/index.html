@@ -12,8 +12,24 @@
         #app { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; }
 
         /* Header - Simple, no charts button */
-        #header { background: linear-gradient(135deg, #1e3c72, #2a5298); padding: 15px 20px; display: flex; justify-content: flex-start; align-items: center; }
-        #header h1 { font-size: 28px; margin: 0; flex: 1; }
+        #header { background: linear-gradient(135deg, #1e3c72, #2a5298); padding: 15px 20px; display: flex; justify-content: flex-start; align-items: center; gap: 15px; }
+        #header h1 { font-size: 28px; margin: 0; }
+
+        /* Search Box */
+        #search-container { position: relative; flex: 1; max-width: 400px; }
+        #search-input { width: 100%; padding: 10px 40px 10px 15px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); border-radius: 25px; color: #fff; font-size: 14px; transition: all 0.3s; }
+        #search-input:focus { outline: none; border-color: #64ffda; background: rgba(255,255,255,0.15); }
+        #search-input::placeholder { color: rgba(255,255,255,0.5); }
+        #search-btn { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); background: rgba(100, 255, 218, 0.2); border: none; color: #64ffda; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; font-size: 18px; transition: all 0.3s; display: flex; align-items: center; justify-content: center; }
+        #search-btn:hover { background: rgba(100, 255, 218, 0.3); }
+        #search-results { position: absolute; top: 100%; left: 0; right: 0; margin-top: 5px; background: rgba(10, 14, 39, 0.98); border: 2px solid rgba(42, 82, 152, 0.6); border-radius: 12px; max-height: 400px; overflow-y: auto; z-index: 10001; display: none; backdrop-filter: blur(10px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+        .search-result-item { padding: 12px 15px; cursor: pointer; border-bottom: 1px solid rgba(42, 82, 152, 0.3); transition: all 0.2s; }
+        .search-result-item:last-child { border-bottom: none; }
+        .search-result-item:hover { background: rgba(42, 82, 152, 0.3); }
+        .search-result-name { color: #64ffda; font-weight: 600; margin-bottom: 3px; }
+        .search-result-details { color: #8892b0; font-size: 12px; }
+        .search-no-results { padding: 20px; text-align: center; color: #8892b0; }
+
         #status { display: flex; gap: 15px; font-size: 14px; }
         .status-item { background: rgba(255,255,255,0.1); padding: 5px 12px; border-radius: 20px; cursor: pointer; transition: all 0.3s; }
         .status-item:active { transform: scale(0.95); }
@@ -357,8 +373,16 @@
     <div id="app">
         <!-- Header - Simple -->
         <div id="header">
-            <button onclick="openSettingsModal()" style="background: rgba(100, 255, 218, 0.2); border: 2px solid #64ffda; color: #64ffda; font-size: 24px; width: 50px; height: 50px; border-radius: 12px; cursor: pointer; transition: all 0.3s; margin-right: 15px;" title="Einstellungen">⚙️</button>
+            <button onclick="openSettingsModal()" style="background: rgba(100, 255, 218, 0.2); border: 2px solid #64ffda; color: #64ffda; font-size: 24px; width: 50px; height: 50px; border-radius: 12px; cursor: pointer; transition: all 0.3s;" title="Einstellungen">⚙️</button>
             <h1>⚓ BoatOS</h1>
+
+            <!-- Search Box -->
+            <div id="search-container">
+                <input type="text" id="search-input" placeholder="Ort, PLZ oder Koordinaten suchen..." />
+                <button id="search-btn" onclick="performSearch()">🔍</button>
+                <div id="search-results"></div>
+            </div>
+
             <div id="status">
                 <div class="status-item" id="map-view-switch" onclick="toggleMapView()">
                     <span id="current-map-view">🗺️ Karte</span>
@@ -705,6 +729,7 @@
     <script src="charts.js?v=1760345500"></script>
     <script src="units.js?v=1760345500"></script>
     <script src="water_routing.js?v=1760346000"></script>
+    <script src="search.js?v=1760348000"></script>
     <script src="app.js?v=1760345500"></script>
 
     <!-- Include Units Modal -->

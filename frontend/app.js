@@ -144,9 +144,18 @@ function initMap() {
     // Click Handler für Wegpunkte
     map.on('click', onMapClick);
 
-    // Disable auto-follow when user drags map
+    // Disable auto-follow when user manually interacts with map
     map.on('dragstart', () => {
         autoFollow = false;
+        console.log('🔓 Auto-follow deaktiviert (Karte verschoben)');
+    });
+
+    map.on('zoomstart', (e) => {
+        // Only disable auto-follow if zoom was initiated by user (not programmatically)
+        if (e.originalEvent) {
+            autoFollow = false;
+            console.log('🔓 Auto-follow deaktiviert (Zoom geändert)');
+        }
     });
 
     console.log('✅ Map initialized');
