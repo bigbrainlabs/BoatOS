@@ -266,11 +266,25 @@ server {
     client_body_timeout 300s;
     proxy_read_timeout 300s;
 
-    # Frontend
+    # Frontend - NO CACHE for HTML and JS files
     location / {
         root /home/INSTALL_USER_PLACEHOLDER/BoatOS/frontend;
         index index.html;
         try_files $uri $uri/ /index.html;
+
+        # Disable caching for HTML and JavaScript files
+        location ~* \.(html|js)$ {
+            add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0";
+            add_header Pragma "no-cache";
+            add_header Expires "0";
+            etag off;
+        }
+
+        # Cache static assets (images, fonts, etc) for 1 hour
+        location ~* \.(jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot|css)$ {
+            expires 1h;
+            add_header Cache-Control "public, immutable";
+        }
     }
 
     # Backend API
@@ -297,7 +311,7 @@ server {
         proxy_set_header Host $host;
     }
 
-    # Charts directory - CRITICAL: trailing slash prevents matching /charts.js
+    # Charts directory
     location /charts/ {
         alias /home/INSTALL_USER_PLACEHOLDER/BoatOS/data/charts;
         autoindex off;
