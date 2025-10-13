@@ -111,8 +111,8 @@
         #progress-details { font-family: monospace; font-size: 12px; color: #64ffda; max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; white-space: pre-wrap; }
 
         /* Settings Modal */
-        #settings-modal { display: none !important; }
-        #settings-modal.show { display: flex !important; }
+        #settings-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; backdrop-filter: blur(5px); }
+        #settings-modal.show { display: flex !important; justify-content: center; align-items: center; }
         .settings-tabs {
             display: flex;
             gap: 5px;
@@ -421,7 +421,7 @@
             <!-- Weather Details Panel -->
             <div id="weather-panel" class="info-panel">
                 <button class="panel-close" onclick="toggleWeatherPanel()">×</button>
-                <h3>🌦️ Weather Details</h3>
+                <h3 data-i18n="weather_details">🌦️ Weather Details</h3>
                 <div class="info-details">
                     <div class="info-item">
                         <div class="info-label" data-i18n="weather_temperature">Temperature</div>
@@ -456,7 +456,7 @@
                         <div class="info-value" id="weather-panel-clouds">--</div>
                     </div>
                 </div>
-                <h4 style="margin-bottom: 10px; color: #8892b0;">3-Day Forecast</h4>
+                <h4 style="margin-bottom: 10px; color: #8892b0;" data-i18n="weather_forecast_3day">3-Day Forecast</h4>
                 <div class="forecast-container" id="weather-forecast"></div>
             </div>
 
@@ -466,7 +466,7 @@
                     <div class="weather-tile-content">
                         <div>
                             <div class="weather-temp" id="weather-temp">--</div>
-                            <div class="weather-desc" id="weather-desc">Loading...</div>
+                            <div class="weather-desc" id="weather-desc" data-i18n="weather_loading">Loading...</div>
                         </div>
                         <img id="weather-icon" class="weather-icon" src="" alt="Weather">
                     </div>
@@ -481,7 +481,7 @@
         <!-- Infrastructure Details Panel -->
         <div id="infrastructure-details-panel" class="info-panel">
             <button class="panel-close" onclick="closeInfrastructureDetails()">×</button>
-            <h3 id="infrastructure-details-title">🔒 Infrastructure Details</h3>
+            <h3 id="infrastructure-details-title" data-i18n="infrastructure_details">🔒 Infrastructure Details</h3>
             <div class="info-details" id="infrastructure-details-content">
                 <!-- Details will be populated by JavaScript -->
             </div>
@@ -490,58 +490,58 @@
         <!-- AIS Details Panel -->
         <div id="ais-details-panel" class="info-panel">
             <button class="panel-close" onclick="closeAISDetails()">×</button>
-            <h3>🚢 AIS Vessel Details</h3>
+            <h3 data-i18n="ais_vessel_details">🚢 AIS Vessel Details</h3>
             <div class="info-details">
                 <div class="info-item">
-                    <div class="info-label">Name</div>
+                    <div class="info-label" data-i18n="ais_name">Name</div>
                     <div class="info-value" id="ais-name">--</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">MMSI</div>
+                    <div class="info-label" data-i18n="ais_mmsi">MMSI</div>
                     <div class="info-value" id="ais-mmsi">--</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Callsign</div>
+                    <div class="info-label" data-i18n="ais_callsign">Callsign</div>
                     <div class="info-value" id="ais-callsign">--</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Type</div>
+                    <div class="info-label" data-i18n="ais_type">Type</div>
                     <div class="info-value" id="ais-type">--</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Speed</div>
+                    <div class="info-label" data-i18n="ais_speed">Speed</div>
                     <div class="info-value" id="ais-speed">--</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Course (COG)</div>
+                    <div class="info-label" data-i18n="ais_course">Course (COG)</div>
                     <div class="info-value" id="ais-course">--</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Heading</div>
+                    <div class="info-label" data-i18n="ais_heading">Heading</div>
                     <div class="info-value" id="ais-heading">--</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Status</div>
+                    <div class="info-label" data-i18n="ais_status">Status</div>
                     <div class="info-value" id="ais-navstat">--</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Destination</div>
+                    <div class="info-label" data-i18n="ais_destination">Destination</div>
                     <div class="info-value" id="ais-destination">--</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">ETA</div>
+                    <div class="info-label" data-i18n="ais_eta">ETA</div>
                     <div class="info-value" id="ais-eta">--</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Length</div>
+                    <div class="info-label" data-i18n="ais_length">Length</div>
                     <div class="info-value" id="ais-length">--</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Width</div>
+                    <div class="info-label" data-i18n="ais_width">Width</div>
                     <div class="info-value" id="ais-width">--</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Draught</div>
+                    <div class="info-label" data-i18n="ais_draught">Draught</div>
                     <div class="info-value" id="ais-draught">--</div>
                 </div>
             </div>
@@ -560,14 +560,14 @@
     <div id="logbook-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>📓 <span data-i18n="btn_logbook">Logbuch</span></h2>
+                <h2>📓 <span data-i18n="logbook_title">Logbuch</span></h2>
                 <button class="modal-close" onclick="closeLogbook()">×</button>
             </div>
             
             <!-- Tabs -->
             <div class="logbook-tabs">
-                <button class="logbook-tab active" onclick="switchLogbookTab('current')">Aktuelle Fahrt</button>
-                <button class="logbook-tab" onclick="switchLogbookTab('archive')">Vergangene Fahrten</button>
+                <button class="logbook-tab active" onclick="switchLogbookTab('current')" data-i18n="logbook_current_trip">Aktuelle Fahrt</button>
+                <button class="logbook-tab" onclick="switchLogbookTab('archive')" data-i18n="logbook_archive">Vergangene Fahrten</button>
             </div>
             
             <div class="modal-body">
@@ -577,11 +577,11 @@
                         <div class="track-status">
                             <div class="track-info">
                                 <div class="track-stat">
-                                    <div class="track-stat-label">Points</div>
+                                    <div class="track-stat-label" data-i18n="track_points">Points</div>
                                     <div class="track-stat-value" id="track-points">0</div>
                                 </div>
                                 <div class="track-stat">
-                                    <div class="track-stat-label">Distance</div>
+                                    <div class="track-stat-label" data-i18n="track_distance">Distance</div>
                                     <div class="track-stat-value" id="track-distance">0 <span style="font-size:16px">NM</span></div>
                                 </div>
                             </div>
@@ -590,18 +590,18 @@
                             </div>
                         </div>
                         <div class="track-buttons">
-                            <button class="track-btn start" id="btn-track-start" onclick="startTrackRecording()">▶️ Start</button>
-                            <button class="track-btn pause" id="btn-track-pause" onclick="pauseTrackRecording()" disabled>⏸️ Pause</button>
-                            <button class="track-btn resume" id="btn-track-resume" onclick="resumeTrackRecording()" disabled>▶️ Resume</button>
-                            <button class="track-btn stop" id="btn-track-stop" onclick="stopTrackRecording()" disabled>⏹️ Stop</button>
+                            <button class="track-btn start" id="btn-track-start" onclick="startTrackRecording()" data-i18n="track_start">▶️ Start</button>
+                            <button class="track-btn pause" id="btn-track-pause" onclick="pauseTrackRecording()" disabled data-i18n="track_pause">⏸️ Pause</button>
+                            <button class="track-btn resume" id="btn-track-resume" onclick="resumeTrackRecording()" disabled data-i18n="track_resume">▶️ Resume</button>
+                            <button class="track-btn stop" id="btn-track-stop" onclick="stopTrackRecording()" disabled data-i18n="track_stop">⏹️ Stop</button>
                         </div>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h3 style="margin: 0; color: #8892b0;">Logbuch-Einträge</h3>
-                        <button class="track-btn" onclick="openManualEntryModal()" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); padding: 10px 20px;">📝 Neuer Eintrag</button>
+                        <h3 style="margin: 0; color: #8892b0;" data-i18n="logbook_entries">Logbuch-Einträge</h3>
+                        <button class="track-btn" onclick="openManualEntryModal()" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); padding: 10px 20px;" data-i18n="logbook_new_entry">📝 Neuer Eintrag</button>
                     </div>
                     <div class="logbook-entries" id="logbook-entries">
-                        <div class="empty-logbook">Noch keine Logbuch-Einträge</div>
+                        <div class="empty-logbook" data-i18n="logbook_no_entries">Noch keine Logbuch-Einträge</div>
                     </div>
                 </div>
                 
@@ -621,18 +621,18 @@
             <div class="modal-body">
                 <form id="manual-entry-form" onsubmit="event.preventDefault(); submitManualEntry();">
                     <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 8px; color: #8892b0; font-size: 14px;">Notizen</label>
-                        <textarea id="manual-entry-notes" rows="6" style="width: 100%; padding: 12px; background: rgba(42, 82, 152, 0.2); border: 2px solid rgba(42, 82, 152, 0.4); border-radius: 8px; color: white; font-family: sans-serif; font-size: 14px; resize: vertical;" placeholder="Was möchtest du festhalten?"></textarea>
+                        <label style="display: block; margin-bottom: 8px; color: #8892b0; font-size: 14px;" data-i18n="logbook_entry_notes">Notizen</label>
+                        <textarea id="manual-entry-notes" rows="6" style="width: 100%; padding: 12px; background: rgba(42, 82, 152, 0.2); border: 2px solid rgba(42, 82, 152, 0.4); border-radius: 8px; color: white; font-family: sans-serif; font-size: 14px; resize: vertical;" data-i18n-placeholder="logbook_entry_placeholder" placeholder="Was möchtest du festhalten?"></textarea>
                     </div>
                     <div style="margin-bottom: 20px;">
                         <label style="display: flex; align-items: center; gap: 10px; color: #8892b0; cursor: pointer;">
                             <input type="checkbox" id="manual-entry-weather" checked style="width: 20px; height: 20px; cursor: pointer;">
-                            <span>🌡️ Aktuelles Wetter speichern</span>
+                            <span data-i18n="logbook_save_weather">🌡️ Aktuelles Wetter speichern</span>
                         </label>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button type="submit" class="track-btn start" style="flex: 1;">✅ Speichern</button>
-                        <button type="button" class="track-btn stop" onclick="closeManualEntryModal()" style="flex: 1;">❌ Abbrechen</button>
+                        <button type="submit" class="track-btn start" style="flex: 1;" data-i18n="btn_save">✅ Speichern</button>
+                        <button type="button" class="track-btn stop" onclick="closeManualEntryModal()" style="flex: 1;" data-i18n="btn_cancel">❌ Abbrechen</button>
                     </div>
                 </form>
             </div>
@@ -643,7 +643,7 @@
     <div id="trip-details-modal" class="modal">
         <div class="modal-content" style="max-width: 900px;">
             <div class="modal-header">
-                <h2>🚢 <span id="trip-details-title">Trip Details</span></h2>
+                <h2>🚢 <span id="trip-details-title" data-i18n="trip_details">Trip Details</span></h2>
                 <button class="modal-close" onclick="closeTripDetails()">×</button>
             </div>
             <div class="modal-body">
@@ -652,27 +652,27 @@
                     <div class="trip-detail-stat">
                         <div class="trip-detail-icon">📏</div>
                         <div class="trip-detail-value" id="trip-detail-distance">--</div>
-                        <div class="trip-detail-label">Distanz (NM)</div>
+                        <div class="trip-detail-label" data-i18n="trip_distance">Distanz</div>
                     </div>
                     <div class="trip-detail-stat">
                         <div class="trip-detail-icon">⏱️</div>
                         <div class="trip-detail-value" id="trip-detail-duration">--</div>
-                        <div class="trip-detail-label">Dauer</div>
+                        <div class="trip-detail-label" data-i18n="trip_duration">Dauer</div>
                     </div>
                     <div class="trip-detail-stat">
                         <div class="trip-detail-icon">📊</div>
                         <div class="trip-detail-value" id="trip-detail-points">--</div>
-                        <div class="trip-detail-label">Track-Punkte</div>
+                        <div class="trip-detail-label" data-i18n="trip_track_points">Track-Punkte</div>
                     </div>
                     <div class="trip-detail-stat">
                         <div class="trip-detail-icon">📝</div>
                         <div class="trip-detail-value" id="trip-detail-entries">--</div>
-                        <div class="trip-detail-label">Einträge</div>
+                        <div class="trip-detail-label" data-i18n="trip_entries">Einträge</div>
                     </div>
                 </div>
 
                 <!-- Trip Timeline -->
-                <h3 style="margin: 20px 0 15px 0; color: #8892b0;">Timeline</h3>
+                <h3 style="margin: 20px 0 15px 0; color: #8892b0;" data-i18n="trip_timeline">Timeline</h3>
                 <div class="trip-details-timeline" id="trip-details-timeline">
                     <!-- Timeline entries will be inserted here -->
                 </div>
@@ -685,27 +685,27 @@
     <!-- Chart Progress Modal -->
     <div id="chart-progress-modal">
         <div class="progress-content">
-            <h2 style="margin-bottom: 20px; color: #64ffda; text-align: center;" id="progress-title">📊 Verarbeite Karten...</h2>
+            <h2 style="margin-bottom: 20px; color: #64ffda; text-align: center;" id="progress-title" data-i18n="charts_processing">📊 Verarbeite Karten...</h2>
             <div style="background: rgba(10, 14, 39, 0.6); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-                <div id="progress-status" style="color: #8892b0; margin-bottom: 15px; font-size: 14px; min-height: 20px;">Initialisiere...</div>
+                <div id="progress-status" style="color: #8892b0; margin-bottom: 15px; font-size: 14px; min-height: 20px;" data-i18n="charts_initializing">Initialisiere...</div>
                 <div class="progress-bar-container">
                     <div id="progress-bar">0%</div>
                 </div>
                 <div id="progress-details"></div>
             </div>
-            <button id="progress-close-btn" onclick="closeProgressModal()" style="display: none; width: 100%; background: linear-gradient(135deg, #2ecc71, #27ae60); border: none; color: white; padding: 12px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer;">✅ Fertig</button>
+            <button id="progress-close-btn" onclick="closeProgressModal()" style="display: none; width: 100%; background: linear-gradient(135deg, #2ecc71, #27ae60); border: none; color: white; padding: 12px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer;" data-i18n="btn_done">✅ Fertig</button>
         </div>
     </div>
 
     <!-- JavaScript Includes -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="i18n.js?v=1760007000"></script>
-    <script src="settings.js?v=1760005231"></script>
-    <script src="logbook.js"></script>
-    <script src="charts.js?v=1760007500"></script>
-    <script src="units.js"></script>
-    <script src="water_routing.js"></script>
-    <script src="app.js?v=1760003498"></script>
+    <script src="i18n.js?v=1760348000"></script>
+    <script src="settings.js?v=1760347000"></script>
+    <script src="logbook.js?v=1760346500"></script>
+    <script src="charts.js?v=1760345500"></script>
+    <script src="units.js?v=1760345500"></script>
+    <script src="water_routing.js?v=1760346000"></script>
+    <script src="app.js?v=1760345500"></script>
 
     <!-- Include Units Modal -->
     <script>
@@ -718,21 +718,21 @@
     <div id="settings-modal" class="modal">
         <div class="modal-content" style="max-width: 900px;">
             <div class="modal-header">
-                <h2>⚙️ Einstellungen</h2>
+                <h2 data-i18n="settings_title">⚙️ Einstellungen</h2>
                 <button class="modal-close" onclick="closeSettingsModal()">×</button>
             </div>
             <div class="modal-body">
                 <!-- Settings Tabs -->
                 <div class="settings-tabs">
-                    <button class="settings-tab active" onclick="switchSettingsTab('general')">Allgemein</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('charts')">Karten</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('navigation')">Navigation</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('gps')">GPS</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('weather')">Wetter</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('sensors')">Sensoren</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('ais')">AIS</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('routing')">Routing</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('data')">Daten</button>
+                    <button class="settings-tab active" onclick="switchSettingsTab('general')" data-i18n="settings_general">Allgemein</button>
+                    <button class="settings-tab" onclick="switchSettingsTab('charts')" data-i18n="settings_charts">Karten</button>
+                    <button class="settings-tab" onclick="switchSettingsTab('navigation')" data-i18n="settings_navigation">Navigation</button>
+                    <button class="settings-tab" onclick="switchSettingsTab('gps')" data-i18n="settings_gps">GPS</button>
+                    <button class="settings-tab" onclick="switchSettingsTab('weather')" data-i18n="settings_weather">Wetter</button>
+                    <button class="settings-tab" onclick="switchSettingsTab('sensors')" data-i18n="settings_sensors">Sensoren</button>
+                    <button class="settings-tab" onclick="switchSettingsTab('ais')" data-i18n="settings_ais">AIS</button>
+                    <button class="settings-tab" onclick="switchSettingsTab('routing')" data-i18n="settings_routing">Routing</button>
+                    <button class="settings-tab" onclick="switchSettingsTab('data')" data-i18n="settings_data">Daten</button>
                 </div>
 
                 <!-- Tab Content -->
@@ -740,10 +740,10 @@
                     
                     <!-- General Tab -->
                     <div id="settings-general" class="settings-tab-content active">
-                        <h3>Allgemeine Einstellungen</h3>
-                        
+                        <h3 data-i18n="general_settings">Allgemeine Einstellungen</h3>
+
                         <div class="setting-item">
-                            <label>Sprache / Language</label>
+                            <label data-i18n="setting_language">Sprache / Language</label>
                             <select id="setting-language">
                                 <option value="de">🇩🇪 Deutsch</option>
                                 <option value="en">🇬🇧 English</option>
@@ -751,21 +751,81 @@
                         </div>
 
                         <div class="setting-item">
-                            <label>Theme</label>
+                            <label data-i18n="setting_theme">Theme</label>
                             <select id="setting-theme">
-                                <option value="auto">Automatisch (System)</option>
-                                <option value="light">Hell</option>
-                                <option value="dark">Dunkel</option>
-                                <option value="night">Nacht (Rot)</option>
+                                <option value="auto" data-i18n="theme_auto">Automatisch (System)</option>
+                                <option value="light" data-i18n="theme_light">Hell</option>
+                                <option value="dark" data-i18n="theme_dark">Dunkel</option>
+                                <option value="night" data-i18n="theme_night">Nacht (Rot)</option>
                             </select>
                         </div>
 
+                        <h3 style="margin-top: 25px; margin-bottom: 15px; color: #8892b0;" data-i18n="units_title">📏 Einheiten</h3>
+
                         <div class="setting-item">
-                            <label>Geschwindigkeits-Einheit</label>
+                            <label data-i18n="unit_speed">Geschwindigkeit</label>
                             <select id="setting-speed-unit">
                                 <option value="kn">Knoten (kn)</option>
                                 <option value="kmh">km/h</option>
                                 <option value="mph">mph</option>
+                                <option value="ms">m/s</option>
+                            </select>
+                        </div>
+
+                        <div class="setting-item">
+                            <label data-i18n="unit_distance">Distanz / Entfernung</label>
+                            <select id="setting-distance-unit">
+                                <option value="nm">Nautische Meilen (NM)</option>
+                                <option value="km">Kilometer (km)</option>
+                                <option value="mi">Meilen (mi)</option>
+                                <option value="m">Meter (m)</option>
+                            </select>
+                        </div>
+
+                        <div class="setting-item">
+                            <label data-i18n="unit_depth">Tiefe</label>
+                            <select id="setting-depth-unit">
+                                <option value="m">Meter (m)</option>
+                                <option value="ft">Fuß (ft)</option>
+                                <option value="fathom">Faden (fathom)</option>
+                            </select>
+                        </div>
+
+                        <div class="setting-item">
+                            <label data-i18n="unit_temperature">Temperatur</label>
+                            <select id="setting-temperature-unit">
+                                <option value="c">Celsius (°C)</option>
+                                <option value="f">Fahrenheit (°F)</option>
+                            </select>
+                        </div>
+
+                        <div class="setting-item">
+                            <label data-i18n="unit_pressure">Luftdruck</label>
+                            <select id="setting-pressure-unit">
+                                <option value="hpa">Hektopascal (hPa)</option>
+                                <option value="mbar">Millibar (mbar)</option>
+                                <option value="inhg">Inches Mercury (inHg)</option>
+                            </select>
+                        </div>
+
+                        <h3 style="margin-top: 25px; margin-bottom: 15px; color: #8892b0;" data-i18n="formats_title">🌍 Formate</h3>
+
+                        <div class="setting-item">
+                            <label data-i18n="format_coordinates">Koordinaten-Format</label>
+                            <select id="setting-coordinate-format">
+                                <option value="decimal">Dezimalgrad (51.616202, 12.487243)</option>
+                                <option value="dm">Grad/Minuten (51° 36.972', 12° 29.234')</option>
+                                <option value="dms">Grad/Minuten/Sekunden (51° 36' 58.3", 12° 29' 14.0")</option>
+                            </select>
+                        </div>
+
+                        <div class="setting-item">
+                            <label data-i18n="format_date">Datumsformat</label>
+                            <select id="setting-date-format">
+                                <option value="dd.mm.yyyy">DD.MM.YYYY (31.12.2025)</option>
+                                <option value="mm/dd/yyyy">MM/DD/YYYY (12/31/2025)</option>
+                                <option value="yyyy-mm-dd">YYYY-MM-DD (2025-12-31)</option>
+                                <option value="iso">ISO 8601 (2025-12-31T23:59:59)</option>
                             </select>
                         </div>
                     </div>
@@ -891,10 +951,16 @@
                     <!-- GPS Tab -->
                     <div id="settings-gps" class="settings-tab-content">
                         <h3>GPS-Einstellungen</h3>
-                        
+
                         <div class="setting-item">
                             <label>SignalK Server URL</label>
                             <input type="text" id="setting-signalk-url" value="http://localhost:3000">
+                        </div>
+
+                        <div class="setting-item">
+                            <label>GPS-Status Wartezeit bei wenig Satelliten (Sekunden)</label>
+                            <input type="number" id="setting-low-satellite-threshold" min="5" max="60" value="15" step="5">
+                            <small>Zeit, die weniger als 4 Satelliten empfangen werden müssen, bevor der GPS-Status auf "nicht verbunden" wechselt (verhindert Blinken)</small>
                         </div>
                     </div>
 

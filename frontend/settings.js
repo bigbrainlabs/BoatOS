@@ -7,7 +7,11 @@ const defaultSettings = {
         theme: 'auto',
         speedUnit: 'kn',
         distanceUnit: 'nm',
-        depthUnit: 'm'
+        depthUnit: 'm',
+        temperatureUnit: 'c',
+        pressureUnit: 'hpa',
+        coordinateFormat: 'decimal',
+        dateFormat: 'dd.mm.yyyy'
     },
     navigation: {
         mapOrientation: 'north-up',
@@ -21,7 +25,8 @@ const defaultSettings = {
         signalkUrl: 'http://localhost:3000',
         gpsInterval: 1000,
         gpsFilter: true,
-        minSatellites: 4
+        minSatellites: 4,
+        lowSatelliteThreshold: 15
     },
     weather: {
         apiKey: '',
@@ -104,7 +109,19 @@ function openSettingsModal() {
     const stored = localStorage.getItem('boatos_settings');
     if (stored) {
         try {
-            currentSettings = { ...defaultSettings, ...JSON.parse(stored) };
+            const storedSettings = JSON.parse(stored);
+            // Deep merge: merge each section individually to preserve new fields in defaultSettings
+            currentSettings = {
+                general: { ...defaultSettings.general, ...storedSettings.general },
+                navigation: { ...defaultSettings.navigation, ...storedSettings.navigation },
+                gps: { ...defaultSettings.gps, ...storedSettings.gps },
+                weather: { ...defaultSettings.weather, ...storedSettings.weather },
+                sensors: { ...defaultSettings.sensors, ...storedSettings.sensors },
+                ais: { ...defaultSettings.ais, ...storedSettings.ais },
+                infrastructure: { ...defaultSettings.infrastructure, ...storedSettings.infrastructure },
+                waterLevel: { ...defaultSettings.waterLevel, ...storedSettings.waterLevel },
+                routing: { ...defaultSettings.routing, ...storedSettings.routing }
+            };
             console.log('📂 Settings loaded from localStorage:', currentSettings);
         } catch (e) {
             console.error('Error parsing stored settings:', e);
@@ -176,6 +193,26 @@ function loadSettingsToForm() {
     document.getElementById('setting-theme').value = currentSettings.general.theme || 'auto';
     document.getElementById('setting-speed-unit').value = currentSettings.general.speedUnit || 'kn';
 
+    // Units (with safe checks)
+    if (document.getElementById('setting-distance-unit')) {
+        document.getElementById('setting-distance-unit').value = currentSettings.general.distanceUnit || 'nm';
+    }
+    if (document.getElementById('setting-depth-unit')) {
+        document.getElementById('setting-depth-unit').value = currentSettings.general.depthUnit || 'm';
+    }
+    if (document.getElementById('setting-temperature-unit')) {
+        document.getElementById('setting-temperature-unit').value = currentSettings.general.temperatureUnit || 'c';
+    }
+    if (document.getElementById('setting-pressure-unit')) {
+        document.getElementById('setting-pressure-unit').value = currentSettings.general.pressureUnit || 'hpa';
+    }
+    if (document.getElementById('setting-coordinate-format')) {
+        document.getElementById('setting-coordinate-format').value = currentSettings.general.coordinateFormat || 'decimal';
+    }
+    if (document.getElementById('setting-date-format')) {
+        document.getElementById('setting-date-format').value = currentSettings.general.dateFormat || 'dd.mm.yyyy';
+    }
+
     // Navigation
     if (document.getElementById('setting-map-orientation')) {
         document.getElementById('setting-map-orientation').value = currentSettings.navigation.mapOrientation || 'north-up';
@@ -190,6 +227,9 @@ function loadSettingsToForm() {
     // GPS
     if (document.getElementById('setting-signalk-url')) {
         document.getElementById('setting-signalk-url').value = currentSettings.gps.signalkUrl || 'http://localhost:3000';
+    }
+    if (document.getElementById('setting-low-satellite-threshold')) {
+        document.getElementById('setting-low-satellite-threshold').value = currentSettings.gps.lowSatelliteThreshold || 15;
     }
 
     // Weather
@@ -269,8 +309,12 @@ function saveSettings() {
             language: getValue('setting-language', 'de'),
             theme: getValue('setting-theme', 'auto'),
             speedUnit: getValue('setting-speed-unit', 'kn'),
-            distanceUnit: currentSettings.general.distanceUnit,
-            depthUnit: currentSettings.general.depthUnit
+            distanceUnit: getValue('setting-distance-unit', 'nm'),
+            depthUnit: getValue('setting-depth-unit', 'm'),
+            temperatureUnit: getValue('setting-temperature-unit', 'c'),
+            pressureUnit: getValue('setting-pressure-unit', 'hpa'),
+            coordinateFormat: getValue('setting-coordinate-format', 'decimal'),
+            dateFormat: getValue('setting-date-format', 'dd.mm.yyyy')
         },
         navigation: {
             mapOrientation: getValue('setting-map-orientation', 'north-up'),
@@ -284,7 +328,8 @@ function saveSettings() {
             signalkUrl: getValue('setting-signalk-url', 'http://localhost:3000'),
             gpsInterval: 1000,
             gpsFilter: true,
-            minSatellites: 4
+            minSatellites: 4,
+            lowSatelliteThreshold: parseInt(getValue('setting-low-satellite-threshold', '15'))
         },
         weather: {
             apiKey: '',
@@ -355,20 +400,22 @@ function saveSettings() {
 // Apply settings (update app behavior)
 function applySettings() {
     // Apply language
-    if (currentSettings.general.language !== currentLang) {
-        setLanguage(currentSettings.general.language);
+    if (typeof currentLang !== 'undefined' && currentSettings.general.language !== currentLang) {
+        if (typeof setLanguage === 'function') {
+            setLanguage(currentSettings.general.language);
+        }
     }
 
     // Apply theme
     applyTheme(currentSettings.general.theme);
 
     // Apply track history visibility (only if map is initialized)
-    if (typeof map !== 'undefined' && typeof toggleTrackHistory === 'function') {
+    if (typeof map !== 'undefined' && map && typeof toggleTrackHistory === 'function') {
         toggleTrackHistory(currentSettings.navigation.showTrackHistory);
     }
 
     // Apply compass rose visibility (only if map is initialized)
-    if (typeof map !== 'undefined' && typeof toggleCompassRose === 'function') {
+    if (typeof map !== 'undefined' && map && typeof toggleCompassRose === 'function') {
         toggleCompassRose(currentSettings.navigation.showCompassRose);
     }
 
@@ -377,8 +424,8 @@ function applySettings() {
         updateAISSettings(currentSettings.ais);
     }
 
-    // Apply Infrastructure settings (only if infrastructure is initialized)
-    if (typeof updateInfrastructureSettings === 'function') {
+    // Apply Infrastructure settings (only if infrastructure is initialized and map is ready)
+    if (typeof map !== 'undefined' && map && typeof updateInfrastructureSettings === 'function') {
         updateInfrastructureSettings(currentSettings.infrastructure);
     }
 
@@ -387,7 +434,54 @@ function applySettings() {
         updateWaterLevelSettings(currentSettings.waterLevel);
     }
 
+    // Apply GPS threshold setting
+    if (typeof LOW_SATELLITE_THRESHOLD !== 'undefined' && currentSettings.gps && currentSettings.gps.lowSatelliteThreshold) {
+        window.LOW_SATELLITE_THRESHOLD = currentSettings.gps.lowSatelliteThreshold * 1000; // Convert seconds to milliseconds
+        console.log(`📡 GPS low satellite threshold updated to ${currentSettings.gps.lowSatelliteThreshold}s`);
+    }
+
+    // Refresh UI elements with new unit labels
+    refreshUnitLabels();
+
     console.log('✅ Settings applied:', currentSettings);
+}
+
+// Refresh UI elements to display correct unit labels
+function refreshUnitLabels() {
+    // Update sensor tile unit labels
+    const speedTile = document.querySelector('#speed');
+    if (speedTile) {
+        const speedUnit = speedTile.querySelector('.tile-unit');
+        if (speedUnit && typeof getUnitLabel === 'function') {
+            speedUnit.textContent = getUnitLabel('speed');
+        }
+    }
+
+    const depthTile = document.querySelector('#depth');
+    if (depthTile) {
+        const depthUnit = depthTile.querySelector('.tile-unit');
+        if (depthUnit && typeof getUnitLabel === 'function') {
+            depthUnit.textContent = getUnitLabel('depth');
+        }
+    }
+
+    const windTile = document.querySelector('#wind');
+    if (windTile) {
+        const windUnit = windTile.querySelector('.tile-unit');
+        if (windUnit && typeof getUnitLabel === 'function') {
+            windUnit.textContent = getUnitLabel('speed');
+        }
+    }
+
+    // Trigger UI refresh if there's active data
+    if (typeof lastGPSData !== 'undefined' && lastGPSData) {
+        // Re-process last GPS data to update displays with new units
+        if (typeof updateGPSDisplay === 'function') {
+            updateGPSDisplay(lastGPSData);
+        }
+    }
+
+    console.log('🔄 Unit labels refreshed');
 }
 
 // Apply theme
@@ -516,20 +610,15 @@ async function initializeSettings() {
     // Try to load from backend first
     const loadedFromBackend = await loadSettingsFromBackend();
 
-    // If not found on backend, load from localStorage
-    if (!loadedFromBackend) {
-        const stored = localStorage.getItem('boatos_settings');
-        if (stored) {
-            try {
-                currentSettings = { ...defaultSettings, ...JSON.parse(stored) };
-            } catch (e) {
-                console.error('Error parsing stored settings:', e);
-            }
-        }
+    // Only reload from localStorage if backend had settings
+    // Otherwise, keep the settings that were already loaded synchronously at script load
+    if (loadedFromBackend) {
+        console.log('✅ Settings loaded from backend, applying...');
+        // Apply settings to the application
+        applySettings();
+    } else {
+        console.log('ℹ️ No backend settings, using already loaded localStorage settings');
     }
-
-    // Apply settings to the application
-    applySettings();
 
     console.log('⚙️ Settings initialized:', currentSettings);
 }
@@ -600,7 +689,38 @@ function clearAllData() {
     }
 }
 
-// Initialize on page load
+// Initialize settings immediately (synchronously load from localStorage)
+(function() {
+    const stored = localStorage.getItem('boatos_settings');
+    if (stored) {
+        try {
+            const storedSettings = JSON.parse(stored);
+            // Deep merge: merge each section individually to preserve new fields in defaultSettings
+            currentSettings = {
+                general: { ...defaultSettings.general, ...storedSettings.general },
+                navigation: { ...defaultSettings.navigation, ...storedSettings.navigation },
+                gps: { ...defaultSettings.gps, ...storedSettings.gps },
+                weather: { ...defaultSettings.weather, ...storedSettings.weather },
+                sensors: { ...defaultSettings.sensors, ...storedSettings.sensors },
+                ais: { ...defaultSettings.ais, ...storedSettings.ais },
+                infrastructure: { ...defaultSettings.infrastructure, ...storedSettings.infrastructure },
+                waterLevel: { ...defaultSettings.waterLevel, ...storedSettings.waterLevel },
+                routing: { ...defaultSettings.routing, ...storedSettings.routing }
+            };
+            console.log('⚙️ Settings loaded synchronously from localStorage:', currentSettings);
+        } catch (e) {
+            console.error('Error parsing stored settings:', e);
+        }
+    } else {
+        console.log('⚙️ Using default settings');
+    }
+})();
+
+// Initialize on page load (apply settings and try loading from backend)
 window.addEventListener('load', function() {
+    // Apply settings first (this will call refreshUnitLabels)
+    applySettings();
+
+    // Then check backend for updates
     initializeSettings();
 });

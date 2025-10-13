@@ -47,7 +47,11 @@ function renderLogbookEntry(entry) {
     };
 
     const type = entryTypes[entry.type] || entryTypes['manual'];
-    const time = new Date(entry.timestamp).toLocaleString('de-DE');
+
+    // Format timestamp with user's date format
+    const time = typeof formatDateTime === 'function'
+        ? formatDateTime(new Date(entry.timestamp))
+        : new Date(entry.timestamp).toLocaleString('de-DE');
 
     // Weather display with proper icons
     let weatherHtml = '';
@@ -68,7 +72,7 @@ function renderLogbookEntry(entry) {
                 <div class="weather-item">
                     <div class="weather-icon wind-arrow">${windIcon}</div>
                     <div class="weather-info">
-                        <div class="weather-value">${w.wind_speed.toFixed(1)} kn</div>
+                        <div class="weather-value">${typeof formatSpeed === 'function' ? formatSpeed(w.wind_speed) : w.wind_speed.toFixed(1) + ' kn'}</div>
                         <div class="weather-label">${getWindDirection(w.wind_deg)}</div>
                     </div>
                 </div>` : ''}
@@ -86,6 +90,11 @@ function renderLogbookEntry(entry) {
     // Trip statistics as colorful tiles (for trip_end)
     let statsHtml = '';
     if (entry.type === 'trip_end' && entry.points) {
+        // Format distance with units
+        const distanceFormatted = typeof formatDistance === 'function'
+            ? formatDistance(parseFloat(entry.distance) * 1852)  // Convert NM to meters
+            : `${entry.distance} NM`;
+
         statsHtml = `
             <div class="entry-stats-grid">
                 <div class="stat-tile" style="background: linear-gradient(135deg, #667eea, #764ba2);">
@@ -95,8 +104,8 @@ function renderLogbookEntry(entry) {
                 </div>
                 <div class="stat-tile" style="background: linear-gradient(135deg, #f093fb, #f5576c);">
                     <div class="stat-icon">📏</div>
-                    <div class="stat-value">${entry.distance}</div>
-                    <div class="stat-label">NM</div>
+                    <div class="stat-value">${distanceFormatted}</div>
+                    <div class="stat-label"></div>
                 </div>
                 <div class="stat-tile" style="background: linear-gradient(135deg, #4facfe, #00f2fe);">
                     <div class="stat-icon">⏱️</div>
@@ -176,7 +185,12 @@ async function updateTrackStatus() {
         const response = await fetch(`${getAPI()}/api/track/status`);
         const status = await response.json();
         document.getElementById("track-points").textContent = status.points;
-        document.getElementById("track-distance").innerHTML = `${status.distance} <span style="font-size:16px">NM</span>`;
+
+        // Format distance with units
+        const distanceFormatted = typeof formatDistance === 'function'
+            ? formatDistance(parseFloat(status.distance) * 1852)  // Convert NM to meters
+            : `${status.distance} NM`;
+        document.getElementById("track-distance").innerHTML = `${distanceFormatted} <span style="font-size:16px"></span>`;
         if (status.recording) {
             document.getElementById("recording-indicator").style.display = "block";
             document.getElementById("btn-track-start").disabled = true;
@@ -220,7 +234,11 @@ async function stopTrackRecording() {
         const response = await fetch(`${getAPI()}/api/track/stop`, { method: "POST" });
         const result = await response.json();
         if (result.distance) {
-            if (typeof showMsg === 'function') showMsg(`⚓ Fahrt beendet - ${result.distance} NM aufgezeichnet`);
+            // Format distance with units
+            const distanceFormatted = typeof formatDistance === 'function'
+                ? formatDistance(parseFloat(result.distance) * 1852)  // Convert NM to meters
+                : `${result.distance} NM`;
+            if (typeof showMsg === 'function') showMsg(`⚓ Fahrt beendet - ${distanceFormatted} aufgezeichnet`);
         } else {
             if (typeof showMsg === 'function') showMsg("⚓ Fahrt beendet");
         }
@@ -407,16 +425,21 @@ async function loadArchivedTrips() {
 function renderTripCard(trip) {
     const startDate = new Date(trip.trip_start);
     const endDate = new Date(trip.trip_end);
-    
-    const dateStr = startDate.toLocaleDateString('de-DE', { 
-        day: '2-digit', 
-        month: '2-digit', 
-        year: 'numeric' 
-    });
-    
+
+    // Format date with user's date format
+    const dateStr = typeof formatDate === 'function'
+        ? formatDate(startDate)
+        : startDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    // Format times (always show time in HH:MM format)
     const startTime = startDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
     const endTime = endDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-    
+
+    // Format distance with units
+    const distanceFormatted = typeof formatDistance === 'function'
+        ? formatDistance(parseFloat(trip.distance || 0) * 1852)  // Convert NM to meters
+        : `${(trip.distance || 0)} NM`;
+
     return '<div class="trip-card" onclick="viewTripDetails(' + trip.id + ')">' +
         '<div class="trip-header">' +
             '<div>' +
@@ -426,8 +449,8 @@ function renderTripCard(trip) {
         '</div>' +
         '<div class="trip-stats">' +
             '<div class="trip-stat">' +
-                '<div class="trip-stat-value">' + (trip.distance || 0) + '</div>' +
-                '<div class="trip-stat-label">NM</div>' +
+                '<div class="trip-stat-value">' + distanceFormatted + '</div>' +
+                '<div class="trip-stat-label"></div>' +
             '</div>' +
             '<div class="trip-stat">' +
                 '<div class="trip-stat-value">' + (trip.duration || '0:00') + '</div>' +
@@ -457,13 +480,20 @@ async function viewTripDetails(tripId) {
 
         const trip = await response.json();
 
-        // Update modal title
+        // Update modal title with formatted date
         const startDate = new Date(trip.trip_start);
-        const title = `Fahrt vom ${startDate.toLocaleDateString('de-DE')}`;
+        const dateStr = typeof formatDate === 'function'
+            ? formatDate(startDate)
+            : startDate.toLocaleDateString('de-DE');
+        const title = `Fahrt vom ${dateStr}`;
         document.getElementById('trip-details-title').textContent = title;
 
         // Update summary stats
-        document.getElementById('trip-detail-distance').textContent = trip.distance || '0';
+        // Format distance with units
+        const distanceFormatted = typeof formatDistance === 'function'
+            ? formatDistance(parseFloat(trip.distance || 0) * 1852)  // Convert NM to meters
+            : `${(trip.distance || 0)} NM`;
+        document.getElementById('trip-detail-distance').textContent = distanceFormatted;
         document.getElementById('trip-detail-duration').textContent = trip.duration || '0:00';
         document.getElementById('trip-detail-points').textContent = trip.points || '0';
         document.getElementById('trip-detail-entries').textContent = trip.entries ? trip.entries.length : '0';
