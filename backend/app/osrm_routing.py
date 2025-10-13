@@ -41,6 +41,74 @@ class OSRMRouter:
         self.enabled = False
         return False
 
+    def _extract_infrastructure(self, route_data: dict) -> dict:
+        """
+        Extract locks, bridges and other infrastructure from OSRM route data
+
+        Args:
+            route_data: OSRM route response
+
+        Returns:
+            Dict with locks and bridges arrays
+        """
+        locks = []
+        bridges = []
+        distance_so_far = 0
+
+        legs = route_data.get("legs", [])
+
+        for leg in legs:
+            steps = leg.get("steps", [])
+
+            for step in steps:
+                # Get step distance
+                step_distance = step.get("distance", 0)
+
+                # Get location
+                maneuver = step.get("maneuver", {})
+                location = maneuver.get("location", [])
+
+                if len(location) == 2:
+                    lon, lat = location
+
+                    # Check for locks (marked as barriers in our profile)
+                    # OSRM doesn't directly expose OSM tags, but we can infer from maneuver types
+                    # In our motorboat.lua, locks are marked with result.barrier = true
+                    # This would show up as restricted maneuvers
+
+                    # For now, we'll look for specific instruction types
+                    instruction = step.get("name", "").lower()
+                    ref = step.get("ref", "").lower()
+
+                    # Detect locks
+                    if any(keyword in instruction for keyword in ["lock", "schleuse", "sluis", "écluse"]):
+                        locks.append({
+                            "name": step.get("name", "Unbekannte Schleuse"),
+                            "lat": lat,
+                            "lon": lon,
+                            "distance_from_start": distance_so_far
+                        })
+
+                    # Detect bridges
+                    if any(keyword in instruction for keyword in ["bridge", "brücke", "brug", "pont"]):
+                        # Try to extract clearance from OSM data if available
+                        clearance = None
+
+                        bridges.append({
+                            "name": step.get("name", "Unbekannte Brücke"),
+                            "lat": lat,
+                            "lon": lon,
+                            "clearance": clearance,
+                            "distance_from_start": distance_so_far
+                        })
+
+                distance_so_far += step_distance
+
+        return {
+            "locks": locks,
+            "bridges": bridges
+        }
+
     def haversine_distance(self, lon1: float, lat1: float, lon2: float, lat2: float) -> float:
         """Calculate distance in meters between two points"""
         R = 6371000  # Earth radius in meters
@@ -55,12 +123,13 @@ class OSRMRouter:
 
         return R * c
 
-    async def route(self, waypoints: List[Tuple[float, float]]) -> dict:
+    async def route(self, waypoints: List[Tuple[float, float]], boat_data: Optional[dict] = None) -> dict:
         """
         Calculate route using OSRM server
 
         Args:
             waypoints: List of (lon, lat) tuples
+            boat_data: Optional boat specifications (draft, height, beam, etc.)
 
         Returns:
             GeoJSON Feature with route geometry and properties
@@ -85,8 +154,8 @@ class OSRMRouter:
             params = {
                 "overview": "full",
                 "geometries": "geojson",
-                "steps": "false",
-                "annotations": "false"
+                "steps": "true",  # Enable steps to get maneuver details
+                "annotations": "true"  # Enable annotations for metadata
             }
 
             async with aiohttp.ClientSession() as session:
@@ -106,7 +175,26 @@ class OSRMRouter:
                             distance_m = route["distance"]
                             duration_s = route.get("duration", 0)
 
+                            # Extract infrastructure (locks, bridges)
+                            infrastructure = self._extract_infrastructure(route)
+
+                            # Log boat restrictions if provided
+                            restrictions = []
+                            if boat_data:
+                                if boat_data.get("draft", 0) > 0:
+                                    restrictions.append(f"Draft: {boat_data['draft']}m")
+                                if boat_data.get("height", 0) > 0:
+                                    restrictions.append(f"Height: {boat_data['height']}m")
+                                if boat_data.get("beam", 0) > 0:
+                                    restrictions.append(f"Beam: {boat_data['beam']}m")
+
                             print(f"✅ OSRM route: {distance_m/1852:.2f} NM, {duration_s/60:.1f} min")
+                            if restrictions:
+                                print(f"   Boat restrictions: {', '.join(restrictions)}")
+                            if infrastructure["locks"]:
+                                print(f"   Locks: {len(infrastructure['locks'])}")
+                            if infrastructure["bridges"]:
+                                print(f"   Bridges: {len(infrastructure['bridges'])}")
 
                             return {
                                 "type": "Feature",
@@ -117,7 +205,10 @@ class OSRMRouter:
                                     "duration_s": duration_s,
                                     "duration_h": duration_s / 3600,
                                     "waterway_routed": True,
-                                    "routing_type": "osrm"
+                                    "routing_type": "osrm",
+                                    "locks": infrastructure["locks"],
+                                    "bridges": infrastructure["bridges"],
+                                    "boat_restrictions": boat_data if boat_data else None
                                 }
                             }
                         else:
