@@ -8,13 +8,16 @@ Ein modernes Marine-Navigationssystem für Raspberry Pi mit GPS, Kartendarstellu
 
 - 🗺️ **Interaktive Seekarten** mit OpenSeaMap und anderen Kartenebenen
 - 📡 **GPS-Integration** über SignalK Server
+- 🔍 **Ortssuche** mit Nominatim (Orte, PLZ, Koordinaten)
 - 🌦️ **Wetter-Informationen** mit Vorhersage
 - 🛤️ **Routen-Planung** und Wegpunkte
+- 🚤 **Waterway-Routing** für Binnenschifffahrt (PyRouteLib3 + OSRM)
 - 📓 **Logbuch** mit Track-Aufzeichnung
-- 🌍 **Mehrsprachig** (Deutsch/English)
+- 🌍 **Mehrsprachig** (Deutsch/English) mit Einheiten-Umrechnung
 - 📊 **Sensor-Dashboard** für Geschwindigkeit, Kurs, Tiefe
 - 🔄 **Echtzeit-Updates** via WebSocket
 - 📱 **Responsive Design** für Desktop und Mobile
+- 🎯 **Intelligentes Auto-Follow** (respektiert manuelle Karten-Interaktion)
 
 ## Technologie-Stack
 
@@ -45,6 +48,8 @@ Ein modernes Marine-Navigationssystem für Raspberry Pi mit GPS, Kartendarstellu
 
 ## Schnellstart
 
+### Neu-Installation
+
 1. Repository klonen:
    ```bash
    git clone https://github.com/yourusername/BoatOS.git
@@ -60,9 +65,23 @@ Ein modernes Marine-Navigationssystem für Raspberry Pi mit GPS, Kartendarstellu
 
 4. System neu starten oder abmelden/anmelden
 
-5. Browser öffnen: http://your-pi-ip/
+5. Browser öffnen: https://your-pi-ip/
 
 Detaillierte Anleitung: [INSTALL.md](INSTALL.md)
+
+### Update bestehender Installation
+
+```bash
+cd ~/BoatOS
+./scripts/update.sh
+```
+
+Das Update-Skript führt automatisch folgende Schritte aus:
+- Git Pull für neueste Version
+- Backend Dependencies aktualisieren
+- Frontend Cache Busting
+- Services neu starten
+- Status-Prüfung
 
 ## Architektur
 
