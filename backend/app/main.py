@@ -1338,7 +1338,12 @@ async def calculate_route(request: dict):
     """
     Calculate route through waypoints using multi-tier waterway routing
 
-    Request body: {"waypoints": [[lon, lat], [lon, lat], ...]}
+    Request body: {
+        "waypoints": [[lon, lat], [lon, lat], ...],
+        "boat_draft": float (optional, meters),
+        "boat_height": float (optional, meters),
+        "boat_beam": float (optional, meters)
+    }
 
     Strategy (priority order):
     1. OSRM waterway routing (fast <100ms, local, follows waterways)
@@ -1347,7 +1352,7 @@ async def calculate_route(request: dict):
 
     Returns:
     - GeoJSON Feature with route geometry
-    - Properties: distance_m, distance_nm, routing_type
+    - Properties: distance_m, distance_nm, routing_type, locks, bridges
     """
     try:
         waypoints_raw = request.get("waypoints", [])
@@ -1358,11 +1363,20 @@ async def calculate_route(request: dict):
         # Convert to tuples (lon, lat)
         waypoints = [(float(wp[0]), float(wp[1])) for wp in waypoints_raw]
 
+        # Extract boat data if provided
+        boat_data = None
+        if any(key in request for key in ["boat_draft", "boat_height", "boat_beam"]):
+            boat_data = {
+                "draft": request.get("boat_draft", 0),
+                "height": request.get("boat_height", 0),
+                "beam": request.get("boat_beam", 0)
+            }
+
         # Strategy 1: Try OSRM (fastest, best)
         if osrm_router and osrm_router.enabled:
             try:
                 print("🚀 Trying OSRM waterway routing...")
-                route = await osrm_router.route(waypoints)
+                route = await osrm_router.route(waypoints, boat_data)
                 if route.get("properties", {}).get("routing_type") == "osrm":
                     return route
             except Exception as e:

@@ -15,15 +15,32 @@ async function updateRoute() {
     });
 
     try {
+        // Get boat settings from settings.js (if available)
+        const boatSettings = typeof getBoatSettings === 'function' ? getBoatSettings() : {};
+
+        // Prepare request body with boat data
+        const requestBody = {
+            waypoints: coordinates
+        };
+
+        // Add boat specifications if available
+        if (boatSettings.draft > 0) {
+            requestBody.boat_draft = boatSettings.draft;
+        }
+        if (boatSettings.height > 0) {
+            requestBody.boat_height = boatSettings.height;
+        }
+        if (boatSettings.beam > 0) {
+            requestBody.boat_beam = boatSettings.beam;
+        }
+
         // BoatOS Backend Routing API
         const response = await fetch(`${API_URL}/api/route`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                waypoints: coordinates
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
@@ -84,8 +101,41 @@ async function updateRoute() {
                 });
             }
 
+            // Add lock markers if present
+            if (data.properties.locks && data.properties.locks.length > 0) {
+                data.properties.locks.forEach(lock => {
+                    const lockIcon = L.divIcon({
+                        className: 'lock-marker',
+                        html: '<div style="background: rgba(255, 140, 0, 0.9); color: white; padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.4); border: 2px solid white;">🔒 Schleuse</div>',
+                        iconSize: [100, 30],
+                        iconAnchor: [50, 15]
+                    });
+
+                    const marker = L.marker([lock.lat, lock.lon], { icon: lockIcon }).addTo(routeLayer);
+                    marker.bindPopup(`<strong>🔒 ${lock.name}</strong><br>Distanz: ${formatDistance(lock.distance_from_start)}`);
+                });
+                console.log(`🔒 ${data.properties.locks.length} Schleusen gefunden`);
+            }
+
+            // Add bridge markers if present
+            if (data.properties.bridges && data.properties.bridges.length > 0) {
+                data.properties.bridges.forEach(bridge => {
+                    const bridgeIcon = L.divIcon({
+                        className: 'bridge-marker',
+                        html: '<div style="background: rgba(52, 152, 219, 0.9); color: white; padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.4); border: 2px solid white;">🌉 Brücke</div>',
+                        iconSize: [100, 30],
+                        iconAnchor: [50, 15]
+                    });
+
+                    const marker = L.marker([bridge.lat, bridge.lon], { icon: bridgeIcon }).addTo(routeLayer);
+                    const clearanceInfo = bridge.clearance ? `<br>Durchfahrtshöhe: ${bridge.clearance}m` : '';
+                    marker.bindPopup(`<strong>🌉 ${bridge.name}</strong><br>Distanz: ${formatDistance(bridge.distance_from_start)}${clearanceInfo}`);
+                });
+                console.log(`🌉 ${data.properties.bridges.length} Brücken gefunden`);
+            }
+
             console.log(`📏 Routed: ${formatDistance(distanceMeters)} (${data.properties.routing_type}), ETA: ${durationHours}h ${durationMinutes}min @ 5kn`);
-            showRouteInfo(distanceMeters, durationHours, durationMinutes, routeInfo, isDirect);
+            showRouteInfo(distanceMeters, durationHours, durationMinutes, routeInfo, isDirect, data.properties.locks, data.properties.bridges);
 
         } else {
             console.warn('⚠️ No route found, using direct routing');
@@ -188,7 +238,7 @@ function calculateBearing(lat1, lon1, lat2, lon2) {
     return bearing;
 }
 
-function showRouteInfo(totalMeters, hours, minutes, segments, isDirect) {
+function showRouteInfo(totalMeters, hours, minutes, segments, isDirect, locks = [], bridges = []) {
     const oldPanel = document.getElementById('route-info-panel');
     if (oldPanel) oldPanel.remove();
 
@@ -202,6 +252,20 @@ function showRouteInfo(totalMeters, hours, minutes, segments, isDirect) {
 
     const distanceFormatted = formatDistance(totalMeters);
 
+    // Infrastructure summary
+    let infrastructureInfo = '';
+    if (locks && locks.length > 0 || bridges && bridges.length > 0) {
+        infrastructureInfo = '<div style="background: rgba(100, 255, 218, 0.1); padding: 8px; border-radius: 6px; margin-bottom: 10px; font-size: 11px; color: #64ffda;">' +
+            '<strong>Infrastruktur:</strong><br>';
+        if (locks && locks.length > 0) {
+            infrastructureInfo += `🔒 ${locks.length} Schleuse${locks.length > 1 ? 'n' : ''}<br>`;
+        }
+        if (bridges && bridges.length > 0) {
+            infrastructureInfo += `🌉 ${bridges.length} Brücke${bridges.length > 1 ? 'n' : ''}`;
+        }
+        infrastructureInfo += '</div>';
+    }
+
     panel.innerHTML = '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">' +
         '<h3 style="margin: 0; color: #64ffda; font-size: 16px;">' + (isDirect ? '📍' : '🚤') + ' Route' + warningBadge + '</h3>' +
         '<div style="display: flex; gap: 5px;">' +
@@ -214,6 +278,7 @@ function showRouteInfo(totalMeters, hours, minutes, segments, isDirect) {
         '<div style="font-size: 24px; font-weight: 700; color: #64ffda;">' + distanceFormatted + '</div>' +
         '<div style="font-size: 12px; color: #8892b0;">ETA: ' + hours + 'h ' + minutes + 'min @ ' + formatSpeed(5) + '</div>' +
         '</div>' +
+        infrastructureInfo +
         '<div style="max-height: 200px; overflow-y: auto;">' +
         segments.map(s =>
             '<div style="background: rgba(42, 82, 152, 0.15); padding: 8px; border-radius: 6px; margin-bottom: 5px; font-size: 12px;">' +
