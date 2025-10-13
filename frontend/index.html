@@ -750,6 +750,7 @@
                 <!-- Settings Tabs -->
                 <div class="settings-tabs">
                     <button class="settings-tab active" onclick="switchSettingsTab('general')" data-i18n="settings_general">Allgemein</button>
+                    <button class="settings-tab" onclick="switchSettingsTab('boat')" data-i18n="settings_boat">Boot</button>
                     <button class="settings-tab" onclick="switchSettingsTab('charts')" data-i18n="settings_charts">Karten</button>
                     <button class="settings-tab" onclick="switchSettingsTab('navigation')" data-i18n="settings_navigation">Navigation</button>
                     <button class="settings-tab" onclick="switchSettingsTab('gps')" data-i18n="settings_gps">GPS</button>
@@ -852,6 +853,86 @@
                                 <option value="yyyy-mm-dd">YYYY-MM-DD (2025-12-31)</option>
                                 <option value="iso">ISO 8601 (2025-12-31T23:59:59)</option>
                             </select>
+                        </div>
+                    </div>
+
+                    <!-- Boat Tab -->
+                    <div id="settings-boat" class="settings-tab-content">
+                        <h3 data-i18n="boat_settings">🚤 Boot-Einstellungen</h3>
+
+                        <div class="setting-item" style="background: rgba(100, 255, 218, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                            <h4 style="margin-top: 0;" data-i18n="boat_specs_title">Boot-Spezifikationen</h4>
+                            <small data-i18n="boat_specs_desc">Diese Daten werden für Routenplanung und Verbrauchsberechnung verwendet</small>
+                        </div>
+
+                        <div class="setting-item">
+                            <label data-i18n="boat_name">Bootsname</label>
+                            <input type="text" id="setting-boat-name" placeholder="z.B. Meine Yacht">
+                            <small data-i18n="boat_name_desc">Name Ihres Bootes (optional)</small>
+                        </div>
+
+                        <div class="setting-item">
+                            <label data-i18n="boat_type">Bootstyp</label>
+                            <select id="setting-boat-type">
+                                <option value="motorboat" data-i18n="boat_type_motorboat">Motorboot</option>
+                                <option value="sailboat" data-i18n="boat_type_sailboat">Segelboot</option>
+                                <option value="yacht" data-i18n="boat_type_yacht">Yacht</option>
+                                <option value="cabin_cruiser" data-i18n="boat_type_cabin_cruiser">Kabinenkreuzer</option>
+                                <option value="other" data-i18n="boat_type_other">Sonstiges</option>
+                            </select>
+                        </div>
+
+                        <div class="setting-item">
+                            <label data-i18n="boat_length">Bootslänge</label>
+                            <input type="number" id="setting-boat-length" placeholder="10.5" step="0.1" min="0">
+                            <small data-i18n="boat_length_desc">Gesamtlänge des Bootes (Meter)</small>
+                        </div>
+
+                        <div class="setting-item">
+                            <label data-i18n="boat_beam">Bootsbreite (Beam)</label>
+                            <input type="number" id="setting-boat-beam" placeholder="3.2" step="0.1" min="0">
+                            <small data-i18n="boat_beam_desc">Maximale Breite des Bootes (Meter)</small>
+                        </div>
+
+                        <div class="setting-item">
+                            <label data-i18n="boat_draft">Tiefgang</label>
+                            <input type="number" id="setting-boat-draft" placeholder="0.8" step="0.1" min="0">
+                            <small data-i18n="boat_draft_desc">Tiefe des Bootes unter der Wasserlinie (Meter)</small>
+                        </div>
+
+                        <div class="setting-item">
+                            <label data-i18n="boat_height">Höhe über Wasserlinie</label>
+                            <input type="number" id="setting-boat-height" placeholder="2.5" step="0.1" min="0">
+                            <small data-i18n="boat_height_desc">Maximale Höhe über der Wasserlinie (Meter) - wichtig für Brücken</small>
+                        </div>
+
+                        <div class="setting-item">
+                            <label data-i18n="boat_fuel_consumption">Kraftstoffverbrauch</label>
+                            <input type="number" id="setting-boat-fuel-consumption" placeholder="8.5" step="0.1" min="0">
+                            <small data-i18n="boat_fuel_consumption_desc">Durchschnittlicher Verbrauch bei Reisegeschwindigkeit (Liter/Stunde)</small>
+                        </div>
+
+                        <div class="setting-item">
+                            <label data-i18n="boat_fuel_capacity">Tankinhalt</label>
+                            <input type="number" id="setting-boat-fuel-capacity" placeholder="200" step="1" min="0">
+                            <small data-i18n="boat_fuel_capacity_desc">Gesamtkapazität des Kraftstofftanks (Liter)</small>
+                        </div>
+
+                        <div class="setting-item">
+                            <label data-i18n="boat_cruise_speed">Reisegeschwindigkeit</label>
+                            <input type="number" id="setting-boat-cruise-speed" placeholder="15" step="0.5" min="0">
+                            <small data-i18n="boat_cruise_speed_desc">Typische Geschwindigkeit für Routenplanung (km/h)</small>
+                        </div>
+
+                        <div class="setting-item" style="margin-top: 20px; padding: 15px; background: rgba(52, 152, 219, 0.1); border-radius: 8px;">
+                            <h4 style="margin-top: 0;" data-i18n="boat_routing_info_title">ℹ️ Routing-Optimierung</h4>
+                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7;">
+                                <span data-i18n="boat_routing_info_desc">Ihre Boot-Spezifikationen werden für die Routenplanung verwendet:</span>
+                            </p>
+                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px; white-space: pre-line;" data-i18n="boat_routing_info_features">• Tiefgang → Vermeidung flacher Gewässer
+• Höhe → Vermeidung niedriger Brücken
+• Breite → Vermeidung enger Kanäle
+• Verbrauch → Reichweiten-Berechnung</p>
                         </div>
                     </div>
 
