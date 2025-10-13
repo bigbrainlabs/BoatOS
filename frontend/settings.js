@@ -59,6 +59,17 @@ const defaultSettings = {
         provider: 'osrm',  // 'osrm', 'direct'
         osrmUrl: 'http://localhost:5000',
         graphhopperApiKey: ''
+    },
+    boat: {
+        name: '',
+        type: 'motorboat',
+        length: 0,           // meters
+        beam: 0,             // meters
+        draft: 0,            // meters
+        height: 0,           // meters above waterline
+        fuelConsumption: 0,  // liters/hour
+        fuelCapacity: 0,     // liters
+        cruiseSpeed: 0       // km/h
     }
 };
 
@@ -120,7 +131,8 @@ function openSettingsModal() {
                 ais: { ...defaultSettings.ais, ...storedSettings.ais },
                 infrastructure: { ...defaultSettings.infrastructure, ...storedSettings.infrastructure },
                 waterLevel: { ...defaultSettings.waterLevel, ...storedSettings.waterLevel },
-                routing: { ...defaultSettings.routing, ...storedSettings.routing }
+                routing: { ...defaultSettings.routing, ...storedSettings.routing },
+                boat: { ...defaultSettings.boat, ...storedSettings.boat }
             };
             console.log('📂 Settings loaded from localStorage:', currentSettings);
         } catch (e) {
@@ -286,6 +298,35 @@ function loadSettingsToForm() {
 
     // Update routing provider visibility
     updateRoutingProviderVisibility();
+
+    // Boat settings
+    if (document.getElementById('setting-boat-name')) {
+        document.getElementById('setting-boat-name').value = currentSettings.boat?.name || '';
+    }
+    if (document.getElementById('setting-boat-type')) {
+        document.getElementById('setting-boat-type').value = currentSettings.boat?.type || 'motorboat';
+    }
+    if (document.getElementById('setting-boat-length')) {
+        document.getElementById('setting-boat-length').value = currentSettings.boat?.length || '';
+    }
+    if (document.getElementById('setting-boat-beam')) {
+        document.getElementById('setting-boat-beam').value = currentSettings.boat?.beam || '';
+    }
+    if (document.getElementById('setting-boat-draft')) {
+        document.getElementById('setting-boat-draft').value = currentSettings.boat?.draft || '';
+    }
+    if (document.getElementById('setting-boat-height')) {
+        document.getElementById('setting-boat-height').value = currentSettings.boat?.height || '';
+    }
+    if (document.getElementById('setting-boat-fuel-consumption')) {
+        document.getElementById('setting-boat-fuel-consumption').value = currentSettings.boat?.fuelConsumption || '';
+    }
+    if (document.getElementById('setting-boat-fuel-capacity')) {
+        document.getElementById('setting-boat-fuel-capacity').value = currentSettings.boat?.fuelCapacity || '';
+    }
+    if (document.getElementById('setting-boat-cruise-speed')) {
+        document.getElementById('setting-boat-cruise-speed').value = currentSettings.boat?.cruiseSpeed || '';
+    }
 }
 
 // Save settings
@@ -362,6 +403,17 @@ function saveSettings() {
             provider: getValue('setting-routing-provider', 'osrm'),
             osrmUrl: getValue('setting-osrm-url', 'http://localhost:5000'),
             graphhopperApiKey: getValue('setting-graphhopper-api-key', '')
+        },
+        boat: {
+            name: getValue('setting-boat-name', ''),
+            type: getValue('setting-boat-type', 'motorboat'),
+            length: parseFloat(getValue('setting-boat-length', '0')) || 0,
+            beam: parseFloat(getValue('setting-boat-beam', '0')) || 0,
+            draft: parseFloat(getValue('setting-boat-draft', '0')) || 0,
+            height: parseFloat(getValue('setting-boat-height', '0')) || 0,
+            fuelConsumption: parseFloat(getValue('setting-boat-fuel-consumption', '0')) || 0,
+            fuelCapacity: parseFloat(getValue('setting-boat-fuel-capacity', '0')) || 0,
+            cruiseSpeed: parseFloat(getValue('setting-boat-cruise-speed', '0')) || 0
         }
     };
 
@@ -705,7 +757,8 @@ function clearAllData() {
                 ais: { ...defaultSettings.ais, ...storedSettings.ais },
                 infrastructure: { ...defaultSettings.infrastructure, ...storedSettings.infrastructure },
                 waterLevel: { ...defaultSettings.waterLevel, ...storedSettings.waterLevel },
-                routing: { ...defaultSettings.routing, ...storedSettings.routing }
+                routing: { ...defaultSettings.routing, ...storedSettings.routing },
+                boat: { ...defaultSettings.boat, ...storedSettings.boat }
             };
             console.log('⚙️ Settings loaded synchronously from localStorage:', currentSettings);
         } catch (e) {
@@ -715,6 +768,11 @@ function clearAllData() {
         console.log('⚙️ Using default settings');
     }
 })();
+
+// Get boat settings for routing
+function getBoatSettings() {
+    return currentSettings.boat || defaultSettings.boat;
+}
 
 // Initialize on page load (apply settings and try loading from backend)
 window.addEventListener('load', function() {
