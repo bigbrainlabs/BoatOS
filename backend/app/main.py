@@ -19,6 +19,9 @@ from ais_service import ais_service
 from waterway_infrastructure import waterway_infrastructure
 from pegelonline import pegelonline
 from water_current import water_current_service
+import crew_management
+import fuel_tracking
+import statistics
 
 app = FastAPI(title="BoatOS API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -1020,11 +1023,16 @@ async def get_track_status():
     return {"recording": track_recording, "paused": track_paused, "points": len(current_track), "distance": calculate_track_distance()}
 
 @app.post("/api/track/start")
-async def start_track_recording():
+async def start_track_recording(request: Dict[str, Any] = None):
     global track_recording, current_track
     track_recording = True
     current_track = []
     current_session_entries.clear()  # Clear session on new start
+
+    # Get crew_ids from request if provided
+    crew_ids = []
+    if request:
+        crew_ids = request.get("crew_ids", [])
 
     # Create automatic logbook entry for trip start with weather
     entry = {
@@ -1041,7 +1049,8 @@ async def start_track_recording():
             "wind_speed": weather_data.get("current", {}).get("wind_speed"),
             "wind_deg": weather_data.get("current", {}).get("wind_deg")
         } if weather_data else None,
-        "notes": "Fahrt gestartet"
+        "notes": "Fahrt gestartet",
+        "crew_ids": crew_ids
     }
     current_session_entries.append(entry)
 
@@ -1074,7 +1083,15 @@ async def stop_track_recording():
             "notes": f"Fahrt beendet - {calculate_track_distance()} NM"
         }
         current_session_entries.append(entry)
-        
+
+        # Get crew_ids from trip_start entry
+        crew_ids = []
+        if current_session_entries:
+            for e in current_session_entries:
+                if e.get("type") == "trip_start" and "crew_ids" in e:
+                    crew_ids = e["crew_ids"]
+                    break
+
         # Save complete trip with all session entries
         trip = {
             "id": len(completed_trips) + 1,
@@ -1084,10 +1101,17 @@ async def stop_track_recording():
             "track_data": current_track.copy(),
             "distance": entry.get("distance"),
             "duration": entry.get("duration"),
-            "points": entry.get("points")
+            "points": entry.get("points"),
+            "crew_ids": crew_ids
         }
         logbook_storage.save_logbook_entry(trip)
         completed_trips.append(trip)
+
+        # Increment trip counter for each crew member
+        if crew_ids:
+            for crew_id in crew_ids:
+                crew_management.increment_crew_trips(crew_id)
+
         current_session_entries.clear()  # Clear session after saving
         return entry
     return {"status": "stopped", "points": 0}
@@ -1500,6 +1524,327 @@ async def calculate_route(request: dict):
         import traceback
         traceback.print_exc()
         return {"error": str(e)}
+
+# ==================== CREW MANAGEMENT ====================
+@app.get("/api/crew")
+async def get_crew():
+    """Get all crew members"""
+    return crew_management.load_crew()
+
+@app.get("/api/crew/{crew_id}")
+async def get_crew_member_by_id(crew_id: int):
+    """Get a specific crew member by ID"""
+    member = crew_management.get_crew_member(crew_id)
+    if not member:
+        return {"error": "Crew member not found"}
+    return member
+
+@app.post("/api/crew")
+async def create_crew_member(request: dict):
+    """
+    Create a new crew member
+
+    Request body: {
+        "name": str (required),
+        "role": str (optional, default "Crew"),
+        "email": str (optional),
+        "phone": str (optional)
+    }
+    """
+    name = request.get("name")
+    if not name:
+        return {"error": "Name is required"}
+
+    role = request.get("role", "Crew")
+    email = request.get("email", "")
+    phone = request.get("phone", "")
+
+    member = crew_management.add_crew_member(name, role, email, phone)
+    return member
+
+@app.put("/api/crew/{crew_id}")
+async def update_crew_member_by_id(crew_id: int, request: dict):
+    """Update crew member information"""
+    member = crew_management.update_crew_member(crew_id, request)
+    if not member:
+        return {"error": "Crew member not found"}
+    return member
+
+@app.delete("/api/crew/{crew_id}")
+async def delete_crew_member_by_id(crew_id: int):
+    """Delete a crew member"""
+    success = crew_management.delete_crew_member(crew_id)
+    return {"status": "deleted" if success else "not_found"}
+
+@app.get("/api/crew/stats")
+async def get_crew_statistics():
+    """Get crew statistics"""
+    return crew_management.get_crew_stats()
+
+# ==================== FUEL TRACKING ====================
+@app.get("/api/fuel")
+async def get_fuel_entries():
+    """Get all fuel entries"""
+    return fuel_tracking.load_fuel_entries()
+
+@app.get("/api/fuel/stats")
+async def get_fuel_statistics(days: int = 30):
+    """Get fuel statistics for the last N days"""
+    return fuel_tracking.get_fuel_stats(days)
+
+@app.get("/api/fuel/consumption")
+async def get_fuel_consumption_stats():
+    """Get fuel consumption statistics (L/NM, L/h, range, etc.)"""
+    return fuel_tracking.get_consumption_stats()
+
+@app.get("/api/fuel/consumption/trend")
+async def get_fuel_consumption_trend(months: int = 6):
+    """Get monthly fuel consumption trend"""
+    return fuel_tracking.get_consumption_trend(months)
+
+@app.get("/api/fuel/{fuel_id}")
+async def get_fuel_entry_by_id(fuel_id: int):
+    """Get a specific fuel entry by ID"""
+    entry = fuel_tracking.get_fuel_entry(fuel_id)
+    if not entry:
+        return {"error": "Fuel entry not found"}
+    return entry
+
+@app.post("/api/fuel")
+async def create_fuel_entry(request: dict):
+    """
+    Add a new fuel entry
+
+    Request body: {
+        "liters": float (required),
+        "price_per_liter": float (required),
+        "location": str (optional),
+        "odometer": float (optional, NM or hours),
+        "notes": str (optional),
+        "position": {"lat": float, "lon": float} (optional)
+    }
+    """
+    liters = request.get("liters")
+    price_per_liter = request.get("price_per_liter")
+
+    if liters is None or price_per_liter is None:
+        return {"error": "liters and price_per_liter are required"}
+
+    location = request.get("location", "")
+    odometer = request.get("odometer", 0)
+    notes = request.get("notes", "")
+    position = request.get("position")
+
+    # Use current GPS position if not provided
+    if not position:
+        position = {
+            "lat": sensor_data["gps"]["lat"],
+            "lon": sensor_data["gps"]["lon"]
+        }
+
+    entry = fuel_tracking.add_fuel_entry(
+        liters=liters,
+        price_per_liter=price_per_liter,
+        location=location,
+        odometer=odometer,
+        notes=notes,
+        position=position
+    )
+    return entry
+
+@app.put("/api/fuel/{fuel_id}")
+async def update_fuel_entry_by_id(fuel_id: int, request: dict):
+    """Update fuel entry information"""
+    entry = fuel_tracking.update_fuel_entry(fuel_id, request)
+    if not entry:
+        return {"error": "Fuel entry not found"}
+    return entry
+
+@app.delete("/api/fuel/{fuel_id}")
+async def delete_fuel_entry_by_id(fuel_id: int):
+    """Delete a fuel entry"""
+    success = fuel_tracking.delete_fuel_entry(fuel_id)
+    return {"status": "deleted" if success else "not_found"}
+
+@app.get("/api/fuel/stats")
+async def get_fuel_statistics(days: int = 30):
+    """Get fuel statistics for the last N days"""
+    return fuel_tracking.get_fuel_stats(days)
+
+@app.get("/api/fuel/consumption")
+async def get_fuel_consumption_stats():
+    """Get fuel consumption statistics (L/NM, L/h, range, etc.)"""
+    return fuel_tracking.get_consumption_stats()
+
+@app.get("/api/fuel/consumption/trend")
+async def get_fuel_consumption_trend(months: int = 6):
+    """Get monthly fuel consumption trend"""
+    return fuel_tracking.get_consumption_trend(months)
+
+# ==================== STATISTICS ====================
+@app.get("/api/statistics/trips")
+async def get_trip_statistics(days: int = 365):
+    """Get trip statistics for the last N days"""
+    return statistics.get_trip_statistics(days)
+
+@app.get("/api/statistics/monthly")
+async def get_monthly_breakdown():
+    """Get monthly breakdown of trips and distance"""
+    return statistics.get_monthly_statistics()
+
+@app.get("/api/statistics/dashboard")
+async def get_dashboard_statistics():
+    """Get complete dashboard summary with all statistics"""
+    return statistics.get_dashboard_summary()
+
+@app.get("/api/statistics/yearly")
+async def get_yearly_comparison_stats():
+    """Compare current year with previous year"""
+    return statistics.get_yearly_comparison()
+
+# ==================== DATA IMPORT/EXPORT ====================
+@app.get("/api/data/export")
+async def export_all_data():
+    """
+    Export all BoatOS data as JSON
+    Includes: logbook trips, crew, fuel entries, and settings
+    """
+    try:
+        export_data = {
+            "export_date": datetime.now().isoformat(),
+            "version": "1.0.0",
+            "logbook": {
+                "trips": logbook_storage.load_logbook_entries()
+            },
+            "crew": crew_management.load_crew(),
+            "fuel": fuel_tracking.load_fuel_entries(),
+            "settings": {}
+        }
+
+        # Load settings if available
+        try:
+            with open("data/settings.json", 'r') as f:
+                export_data["settings"] = json.load(f)
+        except FileNotFoundError:
+            pass
+
+        # Create JSON response
+        json_data = json.dumps(export_data, indent=2, ensure_ascii=False)
+
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"boatos_export_{timestamp}.json"
+
+        return Response(
+            content=json_data,
+            media_type="application/json",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        print(f"❌ Export error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
+@app.post("/api/data/import")
+async def import_all_data(request: Request):
+    """
+    Import BoatOS data from JSON
+    Accepts: logbook trips, crew, fuel entries, and settings
+    """
+    try:
+        import_data = await request.json()
+
+        results = {
+            "status": "success",
+            "imported": {
+                "logbook_trips": 0,
+                "crew_members": 0,
+                "fuel_entries": 0,
+                "settings": False
+            },
+            "errors": []
+        }
+
+        # Import logbook trips
+        if "logbook" in import_data and "trips" in import_data["logbook"]:
+            trips = import_data["logbook"]["trips"]
+            for trip in trips:
+                try:
+                    logbook_storage.save_logbook_entry(trip)
+                    results["imported"]["logbook_trips"] += 1
+                except Exception as e:
+                    results["errors"].append(f"Logbook trip {trip.get('id')}: {str(e)}")
+
+            # Reload completed trips
+            global completed_trips
+            completed_trips = logbook_storage.load_logbook_entries()
+
+        # Import crew
+        if "crew" in import_data:
+            crew_list = import_data["crew"]
+            for member in crew_list:
+                try:
+                    # Add or update crew member
+                    crew_management.add_crew_member(
+                        name=member.get("name"),
+                        role=member.get("role", "Crew"),
+                        email=member.get("email", ""),
+                        phone=member.get("phone", "")
+                    )
+                    results["imported"]["crew_members"] += 1
+                except Exception as e:
+                    results["errors"].append(f"Crew {member.get('name')}: {str(e)}")
+
+        # Import fuel entries
+        if "fuel" in import_data:
+            fuel_list = import_data["fuel"]
+            for entry in fuel_list:
+                try:
+                    fuel_tracking.add_fuel_entry(
+                        liters=entry.get("liters"),
+                        price_per_liter=entry.get("price_per_liter"),
+                        location=entry.get("location", ""),
+                        odometer=entry.get("odometer", 0),
+                        notes=entry.get("notes", ""),
+                        position=entry.get("position")
+                    )
+                    results["imported"]["fuel_entries"] += 1
+                except Exception as e:
+                    results["errors"].append(f"Fuel entry {entry.get('id')}: {str(e)}")
+
+        # Import settings
+        if "settings" in import_data and import_data["settings"]:
+            try:
+                with open("data/settings.json", 'w') as f:
+                    json.dump(import_data["settings"], f, indent=2)
+                results["imported"]["settings"] = True
+
+                # Apply settings (AIS, routing, etc.)
+                settings = import_data["settings"]
+                if 'ais' in settings:
+                    provider = settings['ais'].get('provider', 'aishub')
+                    api_key = settings['ais'].get('apiKey', '')
+                    ais_service.configure(provider=provider, api_key=api_key)
+
+                if 'waterCurrent' in settings:
+                    water_current_service.configure(settings['waterCurrent'])
+
+            except Exception as e:
+                results["errors"].append(f"Settings: {str(e)}")
+
+        print(f"✅ Import completed: {results['imported']}")
+
+        if results["errors"]:
+            results["status"] = "partial"
+
+        return results
+
+    except Exception as e:
+        print(f"❌ Import error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "error": str(e)}
 
 # ==================== STARTUP ====================
 @app.on_event("startup")

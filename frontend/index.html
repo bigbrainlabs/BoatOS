@@ -367,6 +367,20 @@
             font-size: 13px;
         }
 
+        /* Boat Icon Selector */
+        .boat-icon-option:hover {
+            background: rgba(42, 82, 152, 0.3) !important;
+            border-color: rgba(100, 255, 218, 0.5) !important;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .boat-icon-option.selected {
+            border-color: #64ffda !important;
+            background: rgba(100, 255, 218, 0.2) !important;
+            box-shadow: 0 0 15px rgba(100, 255, 218, 0.4);
+        }
+
     </style>
 </head>
 <body>
@@ -387,6 +401,9 @@
                 <div class="status-item" id="map-view-switch" onclick="toggleMapView()">
                     <span id="current-map-view">🗺️ Karte</span>
                 </div>
+                <div class="status-item" onclick="showDashboardPanel()">📊 Dashboard</div>
+                <div class="status-item" onclick="showCrewPanel()">👥 Crew</div>
+                <div class="status-item" onclick="showFuelPanel()">⛽ Treibstoff</div>
                 <div class="status-item" id="signalk-status">SignalK</div>
                 <div class="status-item" id="gps-status" onclick="toggleGpsPanel()">GPS</div>
             </div>
@@ -723,7 +740,9 @@
 
     <!-- JavaScript Includes -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="i18n.js?v=1760348000"></script>
+    <script src="boat_icons.js?v=1760348000"></script>
     <script src="settings.js?v=1760350000"></script>
     <script src="logbook.js?v=1760346500"></script>
     <script src="charts.js?v=1760345500"></script>
@@ -869,6 +888,33 @@
                             <label data-i18n="boat_name">Bootsname</label>
                             <input type="text" id="setting-boat-name" placeholder="z.B. Meine Yacht">
                             <small data-i18n="boat_name_desc">Name Ihres Bootes (optional)</small>
+                        </div>
+
+                        <div class="setting-item">
+                            <label data-i18n="boat_icon">Bootsicon für Positionsmarker</label>
+                            <div id="boat-icon-selector" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 10px;">
+                                <div class="boat-icon-option" data-icon="motorboat_small" onclick="selectBoatIcon('motorboat_small')" style="cursor: pointer; padding: 10px; border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; text-align: center; transition: all 0.3s; background: rgba(42, 82, 152, 0.1);">
+                                    <div id="icon-preview-motorboat_small" style="display: flex; justify-content: center; align-items: center; height: 48px;"></div>
+                                    <small style="display: block; margin-top: 5px; color: #8892b0; font-size: 11px;">Kleines Motorboot</small>
+                                </div>
+                                <div class="boat-icon-option" data-icon="motorboat_large" onclick="selectBoatIcon('motorboat_large')" style="cursor: pointer; padding: 10px; border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; text-align: center; transition: all 0.3s; background: rgba(42, 82, 152, 0.1);">
+                                    <div id="icon-preview-motorboat_large" style="display: flex; justify-content: center; align-items: center; height: 48px;"></div>
+                                    <small style="display: block; margin-top: 5px; color: #8892b0; font-size: 11px;">Großes Motorboot</small>
+                                </div>
+                                <div class="boat-icon-option" data-icon="yacht" onclick="selectBoatIcon('yacht')" style="cursor: pointer; padding: 10px; border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; text-align: center; transition: all 0.3s; background: rgba(42, 82, 152, 0.1);">
+                                    <div id="icon-preview-yacht" style="display: flex; justify-content: center; align-items: center; height: 48px;"></div>
+                                    <small style="display: block; margin-top: 5px; color: #8892b0; font-size: 11px;">Yacht</small>
+                                </div>
+                                <div class="boat-icon-option" data-icon="yacht_luxury" onclick="selectBoatIcon('yacht_luxury')" style="cursor: pointer; padding: 10px; border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; text-align: center; transition: all 0.3s; background: rgba(42, 82, 152, 0.1);">
+                                    <div id="icon-preview-yacht_luxury" style="display: flex; justify-content: center; align-items: center; height: 48px;"></div>
+                                    <small style="display: block; margin-top: 5px; color: #8892b0; font-size: 11px;">Luxusyacht</small>
+                                </div>
+                                <div class="boat-icon-option" data-icon="sailboat" onclick="selectBoatIcon('sailboat')" style="cursor: pointer; padding: 10px; border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; text-align: center; transition: all 0.3s; background: rgba(42, 82, 152, 0.1);">
+                                    <div id="icon-preview-sailboat" style="display: flex; justify-content: center; align-items: center; height: 48px;"></div>
+                                    <small style="display: block; margin-top: 5px; color: #8892b0; font-size: 11px;">Segelboot</small>
+                                </div>
+                            </div>
+                            <small data-i18n="boat_icon_desc">Wähle das Icon für deinen Positionsmarker auf der Karte</small>
                         </div>
 
                         <div class="setting-item">
@@ -1338,6 +1384,180 @@
             </div>
         </div>
     </div>
+
+    <!-- ==================== CREW MANAGEMENT PANEL ==================== -->
+    <div id="crew-panel" class="management-panel">
+        <div class="panel-header">
+            <h2 class="panel-title">👥 Crew-Verwaltung</h2>
+            <button class="panel-add-btn" onclick="showCrewModal()">+ Crew-Mitglied</button>
+            <button class="panel-close" onclick="hideCrewPanel()">×</button>
+        </div>
+        <div id="crew-list"></div>
+    </div>
+
+    <!-- ==================== FUEL TRACKING PANEL ==================== -->
+    <div id="fuel-panel" class="management-panel">
+        <div class="panel-header">
+            <h2 class="panel-title">⛽ Treibstoff-Tracking</h2>
+            <button class="panel-add-btn" onclick="showFuelModal()">+ Tankung</button>
+            <button class="panel-close" onclick="hideFuelPanel()">×</button>
+        </div>
+        <div id="fuel-stats"></div>
+        <div id="fuel-chart-container" style="margin: 20px 0; padding: 20px; background: rgba(10, 14, 39, 0.6); border-radius: 12px; border: 2px solid rgba(42, 82, 152, 0.3);">
+            <h4 style="margin: 0 0 15px 0; color: #64ffda;">📈 Verbrauchstrend (6 Monate)</h4>
+            <canvas id="fuel-trend-chart"></canvas>
+        </div>
+        <div id="fuel-list"></div>
+    </div>
+
+    <!-- ==================== STATISTICS DASHBOARD PANEL ==================== -->
+    <div id="dashboard-panel" class="management-panel">
+        <div class="panel-header">
+            <h2 class="panel-title">📊 Statistik-Dashboard</h2>
+            <button class="panel-close" onclick="hideDashboardPanel()">×</button>
+        </div>
+        <div id="dashboard-trips"></div>
+        <div id="dashboard-fuel"></div>
+        <div id="dashboard-crew"></div>
+        <div id="dashboard-charts" style="margin: 20px 0;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                <div style="padding: 20px; background: rgba(10, 14, 39, 0.6); border-radius: 12px; border: 2px solid rgba(42, 82, 152, 0.3);">
+                    <h4 style="margin: 0 0 15px 0; color: #64ffda;">📈 Monatliche Distanz</h4>
+                    <canvas id="dashboard-distance-chart"></canvas>
+                </div>
+                <div style="padding: 20px; background: rgba(10, 14, 39, 0.6); border-radius: 12px; border: 2px solid rgba(42, 82, 152, 0.3);">
+                    <h4 style="margin: 0 0 15px 0; color: #64ffda;">⛽ Monatlicher Verbrauch</h4>
+                    <canvas id="dashboard-fuel-chart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div id="dashboard-monthly"></div>
+
+        <!-- Import/Export Section -->
+        <div style="margin: 30px 0; padding: 20px; background: rgba(10, 14, 39, 0.6); border-radius: 12px; border: 2px solid rgba(42, 82, 152, 0.3);">
+            <h3 style="margin: 0 0 15px 0; color: #64ffda; font-size: 1.2em;">💾 Daten-Sicherung</h3>
+            <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                <button onclick="exportAllData()" style="
+                    padding: 12px 24px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: 500;
+                    font-size: 1em;
+                    transition: all 0.3s ease;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
+                    📥 Daten exportieren
+                </button>
+
+                <label style="
+                    padding: 12px 24px;
+                    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: 500;
+                    font-size: 1em;
+                    transition: all 0.3s ease;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(245, 87, 108, 0.4)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
+                    📤 Daten importieren
+                    <input type="file" accept=".json" onchange="handleImportFileSelect(event)" style="display: none;">
+                </label>
+
+                <div style="flex: 1; min-width: 200px; font-size: 0.85em; color: #8892b0; line-height: 1.5;">
+                    <div>• Export: Alle Daten als JSON-Datei sichern</div>
+                    <div>• Import: Gesicherte Daten wiederherstellen</div>
+                </div>
+            </div>
+            <div id="import-export-status" style="margin-top: 15px;"></div>
+        </div>
+    </div>
+
+    <!-- ==================== CREW MODAL ==================== -->
+    <div id="crew-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="crew-modal-title">Neues Crew-Mitglied</h3>
+                <button class="panel-close" onclick="hideCrewModal()">×</button>
+            </div>
+            <form id="crew-form">
+                <div class="form-group">
+                    <label class="form-label" for="crew-name">Name *</label>
+                    <input type="text" id="crew-name" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="crew-role">Rolle</label>
+                    <select id="crew-role" class="form-select">
+                        <option value="Captain">Captain</option>
+                        <option value="Crew" selected>Crew</option>
+                        <option value="Guest">Guest</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="crew-email">E-Mail</label>
+                    <input type="email" id="crew-email" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="crew-phone">Telefon</label>
+                    <input type="tel" id="crew-phone" class="form-input">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="form-submit">Speichern</button>
+                    <button type="button" class="form-cancel" onclick="hideCrewModal()">Abbrechen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== FUEL MODAL ==================== -->
+    <div id="fuel-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="fuel-modal-title">Neue Tankung</h3>
+                <button class="panel-close" onclick="hideFuelModal()">×</button>
+            </div>
+            <form id="fuel-form">
+                <div class="form-group">
+                    <label class="form-label" for="fuel-liters">Liter *</label>
+                    <input type="number" id="fuel-liters" class="form-input" step="0.1" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="fuel-price">Preis pro Liter (€) *</label>
+                    <input type="number" id="fuel-price" class="form-input" step="0.001" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="fuel-location">Ort</label>
+                    <input type="text" id="fuel-location" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="fuel-odometer">Zählerstand (NM)</label>
+                    <input type="number" id="fuel-odometer" class="form-input" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="fuel-notes">Notizen</label>
+                    <textarea id="fuel-notes" class="form-textarea"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="form-submit">Speichern</button>
+                    <button type="button" class="form-cancel" onclick="hideFuelModal()">Abbrechen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Load Management Scripts -->
+    <link rel="stylesheet" href="management.css?v=1.2">
+    <script src="crew.js?v=1.2"></script>
+    <script src="fuel.js?v=1.2"></script>
+    <script src="dashboard.js?v=1.2"></script>
 
 </body>
 </html>
