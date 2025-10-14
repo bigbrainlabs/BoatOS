@@ -46,6 +46,7 @@ function convertSpeed(knots, targetUnit) {
     switch (targetUnit) {
         case 'kn': return knots; // Knots
         case 'kmh': return knots * 1.852; // km/h
+        case 'km': return knots * 1.852; // km/h (fallback for common mistake)
         case 'mph': return knots * 1.15078; // Statute Miles per Hour
         case 'ms': return knots * 0.514444; // meters per second
         default: return knots;
@@ -258,9 +259,10 @@ function getUnitLabel(type) {
         case 'speed':
             if (units.speed === 'kn') return 'kn';
             if (units.speed === 'kmh') return 'km/h';
+            if (units.speed === 'km') return 'km/h'; // Fallback for common mistake
             if (units.speed === 'mph') return 'mph';
             if (units.speed === 'ms') return 'm/s';
-            return units.speed.toUpperCase();
+            return 'kn'; // Default fallback
 
         case 'depth':
             if (units.depth === 'm') return 'm';

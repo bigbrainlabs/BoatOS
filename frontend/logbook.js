@@ -217,8 +217,89 @@ async function updateTrackStatus() {
 }
 
 async function startTrackRecording() {
+    // Show crew selection modal first
+    await showCrewSelectionModal();
+}
+
+async function showCrewSelectionModal() {
     try {
-        const response = await fetch(`${getAPI()}/api/track/start`, { method: "POST" });
+        // Load crew members from backend
+        const response = await fetch(`${getAPI()}/api/crew`);
+        const crewMembers = await response.json();
+
+        // Create modal HTML
+        const modalHtml = `
+            <div id="crew-selection-modal" class="modal active">
+                <div class="modal-content" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h2>👥 Crew auswählen</h2>
+                        <button onclick="closeCrewSelectionModal()" class="modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p style="margin-bottom: 15px;">Wer ist bei dieser Fahrt dabei?</p>
+                        ${crewMembers.length > 0 ? `
+                            <div class="crew-selection-list">
+                                ${crewMembers.map(member => `
+                                    <label class="crew-selection-item">
+                                        <input type="checkbox" name="crew" value="${member.id}">
+                                        <div class="crew-selection-info">
+                                            <div class="crew-selection-name">${member.name}</div>
+                                            <div class="crew-selection-role crew-role-${member.role.toLowerCase()}">${member.role}</div>
+                                        </div>
+                                    </label>
+                                `).join('')}
+                            </div>
+                        ` : `
+                            <div class="empty-state-small">
+                                Keine Crew-Mitglieder verfügbar.<br>
+                                Füge zuerst Crew-Mitglieder hinzu.
+                            </div>
+                        `}
+                    </div>
+                    <div class="modal-footer">
+                        <button onclick="closeCrewSelectionModal()" class="btn btn-secondary">Abbrechen</button>
+                        <button onclick="confirmStartTrackRecording()" class="btn btn-primary">Fahrt starten</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Add modal to body
+        const existingModal = document.getElementById('crew-selection-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    } catch (error) {
+        console.error("Error loading crew:", error);
+        // Start without crew selection if loading fails
+        confirmStartTrackRecording();
+    }
+}
+
+function closeCrewSelectionModal() {
+    const modal = document.getElementById('crew-selection-modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+async function confirmStartTrackRecording() {
+    try {
+        // Get selected crew members
+        const checkboxes = document.querySelectorAll('#crew-selection-modal input[name="crew"]:checked');
+        const crewIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+        // Close modal
+        closeCrewSelectionModal();
+
+        // Start recording with crew_ids
+        const response = await fetch(`${getAPI()}/api/track/start`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ crew_ids: crewIds })
+        });
         const result = await response.json();
         if (typeof showMsg === 'function') showMsg("🚢 Fahrt gestartet - Track-Aufzeichnung läuft");
         updateTrackStatus();
@@ -440,11 +521,18 @@ function renderTripCard(trip) {
         ? formatDistance(parseFloat(trip.distance || 0) * 1852)  // Convert NM to meters
         : `${(trip.distance || 0)} NM`;
 
+    // Crew members display
+    let crewHtml = '';
+    if (trip.crew_ids && trip.crew_ids.length > 0) {
+        crewHtml = '<div class="trip-crew">👥 ' + trip.crew_ids.length + ' Crew</div>';
+    }
+
     return '<div class="trip-card" onclick="viewTripDetails(' + trip.id + ')">' +
         '<div class="trip-header">' +
             '<div>' +
                 '<div class="trip-date">🚢 ' + dateStr + '</div>' +
                 '<div class="trip-time">' + startTime + ' - ' + endTime + '</div>' +
+                crewHtml +
             '</div>' +
         '</div>' +
         '<div class="trip-stats">' +

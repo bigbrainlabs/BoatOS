@@ -22,6 +22,8 @@ from water_current import water_current_service
 import crew_management
 import fuel_tracking
 import statistics
+import weather_alerts
+import locks_storage
 
 app = FastAPI(title="BoatOS API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -196,6 +198,215 @@ async def get_water_level_gauges(lat_min: float, lon_min: float, lat_max: float,
     """
     gauges = pegelonline.fetch_gauges(lat_min, lon_min, lat_max, lon_max)
     return {"gauges": gauges, "count": len(gauges)}
+
+# ==================== LOCKS (SCHLEUSEN) ====================
+@app.get("/api/locks")
+async def get_locks():
+    """
+    Get all locks (Schleusen)
+
+    Returns:
+    - List of all locks with details
+    """
+    locks = locks_storage.load_locks()
+    return {"locks": locks, "count": len(locks)}
+
+@app.get("/api/locks/nearby")
+async def get_nearby_locks(lat: float, lon: float, radius: float = 50):
+    """
+    Get locks near a location
+
+    Parameters:
+    - lat, lon: Center position
+    - radius: Search radius in km (default: 50)
+
+    Returns:
+    - List of locks within radius
+    """
+    locks = locks_storage.get_locks_nearby(lat, lon, radius)
+    return {"locks": locks, "count": len(locks)}
+
+@app.get("/api/locks/bounds")
+async def get_locks_in_bounds(lat_min: float, lon_min: float, lat_max: float, lon_max: float):
+    """
+    Get locks within geographic bounds (for map display)
+
+    Parameters:
+    - lat_min, lon_min, lat_max, lon_max: Bounding box
+
+    Returns:
+    - List of locks in bounding box
+    """
+    locks = locks_storage.get_locks_in_bounds(lat_min, lon_min, lat_max, lon_max)
+    return {"locks": locks, "count": len(locks)}
+
+@app.get("/api/locks/waterway/{waterway}")
+async def get_locks_by_waterway(waterway: str):
+    """
+    Get locks on a specific waterway
+
+    Parameters:
+    - waterway: Waterway name (e.g., "Elbe", "Havel")
+
+    Returns:
+    - List of locks on waterway, sorted by river_km
+    """
+    locks = locks_storage.get_locks_by_waterway(waterway)
+    return {"locks": locks, "count": len(locks), "waterway": waterway}
+
+@app.get("/api/locks/{lock_id}")
+async def get_lock_details(lock_id: int):
+    """
+    Get details for a specific lock
+
+    Parameters:
+    - lock_id: Lock ID
+
+    Returns:
+    - Lock details including opening hours, contact info, etc.
+    """
+    lock = locks_storage.get_lock(lock_id)
+    if not lock:
+        return {"error": "Lock not found"}
+    return lock
+
+@app.get("/api/locks/{lock_id}/status")
+async def get_lock_status(lock_id: int):
+    """
+    Check if lock is currently open
+
+    Parameters:
+    - lock_id: Lock ID
+
+    Returns:
+    - is_open: bool
+    - reason: str (open/closed reason)
+    - opens_at/closes_at: next opening/closing time
+    """
+    status = locks_storage.is_lock_open(lock_id)
+    return status
+
+@app.post("/api/locks")
+async def create_lock(lock_data: Dict[str, Any]):
+    """
+    Add a new lock to database
+
+    Request body: {
+        "name": str (required),
+        "waterway": str (required),
+        "lat": float (required),
+        "lon": float (required),
+        "river_km": float,
+        "phone": str,
+        "vhf_channel": str,
+        "email": str,
+        "website": str,
+        "opening_hours": dict,
+        "break_times": list,
+        "max_length": float,
+        "max_width": float,
+        "max_draft": float,
+        "max_height": float,
+        "avg_duration": int,
+        "notes": str,
+        "facilities": list
+    }
+    """
+    try:
+        lock_id = locks_storage.add_lock(lock_data)
+        return {"status": "success", "lock_id": lock_id}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.put("/api/locks/{lock_id}")
+async def update_lock(lock_id: int, lock_data: Dict[str, Any]):
+    """Update lock information"""
+    success = locks_storage.update_lock(lock_id, lock_data)
+    if success:
+        return {"status": "success", "lock_id": lock_id}
+    return {"error": "Lock not found"}
+
+@app.delete("/api/locks/{lock_id}")
+async def delete_lock(lock_id: int):
+    """Delete a lock"""
+    success = locks_storage.delete_lock(lock_id)
+    return {"status": "deleted" if success else "not_found"}
+
+@app.post("/api/locks/{lock_id}/notify")
+async def notify_lock(lock_id: int, request: Dict[str, Any]):
+    """
+    Prepare lock notification (email/SMS template)
+    Phase 1: Returns email template data
+
+    Parameters:
+    - lock_id: Lock ID
+    - request: {
+        "boat_name": str,
+        "eta": str (ISO datetime),
+        "crew_count": int,
+        "boat_length": float,
+        "boat_beam": float
+      }
+
+    Returns:
+    - Email template with pre-filled data
+    """
+    lock = locks_storage.get_lock(lock_id)
+    if not lock:
+        return {"error": "Lock not found"}
+
+    # Load boat data from settings if not provided
+    boat_name = request.get("boat_name", "")
+    boat_length = request.get("boat_length", 0)
+    boat_beam = request.get("boat_beam", 0)
+    crew_count = request.get("crew_count", 2)
+    eta = request.get("eta", datetime.now().isoformat())
+
+    try:
+        with open("data/settings.json", 'r') as f:
+            settings = json.load(f)
+            boat = settings.get('boat', {})
+            if not boat_name:
+                boat_name = boat.get('name', '')
+            if not boat_length:
+                boat_length = boat.get('length', 0)
+            if not boat_beam:
+                boat_beam = boat.get('beam', 0)
+    except:
+        pass
+
+    # Format ETA
+    try:
+        eta_dt = datetime.fromisoformat(eta.replace('Z', '+00:00'))
+        eta_formatted = eta_dt.strftime("%d.%m.%Y um %H:%M Uhr")
+    except:
+        eta_formatted = eta
+
+    # Create email template
+    subject = f"Schleusenanmeldung - {boat_name} - {lock['name']}"
+    body = f"""Guten Tag,
+
+hiermit melde ich mich für die Schleuse {lock['name']} an:
+
+Boot: {boat_name}
+Länge: {boat_length} m
+Breite: {boat_beam} m
+Crew: {crew_count} Personen
+Voraussichtliche Ankunft: {eta_formatted}
+
+Mit freundlichen Grüßen
+"""
+
+    return {
+        "lock": lock,
+        "email": {
+            "to": lock.get('email', ''),
+            "subject": subject,
+            "body": body
+        },
+        "phone": lock.get('phone', ''),
+        "vhf": lock.get('vhf_channel', '')
+    }
 
 # ==================== CHARTS ====================
 @app.get("/api/charts")
@@ -960,6 +1171,75 @@ async def fetch_weather():
         await fetch_weather_once("de")
         await asyncio.sleep(1800)
 
+# ==================== WEATHER ALERTS (DWD) ====================
+@app.get("/api/weather/alerts")
+async def get_weather_alerts():
+    """Get current weather alerts from DWD via Bright Sky API"""
+    try:
+        lat = sensor_data["gps"]["lat"]
+        lon = sensor_data["gps"]["lon"]
+
+        # Use fallback location if GPS not available (Albertkanal area)
+        if lat == 0 or lon == 0 or lat is None or lon is None:
+            lat, lon = 50.833, 5.663
+
+        alerts_data = await weather_alerts.fetch_weather_alerts(lat, lon)
+
+        # Format alerts for UI
+        formatted_alerts = [
+            weather_alerts.format_alert_for_ui(alert)
+            for alert in alerts_data.get("alerts", [])
+        ]
+
+        return {
+            "alerts": formatted_alerts,
+            "count": len(formatted_alerts),
+            "last_updated": alerts_data.get("last_updated"),
+            "location": alerts_data.get("location")
+        }
+    except Exception as e:
+        print(f"❌ Weather alerts endpoint error: {e}")
+        return {"alerts": [], "count": 0, "error": str(e)}
+
+@app.get("/api/weather/alerts/cached")
+async def get_cached_weather_alerts():
+    """Get cached weather alerts without making a new API call"""
+    try:
+        cached = weather_alerts.get_cached_alerts()
+
+        # Format cached alerts for UI
+        formatted_alerts = [
+            weather_alerts.format_alert_for_ui(alert)
+            for alert in cached.get("alerts", [])
+        ]
+
+        return {
+            "alerts": formatted_alerts,
+            "count": len(formatted_alerts),
+            "last_updated": cached.get("last_updated"),
+            "location": cached.get("location")
+        }
+    except Exception as e:
+        print(f"❌ Cached weather alerts error: {e}")
+        return {"alerts": [], "count": 0, "error": str(e)}
+
+async def fetch_weather_alerts_periodic():
+    """Periodic weather alerts fetch loop (every 10 minutes)"""
+    while True:
+        try:
+            lat = sensor_data["gps"]["lat"]
+            lon = sensor_data["gps"]["lon"]
+
+            # Use fallback location if GPS not available
+            if lat == 0 or lon == 0 or lat is None or lon is None:
+                lat, lon = 50.833, 5.663
+
+            await weather_alerts.fetch_weather_alerts(lat, lon)
+        except Exception as e:
+            print(f"⚠️ Periodic weather alerts fetch error: {e}")
+
+        await asyncio.sleep(600)  # 10 minutes
+
 # ==================== LOGBOOK ====================
 @app.get("/api/logbook")
 async def get_logbook():
@@ -1499,6 +1779,58 @@ async def calculate_route(request: dict):
                         route["properties"]["current_adjustment"] = current_info
                         print(f"🌊 Route duration adjusted for currents: {adjusted_duration_h:.2f}h")
 
+                    # Find locks along the route
+                    try:
+                        locks_on_route = locks_storage.get_locks_on_route(route_geometry, buffer_meters=500)
+
+                        # Filter out locks already provided by OSRM
+                        osrm_locks = route["properties"].get("locks", [])
+                        if locks_on_route and len(locks_on_route) > 0:
+                            # Merge with OSRM locks, avoiding duplicates
+                            route["properties"]["locks_from_db"] = locks_on_route
+
+                            # Calculate total lock time and add to duration
+                            total_lock_time_h = 0
+                            for lock in locks_on_route:
+                                lock_duration_min = lock.get('avg_duration', 15)  # Default 15 min
+                                total_lock_time_h += lock_duration_min / 60
+
+                            # Adjust duration for locks
+                            if route["properties"].get("duration_adjusted_h"):
+                                route["properties"]["duration_with_locks_h"] = route["properties"]["duration_adjusted_h"] + total_lock_time_h
+                            else:
+                                base_duration = route["properties"]["distance_nm"] / (boat_speed_kmh / 1.852)
+                                route["properties"]["duration_with_locks_h"] = base_duration + total_lock_time_h
+
+                            print(f"🔒 Found {len(locks_on_route)} locks on route (+{total_lock_time_h*60:.0f} min)")
+
+                            # Check lock availability at arrival times
+                            try:
+                                # Use current time or provided departure time
+                                departure_time = datetime.now()
+                                if request.get("departure_time"):
+                                    try:
+                                        departure_time = datetime.fromisoformat(request["departure_time"])
+                                    except:
+                                        pass
+
+                                lock_warnings = locks_storage.check_locks_availability(
+                                    locks_on_route,
+                                    departure_time,
+                                    boat_speed_kmh
+                                )
+
+                                if lock_warnings:
+                                    route["properties"]["lock_warnings"] = lock_warnings
+                                    print(f"⚠️ {len(lock_warnings)} lock(s) will be closed at arrival time")
+                                    for warning in lock_warnings:
+                                        print(f"   - {warning['lock_name']}: arrives {warning['estimated_arrival_formatted']}, {warning['reason']}")
+                            except Exception as e:
+                                print(f"⚠️ Lock availability check error: {e}")
+
+                    except Exception as e:
+                        print(f"⚠️ Lock detection error: {e}")
+
                     return route
             except Exception as e:
                 print(f"⚠️ OSRM routing failed: {e}")
@@ -1852,6 +2184,7 @@ async def startup_event():
     asyncio.create_task(signalk_listener())
     asyncio.create_task(track_recording_loop())
     asyncio.create_task(fetch_weather())
+    asyncio.create_task(fetch_weather_alerts_periodic())  # Start periodic weather alerts
     asyncio.create_task(gps_service.read_gps_from_signalk())  # Start GPS service from SignalK
     mqtt_client_init()
     load_chart_layers()

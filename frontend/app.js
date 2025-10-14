@@ -34,6 +34,7 @@ let LOW_SATELLITE_THRESHOLD = 15000; // 15 seconds in milliseconds (can be chang
 let lastBackendGpsTime = null; // Track when we last received valid backend GPS
 let backendGpsUnavailableStartTime = null; // Track when backend GPS first became unavailable
 const BACKEND_GPS_FALLBACK_DELAY = 30000; // Wait 30 seconds before falling back to browser GPS (only as true fallback)
+let currentBoatHeading = 0; // Current boat heading/course for rotation
 
 // Map layers (global references)
 let osmLayer;
@@ -115,9 +116,14 @@ function initMap() {
     L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
     // Boot-Position Marker
+    // Get boat icon from settings
+    const settings = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
+    const boatIconType = settings.boat?.icon || 'motorboat_small';
+    const boatIconHtml = (typeof getBoatIcon === 'function') ? getBoatIcon(boatIconType) : '⛵';
+
     boatMarker = L.marker([currentPosition.lat, currentPosition.lon], {
         icon: L.divIcon({
-            html: '⛵',
+            html: boatIconHtml,
             className: 'boat-marker',
             iconSize: [40, 40]
         }),
@@ -136,7 +142,6 @@ function initMap() {
     }).addTo(map);
 
     // Check if track history should be shown from settings
-    const settings = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
     if (settings.showTrackHistory === false) {
         map.removeLayer(trackHistoryLayer);
     }
@@ -427,6 +432,26 @@ function toggleMapView() {
     }
 }
 
+// ==================== PANEL MANAGEMENT ====================
+function hideAllPanels() {
+    const panels = [
+        'crew-panel',
+        'fuel-panel',
+        'dashboard-panel',
+        'gps-panel',
+        'weather-panel'
+    ];
+    panels.forEach(panelId => {
+        const panel = document.getElementById(panelId);
+        if (panel) {
+            panel.style.display = 'none';
+        }
+    });
+}
+
+// Make hideAllPanels globally available for other modules
+window.hideAllPanels = hideAllPanels;
+
 function toggleGpsPanel() {
     const panel = document.getElementById('gps-panel');
     const weatherPanel = document.getElementById('weather-panel');
@@ -464,13 +489,18 @@ function updateBoatPosition(gps) {
         boatMarker.setLatLng([newLat, newLon]);
 
         // Rotate marker based on course (if available)
-        if (gps.course !== undefined && gps.course !== 0) {
-            const markerElement = boatMarker.getElement();
-            if (markerElement) {
-                markerElement.style.transform = `rotate(${gps.course}deg)`;
+        let heading = gps.course || gps.heading || 0;
+        if (heading !== undefined && heading !== 0) {
+            currentBoatHeading = heading;
+            // Update marker icon with rotation
+            const settings = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
+            const boatIconType = settings.boat?.icon || 'motorboat_small';
+            if (typeof createBoatMarkerIcon === 'function') {
+                const rotatedIcon = createBoatMarkerIcon(boatIconType, heading);
+                boatMarker.setIcon(rotatedIcon);
             }
             // Update compass rose with heading
-            updateCompassRose(gps.course);
+            updateCompassRose(heading);
         } else if (gps.heading !== undefined) {
             // Use heading if course not available
             updateCompassRose(gps.heading);
@@ -1242,6 +1272,11 @@ window.addEventListener('load', () => {
     fetchWeather();
     setInterval(fetchWeather, 1800000); // 30 min
 
+    // Initialize locks layer
+    if (typeof initLocksLayer === 'function') {
+        initLocksLayer(map);
+    }
+
     // Geolocation API (Browser GPS als Fallback)
     let firstPositionReceived = false;
     if (navigator.geolocation) {
@@ -1971,6 +2006,24 @@ window.clearDisplayedTrack = function() {
 
     console.log('✅ Track view cleared');
 };
+
+// ==================== UPDATE BOAT MARKER ICON ====================
+function updateBoatMarkerIcon(iconType) {
+    if (!boatMarker) {
+        console.warn('⚠️ Boat marker not initialized yet');
+        return;
+    }
+
+    if (typeof createBoatMarkerIcon !== 'function') {
+        console.warn('⚠️ createBoatMarkerIcon function not available (boat_icons.js not loaded?)');
+        return;
+    }
+
+    // Use current heading/rotation when updating icon
+    const newIcon = createBoatMarkerIcon(iconType || 'motorboat_small', currentBoatHeading);
+    boatMarker.setIcon(newIcon);
+    console.log(`✅ Boat marker icon updated to: ${iconType} (rotation: ${currentBoatHeading}°)`);
+}
 
 // ==================== SERVICE WORKER (PWA) ====================
 if ('serviceWorker' in navigator) {

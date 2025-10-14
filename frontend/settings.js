@@ -69,7 +69,8 @@ const defaultSettings = {
         height: 0,           // meters above waterline
         fuelConsumption: 0,  // liters/hour
         fuelCapacity: 0,     // liters
-        cruiseSpeed: 0       // km/h
+        cruiseSpeed: 0,      // km/h
+        icon: 'motorboat_small'  // boat icon type
     },
     waterCurrent: {
         enabled: false,      // Enable current consideration in routing
@@ -351,6 +352,15 @@ function loadSettingsToForm() {
         document.getElementById('setting-boat-cruise-speed').value = currentSettings.boat?.cruiseSpeed || '';
     }
 
+    // Boat icon
+    if (typeof loadBoatIconPreviews === 'function') {
+        loadBoatIconPreviews();
+        const iconType = currentSettings.boat?.icon || 'motorboat_small';
+        if (typeof selectBoatIcon === 'function') {
+            selectBoatIcon(iconType, false); // false = don't update map yet
+        }
+    }
+
     // Water Current
     if (document.getElementById('setting-water-current-enabled')) {
         document.getElementById('setting-water-current-enabled').checked = currentSettings.waterCurrent?.enabled || false;
@@ -451,7 +461,8 @@ function saveSettings() {
             height: parseFloat(getValue('setting-boat-height', '0')) || 0,
             fuelConsumption: parseFloat(getValue('setting-boat-fuel-consumption', '0')) || 0,
             fuelCapacity: parseFloat(getValue('setting-boat-fuel-capacity', '0')) || 0,
-            cruiseSpeed: parseFloat(getValue('setting-boat-cruise-speed', '0')) || 0
+            cruiseSpeed: parseFloat(getValue('setting-boat-cruise-speed', '0')) || 0,
+            icon: (typeof getSelectedBoatIcon === 'function') ? getSelectedBoatIcon() : 'motorboat_small'
         },
         waterCurrent: {
             enabled: getChecked('setting-water-current-enabled', false),
@@ -848,3 +859,62 @@ window.addEventListener('load', function() {
     // Then check backend for updates
     initializeSettings();
 });
+
+// ==================== BOAT ICON SELECTION ====================
+let selectedBoatIcon = 'motorboat_small';
+
+/**
+ * Load boat icon previews in the settings UI
+ */
+function loadBoatIconPreviews() {
+    if (typeof BOAT_ICONS === 'undefined') {
+        console.warn('⚠️ BOAT_ICONS not loaded yet');
+        return;
+    }
+
+    Object.keys(BOAT_ICONS).forEach(iconType => {
+        const previewEl = document.getElementById(`icon-preview-${iconType}`);
+        if (previewEl) {
+            previewEl.innerHTML = BOAT_ICONS[iconType];
+        }
+    });
+}
+
+/**
+ * Select a boat icon
+ * @param {string} iconType - The icon type to select
+ * @param {boolean} updateMap - Whether to update the map marker immediately
+ */
+function selectBoatIcon(iconType, updateMap = true) {
+    // Remove 'selected' class from all options
+    document.querySelectorAll('.boat-icon-option').forEach(opt => {
+        opt.classList.remove('selected');
+    });
+
+    // Add 'selected' class to clicked option
+    const selectedOption = document.querySelector(`[data-icon="${iconType}"]`);
+    if (selectedOption) {
+        selectedOption.classList.add('selected');
+    }
+
+    // Update global variable
+    selectedBoatIcon = iconType;
+
+    // Update currentSettings
+    if (currentSettings.boat) {
+        currentSettings.boat.icon = iconType;
+    }
+
+    // Update map marker if requested and function is available
+    if (updateMap && typeof updateBoatMarkerIcon === 'function') {
+        updateBoatMarkerIcon(iconType);
+    }
+}
+
+/**
+ * Get the currently selected boat icon
+ * @returns {string} The selected icon type
+ */
+function getSelectedBoatIcon() {
+    return currentSettings.boat?.icon || selectedBoatIcon || 'motorboat_small';
+}
