@@ -77,10 +77,37 @@ async function updateRoute() {
             // Distanz aus Routing-Ergebnis (in Metern)
             const distanceMeters = data.properties.distance_m;
             const distanceNM = data.properties.distance_nm;
-            const avgSpeed = 5; // knots
-            const etaHours = distanceNM / avgSpeed;
-            const durationHours = Math.floor(etaHours);
-            const durationMinutes = Math.round((etaHours - durationHours) * 60);
+
+            // Get cruise speed from boat settings (km/h) and convert to knots
+            let avgSpeed = 5; // Default fallback: 5 knots
+            console.log('🚤 Boat Settings:', boatSettings);
+            console.log('🚤 Cruise Speed (km/h):', boatSettings.cruiseSpeed);
+
+            if (boatSettings.cruiseSpeed && boatSettings.cruiseSpeed > 0) {
+                avgSpeed = boatSettings.cruiseSpeed / 1.852; // Convert km/h to knots
+                console.log('✅ Using cruise speed:', boatSettings.cruiseSpeed, 'km/h =', avgSpeed.toFixed(1), 'kn');
+            } else {
+                console.log('⚠️ No cruise speed set, using default 5 knots');
+            }
+
+            // Use duration_adjusted_h from backend if available (includes water current adjustment)
+            let etaHours;
+            if (data.properties.duration_adjusted_h) {
+                etaHours = data.properties.duration_adjusted_h;
+                console.log('🌊 Using adjusted ETA from backend:', etaHours.toFixed(2), 'hours (includes water current)');
+            } else {
+                etaHours = distanceNM / avgSpeed;
+                console.log('⏱️ Calculating ETA from distance/speed:', etaHours.toFixed(2), 'hours');
+            }
+
+            let durationHours = Math.floor(etaHours);
+            let durationMinutes = Math.round((etaHours - durationHours) * 60);
+
+            // Handle case where rounding gives 60 minutes
+            if (durationMinutes >= 60) {
+                durationHours += 1;
+                durationMinutes = 0;
+            }
 
             // Segment-Infos generieren
             const routeInfo = [];
@@ -101,9 +128,18 @@ async function updateRoute() {
                 });
             }
 
-            // Add lock markers if present
+            // Add lock markers if present (but skip duplicates from locks database)
             if (data.properties.locks && data.properties.locks.length > 0) {
+                let displayedLocks = 0;
+                let skippedLocks = 0;
+
                 data.properties.locks.forEach(lock => {
+                    // Check if this lock is already in our locks database
+                    if (typeof isLockInDatabase === 'function' && isLockInDatabase(lock)) {
+                        skippedLocks++;
+                        return; // Skip this lock, it's already displayed by locks.js
+                    }
+
                     const lockIcon = L.divIcon({
                         className: 'lock-marker',
                         html: '<div style="background: rgba(255, 140, 0, 0.9); color: white; padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.4); border: 2px solid white;">🔒 Schleuse</div>',
@@ -113,8 +149,15 @@ async function updateRoute() {
 
                     const marker = L.marker([lock.lat, lock.lon], { icon: lockIcon }).addTo(routeLayer);
                     marker.bindPopup(`<strong>🔒 ${lock.name}</strong><br>Distanz: ${formatDistance(lock.distance_from_start)}`);
+                    displayedLocks++;
                 });
-                console.log(`🔒 ${data.properties.locks.length} Schleusen gefunden`);
+
+                if (displayedLocks > 0) {
+                    console.log(`🔒 ${displayedLocks} OSRM-Schleusen auf Route angezeigt`);
+                }
+                if (skippedLocks > 0) {
+                    console.log(`⏭️ ${skippedLocks} Schleusen übersprungen (bereits in Datenbank)`);
+                }
             }
 
             // Add bridge markers if present
@@ -134,8 +177,8 @@ async function updateRoute() {
                 console.log(`🌉 ${data.properties.bridges.length} Brücken gefunden`);
             }
 
-            console.log(`📏 Routed: ${formatDistance(distanceMeters)} (${data.properties.routing_type}), ETA: ${durationHours}h ${durationMinutes}min @ 5kn`);
-            showRouteInfo(distanceMeters, durationHours, durationMinutes, routeInfo, isDirect, data.properties.locks, data.properties.bridges);
+            console.log(`📏 Routed: ${formatDistance(distanceMeters)} (${data.properties.routing_type}), ETA: ${durationHours}h ${durationMinutes}min @ ${formatSpeed(avgSpeed)}`);
+            showRouteInfo(distanceMeters, durationHours, durationMinutes, routeInfo, isDirect, data.properties.locks, data.properties.bridges, avgSpeed);
 
         } else {
             console.warn('⚠️ No route found, using direct routing');
@@ -212,13 +255,32 @@ function drawDirectRoute() {
     }
 
     const totalNM = (totalDistance / 1852);
-    const avgSpeed = 5;
+
+    // Get cruise speed from boat settings (km/h) and convert to knots
+    const boatSettings = typeof getBoatSettings === 'function' ? getBoatSettings() : {};
+    let avgSpeed = 5; // Default fallback: 5 knots
+    console.log('🚤 Boat Settings (direct):', boatSettings);
+    console.log('🚤 Cruise Speed (km/h):', boatSettings.cruiseSpeed);
+
+    if (boatSettings.cruiseSpeed && boatSettings.cruiseSpeed > 0) {
+        avgSpeed = boatSettings.cruiseSpeed / 1.852; // Convert km/h to knots
+        console.log('✅ Using cruise speed:', boatSettings.cruiseSpeed, 'km/h =', avgSpeed.toFixed(1), 'kn');
+    } else {
+        console.log('⚠️ No cruise speed set, using default 5 knots');
+    }
+
     const etaHours = totalNM / avgSpeed;
-    const etaHoursInt = Math.floor(etaHours);
-    const etaMinutes = Math.round((etaHours - etaHoursInt) * 60);
+    let etaHoursInt = Math.floor(etaHours);
+    let etaMinutes = Math.round((etaHours - etaHoursInt) * 60);
+
+    // Handle case where rounding gives 60 minutes
+    if (etaMinutes >= 60) {
+        etaHoursInt += 1;
+        etaMinutes = 0;
+    }
 
     console.log(`📏 Direct Route (Luftlinie): ${formatDistance(totalDistance)}`);
-    showRouteInfo(totalDistance, etaHoursInt, etaMinutes, routeInfo, true);
+    showRouteInfo(totalDistance, etaHoursInt, etaMinutes, routeInfo, true, [], [], avgSpeed);
 }
 
 function calculateBearing(lat1, lon1, lat2, lon2) {
@@ -238,7 +300,7 @@ function calculateBearing(lat1, lon1, lat2, lon2) {
     return bearing;
 }
 
-function showRouteInfo(totalMeters, hours, minutes, segments, isDirect, locks = [], bridges = []) {
+function showRouteInfo(totalMeters, hours, minutes, segments, isDirect, locks = [], bridges = [], avgSpeed = 5) {
     const oldPanel = document.getElementById('route-info-panel');
     if (oldPanel) oldPanel.remove();
 
@@ -276,7 +338,7 @@ function showRouteInfo(totalMeters, hours, minutes, segments, isDirect, locks = 
         (isDirect ? '<div style="background: rgba(231, 76, 60, 0.2); padding: 8px; border-radius: 6px; margin-bottom: 10px; font-size: 11px; color: #ffcccc;">⚠️ Wasserrouting nicht verfügbar. Zeige Luftlinie.</div>' : '') +
         '<div style="background: rgba(42, 82, 152, 0.2); padding: 10px; border-radius: 8px; margin-bottom: 10px;">' +
         '<div style="font-size: 24px; font-weight: 700; color: #64ffda;">' + distanceFormatted + '</div>' +
-        '<div style="font-size: 12px; color: #8892b0;">ETA: ' + hours + 'h ' + minutes + 'min @ ' + formatSpeed(5) + '</div>' +
+        '<div style="font-size: 12px; color: #8892b0;">ETA: ' + hours + 'h ' + minutes + 'min @ ' + formatSpeed(avgSpeed) + '</div>' +
         '</div>' +
         infrastructureInfo +
         '<div style="max-height: 200px; overflow-y: auto;">' +

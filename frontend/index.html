@@ -74,6 +74,17 @@
         .tile-value { font-size: 32px; font-weight: 700; color: #64ffda; }
         .tile-unit { font-size: 16px; color: #8892b0; margin-left: 4px; }
 
+        /* Weather Alerts */
+        #weather-alerts { position: absolute; top: 20px; right: 20px; width: 300px; z-index: 1001; display: none; }
+        .alert-box { background: rgba(139, 0, 0, 0.95); backdrop-filter: blur(10px); border: 2px solid #FF4500; border-radius: 12px; padding: 15px; margin-bottom: 10px; animation: pulse 2s ease-in-out infinite; }
+        .alert-box.warning { background: rgba(255, 140, 0, 0.95); border-color: #FF8C00; }
+        .alert-box.minor { background: rgba(255, 215, 0, 0.95); border-color: #FFD700; color: #000; }
+        @keyframes pulse { 0%, 100% { box-shadow: 0 0 10px rgba(255, 69, 0, 0.5); } 50% { box-shadow: 0 0 20px rgba(255, 69, 0, 0.8); } }
+        .alert-title { font-size: 14px; font-weight: 700; margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
+        .alert-severity { font-size: 12px; padding: 2px 8px; border-radius: 4px; background: rgba(255,255,255,0.2); }
+        .alert-event { font-size: 13px; margin-bottom: 5px; font-weight: 600; }
+        .alert-desc { font-size: 11px; line-height: 1.4; opacity: 0.9; }
+
         /* Controls */
         #controls { background: rgba(10, 14, 39, 0.95); padding: 15px 20px; display: flex; gap: 10px; border-top: 2px solid rgba(42, 82, 152, 0.6); }
         .control-btn { flex: 1; background: linear-gradient(135deg, #2a5298, #1e3c72); border: none; color: white; padding: 18px; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s; text-transform: uppercase; }
@@ -82,6 +93,34 @@
 
         /* Boat Marker */
         .boat-marker { width: 40px; height: 40px; background: transparent; display: flex; align-items: center; justify-content: center; font-size: 32px; text-shadow: 0 0 8px rgba(0,0,0,0.8), 0 2px 4px rgba(0,0,0,0.6); transform-origin: center; transition: transform 0.3s; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+
+        /* Lock Marker */
+        .lock-marker { background: transparent !important; border: none !important; }
+        .lock-icon { width: 32px; height: 32px; background: rgba(255, 140, 0, 0.95); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.4); border: 2px solid white; cursor: pointer; transition: all 0.3s; }
+        .lock-icon:hover { transform: scale(1.15); box-shadow: 0 4px 12px rgba(255, 140, 0, 0.6); }
+
+        /* Lock Popup */
+        .lock-popup .leaflet-popup-content-wrapper { background: rgba(10, 14, 39, 0.98); backdrop-filter: blur(10px); border: 2px solid rgba(255, 140, 0, 0.4); border-radius: 12px; color: white; padding: 0; }
+        .lock-popup .leaflet-popup-content { margin: 0; max-width: 350px; }
+        .lock-popup .leaflet-popup-tip { background: rgba(10, 14, 39, 0.98); }
+        .lock-popup-content { padding: 15px; }
+        .lock-popup-content h3 { margin: 0 0 10px 0; color: #FF8C00; font-size: 18px; }
+        .lock-waterway { font-size: 12px; color: #8892b0; margin-bottom: 10px; }
+        .lock-tech { font-size: 11px; color: #64ffda; background: rgba(42, 82, 152, 0.2); padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; }
+        .lock-duration { font-size: 12px; color: #8892b0; margin-bottom: 8px; }
+        .lock-contact { font-size: 12px; color: #8892b0; margin-bottom: 8px; }
+        .lock-contact a { color: #64ffda; text-decoration: none; }
+        .lock-contact a:hover { text-decoration: underline; }
+        .lock-facilities { font-size: 16px; margin-bottom: 10px; }
+        .lock-notes { font-size: 11px; background: rgba(255, 165, 0, 0.1); padding: 8px; border-radius: 6px; margin-bottom: 10px; color: #ffa500; }
+        .lock-actions { display: flex; gap: 8px; margin-top: 12px; }
+        .lock-actions .btn-primary, .lock-actions .btn-secondary { flex: 1; padding: 8px 12px; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        .lock-actions .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .lock-actions .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(100, 255, 218, 0.3); }
+        .lock-actions .btn-secondary { background: rgba(42, 82, 152, 0.5); color: white; }
+        .lock-actions .btn-secondary:hover { background: rgba(42, 82, 152, 0.7); }
+        .lock-hours table { width: 100%; font-size: 12px; }
+        .lock-hours table td { padding: 4px; color: #ccd6f6; }
 
         /* Panel Styles */
         .info-panel { display: none; position: absolute; top: 20px; left: 20px; background: rgba(10, 14, 39, 0.95); backdrop-filter: blur(10px); border: 2px solid rgba(42, 82, 152, 0.6); border-radius: 12px; padding: 20px; max-width: 400px; z-index: 1001; }
@@ -501,6 +540,9 @@
                 <div class="forecast-container" id="weather-forecast"></div>
             </div>
 
+            <!-- Weather Alerts (DWD) -->
+            <div id="weather-alerts"></div>
+
             <!-- Sensor Tiles -->
             <div id="sensor-tiles">
                 <div class="tile weather-tile" onclick="toggleWeatherPanel()">
@@ -749,12 +791,19 @@
     <script src="units.js?v=1760345500"></script>
     <script src="water_routing.js?v=1760348000"></script>
     <script src="search.js?v=1760348000"></script>
+    <script src="weather_alerts.js?v=1.0"></script>
+    <script src="locks.js?v=1.0"></script>
     <script src="app.js?v=1760345500"></script>
 
     <!-- Include Units Modal -->
     <script>
         fetch("units_modal.html").then(r => r.text()).then(html => {
             document.body.insertAdjacentHTML("beforeend", html);
+        });
+
+        // Initialize weather alerts on DOM load
+        document.addEventListener('DOMContentLoaded', function() {
+            initWeatherAlerts();
         });
     </script>
 
