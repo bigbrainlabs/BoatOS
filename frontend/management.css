@@ -1,0 +1,754 @@
+/**
+ * Management CSS - Styles for Crew, Fuel & Dashboard
+ * Glassmorphism design with modern animations
+ */
+
+/* ==================== Common Panel Styles ==================== */
+.management-panel {
+    display: none;
+    position: fixed;
+    top: 80px;
+    left: 20px;
+    right: 20px;
+    bottom: 80px;
+    background: rgba(10, 14, 39, 0.95);
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 2px solid rgba(42, 82, 152, 0.6);
+    border-radius: 20px;
+    padding: 30px;
+    z-index: 1002;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid rgba(42, 82, 152, 0.3);
+}
+
+.panel-title {
+    font-size: 32px;
+    font-weight: 700;
+    color: #64ffda;
+    text-shadow: 0 0 20px rgba(100, 255, 218, 0.3);
+}
+
+.panel-close {
+    background: rgba(255, 59, 48, 0.2);
+    border: 2px solid rgba(255, 59, 48, 0.4);
+    color: #ff3b30;
+    font-size: 24px;
+    width: 45px;
+    height: 45px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.panel-close:hover {
+    background: rgba(255, 59, 48, 0.3);
+    transform: scale(1.05);
+}
+
+.panel-add-btn {
+    background: linear-gradient(135deg, #64ffda, #4db8ff);
+    border: none;
+    color: #0a0e27;
+    padding: 15px 30px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    box-shadow: 0 4px 15px rgba(100, 255, 218, 0.3);
+}
+
+.panel-add-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(100, 255, 218, 0.4);
+}
+
+.panel-add-btn:active {
+    transform: translateY(0);
+}
+
+/* ==================== Empty State ==================== */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    text-align: center;
+}
+
+.empty-icon {
+    font-size: 80px;
+    margin-bottom: 20px;
+    opacity: 0.3;
+}
+
+.empty-text {
+    font-size: 24px;
+    font-weight: 600;
+    color: #8892b0;
+    margin-bottom: 10px;
+}
+
+.empty-subtext {
+    font-size: 16px;
+    color: #565f7e;
+}
+
+.empty-state-small {
+    padding: 40px;
+    text-align: center;
+    color: #8892b0;
+    font-size: 14px;
+}
+
+/* ==================== Crew Cards ==================== */
+#crew-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+}
+
+.crew-card {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(42, 82, 152, 0.4);
+    border-radius: 16px;
+    padding: 20px;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+}
+
+.crew-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(100, 255, 218, 0.1), transparent);
+    transition: left 0.5s;
+}
+
+.crew-card:hover {
+    border-color: #64ffda;
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(100, 255, 218, 0.2);
+}
+
+.crew-card:hover::before {
+    left: 100%;
+}
+
+.crew-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+.crew-name {
+    font-size: 20px;
+    font-weight: 700;
+    color: #64ffda;
+    margin-bottom: 5px;
+}
+
+.crew-role {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.crew-role-captain {
+    background: rgba(255, 214, 0, 0.2);
+    color: #ffd600;
+    border: 1px solid rgba(255, 214, 0, 0.4);
+}
+
+.crew-role-crew {
+    background: rgba(100, 255, 218, 0.2);
+    color: #64ffda;
+    border: 1px solid rgba(100, 255, 218, 0.4);
+}
+
+.crew-role-guest {
+    background: rgba(136, 146, 176, 0.2);
+    color: #8892b0;
+    border: 1px solid rgba(136, 146, 176, 0.4);
+}
+
+.crew-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.crew-action-btn {
+    background: rgba(42, 82, 152, 0.3);
+    border: 1px solid rgba(42, 82, 152, 0.5);
+    color: #64ffda;
+    font-size: 16px;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.crew-action-btn:hover {
+    background: rgba(42, 82, 152, 0.5);
+    transform: scale(1.1);
+}
+
+.crew-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.crew-detail {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: #8892b0;
+}
+
+.crew-detail-icon {
+    font-size: 18px;
+    width: 24px;
+}
+
+.crew-detail-text {
+    flex: 1;
+}
+
+/* ==================== Fuel Cards ==================== */
+#fuel-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.fuel-card {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(42, 82, 152, 0.4);
+    border-radius: 16px;
+    padding: 20px;
+    transition: all 0.3s;
+    position: relative;
+}
+
+.fuel-card:hover {
+    border-color: #64ffda;
+    box-shadow: 0 4px 16px rgba(100, 255, 218, 0.2);
+}
+
+.fuel-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(42, 82, 152, 0.3);
+}
+
+.fuel-date {
+    font-size: 18px;
+    font-weight: 600;
+    color: #64ffda;
+}
+
+.fuel-location {
+    font-size: 14px;
+    color: #8892b0;
+    margin-top: 3px;
+}
+
+.fuel-cost {
+    font-size: 24px;
+    font-weight: 700;
+    color: #64ffda;
+}
+
+.fuel-card-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.fuel-detail {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: #8892b0;
+}
+
+.fuel-detail-icon {
+    font-size: 20px;
+}
+
+.fuel-notes {
+    background: rgba(42, 82, 152, 0.2);
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #8892b0;
+    font-style: italic;
+    margin-top: 10px;
+}
+
+.fuel-card-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.fuel-action-btn {
+    background: rgba(42, 82, 152, 0.3);
+    border: 1px solid rgba(42, 82, 152, 0.5);
+    color: #64ffda;
+    font-size: 16px;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fuel-action-btn:hover {
+    background: rgba(42, 82, 152, 0.5);
+    transform: scale(1.1);
+}
+
+/* ==================== Statistics Dashboard ==================== */
+.dashboard-section-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #64ffda;
+    margin-bottom: 20px;
+    margin-top: 30px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.dashboard-section-title:first-child {
+    margin-top: 0;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(42, 82, 152, 0.4);
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s;
+}
+
+.stat-card:hover {
+    border-color: #64ffda;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(100, 255, 218, 0.2);
+}
+
+.stat-card-highlight {
+    background: linear-gradient(135deg, rgba(100, 255, 218, 0.1), rgba(77, 184, 255, 0.1));
+    border-color: rgba(100, 255, 218, 0.6);
+    box-shadow: 0 0 20px rgba(100, 255, 218, 0.15);
+}
+
+.stat-card-highlight:hover {
+    box-shadow: 0 0 30px rgba(100, 255, 218, 0.3);
+    transform: translateY(-4px) scale(1.02);
+}
+
+.consumption-section {
+    margin-top: 30px;
+    padding-top: 30px;
+    border-top: 2px solid rgba(42, 82, 152, 0.3);
+}
+
+.stat-card-large {
+    grid-column: span 2;
+}
+
+.stat-card-wide {
+    grid-column: span 2;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #8892b0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.stat-value {
+    font-size: 36px;
+    font-weight: 700;
+    color: #64ffda;
+    line-height: 1;
+}
+
+.stat-value-small {
+    font-size: 18px;
+    font-weight: 600;
+    color: #64ffda;
+    margin-bottom: 5px;
+}
+
+.stat-unit {
+    font-size: 18px;
+    color: #8892b0;
+    font-weight: 400;
+}
+
+.stat-subtext {
+    font-size: 12px;
+    color: #565f7e;
+    margin-top: 8px;
+}
+
+/* ==================== Monthly Chart ==================== */
+.monthly-chart {
+    display: flex;
+    gap: 20px;
+    padding: 30px 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
+    border: 2px solid rgba(42, 82, 152, 0.3);
+}
+
+.monthly-bar {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.monthly-bar-label {
+    font-size: 12px;
+    color: #8892b0;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.monthly-bar-container {
+    width: 100%;
+    height: 150px;
+    background: rgba(42, 82, 152, 0.2);
+    border-radius: 8px;
+    display: flex;
+    align-items: flex-end;
+    padding: 5px;
+}
+
+.monthly-bar-fill {
+    width: 100%;
+    background: linear-gradient(180deg, #64ffda, #4db8ff);
+    border-radius: 6px;
+    transition: height 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 20px;
+    position: relative;
+}
+
+.monthly-bar-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0a0e27;
+}
+
+.monthly-bar-subtext {
+    font-size: 11px;
+    color: #565f7e;
+}
+
+/* ==================== Crew Active List ==================== */
+.crew-active-list {
+    margin-top: 20px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
+    border: 2px solid rgba(42, 82, 152, 0.3);
+}
+
+.crew-active-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #64ffda;
+    margin-bottom: 15px;
+}
+
+.crew-active-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 12px;
+    background: rgba(42, 82, 152, 0.2);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    transition: all 0.3s;
+}
+
+.crew-active-item:hover {
+    background: rgba(42, 82, 152, 0.3);
+    transform: translateX(5px);
+}
+
+.crew-active-name {
+    flex: 1;
+    font-weight: 600;
+    color: #64ffda;
+}
+
+.crew-active-role {
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: rgba(100, 255, 218, 0.2);
+    color: #64ffda;
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.crew-active-trips {
+    color: #8892b0;
+    font-size: 14px;
+}
+
+/* ==================== Fuel Stats ==================== */
+#fuel-stats {
+    margin-bottom: 30px;
+}
+
+/* ==================== Modal Styles ==================== */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(5px);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: rgba(10, 14, 39, 0.98);
+    backdrop-filter: blur(20px);
+    border: 2px solid rgba(42, 82, 152, 0.6);
+    border-radius: 20px;
+    padding: 40px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid rgba(42, 82, 152, 0.3);
+}
+
+.modal-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #64ffda;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: #8892b0;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+    width: 100%;
+    padding: 12px 15px;
+    background: rgba(42, 82, 152, 0.2);
+    border: 2px solid rgba(42, 82, 152, 0.4);
+    border-radius: 10px;
+    color: #fff;
+    font-size: 16px;
+    transition: all 0.3s;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+    outline: none;
+    border-color: #64ffda;
+    background: rgba(42, 82, 152, 0.3);
+    box-shadow: 0 0 20px rgba(100, 255, 218, 0.2);
+}
+
+.form-textarea {
+    min-height: 100px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.form-actions {
+    display: flex;
+    gap: 15px;
+    margin-top: 30px;
+}
+
+.form-submit {
+    flex: 1;
+    background: linear-gradient(135deg, #64ffda, #4db8ff);
+    border: none;
+    color: #0a0e27;
+    padding: 15px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.form-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(100, 255, 218, 0.4);
+}
+
+.form-cancel {
+    flex: 1;
+    background: rgba(255, 59, 48, 0.2);
+    border: 2px solid rgba(255, 59, 48, 0.4);
+    color: #ff3b30;
+    padding: 15px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.form-cancel:hover {
+    background: rgba(255, 59, 48, 0.3);
+}
+
+/* ==================== Scrollbar ==================== */
+.management-panel::-webkit-scrollbar,
+.modal-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.management-panel::-webkit-scrollbar-track,
+.modal-content::-webkit-scrollbar-track {
+    background: rgba(42, 82, 152, 0.2);
+    border-radius: 10px;
+}
+
+.management-panel::-webkit-scrollbar-thumb,
+.modal-content::-webkit-scrollbar-thumb {
+    background: rgba(100, 255, 218, 0.3);
+    border-radius: 10px;
+}
+
+.management-panel::-webkit-scrollbar-thumb:hover,
+.modal-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 255, 218, 0.5);
+}
+
+/* ==================== Responsive ==================== */
+@media (max-width: 768px) {
+    .management-panel {
+        top: 70px;
+        left: 10px;
+        right: 10px;
+        bottom: 70px;
+        padding: 20px;
+    }
+
+    .panel-title {
+        font-size: 24px;
+    }
+
+    #crew-list {
+        grid-template-columns: 1fr;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .stat-card-large,
+    .stat-card-wide {
+        grid-column: span 1;
+    }
+
+    .monthly-chart {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .monthly-bar-container {
+        height: 100px;
+    }
+}
