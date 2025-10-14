@@ -18,6 +18,7 @@ import pdf_export
 from ais_service import ais_service
 from waterway_infrastructure import waterway_infrastructure
 from pegelonline import pegelonline
+from water_current import water_current_service
 
 app = FastAPI(title="BoatOS API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -111,6 +112,16 @@ async def save_settings(settings: Dict[str, Any]):
         # Apply Routing settings
         if 'routing' in settings:
             init_waterway_router()  # Reinitialize router with new API key
+
+        # Apply Water Current settings
+        if 'waterCurrent' in settings:
+            water_current_service.configure(settings['waterCurrent'])
+
+        # Generate dynamic Lua profile if boat data is present
+        if 'boat' in settings:
+            boat = settings['boat']
+            if boat.get('draft', 0) > 0 or boat.get('height', 0) > 0 or boat.get('beam', 0) > 0:
+                await generate_lua_profile(boat)
 
         return {"status": "success", "message": "Settings saved"}
     except Exception as e:
@@ -1288,6 +1299,68 @@ def mqtt_client_init():
 osrm_router = None
 pyroutelib_router = None
 
+async def generate_lua_profile(boat: Dict[str, Any]):
+    """
+    Generate dynamic OSRM Lua profile from boat specifications
+
+    Args:
+        boat: Dict with draft (m), height (m), beam (m), etc.
+    """
+    try:
+        # Extract boat specifications with safety margins
+        draft = boat.get('draft', 1.5)
+        height = boat.get('height', 2.5)
+        beam = boat.get('beam', 2.0)
+
+        # Add safety margins (20% for draft, 0.5m for height)
+        min_depth = draft * 1.2 if draft > 0 else 1.5
+        min_clearance = height + 0.5 if height > 0 else 2.5
+
+        # Read base profile template
+        template_path = Path("profiles/motorboat.lua")
+        if not template_path.exists():
+            print(f"⚠️ Base profile template not found at {template_path}")
+            return
+
+        with open(template_path, 'r', encoding='utf-8') as f:
+            profile_content = f.read()
+
+        # Replace depth and clearance values
+        profile_content = profile_content.replace(
+            'min_depth_meters          = 1.5',
+            f'min_depth_meters          = {min_depth:.2f}'
+        )
+        profile_content = profile_content.replace(
+            'min_clearance_meters      = 2.5',
+            f'min_clearance_meters      = {min_clearance:.2f}'
+        )
+
+        # Add boat specifications as comments for documentation
+        boat_info = f"""-- Generated from boat specifications:
+-- Name: {boat.get('name', 'Unknown')}
+-- Draft: {draft}m (routing requires {min_depth:.2f}m minimum depth)
+-- Height: {height}m (routing requires {min_clearance:.2f}m minimum clearance)
+-- Beam: {beam}m
+-- Generated: {datetime.now().isoformat()}
+
+"""
+        profile_content = boat_info + profile_content
+
+        # Write custom profile
+        custom_profile_path = Path("profiles/motorboat_custom.lua")
+        with open(custom_profile_path, 'w', encoding='utf-8') as f:
+            f.write(profile_content)
+
+        print(f"✅ Generated custom Lua profile: draft={draft}m → min_depth={min_depth:.2f}m, height={height}m → min_clearance={min_clearance:.2f}m")
+
+        # TODO: Restart OSRM with new profile (requires system command)
+        # For now, the profile will be used on next OSRM restart
+
+    except Exception as e:
+        print(f"❌ Lua profile generation error: {e}")
+        import traceback
+        traceback.print_exc()
+
 def init_waterway_router():
     """
     Initialize waterway routers with fallback strategy:
@@ -1378,6 +1451,30 @@ async def calculate_route(request: dict):
                 print("🚀 Trying OSRM waterway routing...")
                 route = await osrm_router.route(waypoints, boat_data)
                 if route.get("properties", {}).get("routing_type") == "osrm":
+                    # Adjust ETA based on water currents
+                    route_geometry = route["geometry"]["coordinates"]
+                    distance_km = route["properties"]["distance_m"] / 1000
+
+                    # Get boat speed from boat_data or use default
+                    boat_speed_kmh = 15  # Default cruise speed
+                    if boat_data:
+                        # Try to get cruise speed from settings
+                        try:
+                            with open("data/settings.json", 'r') as f:
+                                settings = json.load(f)
+                                boat_speed_kmh = settings.get('boat', {}).get('cruise_speed', 15)
+                        except:
+                            pass
+
+                    adjusted_duration_h, current_info = water_current_service.adjust_route_duration(
+                        route_geometry, distance_km, boat_speed_kmh
+                    )
+
+                    if current_info:
+                        route["properties"]["duration_adjusted_h"] = adjusted_duration_h
+                        route["properties"]["current_adjustment"] = current_info
+                        print(f"🌊 Route duration adjusted for currents: {adjusted_duration_h:.2f}h")
+
                     return route
             except Exception as e:
                 print(f"⚠️ OSRM routing failed: {e}")
@@ -1415,10 +1512,12 @@ async def startup_event():
     load_chart_layers()
     init_waterway_router()
 
-    # Load settings and configure AIS
+    # Load settings and configure services
     try:
         with open("data/settings.json", 'r') as f:
             settings = json.load(f)
+
+            # Configure AIS
             if 'ais' in settings:
                 provider = settings['ais'].get('provider', 'aisstream')
                 api_key = settings['ais'].get('apiKey', '')
@@ -1427,8 +1526,12 @@ async def startup_event():
                 # Start AISStream WebSocket if configured
                 if ais_service.provider == 'aisstream' and ais_service.enabled:
                     asyncio.create_task(ais_service.start_aisstream_websocket())
+
+            # Configure Water Current service
+            if 'waterCurrent' in settings:
+                water_current_service.configure(settings['waterCurrent'])
     except FileNotFoundError:
-        print("⚠️ No settings file found, AIS not configured")
+        print("⚠️ No settings file found, services not configured")
 
     print("🚢 BoatOS Backend started!")
 
