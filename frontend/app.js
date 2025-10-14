@@ -1250,12 +1250,12 @@ window.addEventListener('load', () => {
             (position) => {
                 browserGpsAccuracy = position.coords.accuracy;
                 console.log('📍 Browser GPS: ' + position.coords.latitude.toFixed(6) + ', ' + position.coords.longitude.toFixed(6) + ' (±' + Math.round(position.coords.accuracy) + 'm)');
-                
-                // Center map on first browser position
-                if (!firstPositionReceived) {
+
+                // Center map on first browser position ONLY if backend GPS has never been received
+                if (!firstPositionReceived && gpsSource === null && lastBackendGpsTime === null) {
                     firstPositionReceived = true;
                     map.setView([position.coords.latitude, position.coords.longitude], 15);
-                    console.log('✅ Centered map on browser location');
+                    console.log('✅ Centered map on browser location (no backend GPS yet)');
                 }
 
                 // Only use browser GPS as fallback when backend GPS has been unavailable for enough time
