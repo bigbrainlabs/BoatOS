@@ -70,6 +70,23 @@ const defaultSettings = {
         fuelConsumption: 0,  // liters/hour
         fuelCapacity: 0,     // liters
         cruiseSpeed: 0       // km/h
+    },
+    waterCurrent: {
+        enabled: false,      // Enable current consideration in routing
+        byName: {
+            'Rhein': { current_kmh: 6.0, type: 'river' },
+            'Mosel': { current_kmh: 3.0, type: 'river' },
+            'Main': { current_kmh: 2.5, type: 'river' },
+            'Elbe': { current_kmh: 4.0, type: 'river' },
+            'Saale': { current_kmh: 2.0, type: 'river' },
+            'Donau': { current_kmh: 5.0, type: 'river' }
+        },
+        byType: {
+            'river': 2.0,
+            'canal': 0.0,
+            'stream': 1.0,
+            'lake': 0.0
+        }
     }
 };
 
@@ -132,7 +149,13 @@ function openSettingsModal() {
                 infrastructure: { ...defaultSettings.infrastructure, ...storedSettings.infrastructure },
                 waterLevel: { ...defaultSettings.waterLevel, ...storedSettings.waterLevel },
                 routing: { ...defaultSettings.routing, ...storedSettings.routing },
-                boat: { ...defaultSettings.boat, ...storedSettings.boat }
+                boat: { ...defaultSettings.boat, ...storedSettings.boat },
+                waterCurrent: {
+                    ...defaultSettings.waterCurrent,
+                    ...storedSettings.waterCurrent,
+                    byName: { ...defaultSettings.waterCurrent.byName, ...storedSettings.waterCurrent?.byName },
+                    byType: { ...defaultSettings.waterCurrent.byType, ...storedSettings.waterCurrent?.byType }
+                }
             };
             console.log('📂 Settings loaded from localStorage:', currentSettings);
         } catch (e) {
@@ -327,6 +350,21 @@ function loadSettingsToForm() {
     if (document.getElementById('setting-boat-cruise-speed')) {
         document.getElementById('setting-boat-cruise-speed').value = currentSettings.boat?.cruiseSpeed || '';
     }
+
+    // Water Current
+    if (document.getElementById('setting-water-current-enabled')) {
+        document.getElementById('setting-water-current-enabled').checked = currentSettings.waterCurrent?.enabled || false;
+        document.getElementById('setting-current-rhein').value = currentSettings.waterCurrent?.byName?.['Rhein']?.current_kmh || 6.0;
+        document.getElementById('setting-current-mosel').value = currentSettings.waterCurrent?.byName?.['Mosel']?.current_kmh || 3.0;
+        document.getElementById('setting-current-main').value = currentSettings.waterCurrent?.byName?.['Main']?.current_kmh || 2.5;
+        document.getElementById('setting-current-elbe').value = currentSettings.waterCurrent?.byName?.['Elbe']?.current_kmh || 4.0;
+        document.getElementById('setting-current-saale').value = currentSettings.waterCurrent?.byName?.['Saale']?.current_kmh || 2.0;
+        document.getElementById('setting-current-donau').value = currentSettings.waterCurrent?.byName?.['Donau']?.current_kmh || 5.0;
+        document.getElementById('setting-current-type-river').value = currentSettings.waterCurrent?.byType?.['river'] || 2.0;
+        document.getElementById('setting-current-type-canal').value = currentSettings.waterCurrent?.byType?.['canal'] || 0.0;
+        document.getElementById('setting-current-type-stream').value = currentSettings.waterCurrent?.byType?.['stream'] || 1.0;
+        document.getElementById('setting-current-type-lake').value = currentSettings.waterCurrent?.byType?.['lake'] || 0.0;
+    }
 }
 
 // Save settings
@@ -414,6 +452,23 @@ function saveSettings() {
             fuelConsumption: parseFloat(getValue('setting-boat-fuel-consumption', '0')) || 0,
             fuelCapacity: parseFloat(getValue('setting-boat-fuel-capacity', '0')) || 0,
             cruiseSpeed: parseFloat(getValue('setting-boat-cruise-speed', '0')) || 0
+        },
+        waterCurrent: {
+            enabled: getChecked('setting-water-current-enabled', false),
+            byName: {
+                'Rhein': { current_kmh: parseFloat(getValue('setting-current-rhein', '6.0')) || 6.0, type: 'river' },
+                'Mosel': { current_kmh: parseFloat(getValue('setting-current-mosel', '3.0')) || 3.0, type: 'river' },
+                'Main': { current_kmh: parseFloat(getValue('setting-current-main', '2.5')) || 2.5, type: 'river' },
+                'Elbe': { current_kmh: parseFloat(getValue('setting-current-elbe', '4.0')) || 4.0, type: 'river' },
+                'Saale': { current_kmh: parseFloat(getValue('setting-current-saale', '2.0')) || 2.0, type: 'river' },
+                'Donau': { current_kmh: parseFloat(getValue('setting-current-donau', '5.0')) || 5.0, type: 'river' }
+            },
+            byType: {
+                'river': parseFloat(getValue('setting-current-type-river', '2.0')) || 2.0,
+                'canal': parseFloat(getValue('setting-current-type-canal', '0.0')) || 0.0,
+                'stream': parseFloat(getValue('setting-current-type-stream', '1.0')) || 1.0,
+                'lake': parseFloat(getValue('setting-current-type-lake', '0.0')) || 0.0
+            }
         }
     };
 
@@ -758,7 +813,13 @@ function clearAllData() {
                 infrastructure: { ...defaultSettings.infrastructure, ...storedSettings.infrastructure },
                 waterLevel: { ...defaultSettings.waterLevel, ...storedSettings.waterLevel },
                 routing: { ...defaultSettings.routing, ...storedSettings.routing },
-                boat: { ...defaultSettings.boat, ...storedSettings.boat }
+                boat: { ...defaultSettings.boat, ...storedSettings.boat },
+                waterCurrent: {
+                    ...defaultSettings.waterCurrent,
+                    ...storedSettings.waterCurrent,
+                    byName: { ...defaultSettings.waterCurrent.byName, ...storedSettings.waterCurrent?.byName },
+                    byType: { ...defaultSettings.waterCurrent.byType, ...storedSettings.waterCurrent?.byType }
+                }
             };
             console.log('⚙️ Settings loaded synchronously from localStorage:', currentSettings);
         } catch (e) {
@@ -772,6 +833,11 @@ function clearAllData() {
 // Get boat settings for routing
 function getBoatSettings() {
     return currentSettings.boat || defaultSettings.boat;
+}
+
+// Get water current settings for routing
+function getWaterCurrentSettings() {
+    return currentSettings.waterCurrent || defaultSettings.waterCurrent;
 }
 
 // Initialize on page load (apply settings and try loading from backend)

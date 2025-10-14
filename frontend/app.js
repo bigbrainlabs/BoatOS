@@ -630,10 +630,32 @@ async function updateRoute() {
 
                 // Distanz und Segment-Infos
                 const distanceNM = routeData.properties?.distance_nm || 0;
-                const avgSpeed = 5;
-                const etaHours = distanceNM / avgSpeed;
-                const etaHoursInt = Math.floor(etaHours);
-                const etaMinutes = Math.round((etaHours - etaHoursInt) * 60);
+
+                // Get cruise speed from boat settings (km/h) and convert to knots
+                const boatSettings = typeof getBoatSettings === 'function' ? getBoatSettings() : {};
+                let avgSpeed = 5; // Default fallback: 5 knots
+                if (boatSettings.cruiseSpeed && boatSettings.cruiseSpeed > 0) {
+                    avgSpeed = boatSettings.cruiseSpeed / 1.852; // Convert km/h to knots
+                }
+
+                // Use duration_adjusted_h from backend if available (includes water current)
+                let etaHours;
+                if (routeData.properties.duration_adjusted_h) {
+                    etaHours = routeData.properties.duration_adjusted_h;
+                    console.log('🌊 Using adjusted ETA from backend:', etaHours.toFixed(2), 'hours (includes water current)');
+                } else {
+                    etaHours = distanceNM / avgSpeed;
+                    console.log('⏱️ Calculating ETA from distance/speed:', etaHours.toFixed(2), 'hours');
+                }
+
+                let etaHoursInt = Math.floor(etaHours);
+                let etaMinutes = Math.round((etaHoursInt - etaHours) * 60);
+
+                // Handle case where rounding gives 60 minutes
+                if (etaMinutes >= 60) {
+                    etaHoursInt += 1;
+                    etaMinutes = 0;
+                }
 
                 // Segment-Infos
                 const routeInfo = [];
@@ -652,7 +674,7 @@ async function updateRoute() {
                 }
 
                 console.log(`🌊 Waterway Route: ${distanceNM.toFixed(2)} NM`);
-                showRouteInfo(distanceNM.toFixed(2), etaHoursInt, etaMinutes, routeInfo, false, true);
+                showRouteInfo(distanceNM.toFixed(2), etaHoursInt, etaMinutes, routeInfo, false, true, avgSpeed);
                 hideRoutingLoader();
                 return;
             }
@@ -731,13 +753,26 @@ function drawDirectRoute() {
     }
 
     const totalNM = (totalDistance / 1852).toFixed(2);
-    const avgSpeed = 5;
+
+    // Get cruise speed from boat settings (km/h) and convert to knots
+    const boatSettings = typeof getBoatSettings === 'function' ? getBoatSettings() : {};
+    let avgSpeed = 5; // Default fallback: 5 knots
+    if (boatSettings.cruiseSpeed && boatSettings.cruiseSpeed > 0) {
+        avgSpeed = boatSettings.cruiseSpeed / 1.852; // Convert km/h to knots
+    }
+
     const etaHours = totalNM / avgSpeed;
-    const etaHoursInt = Math.floor(etaHours);
-    const etaMinutes = Math.round((etaHours - etaHoursInt) * 60);
+    let etaHoursInt = Math.floor(etaHours);
+    let etaMinutes = Math.round((etaHours - etaHoursInt) * 60);
+
+    // Handle case where rounding gives 60 minutes
+    if (etaMinutes >= 60) {
+        etaHoursInt += 1;
+        etaMinutes = 0;
+    }
 
     console.log(`📏 Rhumbline Route: ${totalNM} NM`);
-    showRouteInfo(totalNM, etaHoursInt, etaMinutes, routeInfo, false, false);
+    showRouteInfo(totalNM, etaHoursInt, etaMinutes, routeInfo, false, false, avgSpeed);
 }
 
 function calculateBearing(lat1, lon1, lat2, lon2) {
@@ -757,7 +792,7 @@ function calculateBearing(lat1, lon1, lat2, lon2) {
     return bearing;
 }
 
-function showRouteInfo(totalNM, hours, minutes, segments, isDirect, isWaterway) {
+function showRouteInfo(totalNM, hours, minutes, segments, isDirect, isWaterway, avgSpeed = 5) {
     const oldPanel = document.getElementById('route-info-panel');
     if (oldPanel) oldPanel.remove();
 
@@ -772,6 +807,11 @@ function showRouteInfo(totalNM, hours, minutes, segments, isDirect, isWaterway) 
         ? formatDistance(parseFloat(totalNM) * 1852)  // Convert NM to meters first
         : `${totalNM} NM`;
 
+    // Format speed with units
+    const speedFormatted = typeof formatSpeed === 'function'
+        ? formatSpeed(avgSpeed)
+        : `${avgSpeed.toFixed(1)} kn`;
+
     const panel = document.createElement('div');
     panel.id = 'route-info-panel';
     panel.style.cssText = 'position: absolute; bottom: 80px; left: 20px; background: rgba(10, 14, 39, 0.95); backdrop-filter: blur(10px); border: 2px solid ' + routeColor + '; border-radius: 12px; padding: 15px; z-index: 1001; min-width: 300px; max-width: 350px; color: white; font-size: 14px;';
@@ -785,7 +825,7 @@ function showRouteInfo(totalNM, hours, minutes, segments, isDirect, isWaterway) 
         '</div>' +
         '<div style="background: rgba(42, 82, 152, 0.2); padding: 10px; border-radius: 8px; margin-bottom: 10px;">' +
         '<div style="font-size: 24px; font-weight: 700; color: #64ffda;">' + totalDistFormatted + '</div>' +
-        '<div style="font-size: 12px; color: #8892b0;">ETA: ' + hours + 'h ' + minutes + 'min @ 5kn</div>' +
+        '<div style="font-size: 12px; color: #8892b0;">ETA: ' + hours + 'h ' + minutes + 'min @ ' + speedFormatted + '</div>' +
         '</div>' +
         '<div style="max-height: 200px; overflow-y: auto;">' +
         segments.map(s => {

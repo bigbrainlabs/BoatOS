@@ -91,10 +91,13 @@ class PegelOnline:
         try:
             # Get water level timeseries
             water_level_series = None
+            flow_velocity_series = None
+
             for ts in station.get('timeseries', []):
                 if ts.get('shortname') == 'W':  # W = Wasserstand (water level)
                     water_level_series = ts
-                    break
+                elif ts.get('shortname') == 'VA':  # VA = Fließgeschwindigkeit (flow velocity)
+                    flow_velocity_series = ts
 
             if not water_level_series:
                 return None
@@ -124,6 +127,18 @@ class PegelOnline:
                 'unit': water_level_series.get('unit', 'cm'),
                 'properties': {}
             }
+
+            # Add flow velocity if available
+            if flow_velocity_series:
+                flow_measurement = flow_velocity_series.get('currentMeasurement')
+                if flow_measurement and flow_measurement.get('value') is not None:
+                    # VA is in m/s, convert to km/h
+                    flow_ms = flow_measurement.get('value')
+                    flow_kmh = round(flow_ms * 3.6, 2)
+                    gauge['flow_velocity_ms'] = round(flow_ms, 2)
+                    gauge['flow_velocity_kmh'] = flow_kmh
+                    gauge['flow_timestamp'] = flow_measurement.get('timestamp')
+                    gauge['flow_unit'] = flow_velocity_series.get('unit', 'm/s')
 
             # Add optional properties
             if 'km' in station:
