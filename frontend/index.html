@@ -62,7 +62,8 @@
         #center-btn { position: absolute; bottom: 130px; left: 20px; z-index: 1000; }
 
         /* Sensor Tiles */
-        #sensor-tiles { position: absolute; top: 20px; right: 20px; display: grid; grid-template-columns: repeat(2, 140px); gap: 12px; z-index: 1000; }
+        #sensor-tiles { position: absolute; top: 20px; right: 20px; display: grid; grid-template-columns: repeat(2, 140px); gap: 12px; z-index: 1000; transition: opacity 0.3s, transform 0.3s; }
+        #sensor-tiles.hidden { opacity: 0; transform: translateX(100px); pointer-events: none; }
         .tile { background: rgba(10, 14, 39, 0.92); backdrop-filter: blur(10px); border: 2px solid rgba(42, 82, 152, 0.6); border-radius: 12px; padding: 15px; text-align: center; transition: all 0.3s; cursor: pointer; }
         .tile:active { transform: scale(0.95); }
         .weather-tile { grid-column: span 2; }
@@ -635,7 +636,7 @@
             <button class="control-btn" id="btn-waypoint" data-i18n="btn_waypoint">📍 Wegpunkt</button>
             <button class="control-btn" id="btn-route" data-i18n="btn_route">🛤️ Route</button>
             <button class="control-btn" id="btn-logbook" data-i18n="btn_logbook">📓 Logbuch</button>
-            <button class="control-btn" id="btn-sensors" data-i18n="btn_sensors">📊 Sensoren</button>
+            <button class="control-btn active" id="btn-sensors" data-i18n="btn_sensors">📊 Sensoren</button>
         </div>
     </div>
 

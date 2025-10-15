@@ -1078,9 +1078,19 @@ document.getElementById('btn-logbook').addEventListener('click', () => {
     openLogbook();
 });
 
-document.getElementById('btn-sensors').addEventListener('click', () => {
-    showNotification('📊 Sensor-Details - Coming soon!');
-    // TODO: Sensor-Details-Modal öffnen
+document.getElementById('btn-sensors').addEventListener('click', (e) => {
+    const sensorTiles = document.getElementById('sensor-tiles');
+    const isHidden = sensorTiles.classList.contains('hidden');
+
+    // Toggle the sensor tiles visibility
+    sensorTiles.classList.toggle('hidden');
+
+    // Button should be active when tiles are VISIBLE (not hidden)
+    if (isHidden) {
+        e.target.classList.add('active');
+    } else {
+        e.target.classList.remove('active');
+    }
 });
 
 // Center on boat button
