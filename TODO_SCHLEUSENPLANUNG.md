@@ -234,11 +234,25 @@
 
 ## 📊 Fortschritt
 
-- [ ] Phase 1: Basis-Funktionen (0/9 Schritte)
-  - Geschätzte Zeit: 6-7 Tage
-  - Status: Nicht gestartet
+- [x] Phase 1: Basis-Funktionen (ABGESCHLOSSEN)
+  - ✅ Datenbank-Schema & Backend
+  - ✅ API-Endpoints
+  - ✅ Schleusendaten: 99 hochwertige deutsche Schleusen
+  - ✅ Karten-Integration (Marker, Popups)
+  - ✅ Routing-Integration (Schleusen auf Route, Zeitplanung, Warnungen)
+  - ✅ Datenbereinigung (566 → 99 Qualitäts-Locks)
 
-**Nächster Task:** 1.1 Datenbank-Schema erstellen
+**Datenbank-Status:**
+- 99 hochwertige deutsche Schleusen
+- 17 mit vollständigen technischen Daten (manuell kuratiert)
+- 82 mit Kontaktdaten und deutschem Namen
+- Keine Duplikate, keine internationalen Locks
+- Qualitätskriterien: Dimensionen ODER (Kontakt UND deutscher Name)
+
+**Nächste Schritte:**
+- Daten-Anreicherung mit Wikipedia/WSV-Quellen
+- Anmelde-Historie implementieren
+- Bootsdaten-Settings erweitern
 
 ---
 
