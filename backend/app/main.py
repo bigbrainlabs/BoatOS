@@ -254,6 +254,80 @@ async def get_locks_by_waterway(waterway: str):
     locks = locks_storage.get_locks_by_waterway(waterway)
     return {"locks": locks, "count": len(locks), "waterway": waterway}
 
+@app.post("/api/locks/import-osm")
+async def import_locks_from_osm():
+    """Import locks from OpenStreetMap"""
+    try:
+        script_path = Path(__file__).parent.parent / 'import_locks.py'
+        result = subprocess.run(['python', str(script_path)], capture_output=True, text=True, timeout=300)
+        if result.returncode == 0:
+            import re
+            imported = int(re.search(r'(\d+)\s+new', result.stdout, re.I).group(1)) if re.search(r'(\d+)\s+new', result.stdout, re.I) else 0
+            return {"success": True, "imported": imported}
+        return {"success": False, "error": result.stderr or "Import failed"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/locks/enrich")
+async def enrich_locks_data():
+    """Enrich locks with VHF and contact data"""
+    try:
+        script_path = Path(__file__).parent.parent / 'enrich_locks_data.py'
+        result = subprocess.run(['python', str(script_path)], capture_output=True, text=True, timeout=120)
+        if result.returncode == 0:
+            import re
+            vhf = re.search(r'VHF.*?(\d+\.?\d*%)', result.stdout, re.I).group(1) if re.search(r'VHF.*?(\d+\.?\d*%)', result.stdout, re.I) else "0%"
+            return {"success": True, "vhf_coverage": vhf}
+        return {"success": False, "error": result.stderr or "Enrichment failed"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/locks/quality")
+async def check_locks_quality():
+    """Get locks database quality statistics"""
+    try:
+        script_path = Path(__file__).parent.parent / 'check_locks_quality.py'
+        result = subprocess.run(['python', str(script_path)], capture_output=True, text=True, timeout=60)
+        if result.returncode == 0:
+            import re
+            output = result.stdout
+            total = int(re.search(r'Total.*?(\d+)', output, re.I).group(1)) if re.search(r'Total.*?(\d+)', output, re.I) else 0
+            vhf = re.search(r'VHF.*?(\d+)/(\d+).*?\((\d+\.?\d*%)\)', output, re.I)
+            phone = re.search(r'Phone.*?(\d+)/(\d+).*?\((\d+\.?\d*%)\)', output, re.I)
+            email = re.search(r'E-?mail.*?(\d+)/(\d+).*?\((\d+\.?\d*%)\)', output, re.I)
+            return {
+                "success": True, "total": total,
+                "vhf_count": int(vhf.group(1)) if vhf else 0, "vhf_percentage": vhf.group(3) if vhf else "0%",
+                "phone_count": int(phone.group(1)) if phone else 0, "phone_percentage": phone.group(3) if phone else "0%",
+                "email_count": int(email.group(1)) if email else 0, "email_percentage": email.group(3) if email else "0%",
+                "top_waterways": []
+            }
+        return {"success": False, "error": result.stderr or "Quality check failed"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/locks/verify-positions")
+async def verify_locks_positions():
+    """Verify and fix lock positions against OpenStreetMap (takes ~2 minutes)"""
+    try:
+        # Import the function directly to use it with silent mode
+        import sys
+        sys.path.append(str(Path(__file__).parent.parent))
+        from check_lock_positions import check_lock_positions
+
+        # Run verification with auto-fix and silent mode
+        result = check_lock_positions(auto_fix=True, distance_threshold=500, silent=True)
+
+        return {
+            "success": True,
+            "checked": result['checked'],
+            "fixed": result['fixed'],
+            "avg_distance_fixed": result['avg_distance_fixed'],
+            "issues": result['issues']
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 @app.get("/api/locks/{lock_id}")
 async def get_lock_details(lock_id: int):
     """

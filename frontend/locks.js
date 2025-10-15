@@ -125,6 +125,9 @@ function createLockPopup(lock) {
         const websiteDisplay = lock.website.replace(/^https?:\/\/(www\.)?/, '').substring(0, 25);
         contactLines.push(`🌐 <a href="${lock.website}" target="_blank" style="color: #64ffda; text-decoration: none;">${websiteDisplay}</a>`);
     }
+    if (lock.registration_method) {
+        contactLines.push(`<div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(100, 255, 218, 0.2); font-size: 11px;"><strong>Anmeldung:</strong> ${lock.registration_method}</div>`);
+    }
 
     const contact = contactLines.length > 0 ?
         `<div class="lock-contact">${contactLines.join('<br>')}</div>` : '';
@@ -290,13 +293,14 @@ async function showLockDetails(lockIdOrLock) {
             ${hoursTable}
         </div>
 
-        ${lock.phone || lock.vhf_channel || lock.email || lock.website ? `
+        ${lock.phone || lock.vhf_channel || lock.email || lock.website || lock.registration_method ? `
         <div style="background: rgba(42, 82, 152, 0.2); padding: 12px; border-radius: 8px; margin-bottom: 16px;">
             <div style="font-size: 12px; color: #64ffda; margin-bottom: 8px;">KONTAKT</div>
             ${lock.phone ? `<div>📞 <a href="tel:${lock.phone}" style="color: white;">${lock.phone}</a></div>` : ''}
             ${lock.vhf_channel ? `<div>📻 ${lock.vhf_channel}</div>` : ''}
             ${lock.email ? `<div>📧 <a href="mailto:${lock.email}" style="color: white;">${lock.email}</a></div>` : ''}
             ${lock.website ? `<div>🌐 <a href="${lock.website}" target="_blank" style="color: white;">Website</a></div>` : ''}
+            ${lock.registration_method ? `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(100, 255, 218, 0.2);"><strong style="color: #64ffda;">Anmeldung möglich:</strong> ${lock.registration_method}</div>` : ''}
         </div>
         ` : ''}
 
