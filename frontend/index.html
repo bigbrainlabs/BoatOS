@@ -1421,6 +1421,54 @@
                         <div class="setting-item">
                             <button onclick="resetSettings()" class="data-btn">🔄 Auf Standardwerte zurücksetzen</button>
                         </div>
+
+                        <hr style="margin: 30px 0; border: none; border-top: 2px solid rgba(100, 255, 218, 0.2);">
+
+                        <h3>🗄️ Schleusen-Datenbank</h3>
+                        <p style="font-size: 13px; color: #8892b0; margin-bottom: 20px;">
+                            Verwalte die Schleusen-Datenbank: OSM-Import, Datenanreicherung und Qualitätsprüfung.
+                        </p>
+
+                        <div class="setting-item">
+                            <button onclick="importLocksFromOSM()" class="data-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                🌍 Schleusen von OSM importieren
+                            </button>
+                            <p style="font-size: 12px; color: #8892b0; margin-top: 8px;">
+                                Lädt neue Schleusen aus OpenStreetMap in die Datenbank
+                            </p>
+                        </div>
+
+                        <div class="setting-item">
+                            <button onclick="enrichLocksData()" class="data-btn" style="background: linear-gradient(135deg, #43cea2 0%, #185a9d 100%);">
+                                ✨ Daten anreichern
+                            </button>
+                            <p style="font-size: 12px; color: #8892b0; margin-top: 8px;">
+                                Ergänzt VHF-Kanäle, Kontaktdaten und weitere Infos (102 Einträge verfügbar)
+                            </p>
+                        </div>
+
+                        <div class="setting-item">
+                            <button onclick="checkLocksQuality()" class="data-btn" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                                📊 Qualitätsbericht anzeigen
+                            </button>
+                            <p style="font-size: 12px; color: #8892b0; margin-top: 8px;">
+                                Zeigt Statistiken zur Datenqualität (VHF-Abdeckung, Kontakte, etc.)
+                            </p>
+                        </div>
+
+                        <div class="setting-item">
+                            <button onclick="verifyLocksPositions()" class="data-btn" style="background: linear-gradient(135deg, #f5576c 0%, #fc6c85 100%);">
+                                📍 Positionen überprüfen & korrigieren
+                            </button>
+                            <p style="font-size: 12px; color: #8892b0; margin-top: 8px;">
+                                Prüft alle Schleusen-Positionen gegen OpenStreetMap und korrigiert Fehler (>500m Abweichung)
+                            </p>
+                        </div>
+
+                        <div id="locks-quality-report" style="display: none; margin-top: 20px; padding: 20px; background: rgba(10, 14, 39, 0.6); border-radius: 12px; border: 2px solid rgba(100, 255, 218, 0.3);">
+                            <h4 style="margin: 0 0 15px 0; color: #64ffda;">📊 Datenqualität</h4>
+                            <pre id="locks-quality-content" style="color: #8892b0; font-size: 12px; line-height: 1.8; overflow-x: auto; white-space: pre-wrap;"></pre>
+                        </div>
                     </div>
 
                 </div>

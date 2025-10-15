@@ -96,7 +96,7 @@ function initMap() {
 
     // Add default overlays
     seaMarkLayer.addTo(map);
-    inlandLayer.addTo(map);
+    // inlandLayer.addTo(map); // DISABLED: Inland layer temporarily disabled (contains lock POIs from OpenSeaMap)
     railwayLayer.addTo(map);
 
     // ==================== LAYER CONTROL ====================
@@ -1253,9 +1253,10 @@ window.addEventListener('load', () => {
     }
 
     // Apply infrastructure settings on startup
-    if (settings.infrastructure) {
-        updateInfrastructureSettings(settings.infrastructure);
-    }
+    // DISABLED: Infrastructure temporarily disabled for data collection
+    // if (settings.infrastructure) {
+    //     updateInfrastructureSettings(settings.infrastructure);
+    // }
 
     // Apply water level settings on startup
     if (settings.waterLevel) {

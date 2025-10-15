@@ -860,6 +860,180 @@ window.addEventListener('load', function() {
     initializeSettings();
 });
 
+// ==================== DATABASE MANAGEMENT ====================
+
+/**
+ * Import locks from OpenStreetMap
+ */
+async function importLocksFromOSM() {
+    if (!confirm('Möchten Sie neue Schleusen aus OpenStreetMap importieren?\n\nDieser Vorgang kann einige Minuten dauern.')) {
+        return;
+    }
+
+    showMsg('🌍 Starte OSM-Import...', 5000);
+
+    try {
+        const response = await fetch(`${API_URL}/api/locks/import-osm`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+            showMsg(`✅ ${result.imported} Schleusen importiert, ${result.updated} aktualisiert!`, 5000);
+
+            // Reload locks on map if locks layer is active
+            if (typeof updateLocksOnMap === 'function') {
+                updateLocksOnMap();
+            }
+        } else {
+            showMsg(`❌ Import fehlgeschlagen: ${result.error}`, 5000);
+        }
+    } catch (error) {
+        console.error('OSM Import error:', error);
+        showMsg(`❌ Fehler beim Import: ${error.message}`, 5000);
+    }
+}
+
+/**
+ * Enrich locks data with VHF channels and contact information
+ */
+async function enrichLocksData() {
+    if (!confirm('Möchten Sie die Schleusen-Daten anreichern?\n\nVHF-Kanäle, Kontaktdaten und weitere Infos werden ergänzt.')) {
+        return;
+    }
+
+    showMsg('✨ Starte Datenanreicherung...', 5000);
+
+    try {
+        const response = await fetch(`${API_URL}/api/locks/enrich`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+            showMsg(`✅ ${result.enriched} Schleusen angereichert! VHF: ${result.vhf_coverage}`, 5000);
+
+            // Reload locks on map
+            if (typeof updateLocksOnMap === 'function') {
+                updateLocksOnMap();
+            }
+
+            // Auto-show quality report
+            setTimeout(() => checkLocksQuality(), 1000);
+        } else {
+            showMsg(`❌ Anreicherung fehlgeschlagen: ${result.error}`, 5000);
+        }
+    } catch (error) {
+        console.error('Enrichment error:', error);
+        showMsg(`❌ Fehler bei Anreicherung: ${error.message}`, 5000);
+    }
+}
+
+/**
+ * Check and display locks database quality
+ */
+async function checkLocksQuality() {
+    showMsg('📊 Lade Qualitätsbericht...', 2000);
+
+    try {
+        const response = await fetch(`${API_URL}/api/locks/quality`);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Format quality report
+            const report = `
+Gesamtzahl Schleusen: ${result.total}
+
+═══ VHF-Kanäle ═══
+Mit VHF: ${result.vhf_count}/${result.total} (${result.vhf_percentage})
+
+═══ Kontaktdaten ═══
+Telefonnummern: ${result.phone_count}/${result.total} (${result.phone_percentage})
+E-Mail-Adressen: ${result.email_count}/${result.total} (${result.email_percentage})
+
+═══ Technische Daten ═══
+Abmessungen (L × B): ${result.dimensions_count}/${result.total} (${result.dimensions_percentage})
+Kilometer-Marken: ${result.km_count}/${result.total} (${result.km_percentage})
+
+═══ Zusatzinformationen ═══
+Notizen/Hinweise: ${result.notes_count}/${result.total} (${result.notes_percentage})
+
+═══ Top Wasserstraßen ═══
+${result.top_waterways.map(w => `${w.waterway}: ${w.count} Schleusen`).join('\n')}
+
+Datenstand: ${new Date().toLocaleString('de-DE')}
+            `.trim();
+
+            // Show report
+            document.getElementById('locks-quality-content').textContent = report;
+            document.getElementById('locks-quality-report').style.display = 'block';
+
+            showMsg('✅ Qualitätsbericht geladen', 3000);
+        } else {
+            showMsg(`❌ Fehler: ${result.error}`, 5000);
+        }
+    } catch (error) {
+        console.error('Quality check error:', error);
+        showMsg(`❌ Fehler beim Laden: ${error.message}`, 5000);
+    }
+}
+
+/**
+ * Verify and fix lock positions against OpenStreetMap
+ */
+async function verifyLocksPositions() {
+    if (!confirm('Möchten Sie alle Schleusen-Positionen überprüfen und korrigieren?\n\nDies kann 2-3 Minuten dauern und korrigiert automatisch Positionen mit >500m Abweichung von OpenStreetMap.')) {
+        return;
+    }
+
+    showMsg('📍 Starte Positions-Überprüfung (2-3 Min.)...', 10000);
+
+    try {
+        const response = await fetch(`${API_URL}/api/locks/verify-positions`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+            const message = result.fixed > 0
+                ? `✅ ${result.checked} Schleusen geprüft, ${result.fixed} Positionen korrigiert (Ø ${result.avg_distance_fixed}m Abweichung)`
+                : `✅ ${result.checked} Schleusen geprüft - alle Positionen korrekt!`;
+
+            showMsg(message, 8000);
+
+            // Reload locks on map if locks layer is active
+            if (typeof updateLocksOnMap === 'function') {
+                setTimeout(() => updateLocksOnMap(), 1000);
+            }
+        } else {
+            showMsg(`❌ Überprüfung fehlgeschlagen: ${result.error}`, 5000);
+        }
+    } catch (error) {
+        console.error('Position verification error:', error);
+        showMsg(`❌ Fehler bei Überprüfung: ${error.message}`, 5000);
+    }
+}
+
 // ==================== BOAT ICON SELECTION ====================
 let selectedBoatIcon = 'motorboat_small';
 

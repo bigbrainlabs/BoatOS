@@ -35,6 +35,7 @@ def init_locks_db():
             vhf_channel TEXT,
             email TEXT,
             website TEXT,
+            registration_method TEXT,  -- e.g., "VHF, Email, Phone, App"
 
             -- Opening Hours (JSON format)
             -- Example: {"mo": "06:00-20:00", "tu": "06:00-20:00", ...}
@@ -196,12 +197,12 @@ def add_lock(lock_data: Dict[str, Any]) -> int:
     cursor.execute("""
         INSERT INTO locks (
             name, waterway, lat, lon, river_km,
-            phone, vhf_channel, email, website,
+            phone, vhf_channel, email, website, registration_method,
             opening_hours, break_times,
             max_length, max_width, max_draft, max_height,
             avg_duration, requires_booking, supports_sms, api_endpoint,
             notes, facilities
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         lock_data.get('name'),
         lock_data.get('waterway'),
@@ -212,6 +213,7 @@ def add_lock(lock_data: Dict[str, Any]) -> int:
         lock_data.get('vhf_channel'),
         lock_data.get('email'),
         lock_data.get('website'),
+        lock_data.get('registration_method'),
         lock_data.get('opening_hours'),
         lock_data.get('break_times'),
         lock_data.get('max_length'),
