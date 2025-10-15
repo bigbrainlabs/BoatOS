@@ -25,15 +25,22 @@ def fetch_locks_from_overpass(bbox=None):
     overpass_url = "https://overpass-api.de/api/interpreter"
 
     # Overpass query for locks
-    # In OSM, locks are primarily tagged as waterway=lock_gate
-    # We use a simplified query that focuses on the main tag
+    # In OSM, locks can be tagged in several ways:
+    # - waterway=lock_gate (individual gates)
+    # - lock=yes (on waterways)
+    # - amenity=boat_lock
     overpass_query = f"""
-    [out:json][timeout:180];
+    [out:json][timeout:300];
     (
       node["waterway"="lock_gate"]({bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]});
       way["waterway"="lock_gate"]({bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]});
+      relation["waterway"="lock_gate"]({bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]});
+      node["lock"="yes"]({bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]});
+      way["lock"="yes"]({bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]});
+      node["amenity"="boat_lock"]({bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]});
+      way["amenity"="boat_lock"]({bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]});
     );
-    out body center;
+    out body center qt;
     """
 
     print(f"Querying Overpass API for locks in Germany...")
