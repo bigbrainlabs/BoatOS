@@ -116,12 +116,18 @@ function createLockPopup(lock) {
     const techInfo = technicalData.length > 0 ?
         `<div class="lock-tech">${technicalData.join(' • ')}</div>` : '';
 
-    const contactInfo = [];
-    if (lock.vhf_channel) contactInfo.push(`📻 ${lock.vhf_channel}`);
-    if (lock.phone) contactInfo.push(`📞 <a href="tel:${lock.phone}">${lock.phone}</a>`);
+    // Build contact info with all available methods
+    const contactLines = [];
+    if (lock.vhf_channel) contactLines.push(`📻 ${lock.vhf_channel}`);
+    if (lock.phone) contactLines.push(`📞 <a href="tel:${lock.phone}" style="color: #64ffda; text-decoration: none;">${lock.phone}</a>`);
+    if (lock.email) contactLines.push(`📧 <a href="mailto:${lock.email}" style="color: #64ffda; text-decoration: none;">${lock.email}</a>`);
+    if (lock.website) {
+        const websiteDisplay = lock.website.replace(/^https?:\/\/(www\.)?/, '').substring(0, 25);
+        contactLines.push(`🌐 <a href="${lock.website}" target="_blank" style="color: #64ffda; text-decoration: none;">${websiteDisplay}</a>`);
+    }
 
-    const contact = contactInfo.length > 0 ?
-        `<div class="lock-contact">${contactInfo.join(' • ')}</div>` : '';
+    const contact = contactLines.length > 0 ?
+        `<div class="lock-contact">${contactLines.join('<br>')}</div>` : '';
 
     const facilities = lock.facilities && lock.facilities.length > 0 ?
         `<div class="lock-facilities">
