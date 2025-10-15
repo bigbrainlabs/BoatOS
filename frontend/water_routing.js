@@ -128,36 +128,10 @@ async function updateRoute() {
                 });
             }
 
-            // Add lock markers if present (but skip duplicates from locks database)
+            // Lock markers are now handled by locks.js from database
+            // OSRM lock markers are disabled to avoid duplicates and confusion
             if (data.properties.locks && data.properties.locks.length > 0) {
-                let displayedLocks = 0;
-                let skippedLocks = 0;
-
-                data.properties.locks.forEach(lock => {
-                    // Check if this lock is already in our locks database
-                    if (typeof isLockInDatabase === 'function' && isLockInDatabase(lock)) {
-                        skippedLocks++;
-                        return; // Skip this lock, it's already displayed by locks.js
-                    }
-
-                    const lockIcon = L.divIcon({
-                        className: 'lock-marker',
-                        html: '<div style="background: rgba(255, 140, 0, 0.9); color: white; padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.4); border: 2px solid white;">🔒 Schleuse</div>',
-                        iconSize: [100, 30],
-                        iconAnchor: [50, 15]
-                    });
-
-                    const marker = L.marker([lock.lat, lock.lon], { icon: lockIcon }).addTo(routeLayer);
-                    marker.bindPopup(`<strong>🔒 ${lock.name}</strong><br>Distanz: ${formatDistance(lock.distance_from_start)}`);
-                    displayedLocks++;
-                });
-
-                if (displayedLocks > 0) {
-                    console.log(`🔒 ${displayedLocks} OSRM-Schleusen auf Route angezeigt`);
-                }
-                if (skippedLocks > 0) {
-                    console.log(`⏭️ ${skippedLocks} Schleusen übersprungen (bereits in Datenbank)`);
-                }
+                console.log(`🔒 ${data.properties.locks.length} Schleusen auf Route (werden von locks.js angezeigt)`);
             }
 
             // Add bridge markers if present
