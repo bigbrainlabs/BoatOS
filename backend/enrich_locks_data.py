@@ -115,6 +115,101 @@ LOCK_ENRICHMENT_DATA = {
         "notes": "Verbindet Mittellandkanal mit Elbhafen Magdeburg. Fallhöhe 10.45-18.46m (elbeabhängig). Wassersparend (60%). Eröffnung Mai 2001.",
         "source": "Manual + WSV"
     },
+
+    # Elbe-Seitenkanal Locks
+    "Schleuse Uelzen": {
+        "waterway": "Elbe-Seitenkanal",
+        "vhf_channel": "65",
+        "max_length": 190.0,  # Uelzen II
+        "max_width": 12.5,    # Uelzen II
+        "max_draft": 4.0,
+        "avg_duration": 25,
+        "notes": "Hub 23m. Größte Fallhöhe am ESK. 2 Kammern (I: 185x12m, II: 190x12.5m). Baujahr I: 1976, II: 2006. Wassersparschleuse (60-70%). 24h-Betrieb (eingeschränkt an Feiertagen).",
+        "source": "Wikipedia + Web"
+    },
+
+    # Küstenkanal Locks
+    "Schleuse Oldenburg": {
+        "waterway": "Küstenkanal",
+        "river_km": 1.7,
+        "vhf_channel": "20",
+        "phone": "0441-503924",
+        "avg_duration": 20,
+        "notes": "Mo-Sa: 05:00-21:00, So: 08:00-12:00",
+        "source": "SkipperGuide Küstenkanal"
+    },
+
+    "Schleuse Dörpen": {
+        "waterway": "Küstenkanal",
+        "river_km": 64.5,
+        "vhf_channel": "25",
+        "phone": "04963-8962",
+        "avg_duration": 20,
+        "notes": "Mo-Sa: 06:00-22:00, So: 06:00-14:00. Wartestege für Sportboote auf beiden Seiten.",
+        "source": "SkipperGuide Küstenkanal"
+    },
+
+    # Untere Havel-Wasserstraße Locks
+    "Schleuse Brandenburg": {
+        "waterway": "Untere Havel-Wasserstraße",
+        "phone": "03381-266457",
+        "email": "wsa-brandenburg@wsv.bund.de",
+        "avg_duration": 20,
+        "notes": "Vorstadtschleuse. 2 Kammern (Nord/Süd). Täglich 06:00-22:00, Feiertage: 07:00-22:00.",
+        "source": "Web Brandenburg"
+    },
+
+    "Stadtschleuse Brandenburg": {
+        "waterway": "Untere Havel-Wasserstraße",
+        "phone": "03381-226963",
+        "email": "wsa-brandenburg@wsv.bund.de",
+        "avg_duration": 15,
+        "notes": "Sportbootschleuse. Apr-Sep: So/Feiertag 09:15-19:00. Okt (wetterabhängig): 09:15-18:00.",
+        "source": "Web Brandenburg"
+    },
+
+    # Havel Locks (from Wikipedia list)
+    "Schleuse Zwenzow": {
+        "waterway": "Obere Havel-Wasserstraße",
+        "river_km": 92.5,
+        "phone": "0395-38069440",
+        "max_length": 80.0,
+        "max_width": 3.5,
+        "avg_duration": 15,
+        "notes": "Hub 1.3m. Baujahr 1934.",
+        "source": "Wikipedia Havel-Schleusen"
+    },
+
+    "Schleuse Wesenberg": {
+        "waterway": "Obere Havel-Wasserstraße",
+        "river_km": 81.6,
+        "phone": "039832-20214",
+        "max_length": 55.6,
+        "max_width": 6.6,
+        "avg_duration": 15,
+        "notes": "Hub 2.4m.",
+        "source": "Wikipedia Havel-Schleusen"
+    },
+
+    "Schleuse Steinhavel": {
+        "waterway": "Obere Havel-Wasserstraße",
+        "river_km": 64.6,
+        "max_length": 41.9,
+        "max_width": 5.3,
+        "avg_duration": 15,
+        "notes": "Hub 1.6m. Erneuert 2022.",
+        "source": "Wikipedia Havel-Schleusen"
+    },
+
+    "Schleuse Fürstenberg": {
+        "waterway": "Obere Havel-Wasserstraße",
+        "river_km": 60.7,
+        "max_length": 43.0,
+        "max_width": 11.0,
+        "avg_duration": 15,
+        "notes": "Hub 1.6m. Urspr. 1831/36, Neubau 2009/2010.",
+        "source": "Wikipedia Havel-Schleusen"
+    },
 }
 
 # ============================================================================
@@ -125,7 +220,12 @@ WATERWAY_DEFAULTS = {
     "Mittellandkanal": {
         "max_height": 5.25,  # Standard clearance
         "max_width": 12.0,   # Standard chamber width
-        "email": "wsa-mittellandkanal@wsv.bund.de"
+        "email": "wsa-mittellandkanal-elbe-seitenkanal@wsv.bund.de"
+    },
+    "Elbe-Seitenkanal": {
+        "max_height": 5.25,
+        "max_width": 12.0,
+        "email": "wsa-mittellandkanal-elbe-seitenkanal@wsv.bund.de"
     },
     "Elbe-Havel-Kanal": {
         "max_height": 5.25,
@@ -135,6 +235,12 @@ WATERWAY_DEFAULTS = {
     "Untere Havel-Wasserstraße": {
         "max_height": 5.25,
         "email": "wsa-spree-havel@wsv.bund.de"
+    },
+    "Obere Havel-Wasserstraße": {
+        "email": "wsa-spree-havel@wsv.bund.de"
+    },
+    "Küstenkanal": {
+        "email": "wsa-osnabrueck@wsv.bund.de"
     }
 }
 
