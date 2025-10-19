@@ -280,6 +280,37 @@ function switchSettingsTab(tabName) {
             }
         }, 100);
     }
+
+    // Load sensors if sensors tab is selected
+    if (tabName === 'sensors') {
+        if (typeof window.SettingsRenderer !== 'undefined' && typeof window.SettingsRenderer.renderSensorsSettings === 'function') {
+            const sensorsTab = document.getElementById('settings-sensors');
+            if (sensorsTab) {
+                // Cache original MQTT settings content only once
+                if (!window._cachedMqttContent) {
+                    // Find and preserve the MQTT broker settings section
+                    const mqttHeading = sensorsTab.querySelector('h3');
+                    if (mqttHeading && mqttHeading.textContent.includes('MQTT')) {
+                        // Cache everything from the MQTT heading onwards
+                        window._cachedMqttContent = '';
+                        let node = mqttHeading;
+                        while (node) {
+                            window._cachedMqttContent += node.outerHTML || '';
+                            node = node.nextElementSibling;
+                        }
+                    } else {
+                        window._cachedMqttContent = sensorsTab.innerHTML;
+                    }
+                }
+
+                // Render sensors list
+                window.SettingsRenderer.renderSensorsSettings().then(html => {
+                    // Replace content with fresh sensor data + cached MQTT settings
+                    sensorsTab.innerHTML = html + (window._cachedMqttContent || '');
+                });
+            }
+        }
+    }
 }
 
 // Load settings into form
