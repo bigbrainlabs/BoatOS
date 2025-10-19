@@ -132,8 +132,8 @@ function showMsg(message, duration = 3000) {
     }, duration);
 }
 
-// Open Settings Modal
-async function openSettingsModal() {
+// Open Settings Modal (now opens as fullscreen)
+async function openSettingsModal(fromView = 'map') {
     // First, try to load from backend to get latest settings
     try {
         const response = await fetch('/api/settings', {
@@ -212,17 +212,29 @@ async function openSettingsModal() {
         }
     }
 
-    const modal = document.getElementById('settings-modal');
-    modal.classList.add('show');
-    modal.style.display = 'flex';
-    loadSettingsToForm();
+    // Use screen management from settings_screen.js
+    if (typeof window.SettingsScreen !== 'undefined' && typeof window.SettingsScreen.show === 'function') {
+        window.SettingsScreen.show(fromView);
+    } else {
+        // Fallback to old modal behavior
+        const modal = document.getElementById('settings-modal');
+        modal.classList.add('show');
+        modal.style.display = 'flex';
+        loadSettingsToForm();
+    }
 }
 
-// Close Settings Modal
+// Close Settings Modal (now closes fullscreen)
 function closeSettingsModal() {
-    const modal = document.getElementById('settings-modal');
-    modal.classList.remove('show');
-    modal.style.display = 'none';
+    // Use screen management from settings_screen.js
+    if (typeof window.SettingsScreen !== 'undefined' && typeof window.SettingsScreen.hide === 'function') {
+        window.SettingsScreen.hide();
+    } else {
+        // Fallback to old modal behavior
+        const modal = document.getElementById('settings-modal');
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+    }
 }
 
 // Switch Settings Tab
@@ -272,6 +284,14 @@ function switchSettingsTab(tabName) {
 
 // Load settings into form
 function loadSettingsToForm() {
+    // Render General Settings Tab in Dashboard Style
+    if (typeof window.SettingsRenderer !== 'undefined' && typeof window.SettingsRenderer.renderGeneralSettings === 'function') {
+        const generalTab = document.getElementById('settings-general');
+        if (generalTab) {
+            generalTab.innerHTML = window.SettingsRenderer.renderGeneralSettings();
+        }
+    }
+
     // General
     document.getElementById('setting-language').value = currentSettings.general.language || 'de';
     document.getElementById('setting-theme').value = currentSettings.general.theme || 'auto';

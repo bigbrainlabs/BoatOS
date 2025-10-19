@@ -294,6 +294,11 @@ function renderSensorDashboard() {
     if (wasConnected) {
         updateConnectionStatus(true);
     }
+
+    // Add settings button to dashboard header (if available)
+    if (typeof window.SettingsScreen !== 'undefined' && typeof window.SettingsScreen.addButtonToDashboard === 'function') {
+        window.SettingsScreen.addButtonToDashboard();
+    }
 }
 
 function createHeroCard(icon, label, value, unit, subtitle) {
@@ -544,23 +549,45 @@ function updateFloatingActionButton() {
     if (!fab) return;
 
     const isDashboard = isDashboardVisible();
+    const isSettings = (typeof window.SettingsScreen !== 'undefined' && typeof window.SettingsScreen.isVisible === 'function')
+        ? window.SettingsScreen.isVisible()
+        : false;
 
-    // Update icon and tooltip
-    if (isDashboard) {
+    // Update icon and tooltip based on current view
+    if (isSettings) {
+        // In Settings: Show close/back icon
+        fab.innerHTML = '<span class="fab-icon">✕</span>';
+        fab.title = 'Zurück';
+    } else if (isDashboard) {
+        // In Dashboard: Show map icon
         fab.innerHTML = '<span class="fab-icon">🗺️</span>';
         fab.title = 'Navigation';
     } else {
+        // In Map: Show dashboard icon
         fab.innerHTML = '<span class="fab-icon">📊</span>';
         fab.title = 'Dashboard';
     }
 }
 
 function toggleViewFromFab() {
-    if (isDashboardVisible()) {
+    const isDashboard = isDashboardVisible();
+    const isSettings = (typeof window.SettingsScreen !== 'undefined' && typeof window.SettingsScreen.isVisible === 'function')
+        ? window.SettingsScreen.isVisible()
+        : false;
+
+    if (isSettings) {
+        // Close settings and return to previous view
+        if (typeof window.SettingsScreen !== 'undefined' && typeof window.SettingsScreen.hide === 'function') {
+            window.SettingsScreen.hide();
+        }
+    } else if (isDashboard) {
+        // Go from Dashboard to Map
         hideSensorsDashboard();
     } else {
+        // Go from Map to Dashboard
         showSensorsDashboard();
     }
+
     updateFloatingActionButton();
 }
 
