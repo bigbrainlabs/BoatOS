@@ -568,17 +568,14 @@ function hideBootScreen() {
     const app = document.getElementById('app');
 
     if (bootScreen) {
-        console.log('✅ Boot complete - hiding boot screen and showing app');
+        console.log('✅ Boot complete - hiding boot screen');
         bootScreen.classList.add('fade-out');
 
-        // Show the app element
-        if (app) {
-            app.style.display = 'grid';
-        }
+        // Note: #app is now always visible (display:grid), boot screen just fades out
 
         // Fix map size after showing app (Leaflet was initialized while app was hidden)
         setTimeout(() => {
-            if (window.map) {
+            if (window.map && typeof window.map.invalidateSize === 'function') {
                 console.log('🗺️ Invalidating map size to load tiles...');
                 const mapContainer = document.getElementById('map');
                 if (mapContainer) {
@@ -593,7 +590,16 @@ function hideBootScreen() {
                 window.map.invalidateSize();
                 console.log('🗺️ Map after invalidate - bounds:', window.map.getBounds());
             } else {
-                console.error('❌ window.map not found when trying to invalidateSize!');
+                console.warn('⚠️ Map not ready yet, waiting longer...');
+                // Try again after map should be initialized
+                setTimeout(() => {
+                    if (window.map && typeof window.map.invalidateSize === 'function') {
+                        console.log('🗺️ Map ready now - invalidating size...');
+                        window.map.invalidateSize();
+                    } else {
+                        console.error('❌ window.map still not initialized!');
+                    }
+                }, 500);
             }
         }, 100);
 

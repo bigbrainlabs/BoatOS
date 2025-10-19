@@ -1328,7 +1328,9 @@ function showNotification(message) {
 }
 
 // ==================== STARTUP ====================
-window.addEventListener('load', () => {
+// Initialize map as soon as DOM is ready (not waiting for all resources)
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('📄 DOM loaded - initializing map...');
     initMap();
     connectWebSocket();
 
