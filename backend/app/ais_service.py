@@ -270,10 +270,10 @@ class AISService:
                 async with websockets.connect('wss://stream.aisstream.io/v0/stream') as websocket:
                     self.ws_connection = websocket
 
-                    # Subscribe to AIS messages (no bounding box filter = worldwide)
+                    # Subscribe to AIS messages (Europe only to reduce load)
                     subscribe_message = {
                         "APIKey": self.api_key,
-                        "BoundingBoxes": [[[-180, -90], [180, 90]]]  # Worldwide
+                        "BoundingBoxes": [[[-25, 35], [45, 72]]]  # Europe (Atlantic to Black Sea, Mediterranean to North Cape)
                     }
                     await websocket.send(json.dumps(subscribe_message))
                     print("✅ AISStream WebSocket connected")
@@ -297,8 +297,10 @@ class AISService:
 
             except Exception as e:
                 print(f"⚠️ AISStream WebSocket error: {e}")
-                if self.ws_running:
-                    await asyncio.sleep(10)  # Wait before reconnect
+
+            # Always wait before reconnect attempt (whether error or connection closed)
+            if self.ws_running:
+                await asyncio.sleep(10)  # Prevent busy loop on reconnect
 
         print("🚢 AISStream WebSocket stopped")
         self.ws_running = False
