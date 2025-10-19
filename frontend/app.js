@@ -107,19 +107,10 @@ function initMap() {
     osmLayer.addTo(map);
     console.log('🗺️ OSM layer added. Map bounds:', map.getBounds());
 
-    // Force map to recalculate size after initialization
-    // This is critical because map may be initialized before grid layout is fully calculated
-    setTimeout(() => {
-        console.log('🗺️ Forcing map size recalculation...');
-        map.invalidateSize({pan: false});
-        console.log('🗺️ Map size after invalidate:', map.getSize());
-    }, 100);
-
-    setTimeout(() => {
-        console.log('🗺️ Second invalidateSize (longer delay)...');
-        map.invalidateSize({pan: false});
-        console.log('🗺️ Map size after second invalidate:', map.getSize());
-    }, 500);
+    // DO NOT call invalidateSize() here!
+    // The map initializes with correct size (1920x508)
+    // invalidateSize() will be called when switching from dashboard to map view
+    console.log('📏 Initial map size:', map.getSize());
 
     // ==================== OVERLAY LAYERS ====================
     const seaMarkLayer = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
@@ -1301,7 +1292,7 @@ function showNotification(message) {
 }
 
 // ==================== STARTUP ====================
-// Initialize map as soon as DOM is ready (not waiting for all resources)
+// Initialize map as soon as DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     console.log('📄 DOM loaded - initializing map...');
     initMap();
