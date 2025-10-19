@@ -7,9 +7,50 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <link rel="stylesheet" href="logbook.css?v=2.1"/>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: sans-serif; background: #0a0e27; color: #fff; overflow: hidden; user-select: none; }
-        #app { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; }
+        * { margin: 0; padding: 0; box-sizing: border-box; cursor: none; }
+        body {
+            font-family: sans-serif;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%);
+            color: #fff;
+            overflow: hidden;
+            user-select: none;
+            position: relative;
+            cursor: none;
+        }
+
+        /* Desktop Wallpaper - BootOS Style Background */
+        body::before {
+            content: '⚓';
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 600px;
+            opacity: 0.03;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        body::after {
+            content: 'BoatOS';
+            position: fixed;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 72px;
+            font-weight: 300;
+            letter-spacing: 16px;
+            color: rgba(100, 255, 218, 0.08);
+            z-index: 0;
+            pointer-events: none;
+        }
+        #app {
+            display: none;
+            grid-template-rows: auto 1fr auto;
+            height: 100vh;
+            position: relative;
+            z-index: 1;
+        }
 
         /* Header - Simple, no charts button */
         #header { background: linear-gradient(135deg, #1e3c72, #2a5298); padding: 15px 20px; display: flex; justify-content: flex-start; align-items: center; gap: 15px; }
@@ -424,6 +465,52 @@
     </style>
 </head>
 <body>
+    <!-- Boot Screen - Shown immediately on load -->
+    <div id="boot-screen" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 99999;
+        opacity: 1;
+        transition: opacity 0.8s ease-out;
+    ">
+        <div style="text-align: center; color: white;">
+            <div style="font-size: 120px; margin-bottom: 20px; animation: boot-pulse 2s ease-in-out infinite;">⚓</div>
+            <h1 style="font-size: 48px; font-weight: 300; margin: 0 0 10px 0; letter-spacing: 8px; color: #64ffda;">BoatOS</h1>
+            <div style="font-size: 18px; color: #8892b0; margin-bottom: 50px; letter-spacing: 2px;">Marine Navigation System</div>
+            <div style="
+                width: 60px;
+                height: 60px;
+                border: 4px solid rgba(100, 255, 218, 0.2);
+                border-top-color: #64ffda;
+                border-radius: 50%;
+                margin: 0 auto 30px;
+                animation: boot-spin 1s linear infinite;
+            "></div>
+            <div id="boot-status" style="font-size: 16px; color: #64ffda; min-height: 24px;">Initializing System...</div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes boot-spin {
+            to { transform: rotate(360deg); }
+        }
+        @keyframes boot-pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+        }
+        #boot-screen.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+
     <div id="app">
         <!-- Header - Simple -->
         <div id="header">
@@ -1662,12 +1749,10 @@
             window.SensorsDashboard.show();
         }
 
-        // Start with Dashboard view by default
+        // Start with Dashboard view by default - NO DELAY
         window.addEventListener('DOMContentLoaded', function() {
-            // Small delay to ensure all elements are loaded
-            setTimeout(function() {
-                window.SensorsDashboard.show();
-            }, 500);
+            // Show dashboard immediately - no delay, no flicker
+            window.SensorsDashboard.show();
         });
     </script>
 

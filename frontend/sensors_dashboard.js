@@ -99,6 +99,14 @@ function updateConnectionStatus(connected) {
         indicator.classList.toggle('connected', connected);
         indicator.textContent = connected ? '[ON] Live' : '[OFF] Offline';
     }
+
+    // Hide boot screen when connected
+    if (connected) {
+        updateBootStatus('Connected! Starting dashboard...');
+        setTimeout(() => {
+            hideBootScreen();
+        }, 500);
+    }
 }
 
 // ==================== Dashboard Rendering ====================
@@ -537,9 +545,42 @@ function toggleViewFromFab() {
     updateFloatingActionButton();
 }
 
+// ==================== Boot Screen ====================
+
+function updateBootStatus(message) {
+    const statusElement = document.getElementById('boot-status');
+    if (statusElement) {
+        statusElement.textContent = message;
+        console.log(`🚀 Boot: ${message}`);
+    }
+}
+
+function hideBootScreen() {
+    const bootScreen = document.getElementById('boot-screen');
+    const app = document.getElementById('app');
+
+    if (bootScreen) {
+        console.log('✅ Boot complete - hiding boot screen and showing app');
+        bootScreen.classList.add('fade-out');
+
+        // Show the app element
+        if (app) {
+            app.style.display = 'grid';
+        }
+
+        setTimeout(() => {
+            bootScreen.remove();
+        }, 800);
+    }
+}
+
 // Initialize FAB when script loads
 document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(createFloatingActionButton, 100);
+    updateBootStatus('Loading interface...');
+    setTimeout(() => {
+        createFloatingActionButton();
+        updateBootStatus('Connecting to sensors...');
+    }, 100);
 });
 
 // Export functions
