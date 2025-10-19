@@ -133,34 +133,82 @@ function showMsg(message, duration = 3000) {
 }
 
 // Open Settings Modal
-function openSettingsModal() {
-    // Reload from localStorage to get saved values
-    const stored = localStorage.getItem('boatos_settings');
-    if (stored) {
-        try {
-            const storedSettings = JSON.parse(stored);
-            // Deep merge: merge each section individually to preserve new fields in defaultSettings
-            currentSettings = {
-                general: { ...defaultSettings.general, ...storedSettings.general },
-                navigation: { ...defaultSettings.navigation, ...storedSettings.navigation },
-                gps: { ...defaultSettings.gps, ...storedSettings.gps },
-                weather: { ...defaultSettings.weather, ...storedSettings.weather },
-                sensors: { ...defaultSettings.sensors, ...storedSettings.sensors },
-                ais: { ...defaultSettings.ais, ...storedSettings.ais },
-                infrastructure: { ...defaultSettings.infrastructure, ...storedSettings.infrastructure },
-                waterLevel: { ...defaultSettings.waterLevel, ...storedSettings.waterLevel },
-                routing: { ...defaultSettings.routing, ...storedSettings.routing },
-                boat: { ...defaultSettings.boat, ...storedSettings.boat },
-                waterCurrent: {
-                    ...defaultSettings.waterCurrent,
-                    ...storedSettings.waterCurrent,
-                    byName: { ...defaultSettings.waterCurrent.byName, ...storedSettings.waterCurrent?.byName },
-                    byType: { ...defaultSettings.waterCurrent.byType, ...storedSettings.waterCurrent?.byType }
+async function openSettingsModal() {
+    // First, try to load from backend to get latest settings
+    try {
+        const response = await fetch('/api/settings', {
+            cache: 'no-cache',
+            headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
+        });
+        if (response.ok) {
+            const serverSettings = await response.json();
+            currentSettings = { ...defaultSettings, ...serverSettings };
+            console.log('📡 Settings loaded from backend:', currentSettings);
+            // Also update localStorage with fresh data
+            localStorage.setItem('boatos_settings', JSON.stringify(currentSettings));
+        } else {
+            console.warn('⚠️ Backend settings not available, using localStorage');
+            // Fallback to localStorage
+            const stored = localStorage.getItem('boatos_settings');
+            if (stored) {
+                try {
+                    const storedSettings = JSON.parse(stored);
+                    currentSettings = {
+                        general: { ...defaultSettings.general, ...storedSettings.general },
+                        navigation: { ...defaultSettings.navigation, ...storedSettings.navigation },
+                        gps: { ...defaultSettings.gps, ...storedSettings.gps },
+                        weather: { ...defaultSettings.weather, ...storedSettings.weather },
+                        sensors: { ...defaultSettings.sensors, ...storedSettings.sensors },
+                        ais: { ...defaultSettings.ais, ...storedSettings.ais },
+                        infrastructure: { ...defaultSettings.infrastructure, ...storedSettings.infrastructure },
+                        waterLevel: { ...defaultSettings.waterLevel, ...storedSettings.waterLevel },
+                        routing: { ...defaultSettings.routing, ...storedSettings.routing },
+                        boat: { ...defaultSettings.boat, ...storedSettings.boat },
+                        waterCurrent: {
+                            ...defaultSettings.waterCurrent,
+                            ...storedSettings.waterCurrent,
+                            byName: { ...defaultSettings.waterCurrent.byName, ...storedSettings.waterCurrent?.byName },
+                            byType: { ...defaultSettings.waterCurrent.byType, ...storedSettings.waterCurrent?.byType }
+                        }
+                    };
+                    console.log('📂 Settings loaded from localStorage:', currentSettings);
+                } catch (e) {
+                    console.error('Error parsing stored settings:', e);
                 }
-            };
-            console.log('📂 Settings loaded from localStorage:', currentSettings);
-        } catch (e) {
-            console.error('Error parsing stored settings:', e);
+            }
+        }
+    } catch (error) {
+        console.warn('⚠️ Could not fetch backend settings:', error);
+        // Fallback to localStorage
+        const stored = localStorage.getItem('boatos_settings');
+        if (stored) {
+            try {
+                const storedSettings = JSON.parse(stored);
+                currentSettings = {
+                    general: { ...defaultSettings.general, ...storedSettings.general },
+                    navigation: { ...defaultSettings.navigation, ...storedSettings.navigation },
+                    gps: { ...defaultSettings.gps, ...storedSettings.gps },
+                    weather: { ...defaultSettings.weather, ...storedSettings.weather },
+                    sensors: { ...defaultSettings.sensors, ...storedSettings.sensors },
+                    ais: { ...defaultSettings.ais, ...storedSettings.ais },
+                    infrastructure: { ...defaultSettings.infrastructure, ...storedSettings.infrastructure },
+                    waterLevel: { ...defaultSettings.waterLevel, ...storedSettings.waterLevel },
+                    routing: { ...defaultSettings.routing, ...storedSettings.routing },
+                    boat: { ...defaultSettings.boat, ...storedSettings.boat },
+                    waterCurrent: {
+                        ...defaultSettings.waterCurrent,
+                        ...storedSettings.waterCurrent,
+                        byName: { ...defaultSettings.waterCurrent.byName, ...storedSettings.waterCurrent?.byName },
+                        byType: { ...defaultSettings.waterCurrent.byType, ...storedSettings.waterCurrent?.byType }
+                    }
+                };
+                console.log('📂 Settings loaded from localStorage:', currentSettings);
+            } catch (e) {
+                console.error('Error parsing stored settings:', e);
+            }
         }
     }
 

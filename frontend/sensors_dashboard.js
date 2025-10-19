@@ -97,7 +97,7 @@ function updateConnectionStatus(connected) {
     const indicator = document.getElementById('sensor-connection-status');
     if (indicator) {
         indicator.classList.toggle('connected', connected);
-        indicator.textContent = connected ? '🟢 Live' : '🔴 Offline';
+        indicator.textContent = connected ? '[ON] Live' : '[OFF] Offline';
     }
 }
 
@@ -129,7 +129,7 @@ function showSensorsDashboard() {
     dashboard.style.display = 'flex';
 
     // Update button text (for when dashboard is hidden and button becomes visible again)
-    if (viewLabel) viewLabel.textContent = '📊 Dashboard';
+    if (viewLabel) viewLabel.textContent = '[DSH] Dashboard';
 
     connectSensorWebSocket();
     renderSensorDashboard();
@@ -149,7 +149,7 @@ function hideSensorsDashboard() {
 
     // Reset button text to show where you can go
     if (viewLabel) {
-        viewLabel.textContent = '📊 Dashboard';
+        viewLabel.textContent = '[DSH] Dashboard';
     }
 
     if (sensorWebSocket) {
@@ -203,7 +203,7 @@ function renderSensorDashboard() {
                     border-radius: 20px;
                     font-size: 14px;
                 ">
-                    🔴 Connecting...
+                    [OFF] Connecting...
                 </div>
                 <div onclick="window.SensorsDashboard.hide()" style="
                     background: rgba(255,255,255,0.1);
@@ -234,29 +234,29 @@ function renderSensorDashboard() {
             <div style="max-width: 1400px; margin: 0 auto; position: relative; z-index: 2;">
                 <!-- Hero Cards - Main Values -->
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; margin-bottom: 30px; position: relative; z-index: 10;">
-                    ${createHeroCard('🚤', 'Speed', sensorData.speed.toFixed(1), 'kn', 'Geschwindigkeit')}
-                    ${createHeroCard('🔋', 'Batterie', sensorData.battery.voltage.toFixed(1), 'V', 'Hauptbatterie')}
-                    ${createHeroCard('🌡️', 'Bilge', sensorData.bilge.temperature.toFixed(1), '°C', 'Temperatur')}
+                    ${createHeroCard('SPD', 'Speed', sensorData.speed.toFixed(1), 'kn', 'Geschwindigkeit')}
+                    ${createHeroCard('BAT', 'Batterie', sensorData.battery.voltage.toFixed(1), 'V', 'Hauptbatterie')}
+                    ${createHeroCard('TMP', 'Bilge', sensorData.bilge.temperature.toFixed(1), '°C', 'Temperatur')}
                 </div>
 
                 <!-- Navigation Details -->
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin-bottom: 30px; position: relative; z-index: 10;">
-                    ${createStatCard('📍', 'Position', formatPosition(sensorData.gps.lat, sensorData.gps.lon), '', 'cyan')}
-                    ${createStatCard('🧭', 'Kurs', Math.round(sensorData.gps.course || 0), '°', 'purple')}
-                    ${createStatCard('📊', 'Heading', Math.round(sensorData.heading), '°', 'purple')}
-                    ${createStatCard('🛰️', 'Satelliten', sensorData.gps.satellites, '', 'cyan')}
+                    ${createStatCard('POS', 'Position', formatPosition(sensorData.gps.lat, sensorData.gps.lon), '', 'cyan')}
+                    ${createStatCard('CRS', 'Kurs', Math.round(sensorData.gps.course || 0), '°', 'purple')}
+                    ${createStatCard('HDG', 'Heading', Math.round(sensorData.heading), '°', 'purple')}
+                    ${createStatCard('SAT', 'Satelliten', sensorData.gps.satellites, '', 'cyan')}
                 </div>
 
                 <!-- Environment & Systems -->
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; position: relative; z-index: 10;">
-                    ${createStatCard('🌊', 'Tiefe', sensorData.depth.toFixed(1), 'm', 'cyan')}
-                    ${createStatCard('💨', 'Wind', sensorData.wind.speed.toFixed(1), 'kn', 'blue')}
-                    ${createStatCard('🌬️', 'Richtung', Math.round(sensorData.wind.direction), '°', 'blue')}
-                    ${createStatCard('💧', 'Humidity', sensorData.bilge.humidity.toFixed(1), '%', 'blue')}
-                    ${createStatCard('⚙️', 'Motor RPM', sensorData.engine.rpm, 'RPM', 'red')}
-                    ${createStatCard('🌡️', 'Motor Temp', sensorData.engine.temp, '°C', 'orange')}
-                    ${createStatCard('🛢️', 'Öldruck', sensorData.engine.oil_pressure.toFixed(1), 'bar', 'amber')}
-                    ${createStatCard('⚡', 'Strom', sensorData.battery.current.toFixed(1), 'A', 'green')}
+                    ${createStatCard('DPH', 'Tiefe', sensorData.depth.toFixed(1), 'm', 'cyan')}
+                    ${createStatCard('WND', 'Wind', sensorData.wind.speed.toFixed(1), 'kn', 'blue')}
+                    ${createStatCard('DIR', 'Richtung', Math.round(sensorData.wind.direction), '°', 'blue')}
+                    ${createStatCard('HUM', 'Humidity', sensorData.bilge.humidity.toFixed(1), '%', 'blue')}
+                    ${createStatCard('RPM', 'Motor RPM', sensorData.engine.rpm, 'RPM', 'red')}
+                    ${createStatCard('TMP', 'Motor Temp', sensorData.engine.temp, '°C', 'orange')}
+                    ${createStatCard('OIL', 'Öldruck', sensorData.engine.oil_pressure.toFixed(1), 'bar', 'amber')}
+                    ${createStatCard('AMP', 'Strom', sensorData.battery.current.toFixed(1), 'A', 'green')}
                 </div>
             </div>
         </div>
@@ -278,7 +278,12 @@ function createHeroCard(icon, label, value, unit, subtitle) {
                     background: linear-gradient(135deg, rgba(100, 255, 218, 0.2), rgba(52, 152, 219, 0.2));
                     padding: 18px;
                     border-radius: 20px;
-                    font-size: 42px;
+                    font-size: 24px;
+                    font-weight: 700;
+                    color: #64ffda;
+                    font-family: monospace;
+                    min-width: 70px;
+                    text-align: center;
                 ">${icon}</div>
                 <div style="text-align: right;">
                     <div style="font-size: 11px; color: #8892b0; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 5px;">${label}</div>
@@ -333,8 +338,13 @@ function createStatCard(icon, label, value, unit, color) {
             padding: 24px;
             box-shadow: 0 4px 16px rgba(0,0,0,0.2);
         ">
-            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 24px;">
-                ${icon}
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                <span style="
+                    font-size: 14px;
+                    font-weight: 700;
+                    color: ${textColorMap[color] || textColorMap.cyan};
+                    font-family: monospace;
+                ">${icon}</span>
                 <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #8892b0;">${label}</span>
             </div>
             <div style="font-size: 42px; font-weight: 300; color: ${textColorMap[color] || textColorMap.cyan}; letter-spacing: -1px;">
