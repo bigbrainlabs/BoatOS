@@ -2,48 +2,7 @@
  * BoatOS Frontend - Marine Dashboard
  */
 
-// ==================== DEBUG CONSOLE OVERLAY ====================
-const originalLog = console.log;
-const originalError = console.error;
-const originalWarn = console.warn;
-let logBuffer = [];
-const maxLines = 30;
-
-function initDebugConsole() {
-    const debugConsole = document.getElementById('debug-console');
-
-    function addToDebug(message, color = '#0f0') {
-        logBuffer.push(`<span style="color: ${color}">${message}</span>`);
-        if (logBuffer.length > maxLines) logBuffer.shift();
-        const debugEl = document.getElementById('debug-console');
-        if (debugEl) debugEl.innerHTML = logBuffer.join('<br>');
-    }
-
-    console.log = function(...args) {
-        originalLog.apply(console, args);
-        addToDebug(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), '#0f0');
-    };
-
-    console.error = function(...args) {
-        originalError.apply(console, args);
-        addToDebug('ERROR: ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), '#f00');
-    };
-
-    console.warn = function(...args) {
-        originalWarn.apply(console, args);
-        addToDebug('WARN: ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), '#ff0');
-    };
-
-    console.log('🐛 Debug console initialized');
-}
-
-// Initialize debug console when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initDebugConsole);
-} else {
-    initDebugConsole();
-}
-
+// Debug console disabled - was causing JavaScript errors
 // Auto-detect protocol (http/https) for API and WebSocket
 const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
 const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -147,6 +106,20 @@ function initMap() {
     console.log('➕ Adding OSM layer to map');
     osmLayer.addTo(map);
     console.log('🗺️ OSM layer added. Map bounds:', map.getBounds());
+
+    // Force map to recalculate size after initialization
+    // This is critical because map may be initialized before grid layout is fully calculated
+    setTimeout(() => {
+        console.log('🗺️ Forcing map size recalculation...');
+        map.invalidateSize({pan: false});
+        console.log('🗺️ Map size after invalidate:', map.getSize());
+    }, 100);
+
+    setTimeout(() => {
+        console.log('🗺️ Second invalidateSize (longer delay)...');
+        map.invalidateSize({pan: false});
+        console.log('🗺️ Map size after second invalidate:', map.getSize());
+    }, 500);
 
     // ==================== OVERLAY LAYERS ====================
     const seaMarkLayer = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
