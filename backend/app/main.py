@@ -68,7 +68,7 @@ async def websocket_endpoint(websocket: WebSocket):
             gps_status = gps_service.get_gps_status()
             sensor_data["gps"] = gps_status
             await websocket.send_json(sensor_data)
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(1.0)  # Reduced from 0.5s to 1s for better performance
     except WebSocketDisconnect:
         active_connections.remove(websocket)
         gps_service.websocket_clients.discard(websocket)  # Unregister from GPS service
@@ -2653,14 +2653,14 @@ async def import_all_data(request: Request):
 # ==================== STARTUP ====================
 @app.on_event("startup")
 async def startup_event():
-    asyncio.create_task(signalk_listener())
+    # asyncio.create_task(signalk_listener())  # DISABLED: Duplicate GPS reader, gps_service handles this
     asyncio.create_task(track_recording_loop())
     asyncio.create_task(fetch_weather())
     asyncio.create_task(fetch_weather_alerts_periodic())  # Start periodic weather alerts
     asyncio.create_task(gps_service.read_gps_from_signalk())  # Start GPS service from SignalK
     mqtt_client_init()
-    mqtt_publisher_init()  # Initialize MQTT publisher for Home Assistant
-    asyncio.create_task(publish_sensor_data())  # Start publishing sensor data every 2 seconds
+    # mqtt_publisher_init()  # DISABLED: Home Assistant removed, no longer needed
+    # asyncio.create_task(publish_sensor_data())  # DISABLED: Home Assistant removed, no longer needed
     load_chart_layers()
     init_waterway_router()
 
