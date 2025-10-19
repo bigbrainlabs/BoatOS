@@ -218,6 +218,43 @@ function renderSensorDashboard() {
     // Save current connection status before re-rendering
     const wasConnected = sensorWebSocket && sensorWebSocket.readyState === WebSocket.OPEN;
 
+    // Get current unit settings (from units.js)
+    const units = typeof getCurrentUnits === 'function' ? getCurrentUnits() : {
+        speed: 'kn',
+        depth: 'm',
+        temperature: 'c'
+    };
+
+    // Convert sensor values to selected units
+    const speedConverted = typeof convertSpeed === 'function'
+        ? convertSpeed(sensorData.speed, units.speed)
+        : sensorData.speed;
+    const speedUnit = typeof getUnitLabel === 'function'
+        ? getUnitLabel('speed')
+        : 'kn';
+
+    const depthConverted = typeof convertDepth === 'function'
+        ? convertDepth(sensorData.depth, units.depth)
+        : sensorData.depth;
+    const depthUnit = typeof getUnitLabel === 'function'
+        ? getUnitLabel('depth')
+        : 'm';
+
+    const bilgeTempConverted = typeof convertTemperature === 'function'
+        ? convertTemperature(sensorData.bilge.temperature, units.temperature)
+        : sensorData.bilge.temperature;
+    const tempUnit = typeof getUnitLabel === 'function'
+        ? getUnitLabel('temperature')
+        : '°C';
+
+    const windSpeedConverted = typeof convertSpeed === 'function'
+        ? convertSpeed(sensorData.wind.speed, units.speed)
+        : sensorData.wind.speed;
+
+    const engineTempConverted = typeof convertTemperature === 'function'
+        ? convertTemperature(sensorData.engine.temp, units.temperature)
+        : sensorData.engine.temp;
+
     dashboard.innerHTML = `
         <!-- Animated Background -->
         <div class="animated-bg"></div>
@@ -262,9 +299,9 @@ function renderSensorDashboard() {
             <div style="max-width: 1400px; margin: 0 auto; position: relative; z-index: 2;">
                 <!-- Hero Cards - Main Values -->
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; margin-bottom: 30px; position: relative; z-index: 10;">
-                    ${createHeroCard('SPD', 'Speed', sensorData.speed.toFixed(1), 'kn', 'Geschwindigkeit')}
+                    ${createHeroCard('SPD', 'Speed', speedConverted.toFixed(1), speedUnit, 'Geschwindigkeit')}
                     ${createHeroCard('BAT', 'Batterie', sensorData.battery.voltage.toFixed(1), 'V', 'Hauptbatterie')}
-                    ${createHeroCard('TMP', 'Bilge', sensorData.bilge.temperature.toFixed(1), '°C', 'Temperatur')}
+                    ${createHeroCard('TMP', 'Bilge', bilgeTempConverted.toFixed(1), tempUnit, 'Temperatur')}
                 </div>
 
                 <!-- Navigation Details -->
@@ -277,12 +314,12 @@ function renderSensorDashboard() {
 
                 <!-- Environment & Systems -->
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; position: relative; z-index: 10;">
-                    ${createStatCard('DPH', 'Tiefe', sensorData.depth.toFixed(1), 'm', 'cyan')}
-                    ${createStatCard('WND', 'Wind', sensorData.wind.speed.toFixed(1), 'kn', 'blue')}
+                    ${createStatCard('DPH', 'Tiefe', depthConverted.toFixed(1), depthUnit, 'cyan')}
+                    ${createStatCard('WND', 'Wind', windSpeedConverted.toFixed(1), speedUnit, 'blue')}
                     ${createStatCard('DIR', 'Richtung', Math.round(sensorData.wind.direction), '°', 'blue')}
                     ${createStatCard('HUM', 'Humidity', sensorData.bilge.humidity.toFixed(1), '%', 'blue')}
                     ${createStatCard('RPM', 'Motor RPM', sensorData.engine.rpm, 'RPM', 'red')}
-                    ${createStatCard('TMP', 'Motor Temp', sensorData.engine.temp, '°C', 'orange')}
+                    ${createStatCard('TMP', 'Motor Temp', engineTempConverted.toFixed(0), tempUnit, 'orange')}
                     ${createStatCard('OIL', 'Öldruck', sensorData.engine.oil_pressure.toFixed(1), 'bar', 'amber')}
                     ${createStatCard('AMP', 'Strom', sensorData.battery.current.toFixed(1), 'A', 'green')}
                 </div>
@@ -395,6 +432,13 @@ function createStatCard(icon, label, value, unit, color) {
 
 function formatPosition(lat, lon) {
     if (lat === 0 && lon === 0) return '--';
+
+    // Use coordinate formatting from units.js if available
+    if (typeof formatCoordinates === 'function') {
+        return formatCoordinates(lat, lon);
+    }
+
+    // Fallback to decimal format
     return `${lat.toFixed(5)}°, ${lon.toFixed(5)}°`;
 }
 
