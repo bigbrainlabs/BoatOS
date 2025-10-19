@@ -629,6 +629,14 @@ function applySettings() {
     // Refresh UI elements with new unit labels
     refreshUnitLabels();
 
+    // Refresh sensor dashboard if it's visible (to apply new units)
+    if (typeof window.SensorsDashboard !== 'undefined' && typeof window.SensorsDashboard.isVisible === 'function') {
+        if (window.SensorsDashboard.isVisible() && typeof renderSensorDashboard === 'function') {
+            renderSensorDashboard();
+            console.log('🔄 Sensor dashboard refreshed with new units');
+        }
+    }
+
     console.log('✅ Settings applied:', currentSettings);
 }
 
