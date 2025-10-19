@@ -134,6 +134,9 @@ function showSensorsDashboard() {
     // Render first, then connect to preserve connection status
     renderSensorDashboard();
     connectSensorWebSocket();
+
+    // Update FAB
+    updateFloatingActionButton();
 }
 
 function hideSensorsDashboard() {
@@ -157,6 +160,9 @@ function hideSensorsDashboard() {
         sensorWebSocket.close();
         sensorWebSocket = null;
     }
+
+    // Update FAB
+    updateFloatingActionButton();
 }
 
 function createDashboardElement() {
@@ -208,15 +214,6 @@ function renderSensorDashboard() {
                     font-size: 14px;
                 ">
                     [OFF] Connecting...
-                </div>
-                <div onclick="window.SensorsDashboard.hide()" style="
-                    background: rgba(255,255,255,0.1);
-                    padding: 5px 12px;
-                    border-radius: 20px;
-                    cursor: pointer;
-                    font-size: 14px;
-                ">
-                    🗺️ Navigation
                 </div>
             </div>
         </div>
@@ -428,6 +425,56 @@ const dashboardStyles = `
             padding: 8px 16px;
             border-radius: 20px;
         }
+
+        /* Floating Action Button */
+        .floating-action-button {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 3px rgba(100, 255, 218, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10000;
+            transition: all 0.3s ease;
+            border: 2px solid rgba(100, 255, 218, 0.5);
+            backdrop-filter: blur(10px);
+        }
+
+        .floating-action-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 4px rgba(100, 255, 218, 0.5);
+        }
+
+        .floating-action-button:active {
+            transform: scale(0.95);
+        }
+
+        .fab-icon {
+            font-size: 36px;
+            line-height: 1;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Pulse animation for FAB */
+        @keyframes fab-pulse {
+            0%, 100% {
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 3px rgba(100, 255, 218, 0.3);
+            }
+            50% {
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 6px rgba(100, 255, 218, 0.6);
+            }
+        }
+
+        .floating-action-button {
+            animation: fab-pulse 2s ease-in-out infinite;
+        }
     </style>
 `;
 
@@ -438,6 +485,62 @@ if (!document.getElementById('sensors-dashboard-styles')) {
     styleElement.innerHTML = dashboardStyles;
     document.head.appendChild(styleElement);
 }
+
+// ==================== Floating Action Button (FAB) ====================
+
+function createFloatingActionButton() {
+    // Remove existing FAB if present
+    const existingFab = document.getElementById('view-switch-fab');
+    if (existingFab) {
+        existingFab.remove();
+    }
+
+    // Create FAB
+    const fab = document.createElement('div');
+    fab.id = 'view-switch-fab';
+    fab.className = 'floating-action-button';
+    fab.onclick = toggleViewFromFab;
+
+    // Start with dashboard icon (since we start in dashboard view)
+    fab.innerHTML = '<span class="fab-icon">🗺️</span>';
+
+    document.body.appendChild(fab);
+
+    // Update FAB state based on current view
+    updateFloatingActionButton();
+
+    console.log('✅ Floating Action Button created');
+}
+
+function updateFloatingActionButton() {
+    const fab = document.getElementById('view-switch-fab');
+    if (!fab) return;
+
+    const isDashboard = isDashboardVisible();
+
+    // Update icon and tooltip
+    if (isDashboard) {
+        fab.innerHTML = '<span class="fab-icon">🗺️</span>';
+        fab.title = 'Navigation';
+    } else {
+        fab.innerHTML = '<span class="fab-icon">📊</span>';
+        fab.title = 'Dashboard';
+    }
+}
+
+function toggleViewFromFab() {
+    if (isDashboardVisible()) {
+        hideSensorsDashboard();
+    } else {
+        showSensorsDashboard();
+    }
+    updateFloatingActionButton();
+}
+
+// Initialize FAB when script loads
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(createFloatingActionButton, 100);
+});
 
 // Export functions
 window.SensorsDashboard = {
