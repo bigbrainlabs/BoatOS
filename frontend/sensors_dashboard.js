@@ -161,7 +161,7 @@ function hideSensorsDashboard() {
 
     // Fix map size after showing map container (Leaflet was hidden while dashboard was open)
     setTimeout(() => {
-        if (window.map) {
+        if (window.map && typeof window.map.invalidateSize === 'function') {
             console.log('🗺️ Dashboard closed - invalidating map size to load tiles...');
             window.map.invalidateSize();
         }
@@ -573,35 +573,8 @@ function hideBootScreen() {
 
         // Note: #app is now always visible (display:grid), boot screen just fades out
 
-        // Fix map size after showing app (Leaflet was initialized while app was hidden)
-        setTimeout(() => {
-            if (window.map && typeof window.map.invalidateSize === 'function') {
-                console.log('🗺️ Invalidating map size to load tiles...');
-                const mapContainer = document.getElementById('map');
-                if (mapContainer) {
-                    const rect = mapContainer.getBoundingClientRect();
-                    console.log('📐 Map container after show:', {
-                        width: rect.width,
-                        height: rect.height,
-                        display: window.getComputedStyle(mapContainer).display
-                    });
-                }
-                console.log('🗺️ Map before invalidate - zoom:', window.map.getZoom(), 'center:', window.map.getCenter());
-                window.map.invalidateSize();
-                console.log('🗺️ Map after invalidate - bounds:', window.map.getBounds());
-            } else {
-                console.warn('⚠️ Map not ready yet, waiting longer...');
-                // Try again after map should be initialized
-                setTimeout(() => {
-                    if (window.map && typeof window.map.invalidateSize === 'function') {
-                        console.log('🗺️ Map ready now - invalidating size...');
-                        window.map.invalidateSize();
-                    } else {
-                        console.error('❌ window.map still not initialized!');
-                    }
-                }, 500);
-            }
-        }, 100);
+        // Map invalidation is handled when switching views - not needed here
+        // because dashboard is shown immediately after boot
 
         setTimeout(() => {
             bootScreen.remove();
