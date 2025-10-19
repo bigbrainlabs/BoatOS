@@ -84,6 +84,147 @@ async def get_sensors():
     sensor_data["gps"] = gps_status
     return sensor_data
 
+@app.get("/api/sensors/list")
+async def get_sensors_list():
+    """Get a structured list of all detected sensors with their status, grouped by functionality"""
+    gps_status = gps_service.get_gps_status()
+    sensor_data["gps"] = gps_status
+
+    sensors_list = []
+
+    # Navigation Group (GPS, Speed, Heading, Course)
+    nav_has_data = (sensor_data["gps"].get("satellites", 0) > 0 or
+                    sensor_data["speed"] > 0 or
+                    sensor_data["heading"] != 0)
+    sensors_list.append({
+        "id": "navigation",
+        "name": "Navigation",
+        "type": "navigation",
+        "status": "online" if sensor_data["gps"].get("satellites", 0) > 0 else ("standby" if nav_has_data else "offline"),
+        "values": {
+            "latitude": sensor_data["gps"].get("lat", 0),
+            "longitude": sensor_data["gps"].get("lon", 0),
+            "satellites": sensor_data["gps"].get("satellites", 0),
+            "altitude": sensor_data["gps"].get("altitude", 0),
+            "speed": sensor_data["speed"],
+            "heading": sensor_data["heading"],
+            "course": sensor_data["gps"].get("course", 0)
+        },
+        "topics": [
+            "boat/gps/latitude",
+            "boat/gps/longitude",
+            "boat/gps/satellites",
+            "boat/gps/altitude",
+            "boat/gps/speed",
+            "boat/gps/course",
+            "boatos/navigation/speed",
+            "boatos/navigation/heading"
+        ],
+        "icon": "🧭"
+    })
+
+    # Depth Sensor
+    sensors_list.append({
+        "id": "depth",
+        "name": "Tiefenmesser",
+        "type": "navigation",
+        "status": "online" if sensor_data["depth"] > 0 else "offline",
+        "values": {
+            "depth": sensor_data["depth"]
+        },
+        "topics": [
+            "boatos/navigation/depth",
+            "environment.depth.belowTransducer"
+        ],
+        "icon": "📏"
+    })
+
+    # Wind Sensor (Speed + Direction)
+    sensors_list.append({
+        "id": "wind",
+        "name": "Wind",
+        "type": "environment",
+        "status": "online" if sensor_data["wind"]["speed"] > 0 else "standby",
+        "values": {
+            "speed": sensor_data["wind"]["speed"],
+            "direction": sensor_data["wind"]["direction"]
+        },
+        "topics": [
+            "boatos/wind/speed",
+            "boatos/wind/direction"
+        ],
+        "icon": "💨"
+    })
+
+    # Engine Sensors (RPM, Temperature, Oil Pressure)
+    engine_has_data = (sensor_data["engine"]["rpm"] > 0 or
+                       sensor_data["engine"]["temp"] > 0 or
+                       sensor_data["engine"]["oil_pressure"] > 0)
+    sensors_list.append({
+        "id": "engine",
+        "name": "Motor",
+        "type": "propulsion",
+        "status": "online" if sensor_data["engine"]["rpm"] > 0 else ("standby" if engine_has_data else "offline"),
+        "values": {
+            "rpm": sensor_data["engine"]["rpm"],
+            "temperature": sensor_data["engine"]["temp"],
+            "oil_pressure": sensor_data["engine"]["oil_pressure"]
+        },
+        "topics": [
+            "boat/engine",
+            "boatos/engine/rpm",
+            "boatos/engine/temperature",
+            "boatos/engine/oil_pressure"
+        ],
+        "icon": "🔧"
+    })
+
+    # Battery Sensors (Voltage + Current)
+    battery_has_data = (sensor_data["battery"]["voltage"] > 0 or
+                        sensor_data["battery"]["current"] != 0)
+    sensors_list.append({
+        "id": "battery",
+        "name": "Batterie",
+        "type": "electrical",
+        "status": "online" if sensor_data["battery"]["voltage"] > 0 else ("standby" if battery_has_data else "offline"),
+        "values": {
+            "voltage": sensor_data["battery"]["voltage"],
+            "current": sensor_data["battery"]["current"]
+        },
+        "topics": [
+            "boatos/battery/voltage",
+            "boatos/battery/current"
+        ],
+        "icon": "🔋"
+    })
+
+    # Bilge Sensors (Temperature + Humidity)
+    bilge_has_data = (sensor_data["bilge"]["temperature"] > 0 or
+                      sensor_data["bilge"]["humidity"] > 0)
+    sensors_list.append({
+        "id": "bilge",
+        "name": "Bilge",
+        "type": "environment",
+        "status": "online" if bilge_has_data else "offline",
+        "values": {
+            "temperature": sensor_data["bilge"]["temperature"],
+            "humidity": sensor_data["bilge"]["humidity"]
+        },
+        "topics": [
+            "thermo_3b8790/temperature",
+            "thermo_3b8790/humidity"
+        ],
+        "icon": "🌡️"
+    })
+
+    return {
+        "total": len(sensors_list),
+        "online": sum(1 for s in sensors_list if s["status"] == "online"),
+        "offline": sum(1 for s in sensors_list if s["status"] == "offline"),
+        "standby": sum(1 for s in sensors_list if s["status"] == "standby"),
+        "sensors": sensors_list
+    }
+
 @app.get("/api/gps")
 async def get_gps():
     return gps_service.get_gps_status()

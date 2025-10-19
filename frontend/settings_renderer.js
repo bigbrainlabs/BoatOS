@@ -248,9 +248,194 @@ function renderGeneralSettings() {
     `;
 }
 
+// Render Sensors Settings Tab
+async function renderSensorsSettings() {
+    try {
+        const response = await fetch('/api/sensors/list');
+        const data = await response.json();
+
+        const statusColors = {
+            online: '#2ecc71',
+            offline: '#e74c3c',
+            standby: '#f39c12'
+        };
+
+        const statusLabels = {
+            online: 'Online',
+            offline: 'Offline',
+            standby: 'Standby'
+        };
+
+        return `
+            <div style="max-width: 1400px; margin: 0 auto; position: relative; z-index: 2;">
+                <!-- Sensor Overview Cards -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; margin-bottom: 30px;">
+                    ${createSettingsHeroCard('📊', 'Sensoren gesamt', data.total, '', 'Alle registrierten Sensoren')}
+                    ${createSettingsHeroCard('✅', 'Online', data.online, '', 'Aktiv und senden Daten')}
+                    ${createSettingsHeroCard('❌', 'Offline', data.offline, '', 'Keine Verbindung')}
+                </div>
+
+                <!-- Detected Sensors -->
+                <h3 style="color: #64ffda; font-size: 20px; font-weight: 600; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid rgba(100, 255, 218, 0.2);">
+                    🔌 Erkannte Sensoren
+                </h3>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                    ${data.sensors.map(sensor => {
+                        // Define value labels for better readability
+                        const valueLabels = {
+                            latitude: 'Latitude',
+                            longitude: 'Longitude',
+                            satellites: 'Satelliten',
+                            altitude: 'Höhe (m)',
+                            speed: 'Speed (kn)',
+                            heading: 'Heading (°)',
+                            course: 'Course (°)',
+                            depth: 'Tiefe (m)',
+                            direction: 'Richtung (°)',
+                            rpm: 'RPM',
+                            temperature: 'Temp (°C)',
+                            oil_pressure: 'Öldruck (bar)',
+                            voltage: 'Spannung (V)',
+                            current: 'Strom (A)',
+                            humidity: 'Luftfeuchte (%)'
+                        };
+
+                        return `
+                        <div style="
+                            background: linear-gradient(135deg, rgba(30, 60, 114, 0.6), rgba(42, 82, 152, 0.6));
+                            backdrop-filter: blur(15px);
+                            border: 2px solid ${sensor.status === 'online' ? 'rgba(46, 204, 113, 0.4)' : sensor.status === 'offline' ? 'rgba(231, 76, 60, 0.4)' : 'rgba(243, 156, 18, 0.4)'};
+                            border-radius: 16px;
+                            padding: 24px;
+                            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+                            position: relative;
+                            overflow: hidden;
+                        ">
+                            <!-- Status Indicator -->
+                            <div style="
+                                position: absolute;
+                                top: 15px;
+                                right: 15px;
+                                background: ${statusColors[sensor.status]};
+                                color: white;
+                                padding: 4px 12px;
+                                border-radius: 20px;
+                                font-size: 11px;
+                                font-weight: 600;
+                                text-transform: uppercase;
+                                letter-spacing: 0.5px;
+                                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                            ">${statusLabels[sensor.status]}</div>
+
+                            <!-- Sensor Icon & Name -->
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                                <span style="font-size: 36px;">${sensor.icon}</span>
+                                <div>
+                                    <div style="font-size: 19px; font-weight: 600; color: white;">${sensor.name}</div>
+                                    <div style="font-size: 11px; color: #8892b0; text-transform: uppercase; letter-spacing: 1.2px;">${sensor.type}</div>
+                                </div>
+                            </div>
+
+                            <!-- Sensor Values (grouped and styled) -->
+                            <div style="
+                                background: rgba(10, 14, 39, 0.5);
+                                border-radius: 10px;
+                                padding: 14px;
+                                border: 1px solid rgba(100, 255, 218, 0.1);
+                            ">
+                                ${Object.entries(sensor.values).map(([key, value], index) => `
+                                    <div style="
+                                        display: flex;
+                                        justify-content: space-between;
+                                        align-items: center;
+                                        padding: 8px 0;
+                                        ${index < Object.keys(sensor.values).length - 1 ? 'border-bottom: 1px solid rgba(255,255,255,0.08);' : ''}
+                                    ">
+                                        <span style="
+                                            color: #8892b0;
+                                            font-size: 12px;
+                                            font-weight: 500;
+                                        ">${valueLabels[key] || key}</span>
+                                        <span style="
+                                            color: ${sensor.status === 'online' ? '#64ffda' : sensor.status === 'offline' ? '#e74c3c' : '#f39c12'};
+                                            font-size: 14px;
+                                            font-weight: 700;
+                                            font-family: monospace;
+                                        ">${typeof value === 'number' ? (key === 'latitude' || key === 'longitude' ? value.toFixed(6) : value.toFixed(2)) : value}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+
+                            <!-- MQTT Topics -->
+                            ${sensor.topics && sensor.topics.length > 0 ? `
+                            <div style="
+                                margin-top: 16px;
+                                padding-top: 12px;
+                                border-top: 1px solid rgba(100, 255, 218, 0.2);
+                            ">
+                                <div style="
+                                    font-size: 11px;
+                                    color: #8892b0;
+                                    font-weight: 600;
+                                    text-transform: uppercase;
+                                    letter-spacing: 1px;
+                                    margin-bottom: 8px;
+                                ">📡 MQTT Topics:</div>
+                                <div style="
+                                    display: flex;
+                                    flex-direction: column;
+                                    gap: 4px;
+                                ">
+                                    ${sensor.topics.map(topic => `
+                                        <div style="
+                                            background: rgba(100, 255, 218, 0.05);
+                                            padding: 6px 10px;
+                                            border-radius: 6px;
+                                            border: 1px solid rgba(100, 255, 218, 0.15);
+                                            font-family: monospace;
+                                            font-size: 11px;
+                                            color: #64ffda;
+                                            word-break: break-all;
+                                        ">${topic}</div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            ` : ''}
+
+                            <!-- Sensor ID Badge -->
+                            <div style="
+                                margin-top: 14px;
+                                text-align: center;
+                                background: rgba(100, 255, 218, 0.1);
+                                padding: 6px;
+                                border-radius: 6px;
+                                border: 1px solid rgba(100, 255, 218, 0.2);
+                            ">
+                                <span style="font-size: 10px; color: #64ffda; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">ID: ${sensor.id}</span>
+                            </div>
+                        </div>
+                    `;
+                    }).join('')}
+                </div>
+
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error loading sensors:', error);
+        return `
+            <div style="padding: 40px; text-align: center; color: #e74c3c;">
+                <h3>⚠️ Fehler beim Laden der Sensoren</h3>
+                <p style="color: #8892b0; margin-top: 10px;">${error.message}</p>
+            </div>
+        `;
+    }
+}
+
 // Export
 window.SettingsRenderer = {
     renderGeneralSettings: renderGeneralSettings,
+    renderSensorsSettings: renderSensorsSettings,
     createSettingsHeroCard: createSettingsHeroCard,
     createSettingsCard: createSettingsCard
 };
