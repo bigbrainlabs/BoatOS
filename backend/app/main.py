@@ -36,7 +36,7 @@ CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/charts", StaticFiles(directory=str(CHARTS_DIR)), name="charts")
 
 active_connections: List[WebSocket] = []
-sensor_data: Dict[str, Any] = {"gps": {"lat": 0, "lon": 0, "satellites": 0, "altitude": 0, "course": 0}, "speed": 0, "heading": 0, "depth": 0, "wind": {"speed": 0, "direction": 0}, "engine": {"rpm": 0, "temp": 0, "oil_pressure": 0}, "battery": {"voltage": 0, "current": 0}}
+sensor_data: Dict[str, Any] = {"gps": {"lat": 0, "lon": 0, "satellites": 0, "altitude": 0, "course": 0}, "speed": 0, "heading": 0, "depth": 0, "wind": {"speed": 0, "direction": 0}, "engine": {"rpm": 0, "temp": 0, "oil_pressure": 0}, "battery": {"voltage": 0, "current": 0}, "bilge": {"temperature": 0, "humidity": 0}}
 routes, waypoints = {}, []
 # Current session entries (cleared on stop)
 current_session_entries = []
@@ -1646,9 +1646,12 @@ def on_mqtt_message(client, userdata, msg):
         elif "heater" in topic:
             sensor_data["heater"] = json.loads(payload)
         elif "engine" in topic:
-            sensor_data["engine"].update(json.loads(payload)
-
-)
+            sensor_data["engine"].update(json.loads(payload))
+        # Bilge Sensor (ESPHome/Tasmota via MQTT)
+        elif "thermo_3b8790" in topic and "temperature" in topic:
+            sensor_data["bilge"]["temperature"] = float(payload)
+        elif "thermo_3b8790" in topic and "humidity" in topic:
+            sensor_data["bilge"]["humidity"] = float(payload)
     except Exception as e:
         print(f"⚠️ MQTT parse error ({topic}): {e}")
 
@@ -1672,6 +1675,401 @@ def mqtt_client_init():
         print("✅ MQTT connected (boat/#)")
     except Exception as e:
         print(f"⚠️ MQTT connection failed: {e}")
+
+# ==================== MQTT PUBLISHER (Home Assistant Integration) ====================
+mqtt_publisher_client = None
+
+def mqtt_publisher_init():
+    """Initialize MQTT publisher for Home Assistant integration"""
+    global mqtt_publisher_client
+    try:
+        mqtt_publisher_client = mqtt.Client(client_id="boatos_publisher")
+        mqtt_publisher_client.connect("localhost", 1883, 60)
+        mqtt_publisher_client.loop_start()
+        print("✅ MQTT Publisher connected for Home Assistant")
+
+        # Send Home Assistant MQTT Discovery messages
+        send_ha_discovery_messages()
+    except Exception as e:
+        print(f"⚠️ MQTT Publisher connection failed: {e}")
+
+def send_ha_discovery_messages():
+    """Send Home Assistant MQTT Discovery configuration for all sensors"""
+    if not mqtt_publisher_client:
+        return
+
+    # Device info (shared across all sensors)
+    device_info = {
+        "identifiers": ["boatos_main"],
+        "name": "BoatOS",
+        "model": "BoatOS v1.0",
+        "manufacturer": "BoatOS Project",
+        "sw_version": "1.0.0"
+    }
+
+    # GPS Sensors
+    sensors = [
+        # GPS
+        {
+            "name": "GPS Latitude",
+            "unique_id": "boatos_gps_lat",
+            "state_topic": "boatos/gps/latitude",
+            "unit_of_measurement": "°",
+            "icon": "mdi:crosshairs-gps",
+            "device_class": None,
+            "value_template": "{{ value_json.lat }}"
+        },
+        {
+            "name": "GPS Longitude",
+            "unique_id": "boatos_gps_lon",
+            "state_topic": "boatos/gps/longitude",
+            "unit_of_measurement": "°",
+            "icon": "mdi:crosshairs-gps",
+            "device_class": None,
+            "value_template": "{{ value_json.lon }}"
+        },
+        {
+            "name": "GPS Position",
+            "unique_id": "boatos_gps_position",
+            "state_topic": "boatos/gps/position",
+            "icon": "mdi:map-marker",
+            "device_class": None,
+            "value_template": "{{ value_json.lat }}, {{ value_json.lon }}"
+        },
+        {
+            "name": "GPS Satellites",
+            "unique_id": "boatos_gps_satellites",
+            "state_topic": "boatos/gps/satellites",
+            "icon": "mdi:satellite-variant",
+            "device_class": None,
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "GPS Altitude",
+            "unique_id": "boatos_gps_altitude",
+            "state_topic": "boatos/gps/altitude",
+            "unit_of_measurement": "m",
+            "icon": "mdi:elevation-rise",
+            "device_class": "distance",
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "GPS Course",
+            "unique_id": "boatos_gps_course",
+            "state_topic": "boatos/gps/course",
+            "unit_of_measurement": "°",
+            "icon": "mdi:compass",
+            "device_class": None,
+            "value_template": "{{ value }}"
+        },
+
+        # Navigation
+        {
+            "name": "Speed Over Ground",
+            "unique_id": "boatos_speed",
+            "state_topic": "boatos/navigation/speed",
+            "unit_of_measurement": "kn",
+            "icon": "mdi:speedometer",
+            "device_class": "speed",
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "Heading",
+            "unique_id": "boatos_heading",
+            "state_topic": "boatos/navigation/heading",
+            "unit_of_measurement": "°",
+            "icon": "mdi:compass-outline",
+            "device_class": None,
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "Water Depth",
+            "unique_id": "boatos_depth",
+            "state_topic": "boatos/navigation/depth",
+            "unit_of_measurement": "m",
+            "icon": "mdi:waves",
+            "device_class": "distance",
+            "value_template": "{{ value }}"
+        },
+
+        # Wind
+        {
+            "name": "Wind Speed",
+            "unique_id": "boatos_wind_speed",
+            "state_topic": "boatos/wind/speed",
+            "unit_of_measurement": "kn",
+            "icon": "mdi:weather-windy",
+            "device_class": "wind_speed",
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "Wind Direction",
+            "unique_id": "boatos_wind_direction",
+            "state_topic": "boatos/wind/direction",
+            "unit_of_measurement": "°",
+            "icon": "mdi:windsock",
+            "device_class": None,
+            "value_template": "{{ value }}"
+        },
+
+        # Engine
+        {
+            "name": "Engine RPM",
+            "unique_id": "boatos_engine_rpm",
+            "state_topic": "boatos/engine/rpm",
+            "unit_of_measurement": "RPM",
+            "icon": "mdi:engine",
+            "device_class": None,
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "Engine Temperature",
+            "unique_id": "boatos_engine_temp",
+            "state_topic": "boatos/engine/temperature",
+            "unit_of_measurement": "°C",
+            "icon": "mdi:thermometer",
+            "device_class": "temperature",
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "Engine Oil Pressure",
+            "unique_id": "boatos_engine_oil",
+            "state_topic": "boatos/engine/oil_pressure",
+            "unit_of_measurement": "bar",
+            "icon": "mdi:oil",
+            "device_class": "pressure",
+            "value_template": "{{ value }}"
+        },
+
+        # Battery
+        {
+            "name": "Battery Voltage",
+            "unique_id": "boatos_battery_voltage",
+            "state_topic": "boatos/battery/voltage",
+            "unit_of_measurement": "V",
+            "icon": "mdi:battery",
+            "device_class": "voltage",
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "Battery Current",
+            "unique_id": "boatos_battery_current",
+            "state_topic": "boatos/battery/current",
+            "unit_of_measurement": "A",
+            "icon": "mdi:current-dc",
+            "device_class": "current",
+            "value_template": "{{ value }}"
+        },
+
+        # Future sensors (placeholders)
+        {
+            "name": "Water Temperature",
+            "unique_id": "boatos_water_temp",
+            "state_topic": "boatos/environment/water_temperature",
+            "unit_of_measurement": "°C",
+            "icon": "mdi:thermometer-water",
+            "device_class": "temperature",
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "Air Temperature",
+            "unique_id": "boatos_air_temp",
+            "state_topic": "boatos/environment/air_temperature",
+            "unit_of_measurement": "°C",
+            "icon": "mdi:thermometer",
+            "device_class": "temperature",
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "Humidity",
+            "unique_id": "boatos_humidity",
+            "state_topic": "boatos/environment/humidity",
+            "unit_of_measurement": "%",
+            "icon": "mdi:water-percent",
+            "device_class": "humidity",
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "Barometric Pressure",
+            "unique_id": "boatos_pressure",
+            "state_topic": "boatos/environment/pressure",
+            "unit_of_measurement": "hPa",
+            "icon": "mdi:gauge",
+            "device_class": "atmospheric_pressure",
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "Fuel Level",
+            "unique_id": "boatos_fuel_level",
+            "state_topic": "boatos/tank/fuel_level",
+            "unit_of_measurement": "%",
+            "icon": "mdi:fuel",
+            "device_class": None,
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "Fresh Water Level",
+            "unique_id": "boatos_water_level",
+            "state_topic": "boatos/tank/water_level",
+            "unit_of_measurement": "%",
+            "icon": "mdi:water",
+            "device_class": None,
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "Bilge Level",
+            "unique_id": "boatos_bilge_level",
+            "state_topic": "boatos/tank/bilge_level",
+            "unit_of_measurement": "%",
+            "icon": "mdi:water-alert",
+            "device_class": None,
+            "value_template": "{{ value }}"
+        },
+    ]
+
+    # Binary sensors
+    binary_sensors = [
+        {
+            "name": "Track Recording Active",
+            "unique_id": "boatos_track_recording",
+            "state_topic": "boatos/status/track_recording",
+            "icon": "mdi:record-rec",
+            "device_class": None,
+            "payload_on": "true",
+            "payload_off": "false",
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "GPS Fix",
+            "unique_id": "boatos_gps_fix",
+            "state_topic": "boatos/status/gps_fix",
+            "icon": "mdi:crosshairs-gps",
+            "device_class": "connectivity",
+            "payload_on": "true",
+            "payload_off": "false",
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "Anchor Alarm",
+            "unique_id": "boatos_anchor_alarm",
+            "state_topic": "boatos/alarm/anchor",
+            "icon": "mdi:anchor",
+            "device_class": None,
+            "payload_on": "true",
+            "payload_off": "false",
+            "value_template": "{{ value }}"
+        },
+        {
+            "name": "Bilge Pump Active",
+            "unique_id": "boatos_bilge_pump",
+            "state_topic": "boatos/status/bilge_pump",
+            "icon": "mdi:pump",
+            "device_class": None,
+            "payload_on": "true",
+            "payload_off": "false",
+            "value_template": "{{ value }}"
+        },
+    ]
+
+    # Send discovery messages for sensors
+    for sensor in sensors:
+        config = {
+            "name": sensor["name"],
+            "unique_id": sensor["unique_id"],
+            "state_topic": sensor["state_topic"],
+            "icon": sensor["icon"],
+            "device": device_info
+        }
+
+        if sensor.get("unit_of_measurement"):
+            config["unit_of_measurement"] = sensor["unit_of_measurement"]
+        if sensor.get("device_class"):
+            config["device_class"] = sensor["device_class"]
+        if sensor.get("value_template"):
+            config["value_template"] = sensor["value_template"]
+
+        topic = f"homeassistant/sensor/{sensor['unique_id']}/config"
+        mqtt_publisher_client.publish(topic, json.dumps(config), retain=True)
+
+    # Send discovery messages for binary sensors
+    for sensor in binary_sensors:
+        config = {
+            "name": sensor["name"],
+            "unique_id": sensor["unique_id"],
+            "state_topic": sensor["state_topic"],
+            "icon": sensor["icon"],
+            "payload_on": sensor["payload_on"],
+            "payload_off": sensor["payload_off"],
+            "device": device_info
+        }
+
+        if sensor.get("device_class"):
+            config["device_class"] = sensor["device_class"]
+        if sensor.get("value_template"):
+            config["value_template"] = sensor["value_template"]
+
+        topic = f"homeassistant/binary_sensor/{sensor['unique_id']}/config"
+        mqtt_publisher_client.publish(topic, json.dumps(config), retain=True)
+
+    print("📡 Home Assistant MQTT Discovery messages sent")
+
+async def publish_sensor_data():
+    """Publish sensor data to MQTT every 2 seconds"""
+    while True:
+        try:
+            if mqtt_publisher_client and mqtt_publisher_client.is_connected():
+                # Get current GPS data
+                gps_status = gps_service.get_gps_status()
+                sensor_data["gps"] = gps_status
+
+                # Publish GPS data
+                mqtt_publisher_client.publish("boatos/gps/latitude", json.dumps({"lat": sensor_data["gps"]["lat"]}))
+                mqtt_publisher_client.publish("boatos/gps/longitude", json.dumps({"lon": sensor_data["gps"]["lon"]}))
+                mqtt_publisher_client.publish("boatos/gps/position", json.dumps({
+                    "lat": sensor_data["gps"]["lat"],
+                    "lon": sensor_data["gps"]["lon"]
+                }))
+                mqtt_publisher_client.publish("boatos/gps/satellites", str(sensor_data["gps"]["satellites"]))
+                mqtt_publisher_client.publish("boatos/gps/altitude", str(sensor_data["gps"]["altitude"]))
+                mqtt_publisher_client.publish("boatos/gps/course", str(sensor_data["gps"]["course"]))
+
+                # Publish navigation data
+                mqtt_publisher_client.publish("boatos/navigation/speed", str(sensor_data["speed"]))
+                mqtt_publisher_client.publish("boatos/navigation/heading", str(sensor_data["heading"]))
+                mqtt_publisher_client.publish("boatos/navigation/depth", str(sensor_data["depth"]))
+
+                # Publish wind data
+                mqtt_publisher_client.publish("boatos/wind/speed", str(sensor_data["wind"]["speed"]))
+                mqtt_publisher_client.publish("boatos/wind/direction", str(sensor_data["wind"]["direction"]))
+
+                # Publish engine data
+                mqtt_publisher_client.publish("boatos/engine/rpm", str(sensor_data["engine"]["rpm"]))
+                mqtt_publisher_client.publish("boatos/engine/temperature", str(sensor_data["engine"]["temp"]))
+                mqtt_publisher_client.publish("boatos/engine/oil_pressure", str(sensor_data["engine"]["oil_pressure"]))
+
+                # Publish battery data
+                mqtt_publisher_client.publish("boatos/battery/voltage", str(sensor_data["battery"]["voltage"]))
+                mqtt_publisher_client.publish("boatos/battery/current", str(sensor_data["battery"]["current"]))
+
+                # Publish status data
+                mqtt_publisher_client.publish("boatos/status/track_recording", "true" if track_recording else "false")
+                mqtt_publisher_client.publish("boatos/status/gps_fix", "true" if sensor_data["gps"]["satellites"] >= 4 else "false")
+
+                # Future sensors (publish 0/null if not available yet)
+                mqtt_publisher_client.publish("boatos/environment/water_temperature", "0")
+                mqtt_publisher_client.publish("boatos/environment/air_temperature", "0")
+                mqtt_publisher_client.publish("boatos/environment/humidity", "0")
+                mqtt_publisher_client.publish("boatos/environment/pressure", "0")
+                mqtt_publisher_client.publish("boatos/tank/fuel_level", "0")
+                mqtt_publisher_client.publish("boatos/tank/water_level", "0")
+                mqtt_publisher_client.publish("boatos/tank/bilge_level", "0")
+                mqtt_publisher_client.publish("boatos/alarm/anchor", "false")
+                mqtt_publisher_client.publish("boatos/status/bilge_pump", "false")
+
+        except Exception as e:
+            print(f"⚠️ MQTT publish error: {e}")
+
+        await asyncio.sleep(2)  # Publish every 2 seconds
 
 # ==================== WATERWAY ROUTING ====================
 osrm_router = None
@@ -2261,6 +2659,8 @@ async def startup_event():
     asyncio.create_task(fetch_weather_alerts_periodic())  # Start periodic weather alerts
     asyncio.create_task(gps_service.read_gps_from_signalk())  # Start GPS service from SignalK
     mqtt_client_init()
+    mqtt_publisher_init()  # Initialize MQTT publisher for Home Assistant
+    asyncio.create_task(publish_sensor_data())  # Start publishing sensor data every 2 seconds
     load_chart_layers()
     init_waterway_router()
 
