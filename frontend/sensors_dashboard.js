@@ -131,8 +131,9 @@ function showSensorsDashboard() {
     // Update button text (for when dashboard is hidden and button becomes visible again)
     if (viewLabel) viewLabel.textContent = '[DSH] Dashboard';
 
-    connectSensorWebSocket();
+    // Render first, then connect to preserve connection status
     renderSensorDashboard();
+    connectSensorWebSocket();
 }
 
 function hideSensorsDashboard() {
@@ -180,6 +181,9 @@ function createDashboardElement() {
 function renderSensorDashboard() {
     const dashboard = document.getElementById('sensors-dashboard');
     if (!dashboard) return;
+
+    // Save current connection status before re-rendering
+    const wasConnected = sensorWebSocket && sensorWebSocket.readyState === WebSocket.OPEN;
 
     dashboard.innerHTML = `
         <!-- Animated Background -->
@@ -261,6 +265,11 @@ function renderSensorDashboard() {
             </div>
         </div>
     `;
+
+    // Restore connection status after re-rendering
+    if (wasConnected) {
+        updateConnectionStatus(true);
+    }
 }
 
 function createHeroCard(icon, label, value, unit, subtitle) {
