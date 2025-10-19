@@ -159,6 +159,14 @@ function hideSensorsDashboard() {
     if (mapContainer) mapContainer.style.display = 'block';
     if (controls) controls.style.display = 'flex';
 
+    // Fix map size after showing map container (Leaflet was hidden while dashboard was open)
+    setTimeout(() => {
+        if (window.map) {
+            console.log('🗺️ Dashboard closed - invalidating map size to load tiles...');
+            window.map.invalidateSize();
+        }
+    }, 100);
+
     // Reset button text to show where you can go
     if (viewLabel) {
         viewLabel.textContent = '[DSH] Dashboard';
@@ -567,6 +575,27 @@ function hideBootScreen() {
         if (app) {
             app.style.display = 'grid';
         }
+
+        // Fix map size after showing app (Leaflet was initialized while app was hidden)
+        setTimeout(() => {
+            if (window.map) {
+                console.log('🗺️ Invalidating map size to load tiles...');
+                const mapContainer = document.getElementById('map');
+                if (mapContainer) {
+                    const rect = mapContainer.getBoundingClientRect();
+                    console.log('📐 Map container after show:', {
+                        width: rect.width,
+                        height: rect.height,
+                        display: window.getComputedStyle(mapContainer).display
+                    });
+                }
+                console.log('🗺️ Map before invalidate - zoom:', window.map.getZoom(), 'center:', window.map.getCenter());
+                window.map.invalidateSize();
+                console.log('🗺️ Map after invalidate - bounds:', window.map.getBounds());
+            } else {
+                console.error('❌ window.map not found when trying to invalidateSize!');
+            }
+        }, 100);
 
         setTimeout(() => {
             bootScreen.remove();

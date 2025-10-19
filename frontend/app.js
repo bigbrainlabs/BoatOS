@@ -2,6 +2,48 @@
  * BoatOS Frontend - Marine Dashboard
  */
 
+// ==================== DEBUG CONSOLE OVERLAY ====================
+const originalLog = console.log;
+const originalError = console.error;
+const originalWarn = console.warn;
+let logBuffer = [];
+const maxLines = 30;
+
+function initDebugConsole() {
+    const debugConsole = document.getElementById('debug-console');
+
+    function addToDebug(message, color = '#0f0') {
+        logBuffer.push(`<span style="color: ${color}">${message}</span>`);
+        if (logBuffer.length > maxLines) logBuffer.shift();
+        const debugEl = document.getElementById('debug-console');
+        if (debugEl) debugEl.innerHTML = logBuffer.join('<br>');
+    }
+
+    console.log = function(...args) {
+        originalLog.apply(console, args);
+        addToDebug(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), '#0f0');
+    };
+
+    console.error = function(...args) {
+        originalError.apply(console, args);
+        addToDebug('ERROR: ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), '#f00');
+    };
+
+    console.warn = function(...args) {
+        originalWarn.apply(console, args);
+        addToDebug('WARN: ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), '#ff0');
+    };
+
+    console.log('🐛 Debug console initialized');
+}
+
+// Initialize debug console when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initDebugConsole);
+} else {
+    initDebugConsole();
+}
+
 // Auto-detect protocol (http/https) for API and WebSocket
 const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
 const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -49,16 +91,51 @@ let aisSettings = { enabled: false, apiKey: '', updateInterval: 60, showLabels: 
 
 // ==================== MAP INIT ====================
 function initMap() {
+    console.log('🗺️ initMap() called');
+
+    // Check map container dimensions
+    const mapContainer = document.getElementById('map');
+    if (mapContainer) {
+        const rect = mapContainer.getBoundingClientRect();
+        console.log('📐 Map container dimensions:', {
+            width: rect.width,
+            height: rect.height,
+            display: window.getComputedStyle(mapContainer).display,
+            visibility: window.getComputedStyle(mapContainer).visibility
+        });
+    } else {
+        console.error('❌ Map container not found!');
+    }
+
+    console.log('📍 Initial position:', currentPosition);
+
     // Karte initialisieren
     map = L.map('map', {
         zoomControl: false,
         attributionControl: false
     }).setView([currentPosition.lat, currentPosition.lon], 13);
 
+    console.log('🗺️ Map created, zoom:', map.getZoom(), 'center:', map.getCenter());
+
     // ==================== BASE LAYERS ====================
-    osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // Using local Nginx tile proxy to avoid HTTPS mixed content issues
+    osmLayer = L.tileLayer('/tiles/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '© OpenStreetMap'
+    });
+
+    // Add tile loading event listeners for debugging
+    osmLayer.on('tileerror', function(error, tile) {
+        console.error('❌ Tile load error:', error.tile.src, error);
+    });
+    osmLayer.on('tileloadstart', function(event) {
+        console.log('⏳ Tile loading:', event.tile.src);
+    });
+    osmLayer.on('tileload', function(event) {
+        console.log('✅ Tile loaded:', event.tile.src);
+    });
+    osmLayer.on('load', function() {
+        console.log('✅ All tiles loaded for current view');
     });
 
     satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
@@ -67,7 +144,9 @@ function initMap() {
     });
 
     // Default base layer
+    console.log('➕ Adding OSM layer to map');
     osmLayer.addTo(map);
+    console.log('🗺️ OSM layer added. Map bounds:', map.getBounds());
 
     // ==================== OVERLAY LAYERS ====================
     const seaMarkLayer = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
@@ -358,7 +437,7 @@ function updateGpsInfo(gps) {
 
         // HDOP (Horizontal Dilution of Precision)
         const hdopEl = document.getElementById('gps-hdop');
-        if (hdopEl && gps.hdop !== undefined) {
+        if (hdopEl && gps.hdop !== undefined && gps.hdop !== null) {
             hdopEl.textContent = gps.hdop.toFixed(2);
             // Color code: <2 excellent, 2-5 good, 5-10 moderate, >10 poor
             if (gps.hdop < 2) hdopEl.style.color = '#2ecc71';
