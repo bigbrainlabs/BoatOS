@@ -22,14 +22,17 @@ class AISService:
         self.ws_running = False
         self.bounding_box = None  # Current map bounding box
 
-    def configure(self, provider: str = 'aishub', api_key: str = ''):
-        """Configure AIS service with provider and API key"""
+    def configure(self, provider: str = "aishub", api_key: str = "", enabled: bool = None):
+        """Configure AIS service with provider, API key, and enabled flag"""
         old_provider = self.provider
         self.provider = provider.lower()
         self.api_key = api_key
 
-        # All providers require API key
-        self.enabled = bool(api_key and len(api_key) > 0)
+        # Use explicit enabled flag if provided, otherwise check for API key
+        if enabled is not None:
+            self.enabled = enabled
+        else:
+            self.enabled = bool(api_key and len(api_key) > 0)
 
         print(f"🚢 AIS Service: {self.provider} {'enabled' if self.enabled else 'disabled'}")
 

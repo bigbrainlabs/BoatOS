@@ -111,8 +111,9 @@ async def save_settings(settings: Dict[str, Any]):
         # Apply AIS settings
         if 'ais' in settings:
             provider = settings['ais'].get('provider', 'aishub')
+            enabled = settings["ais"].get("enabled", False)
             api_key = settings['ais'].get('apiKey', '')
-            ais_service.configure(provider=provider, api_key=api_key)
+            ais_service.configure(provider=provider, api_key=api_key, enabled=enabled)
 
         # Apply Routing settings
         if 'routing' in settings:
@@ -2628,8 +2629,9 @@ async def import_all_data(request: Request):
                 settings = import_data["settings"]
                 if 'ais' in settings:
                     provider = settings['ais'].get('provider', 'aishub')
+                    enabled = settings["ais"].get("enabled", False)
                     api_key = settings['ais'].get('apiKey', '')
-                    ais_service.configure(provider=provider, api_key=api_key)
+                    ais_service.configure(provider=provider, api_key=api_key, enabled=enabled)
 
                 if 'waterCurrent' in settings:
                     water_current_service.configure(settings['waterCurrent'])
@@ -2671,9 +2673,10 @@ async def startup_event():
 
             # Configure AIS
             if 'ais' in settings:
+                enabled = settings["ais"].get("enabled", False)
                 provider = settings['ais'].get('provider', 'aisstream')
                 api_key = settings['ais'].get('apiKey', '')
-                ais_service.configure(provider=provider, api_key=api_key)
+                ais_service.configure(provider=provider, api_key=api_key, enabled=enabled)
 
                 # Start AISStream WebSocket if configured
                 if ais_service.provider == 'aisstream' and ais_service.enabled:
