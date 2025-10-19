@@ -159,13 +159,24 @@ function hideSensorsDashboard() {
     if (mapContainer) mapContainer.style.display = 'block';
     if (controls) controls.style.display = 'flex';
 
-    // Fix map size after showing map container (Leaflet was hidden while dashboard was open)
-    setTimeout(() => {
-        if (window.map && typeof window.map.invalidateSize === 'function') {
-            console.log('🗺️ Dashboard closed - invalidating map size to load tiles...');
-            window.map.invalidateSize();
-        }
-    }, 100);
+    // CRITICAL: Wait for CSS grid to recalculate before invalidating map size
+    // The map container needs time to get its dimensions after display:block
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            if (window.map && typeof window.map.invalidateSize === 'function') {
+                const mapContainer = document.getElementById('map');
+                const rect = mapContainer ? mapContainer.getBoundingClientRect() : null;
+                console.log('🗺️ Dashboard closed - Map container is now visible');
+                console.log('📐 Map container dimensions:', rect);
+                console.log('📏 Map size BEFORE invalidate:', window.map.getSize());
+
+                // Force map to recalculate its size based on the now-visible container
+                window.map.invalidateSize({animate: false, pan: false});
+
+                console.log('📏 Map size AFTER invalidate:', window.map.getSize());
+            }
+        });
+    });
 
     // Reset button text to show where you can go
     if (viewLabel) {
