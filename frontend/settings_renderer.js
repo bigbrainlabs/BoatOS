@@ -401,6 +401,71 @@ async function renderSensorsSettings() {
                                 `).join('')}
                             </div>
 
+                            <!-- Custom Alias -->
+                            <div style="
+                                margin-top: 16px;
+                                padding-top: 12px;
+                                border-top: 1px solid rgba(100, 255, 218, 0.2);
+                            ">
+                                <div style="
+                                    font-size: 11px;
+                                    color: #8892b0;
+                                    font-weight: 600;
+                                    text-transform: uppercase;
+                                    letter-spacing: 1px;
+                                    margin-bottom: 8px;
+                                ">✏️ Eigener Name (Alias):</div>
+                                <div style="display: flex; gap: 8px;">
+                                    <input
+                                        type="text"
+                                        id="alias-${sensor.id}"
+                                        value="${sensor.has_alias ? sensor.name : ''}"
+                                        placeholder="z.B. Haupttemperatursensor"
+                                        style="
+                                            flex: 1;
+                                            padding: 10px 12px;
+                                            background: rgba(10, 14, 39, 0.6);
+                                            border: 1px solid rgba(100, 255, 218, 0.3);
+                                            border-radius: 8px;
+                                            color: #fff;
+                                            font-size: 13px;
+                                            font-family: inherit;
+                                        "
+                                    />
+                                    <button
+                                        onclick="saveSensorAlias('${sensor.base_name}', '${sensor.id}')"
+                                        id="save-alias-${sensor.id}"
+                                        style="
+                                            padding: 10px 16px;
+                                            background: linear-gradient(135deg, rgba(100, 255, 218, 0.2), rgba(52, 152, 219, 0.2));
+                                            border: 1px solid rgba(100, 255, 218, 0.3);
+                                            border-radius: 8px;
+                                            color: #64ffda;
+                                            font-size: 13px;
+                                            font-weight: 600;
+                                            cursor: pointer;
+                                            transition: all 0.3s ease;
+                                            white-space: nowrap;
+                                        "
+                                        onmouseover="this.style.background='linear-gradient(135deg, rgba(100, 255, 218, 0.3), rgba(52, 152, 219, 0.3))'"
+                                        onmouseout="this.style.background='linear-gradient(135deg, rgba(100, 255, 218, 0.2), rgba(52, 152, 219, 0.2))'"
+                                    >💾 Speichern</button>
+                                </div>
+                                ${sensor.has_alias ? `
+                                    <div style="
+                                        margin-top: 8px;
+                                        font-size: 11px;
+                                        color: #64ffda;
+                                        background: rgba(100, 255, 218, 0.05);
+                                        padding: 6px 10px;
+                                        border-radius: 6px;
+                                        border: 1px solid rgba(100, 255, 218, 0.15);
+                                    ">
+                                        ✓ Alias aktiv (Basis: ${sensor.base_name})
+                                    </div>
+                                ` : ''}
+                            </div>
+
                             <!-- MQTT Topics -->
                             ${sensor.topics && sensor.topics.length > 0 ? `
                             <div style="
@@ -886,6 +951,73 @@ window.cleanupZombieTopics = async function() {
     } catch (error) {
         console.error('Error cleaning up zombie topics:', error);
         button.innerHTML = '❌ Fehler';
+        setTimeout(() => {
+            button.innerHTML = originalButtonText;
+            button.disabled = false;
+        }, 2000);
+    }
+};
+
+/**
+ * Save Sensor Alias
+ */
+window.saveSensorAlias = async function(baseName, sensorId) {
+    const button = document.getElementById(`save-alias-${sensorId}`);
+    const input = document.getElementById(`alias-${sensorId}`);
+
+    if (!button || !input) return;
+
+    const originalButtonText = button.innerHTML;
+    const aliasValue = input.value.trim();
+
+    // Show loading state
+    button.innerHTML = '⏳';
+    button.disabled = true;
+
+    try {
+        // Load current settings
+        const settingsResponse = await fetch('/api/settings');
+        const currentSettings = settingsResponse.ok ? await settingsResponse.json() : {};
+
+        // Get or create sensor_aliases object
+        if (!currentSettings.sensor_aliases) {
+            currentSettings.sensor_aliases = {};
+        }
+
+        // Update or remove alias
+        if (aliasValue === '') {
+            // Remove alias if empty
+            delete currentSettings.sensor_aliases[baseName];
+        } else {
+            // Set new alias
+            currentSettings.sensor_aliases[baseName] = aliasValue;
+        }
+
+        // Save settings
+        const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(currentSettings)
+        });
+
+        if (response.ok) {
+            console.log('✅ Alias gespeichert:', baseName, '→', aliasValue);
+            button.innerHTML = '✅';
+
+            // Refresh sensors list to show new alias
+            setTimeout(() => {
+                window.refreshSensors();
+            }, 800);
+        } else {
+            button.innerHTML = '❌';
+            setTimeout(() => {
+                button.innerHTML = originalButtonText;
+                button.disabled = false;
+            }, 2000);
+        }
+    } catch (error) {
+        console.error('Error saving sensor alias:', error);
+        button.innerHTML = '❌';
         setTimeout(() => {
             button.innerHTML = originalButtonText;
             button.disabled = false;
