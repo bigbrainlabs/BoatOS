@@ -54,6 +54,13 @@ class DashboardRenderer {
             return;
         }
 
+        container.innerHTML = this.renderToHTML();
+    }
+
+    /**
+     * Render dashboard to HTML string (for preview mode)
+     */
+    renderToHTML() {
         // Show errors if any
         if (this.layout.errors && this.layout.errors.length > 0) {
             console.warn('Dashboard layout errors:', this.layout.errors);
@@ -78,7 +85,7 @@ class DashboardRenderer {
 
         html += '</div>';
 
-        container.innerHTML = html;
+        return html;
     }
 
     /**
