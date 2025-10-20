@@ -1,0 +1,15 @@
+[Unit]
+Description=SignalK to MQTT Bridge
+After=network.target signalk.service mosquitto.service
+Wants=signalk.service mosquitto.service
+
+[Service]
+Type=simple
+User=arielle
+WorkingDirectory=/home/arielle/BoatOS
+ExecStart=/usr/bin/python3 /home/arielle/BoatOS/signalk_to_mqtt.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
