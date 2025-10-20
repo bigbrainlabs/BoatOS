@@ -275,10 +275,44 @@ async function renderSensorsSettings() {
                     ${createSettingsHeroCard('❌', 'Offline', data.offline, '', 'Keine Verbindung')}
                 </div>
 
-                <!-- Detected Sensors -->
-                <h3 style="color: #64ffda; font-size: 20px; font-weight: 600; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid rgba(100, 255, 218, 0.2);">
-                    🔌 Erkannte Sensoren
-                </h3>
+                <!-- Refresh Sensors Button -->
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 15px;">
+                    <h3 style="color: #64ffda; font-size: 20px; font-weight: 600; margin: 0;">
+                        🔌 Erkannte Sensoren
+                    </h3>
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="cleanupZombieTopics()" id="cleanup-topics-btn" style="
+                            padding: 12px 24px;
+                            background: linear-gradient(135deg, rgba(231, 76, 60, 0.2), rgba(192, 57, 43, 0.2));
+                            border: 1px solid rgba(231, 76, 60, 0.3);
+                            border-radius: 10px;
+                            color: #e74c3c;
+                            font-size: 14px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            transition: all 0.3s ease;
+                            text-transform: uppercase;
+                            letter-spacing: 0.5px;
+                        " onmouseover="this.style.background='linear-gradient(135deg, rgba(231, 76, 60, 0.3), rgba(192, 57, 43, 0.3))'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(231, 76, 60, 0.3)'" onmouseout="this.style.background='linear-gradient(135deg, rgba(231, 76, 60, 0.2), rgba(192, 57, 43, 0.2))'; this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                            🧹 Zombies löschen
+                        </button>
+                        <button onclick="refreshSensors()" id="refresh-sensors-btn" style="
+                            padding: 12px 24px;
+                            background: linear-gradient(135deg, rgba(100, 255, 218, 0.2), rgba(52, 152, 219, 0.2));
+                            border: 1px solid rgba(100, 255, 218, 0.3);
+                            border-radius: 10px;
+                            color: #64ffda;
+                            font-size: 14px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            transition: all 0.3s ease;
+                            text-transform: uppercase;
+                            letter-spacing: 0.5px;
+                        " onmouseover="this.style.background='linear-gradient(135deg, rgba(100, 255, 218, 0.3), rgba(52, 152, 219, 0.3))'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(100, 255, 218, 0.3)'" onmouseout="this.style.background='linear-gradient(135deg, rgba(100, 255, 218, 0.2), rgba(52, 152, 219, 0.2))'; this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                            🔄 Aktualisieren
+                        </button>
+                    </div>
+                </div>
 
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 30px;">
                     ${data.sensors.map(sensor => {
@@ -432,10 +466,438 @@ async function renderSensorsSettings() {
     }
 }
 
+/**
+ * Render MQTT Connection Settings Card
+ */
+async function renderMqttConnectionCard() {
+    // Load current MQTT settings
+    let mqttSettings = {
+        host: 'localhost',
+        port: 1883,
+        username: '',
+        password: ''
+    };
+
+    try {
+        const response = await fetch('/api/settings');
+        if (response.ok) {
+            const settings = await response.json();
+            if (settings.mqtt_url) {
+                // Parse mqtt://host:port format
+                const url = new URL(settings.mqtt_url.replace('mqtt://', 'http://'));
+                mqttSettings.host = url.hostname;
+                mqttSettings.port = url.port || 1883;
+            }
+            mqttSettings.username = settings.mqtt_username || '';
+            mqttSettings.password = settings.mqtt_password || '';
+        }
+    } catch (error) {
+        console.error('Error loading MQTT settings:', error);
+    }
+
+    return `
+        <div style="
+            background: linear-gradient(135deg, rgba(30, 60, 114, 0.8), rgba(42, 82, 152, 0.8));
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(100, 255, 218, 0.2);
+            border-radius: 24px;
+            padding: 35px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            margin-top: 30px;
+        ">
+            <!-- Header -->
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 30px;">
+                <div style="
+                    background: linear-gradient(135deg, rgba(100, 255, 218, 0.2), rgba(52, 152, 219, 0.2));
+                    padding: 15px;
+                    border-radius: 16px;
+                    font-size: 28px;
+                ">📡</div>
+                <div>
+                    <h3 style="margin: 0; color: #64ffda; font-size: 20px; font-weight: 700;">MQTT Broker Verbindung</h3>
+                    <p style="margin: 5px 0 0 0; color: #8892b0; font-size: 13px;">Konfiguration der MQTT-Verbindung für Sensordaten</p>
+                </div>
+            </div>
+
+            <!-- Connection Status -->
+            <div id="mqtt-connection-status" style="
+                padding: 12px 20px;
+                background: rgba(100, 255, 218, 0.1);
+                border: 1px solid rgba(100, 255, 218, 0.3);
+                border-radius: 12px;
+                margin-bottom: 25px;
+                display: none;
+            ">
+                <span style="color: #64ffda; font-weight: 600;">✓ Verbindung erfolgreich</span>
+            </div>
+
+            <!-- Form Fields -->
+            <div style="display: grid; gap: 20px;">
+                <!-- Host -->
+                <div>
+                    <label style="
+                        display: block;
+                        color: #ccd6f6;
+                        font-size: 13px;
+                        font-weight: 600;
+                        margin-bottom: 8px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                    ">Host</label>
+                    <input type="text" id="mqtt-host" value="${mqttSettings.host}" placeholder="localhost" style="
+                        width: 100%;
+                        padding: 14px 18px;
+                        background: rgba(10, 25, 47, 0.8);
+                        border: 1px solid rgba(100, 255, 218, 0.2);
+                        border-radius: 12px;
+                        color: #ccd6f6;
+                        font-size: 15px;
+                        font-family: monospace;
+                        box-sizing: border-box;
+                        transition: all 0.3s ease;
+                    " onfocus="this.style.borderColor='rgba(100, 255, 218, 0.5)'" onblur="this.style.borderColor='rgba(100, 255, 218, 0.2)'">
+                </div>
+
+                <!-- Port -->
+                <div>
+                    <label style="
+                        display: block;
+                        color: #ccd6f6;
+                        font-size: 13px;
+                        font-weight: 600;
+                        margin-bottom: 8px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                    ">Port</label>
+                    <input type="number" id="mqtt-port" value="${mqttSettings.port}" placeholder="1883" style="
+                        width: 100%;
+                        padding: 14px 18px;
+                        background: rgba(10, 25, 47, 0.8);
+                        border: 1px solid rgba(100, 255, 218, 0.2);
+                        border-radius: 12px;
+                        color: #ccd6f6;
+                        font-size: 15px;
+                        font-family: monospace;
+                        box-sizing: border-box;
+                        transition: all 0.3s ease;
+                    " onfocus="this.style.borderColor='rgba(100, 255, 218, 0.5)'" onblur="this.style.borderColor='rgba(100, 255, 218, 0.2)'">
+                </div>
+
+                <!-- Username (optional) -->
+                <div>
+                    <label style="
+                        display: block;
+                        color: #ccd6f6;
+                        font-size: 13px;
+                        font-weight: 600;
+                        margin-bottom: 8px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                    ">Username <span style="color: #8892b0; font-size: 11px; text-transform: none;">(optional)</span></label>
+                    <input type="text" id="mqtt-username" value="${mqttSettings.username}" placeholder="Benutzername" style="
+                        width: 100%;
+                        padding: 14px 18px;
+                        background: rgba(10, 25, 47, 0.8);
+                        border: 1px solid rgba(100, 255, 218, 0.2);
+                        border-radius: 12px;
+                        color: #ccd6f6;
+                        font-size: 15px;
+                        font-family: monospace;
+                        box-sizing: border-box;
+                        transition: all 0.3s ease;
+                    " onfocus="this.style.borderColor='rgba(100, 255, 218, 0.5)'" onblur="this.style.borderColor='rgba(100, 255, 218, 0.2)'">
+                </div>
+
+                <!-- Password (optional) -->
+                <div>
+                    <label style="
+                        display: block;
+                        color: #ccd6f6;
+                        font-size: 13px;
+                        font-weight: 600;
+                        margin-bottom: 8px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                    ">Password <span style="color: #8892b0; font-size: 11px; text-transform: none;">(optional)</span></label>
+                    <input type="password" id="mqtt-password" value="${mqttSettings.password}" placeholder="Passwort" style="
+                        width: 100%;
+                        padding: 14px 18px;
+                        background: rgba(10, 25, 47, 0.8);
+                        border: 1px solid rgba(100, 255, 218, 0.2);
+                        border-radius: 12px;
+                        color: #ccd6f6;
+                        font-size: 15px;
+                        font-family: monospace;
+                        box-sizing: border-box;
+                        transition: all 0.3s ease;
+                    " onfocus="this.style.borderColor='rgba(100, 255, 218, 0.5)'" onblur="this.style.borderColor='rgba(100, 255, 218, 0.2)'">
+                </div>
+
+                <!-- Buttons -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
+                    <button id="mqtt-test-connection" onclick="testMqttConnection()" style="
+                        padding: 16px;
+                        background: linear-gradient(135deg, rgba(100, 255, 218, 0.2), rgba(52, 152, 219, 0.2));
+                        border: 1px solid rgba(100, 255, 218, 0.3);
+                        border-radius: 12px;
+                        color: #64ffda;
+                        font-size: 15px;
+                        font-weight: 700;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        text-transform: uppercase;
+                        letter-spacing: 1px;
+                    " onmouseover="this.style.background='linear-gradient(135deg, rgba(100, 255, 218, 0.3), rgba(52, 152, 219, 0.3))'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(100, 255, 218, 0.3)'" onmouseout="this.style.background='linear-gradient(135deg, rgba(100, 255, 218, 0.2), rgba(52, 152, 219, 0.2))'; this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                        🔌 Testen
+                    </button>
+                    <button id="mqtt-save-settings" onclick="saveMqttSettings()" style="
+                        padding: 16px;
+                        background: linear-gradient(135deg, rgba(46, 204, 113, 0.2), rgba(39, 174, 96, 0.2));
+                        border: 1px solid rgba(46, 204, 113, 0.3);
+                        border-radius: 12px;
+                        color: #2ecc71;
+                        font-size: 15px;
+                        font-weight: 700;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        text-transform: uppercase;
+                        letter-spacing: 1px;
+                    " onmouseover="this.style.background='linear-gradient(135deg, rgba(46, 204, 113, 0.3), rgba(39, 174, 96, 0.3))'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(46, 204, 113, 0.3)'" onmouseout="this.style.background='linear-gradient(135deg, rgba(46, 204, 113, 0.2), rgba(39, 174, 96, 0.2))'; this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                        💾 Speichern
+                    </button>
+                </div>
+            </div>
+
+            <!-- Info Text -->
+            <div style="
+                margin-top: 20px;
+                padding: 15px;
+                background: rgba(100, 255, 218, 0.05);
+                border-left: 3px solid rgba(100, 255, 218, 0.5);
+                border-radius: 8px;
+            ">
+                <p style="margin: 0 0 10px 0; color: #8892b0; font-size: 12px; line-height: 1.6;">
+                    💡 <strong style="color: #64ffda;">Hinweis:</strong> Die MQTT-Verbindung wird für den Empfang von Sensordaten verwendet.
+                </p>
+                <p style="margin: 0; color: #8892b0; font-size: 12px; line-height: 1.6;">
+                    🐳 <strong style="color: #64ffda;">Docker:</strong> Bei MQTT-Broker in Docker-Container:
+                    <br>• Mit <code style="background: rgba(100, 255, 218, 0.1); padding: 2px 6px; border-radius: 4px;">--network host</code> oder Port-Mapping: <code style="background: rgba(100, 255, 218, 0.1); padding: 2px 6px; border-radius: 4px;">localhost</code> verwenden
+                    <br>• Mit Docker-Network: Container-Name oder <code style="background: rgba(100, 255, 218, 0.1); padding: 2px 6px; border-radius: 4px;">host.docker.internal</code> verwenden
+                </p>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Save MQTT Settings
+ */
+window.saveMqttSettings = async function() {
+    const button = document.getElementById('mqtt-save-settings');
+    const originalButtonText = button.innerHTML;
+
+    // Show loading state
+    button.innerHTML = '⏳ Speichere...';
+    button.disabled = true;
+
+    try {
+        const host = document.getElementById('mqtt-host').value;
+        const port = document.getElementById('mqtt-port').value;
+        const username = document.getElementById('mqtt-username').value;
+        const password = document.getElementById('mqtt-password').value;
+
+        // Construct MQTT URL
+        const mqttUrl = `mqtt://${host}:${port}`;
+
+        // Save to backend
+        const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                mqtt_url: mqttUrl,
+                mqtt_host: host,
+                mqtt_port: parseInt(port),
+                mqtt_username: username,
+                mqtt_password: password
+            })
+        });
+
+        if (response.ok) {
+            button.innerHTML = '✅ Gespeichert';
+            console.log('✅ MQTT settings saved');
+
+            // Reset button after 2 seconds
+            setTimeout(() => {
+                button.innerHTML = originalButtonText;
+                button.disabled = false;
+            }, 2000);
+        } else {
+            button.innerHTML = '❌ Fehler';
+            setTimeout(() => {
+                button.innerHTML = originalButtonText;
+                button.disabled = false;
+            }, 2000);
+        }
+    } catch (error) {
+        console.error('MQTT save error:', error);
+        button.innerHTML = '❌ Fehler';
+        setTimeout(() => {
+            button.innerHTML = originalButtonText;
+            button.disabled = false;
+        }, 2000);
+    }
+};
+
+/**
+ * Test MQTT Connection
+ */
+window.testMqttConnection = async function() {
+    const button = document.getElementById('mqtt-test-connection');
+    const statusDiv = document.getElementById('mqtt-connection-status');
+    const originalButtonText = button.innerHTML;
+
+    // Show loading state
+    button.innerHTML = '⏳ Teste Verbindung...';
+    button.disabled = true;
+    statusDiv.style.display = 'none';
+
+    try {
+        const host = document.getElementById('mqtt-host').value;
+        const port = document.getElementById('mqtt-port').value;
+        const username = document.getElementById('mqtt-username').value;
+        const password = document.getElementById('mqtt-password').value;
+
+        // Test connection via backend
+        const response = await fetch('/api/mqtt/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ host, port: parseInt(port), username, password })
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = 'rgba(46, 204, 113, 0.1)';
+            statusDiv.style.borderColor = 'rgba(46, 204, 113, 0.3)';
+            statusDiv.innerHTML = '<span style="color: #2ecc71; font-weight: 600;">✓ Verbindung erfolgreich</span>';
+        } else {
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = 'rgba(231, 76, 60, 0.1)';
+            statusDiv.style.borderColor = 'rgba(231, 76, 60, 0.3)';
+            statusDiv.innerHTML = '<span style="color: #e74c3c; font-weight: 600;">✗ Verbindung fehlgeschlagen</span>';
+        }
+    } catch (error) {
+        console.error('MQTT test error:', error);
+        statusDiv.style.display = 'block';
+        statusDiv.style.background = 'rgba(231, 76, 60, 0.1)';
+        statusDiv.style.borderColor = 'rgba(231, 76, 60, 0.3)';
+        statusDiv.innerHTML = '<span style="color: #e74c3c; font-weight: 600;">✗ Fehler beim Testen der Verbindung</span>';
+    } finally {
+        button.innerHTML = originalButtonText;
+        button.disabled = false;
+    }
+};
+
+/**
+ * Refresh Sensors List
+ */
+window.refreshSensors = async function() {
+    const button = document.getElementById('refresh-sensors-btn');
+    if (!button) return;
+
+    const originalButtonText = button.innerHTML;
+
+    // Show loading state
+    button.innerHTML = '⏳ Aktualisiere...';
+    button.disabled = true;
+
+    try {
+        // Reload sensors tab content
+        if (typeof window.SettingsRenderer !== 'undefined' &&
+            typeof window.SettingsRenderer.renderSensorsSettings === 'function' &&
+            typeof window.SettingsRenderer.renderMqttConnectionCard === 'function') {
+
+            const sensorsTab = document.getElementById('settings-sensors');
+            if (sensorsTab) {
+                // Render both sensors list and MQTT connection card
+                const [sensorsHtml, mqttHtml] = await Promise.all([
+                    window.SettingsRenderer.renderSensorsSettings(),
+                    window.SettingsRenderer.renderMqttConnectionCard()
+                ]);
+
+                sensorsTab.innerHTML = sensorsHtml + mqttHtml;
+                console.log('✅ Sensoren aktualisiert');
+            }
+        }
+    } catch (error) {
+        console.error('Error refreshing sensors:', error);
+        button.innerHTML = '❌ Fehler';
+        setTimeout(() => {
+            button.innerHTML = originalButtonText;
+            button.disabled = false;
+        }, 2000);
+    }
+};
+
+/**
+ * Cleanup Zombie MQTT Topics (topics that haven't been updated in a while)
+ */
+window.cleanupZombieTopics = async function() {
+    const button = document.getElementById('cleanup-topics-btn');
+    if (!button) return;
+
+    const originalButtonText = button.innerHTML;
+
+    // Show loading state
+    button.innerHTML = '⏳ Räume auf...';
+    button.disabled = true;
+
+    try {
+        // Call cleanup endpoint (default: remove topics older than 60 minutes)
+        const response = await fetch('/api/mqtt/cleanup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ max_age_minutes: 60 })
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            console.log('🧹 Zombie topics removed:', result);
+
+            button.innerHTML = `✅ ${result.removed} gelöscht`;
+
+            // Refresh sensors list after cleanup
+            setTimeout(() => {
+                window.refreshSensors();
+            }, 1000);
+
+            // Reset button after 2 seconds
+            setTimeout(() => {
+                button.innerHTML = originalButtonText;
+                button.disabled = false;
+            }, 2000);
+        } else {
+            button.innerHTML = '❌ Fehler';
+            setTimeout(() => {
+                button.innerHTML = originalButtonText;
+                button.disabled = false;
+            }, 2000);
+        }
+    } catch (error) {
+        console.error('Error cleaning up zombie topics:', error);
+        button.innerHTML = '❌ Fehler';
+        setTimeout(() => {
+            button.innerHTML = originalButtonText;
+            button.disabled = false;
+        }, 2000);
+    }
+};
+
 // Export
 window.SettingsRenderer = {
     renderGeneralSettings: renderGeneralSettings,
     renderSensorsSettings: renderSensorsSettings,
+    renderMqttConnectionCard: renderMqttConnectionCard,
     createSettingsHeroCard: createSettingsHeroCard,
     createSettingsCard: createSettingsCard
 };

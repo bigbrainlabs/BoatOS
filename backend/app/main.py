@@ -37,6 +37,8 @@ app.mount("/charts", StaticFiles(directory=str(CHARTS_DIR)), name="charts")
 
 active_connections: List[WebSocket] = []
 sensor_data: Dict[str, Any] = {"gps": {"lat": 0, "lon": 0, "satellites": 0, "altitude": 0, "course": 0}, "speed": 0, "heading": 0, "depth": 0, "wind": {"speed": 0, "direction": 0}, "engine": {"rpm": 0, "temp": 0, "oil_pressure": 0}, "battery": {"voltage": 0, "current": 0}, "bilge": {"temperature": 0, "humidity": 0}}
+sensor_timestamps: Dict[str, float] = {}  # Track last update time for each sensor/topic
+topic_values: Dict[str, str] = {}  # Store actual MQTT payload values for each topic
 routes, waypoints = {}, []
 # Current session entries (cleared on stop)
 current_session_entries = []
@@ -84,138 +86,190 @@ async def get_sensors():
     sensor_data["gps"] = gps_status
     return sensor_data
 
+# ==================== SENSOR HELPERS ====================
+def get_icon_for_topic(topic_name: str) -> str:
+    """Return an appropriate icon emoji based on topic keywords"""
+    topic_lower = topic_name.lower()
+
+    # Navigation & Position
+    if any(keyword in topic_lower for keyword in ['gps', 'position', 'location', 'latitude', 'longitude', 'navigation']):
+        return "🧭"
+
+    # Temperature
+    if any(keyword in topic_lower for keyword in ['temperature', 'temp', 'thermo']):
+        return "🌡️"
+
+    # Humidity
+    if 'humidity' in topic_lower or 'humid' in topic_lower:
+        return "💧"
+
+    # Battery & Power
+    if any(keyword in topic_lower for keyword in ['battery', 'voltage', 'current', 'power', 'charge']):
+        return "🔋"
+
+    # Engine & Motor
+    if any(keyword in topic_lower for keyword in ['engine', 'motor', 'rpm']):
+        return "🔧"
+
+    # Wind
+    if 'wind' in topic_lower:
+        return "💨"
+
+    # Depth & Sonar
+    if any(keyword in topic_lower for keyword in ['depth', 'sonar', 'echo']):
+        return "📏"
+
+    # Pressure
+    if 'pressure' in topic_lower:
+        return "⏲️"
+
+    # Light & Illumination
+    if any(keyword in topic_lower for keyword in ['light', 'lux', 'brightness']):
+        return "💡"
+
+    # Water & Bilge
+    if any(keyword in topic_lower for keyword in ['bilge', 'water', 'leak']):
+        return "🌊"
+
+    # Heater
+    if 'heater' in topic_lower or 'heating' in topic_lower:
+        return "♨️"
+
+    # Fuel
+    if 'fuel' in topic_lower:
+        return "⛽"
+
+    # Speed
+    if 'speed' in topic_lower:
+        return "🚤"
+
+    # Status & Online/Offline
+    if any(keyword in topic_lower for keyword in ['online', 'status', 'state']):
+        return "📡"
+
+    # Default
+    return "📊"
+
+def generate_sensor_name(topic_base: str) -> str:
+    """Generate a readable sensor name from topic structure"""
+    # Remove common prefixes
+    name = topic_base
+    for prefix in ['arielle/', 'boat/', 'boatos/', 'home/', 'sensor/']:
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+
+    # Split by '/' and capitalize each part
+    parts = name.split('/')
+
+    # Capitalize and clean each part
+    cleaned_parts = []
+    for part in parts:
+        # Replace underscores with spaces
+        part = part.replace('_', ' ')
+        # Capitalize
+        part = part.title()
+        cleaned_parts.append(part)
+
+    # Join with › separator
+    return ' › '.join(cleaned_parts)
+
 @app.get("/api/sensors/list")
 async def get_sensors_list():
-    """Get a structured list of all detected sensors with their status, grouped by functionality"""
-    gps_status = gps_service.get_gps_status()
-    sensor_data["gps"] = gps_status
+    """Get a structured list of all detected sensors with their status - fully dynamic from MQTT topics"""
+    import time
+    current_time = time.time()
 
+    # Load sensor aliases from settings
+    sensor_aliases = {}
+    settings_file = "data/settings.json"
+    try:
+        with open(settings_file, 'r') as f:
+            settings = json.load(f)
+            sensor_aliases = settings.get("sensor_aliases", {})
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
+
+    # Group all topics by base name (e.g., "arielle/bilge/thermo/temperature" → "arielle/bilge/thermo")
+    grouped_sensors = {}
+    for topic, timestamp in sensor_timestamps.items():
+        age_seconds = current_time - timestamp
+
+        # Determine base name (everything before the last '/')
+        if '/' in topic:
+            base_name = topic.rsplit('/', 1)[0]
+            subtopic = topic.rsplit('/', 1)[1]
+        else:
+            base_name = topic
+            subtopic = "value"
+
+        if base_name not in grouped_sensors:
+            grouped_sensors[base_name] = {
+                "values": {},
+                "topics": [],
+                "last_update": timestamp,
+                "age_seconds": age_seconds
+            }
+
+        grouped_sensors[base_name]["topics"].append(topic)
+
+        # Store actual value from topic_values instead of placeholder
+        actual_value = topic_values.get(topic, "")
+        grouped_sensors[base_name]["values"][subtopic] = actual_value
+
+        # Update last_update to the most recent
+        if timestamp > grouped_sensors[base_name]["last_update"]:
+            grouped_sensors[base_name]["last_update"] = timestamp
+            grouped_sensors[base_name]["age_seconds"] = age_seconds
+
+    # Build sensors list
     sensors_list = []
+    for base_name, info in grouped_sensors.items():
+        age_minutes = info["age_seconds"] / 60
 
-    # Navigation Group (GPS, Speed, Heading, Course)
-    nav_has_data = (sensor_data["gps"].get("satellites", 0) > 0 or
-                    sensor_data["speed"] > 0 or
-                    sensor_data["heading"] != 0)
-    sensors_list.append({
-        "id": "navigation",
-        "name": "Navigation",
-        "type": "navigation",
-        "status": "online" if sensor_data["gps"].get("satellites", 0) > 0 else ("standby" if nav_has_data else "offline"),
-        "values": {
-            "latitude": sensor_data["gps"].get("lat", 0),
-            "longitude": sensor_data["gps"].get("lon", 0),
-            "satellites": sensor_data["gps"].get("satellites", 0),
-            "altitude": sensor_data["gps"].get("altitude", 0),
-            "speed": sensor_data["speed"],
-            "heading": sensor_data["heading"],
-            "course": sensor_data["gps"].get("course", 0)
-        },
-        "topics": [
-            "boat/gps/latitude",
-            "boat/gps/longitude",
-            "boat/gps/satellites",
-            "boat/gps/altitude",
-            "boat/gps/speed",
-            "boat/gps/course",
-            "boatos/navigation/speed",
-            "boatos/navigation/heading"
-        ],
-        "icon": "🧭"
-    })
+        # Determine status based on age
+        if age_minutes < 5:
+            status = "online"
+        elif age_minutes < 60:
+            status = "standby"
+        else:
+            status = "offline"
 
-    # Depth Sensor
-    sensors_list.append({
-        "id": "depth",
-        "name": "Tiefenmesser",
-        "type": "navigation",
-        "status": "online" if sensor_data["depth"] > 0 else "offline",
-        "values": {
-            "depth": sensor_data["depth"]
-        },
-        "topics": [
-            "boatos/navigation/depth",
-            "environment.depth.belowTransducer"
-        ],
-        "icon": "📏"
-    })
+        # Get icon based on topic keywords
+        icon = get_icon_for_topic(base_name)
 
-    # Wind Sensor (Speed + Direction)
-    sensors_list.append({
-        "id": "wind",
-        "name": "Wind",
-        "type": "environment",
-        "status": "online" if sensor_data["wind"]["speed"] > 0 else "standby",
-        "values": {
-            "speed": sensor_data["wind"]["speed"],
-            "direction": sensor_data["wind"]["direction"]
-        },
-        "topics": [
-            "boatos/wind/speed",
-            "boatos/wind/direction"
-        ],
-        "icon": "💨"
-    })
+        # Generate readable name or use alias
+        has_alias = base_name in sensor_aliases
+        if has_alias:
+            sensor_name = sensor_aliases[base_name]
+        else:
+            sensor_name = generate_sensor_name(base_name)
 
-    # Engine Sensors (RPM, Temperature, Oil Pressure)
-    engine_has_data = (sensor_data["engine"]["rpm"] > 0 or
-                       sensor_data["engine"]["temp"] > 0 or
-                       sensor_data["engine"]["oil_pressure"] > 0)
-    sensors_list.append({
-        "id": "engine",
-        "name": "Motor",
-        "type": "propulsion",
-        "status": "online" if sensor_data["engine"]["rpm"] > 0 else ("standby" if engine_has_data else "offline"),
-        "values": {
-            "rpm": sensor_data["engine"]["rpm"],
-            "temperature": sensor_data["engine"]["temp"],
-            "oil_pressure": sensor_data["engine"]["oil_pressure"]
-        },
-        "topics": [
-            "boat/engine",
-            "boatos/engine/rpm",
-            "boatos/engine/temperature",
-            "boatos/engine/oil_pressure"
-        ],
-        "icon": "🔧"
-    })
+        # Determine type based on icon/topic
+        sensor_type = "unknown"
+        if icon == "🧭":
+            sensor_type = "navigation"
+        elif icon in ["🌡️", "💧", "🌊"]:
+            sensor_type = "environment"
+        elif icon in ["🔋", "⚡"]:
+            sensor_type = "electrical"
+        elif icon in ["🔧", "⚙️"]:
+            sensor_type = "propulsion"
 
-    # Battery Sensors (Voltage + Current)
-    battery_has_data = (sensor_data["battery"]["voltage"] > 0 or
-                        sensor_data["battery"]["current"] != 0)
-    sensors_list.append({
-        "id": "battery",
-        "name": "Batterie",
-        "type": "electrical",
-        "status": "online" if sensor_data["battery"]["voltage"] > 0 else ("standby" if battery_has_data else "offline"),
-        "values": {
-            "voltage": sensor_data["battery"]["voltage"],
-            "current": sensor_data["battery"]["current"]
-        },
-        "topics": [
-            "boatos/battery/voltage",
-            "boatos/battery/current"
-        ],
-        "icon": "🔋"
-    })
+        sensors_list.append({
+            "id": base_name.replace('/', '_'),
+            "name": sensor_name,
+            "type": sensor_type,
+            "status": status,
+            "values": info["values"],
+            "topics": info["topics"],
+            "icon": icon,
+            "age_minutes": round(age_minutes, 1),
+            "has_alias": has_alias,
+            "base_name": base_name
+        })
 
-    # Bilge Sensors (Temperature + Humidity)
-    bilge_has_data = (sensor_data["bilge"]["temperature"] > 0 or
-                      sensor_data["bilge"]["humidity"] > 0)
-    sensors_list.append({
-        "id": "bilge",
-        "name": "Bilge",
-        "type": "environment",
-        "status": "online" if bilge_has_data else "offline",
-        "values": {
-            "temperature": sensor_data["bilge"]["temperature"],
-            "humidity": sensor_data["bilge"]["humidity"]
-        },
-        "topics": [
-            "thermo_3b8790/temperature",
-            "thermo_3b8790/humidity"
-        ],
-        "icon": "🌡️"
-    })
+    # Sort sensors by name
+    sensors_list.sort(key=lambda s: s["name"])
 
     return {
         "total": len(sensors_list),
@@ -273,6 +327,104 @@ async def save_settings(settings: Dict[str, Any]):
         return {"status": "success", "message": "Settings saved"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+@app.post("/api/mqtt/test")
+async def test_mqtt_connection(mqtt_config: Dict[str, Any]):
+    """Test MQTT broker connection"""
+    try:
+        import paho.mqtt.client as mqtt
+
+        host = mqtt_config.get('host', 'localhost')
+        port = mqtt_config.get('port', 1883)
+        username = mqtt_config.get('username', '')
+        password = mqtt_config.get('password', '')
+
+        # Create a test client
+        test_client = mqtt.Client(client_id="boatos_connection_test")
+
+        # Set credentials if provided
+        if username and password:
+            test_client.username_pw_set(username, password)
+
+        # Connection result
+        connection_successful = False
+        connection_error = None
+
+        def on_connect(client, userdata, flags, rc):
+            nonlocal connection_successful, connection_error
+            if rc == 0:
+                connection_successful = True
+            else:
+                connection_error = f"Connection failed with code {rc}"
+
+        test_client.on_connect = on_connect
+
+        # Try to connect with timeout
+        test_client.connect(host, port, keepalive=10)
+        test_client.loop_start()
+
+        # Wait for connection result (max 5 seconds)
+        import time
+        for _ in range(50):  # 50 * 0.1s = 5s timeout
+            if connection_successful or connection_error:
+                break
+            time.sleep(0.1)
+
+        test_client.loop_stop()
+        test_client.disconnect()
+
+        if connection_successful:
+            return {"status": "success", "message": "MQTT connection successful"}
+        else:
+            return {"status": "error", "message": connection_error or "Connection timeout"}
+
+    except Exception as e:
+        return {"status": "error", "message": f"Connection failed: {str(e)}"}
+
+@app.get("/api/mqtt/topics")
+async def get_mqtt_topics():
+    """Get all MQTT topics with their last update timestamps"""
+    import time
+    current_time = time.time()
+
+    topics_info = []
+    for topic, timestamp in sensor_timestamps.items():
+        age_seconds = current_time - timestamp
+        topics_info.append({
+            "topic": topic,
+            "last_update": timestamp,
+            "age_seconds": age_seconds,
+            "age_minutes": age_seconds / 60
+        })
+
+    # Sort by age (oldest first)
+    topics_info.sort(key=lambda x: x["age_seconds"], reverse=True)
+
+    return {
+        "total": len(topics_info),
+        "topics": topics_info
+    }
+
+@app.post("/api/mqtt/cleanup")
+async def cleanup_old_topics(max_age_minutes: int = 60):
+    """Remove topics that haven't been updated in X minutes"""
+    import time
+    current_time = time.time()
+    max_age_seconds = max_age_minutes * 60
+
+    topics_to_remove = []
+    for topic, timestamp in list(sensor_timestamps.items()):
+        age = current_time - timestamp
+        if age > max_age_seconds:
+            topics_to_remove.append(topic)
+            del sensor_timestamps[topic]
+
+    return {
+        "status": "success",
+        "removed": len(topics_to_remove),
+        "topics_removed": topics_to_remove,
+        "remaining": len(sensor_timestamps)
+    }
 
 @app.get("/api/waypoints")
 async def get_waypoints():
@@ -1765,7 +1917,15 @@ async def track_recording_loop():
 # ==================== MQTT ====================
 def on_mqtt_message(client, userdata, msg):
     topic, payload = msg.topic, msg.payload.decode()
+    import time
+    current_time = time.time()
+
     try:
+        # Update timestamp for this topic
+        sensor_timestamps[topic] = current_time
+        # Store actual payload value
+        topic_values[topic] = payload
+
         if topic == "boat/gps/latitude":
             gps_module_data["latitude"] = float(payload)
             update_gps_from_module()
@@ -1812,9 +1972,9 @@ def mqtt_client_init():
     client.on_message = on_mqtt_message
     try:
         client.connect("localhost", 1883, 60)
-        client.subscribe("boat/#")
+        client.subscribe("#")  # Subscribe to all topics
         client.loop_start()
-        print("✅ MQTT connected (boat/#)")
+        print("✅ MQTT connected (all topics: #)")
     except Exception as e:
         print(f"⚠️ MQTT connection failed: {e}")
 
