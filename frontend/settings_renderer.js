@@ -1025,11 +1025,346 @@ window.saveSensorAlias = async function(baseName, sensorId) {
     }
 };
 
+/**
+ * Render Dashboard Settings
+ */
+async function renderDashboardSettings() {
+    try {
+        // Load current layout
+        const response = await fetch('/api/dashboard/layout');
+        const data = await response.json();
+        const layout = data.layout || '';
+
+        return `
+            <div style="max-width: 1400px; margin: 0 auto; position: relative; z-index: 2;">
+                <!-- Hero Card -->
+                ${createSettingsHeroCard('📊', 'Dashboard Layout', `
+                    <p style="color: #8892b0; font-size: 14px; line-height: 1.6; margin: 0;">
+                        Konfiguriere das Dashboard-Layout mit der BoatOS DSL (Domain Specific Language).
+                        <a href="https://github.com/bigbrainlabs/BoatOS/blob/main/DASHBOARD_DSL.md" target="_blank" style="color: #64ffda; text-decoration: none;">
+                            📖 Dokumentation
+                        </a>
+                    </p>
+                `)}
+
+                <!-- Code Editor -->
+                <div style="margin-bottom: 30px;">
+                    <div style="
+                        background: linear-gradient(135deg, rgba(30, 60, 114, 0.6), rgba(42, 82, 152, 0.6));
+                        backdrop-filter: blur(15px);
+                        border: 1px solid rgba(100, 255, 218, 0.2);
+                        border-radius: 16px;
+                        padding: 24px;
+                        box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+                    ">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3 style="color: #64ffda; font-size: 16px; font-weight: 600; margin: 0;">
+                                DSL Code Editor
+                            </h3>
+                            <div style="display: flex; gap: 10px;">
+                                <button onclick="testDashboardLayout()" id="test-dashboard-btn" style="
+                                    padding: 10px 20px;
+                                    background: linear-gradient(135deg, rgba(52, 152, 219, 0.2), rgba(41, 128, 185, 0.2));
+                                    border: 1px solid rgba(52, 152, 219, 0.3);
+                                    border-radius: 8px;
+                                    color: #3498db;
+                                    font-size: 13px;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                    transition: all 0.3s ease;
+                                ">🧪 Testen</button>
+                                <button onclick="saveDashboardLayout()" id="save-dashboard-btn" style="
+                                    padding: 10px 20px;
+                                    background: linear-gradient(135deg, rgba(100, 255, 218, 0.2), rgba(52, 152, 219, 0.2));
+                                    border: 1px solid rgba(100, 255, 218, 0.3);
+                                    border-radius: 8px;
+                                    color: #64ffda;
+                                    font-size: 13px;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                    transition: all 0.3s ease;
+                                ">💾 Speichern</button>
+                            </div>
+                        </div>
+
+                        <textarea id="dashboard-layout-editor" style="
+                            width: 100%;
+                            min-height: 400px;
+                            padding: 16px;
+                            background: rgba(10, 14, 39, 0.8);
+                            border: 1px solid rgba(100, 255, 218, 0.3);
+                            border-radius: 8px;
+                            color: #fff;
+                            font-size: 14px;
+                            font-family: 'Courier New', monospace;
+                            line-height: 1.6;
+                            resize: vertical;
+                        ">${layout}</textarea>
+
+                        <div id="dashboard-errors" style="margin-top: 15px;"></div>
+                    </div>
+                </div>
+
+                <!-- Example Layouts -->
+                <div style="margin-bottom: 30px;">
+                    ${createSettingsCard('📝', 'Beispiel-Layouts', `
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <button onclick="loadExampleLayout('default')" style="
+                                padding: 12px;
+                                background: rgba(100, 255, 218, 0.1);
+                                border: 1px solid rgba(100, 255, 218, 0.3);
+                                border-radius: 8px;
+                                color: #64ffda;
+                                font-size: 14px;
+                                cursor: pointer;
+                                text-align: left;
+                            ">
+                                📊 Default Layout (3-Spalten mit Hero-Cards)
+                            </button>
+                            <button onclick="loadExampleLayout('compact')" style="
+                                padding: 12px;
+                                background: rgba(100, 255, 218, 0.1);
+                                border: 1px solid rgba(100, 255, 218, 0.3);
+                                border-radius: 8px;
+                                color: #64ffda;
+                                font-size: 14px;
+                                cursor: pointer;
+                                text-align: left;
+                            ">
+                                📱 Compact Layout (4-Spalten klein)
+                            </button>
+                            <button onclick="loadExampleLayout('gauges')" style="
+                                padding: 12px;
+                                background: rgba(100, 255, 218, 0.1);
+                                border: 1px solid rgba(100, 255, 218, 0.3);
+                                border-radius: 8px;
+                                color: #64ffda;
+                                font-size: 14px;
+                                cursor: pointer;
+                                text-align: left;
+                            ">
+                                🎯 Gauge Layout (mit Anzeigen)
+                            </button>
+                        </div>
+                    `, 'blue')}
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error loading dashboard settings:', error);
+        return `
+            <div style="padding: 40px; text-align: center; color: #e74c3c;">
+                <h3>⚠️ Fehler beim Laden der Dashboard-Einstellungen</h3>
+                <p style="color: #8892b0; margin-top: 10px;">${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Save Dashboard Layout
+ */
+window.saveDashboardLayout = async function() {
+    const button = document.getElementById('save-dashboard-btn');
+    const editor = document.getElementById('dashboard-layout-editor');
+    const errorsDiv = document.getElementById('dashboard-errors');
+
+    if (!button || !editor) return;
+
+    const originalButtonText = button.innerHTML;
+    button.innerHTML = '⏳ Speichere...';
+    button.disabled = true;
+    errorsDiv.innerHTML = '';
+
+    try {
+        const layout = editor.value;
+
+        // First parse to check for errors
+        const parseResponse = await fetch('/api/dashboard/parse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ layout })
+        });
+        const parseResult = await parseResponse.json();
+
+        if (parseResult.errors && parseResult.errors.length > 0) {
+            errorsDiv.innerHTML = `
+                <div style="
+                    background: rgba(231, 76, 60, 0.1);
+                    border: 1px solid rgba(231, 76, 60, 0.3);
+                    border-radius: 8px;
+                    padding: 12px;
+                ">
+                    <div style="color: #e74c3c; font-weight: 600; margin-bottom: 8px;">⚠️ Fehler gefunden:</div>
+                    ${parseResult.errors.map(err => `
+                        <div style="color: #e74c3c; font-size: 12px; margin-left: 10px;">• ${err}</div>
+                    `).join('')}
+                </div>
+            `;
+            button.innerHTML = '❌ Fehler';
+            setTimeout(() => {
+                button.innerHTML = originalButtonText;
+                button.disabled = false;
+            }, 2000);
+            return;
+        }
+
+        // Save layout
+        const response = await fetch('/api/dashboard/layout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ layout })
+        });
+
+        if (response.ok) {
+            button.innerHTML = '✅ Gespeichert';
+
+            // Reload dashboard
+            if (window.dashboardRenderer) {
+                await window.dashboardRenderer.loadAndRender();
+            }
+
+            setTimeout(() => {
+                button.innerHTML = originalButtonText;
+                button.disabled = false;
+            }, 2000);
+        } else {
+            button.innerHTML = '❌ Fehler';
+            setTimeout(() => {
+                button.innerHTML = originalButtonText;
+                button.disabled = false;
+            }, 2000);
+        }
+    } catch (error) {
+        console.error('Error saving dashboard layout:', error);
+        button.innerHTML = '❌ Fehler';
+        setTimeout(() => {
+            button.innerHTML = originalButtonText;
+            button.disabled = false;
+        }, 2000);
+    }
+};
+
+/**
+ * Test Dashboard Layout
+ */
+window.testDashboardLayout = async function() {
+    const button = document.getElementById('test-dashboard-btn');
+    const editor = document.getElementById('dashboard-layout-editor');
+    const errorsDiv = document.getElementById('dashboard-errors');
+
+    if (!button || !editor) return;
+
+    const originalButtonText = button.innerHTML;
+    button.innerHTML = '⏳ Teste...';
+    button.disabled = true;
+
+    try {
+        const layout = editor.value;
+
+        const response = await fetch('/api/dashboard/parse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ layout })
+        });
+        const result = await response.json();
+
+        if (result.errors && result.errors.length > 0) {
+            errorsDiv.innerHTML = `
+                <div style="
+                    background: rgba(231, 76, 60, 0.1);
+                    border: 1px solid rgba(231, 76, 60, 0.3);
+                    border-radius: 8px;
+                    padding: 12px;
+                ">
+                    <div style="color: #e74c3c; font-weight: 600; margin-bottom: 8px;">⚠️ Fehler gefunden:</div>
+                    ${result.errors.map(err => `
+                        <div style="color: #e74c3c; font-size: 12px; margin-left: 10px;">• ${err}</div>
+                    `).join('')}
+                </div>
+            `;
+            button.innerHTML = '❌ Fehler';
+        } else {
+            errorsDiv.innerHTML = `
+                <div style="
+                    background: rgba(46, 204, 113, 0.1);
+                    border: 1px solid rgba(46, 204, 113, 0.3);
+                    border-radius: 8px;
+                    padding: 12px;
+                ">
+                    <div style="color: #2ecc71; font-weight: 600;">✅ Layout ist valide!</div>
+                    <div style="color: #8892b0; font-size: 12px; margin-top: 5px;">
+                        Grid: ${result.grid} Spalten | ${result.rows.length} Reihen | ${result.rows.reduce((sum, row) => sum + row.widgets.length, 0)} Widgets
+                    </div>
+                </div>
+            `;
+            button.innerHTML = '✅ OK';
+        }
+
+        setTimeout(() => {
+            button.innerHTML = originalButtonText;
+            button.disabled = false;
+        }, 2000);
+    } catch (error) {
+        console.error('Error testing dashboard layout:', error);
+        button.innerHTML = '❌ Fehler';
+        setTimeout(() => {
+            button.innerHTML = originalButtonText;
+            button.disabled = false;
+        }, 2000);
+    }
+};
+
+/**
+ * Load Example Layout
+ */
+window.loadExampleLayout = function(type) {
+    const editor = document.getElementById('dashboard-layout-editor');
+    if (!editor) return;
+
+    const examples = {
+        default: `# Default BoatOS Dashboard
+GRID 3
+
+ROW hero
+  SENSOR navigation/position SIZE 2 STYLE hero
+  SENSOR navigation/gnss/satellites SIZE 1
+
+ROW sensors
+  SENSOR bilge/thermo
+  SENSOR navigation/gnss
+  TEXT "Weitere Sensoren folgen..." STYLE subtitle`,
+
+        compact: `# Compact Dashboard (4 Spalten)
+GRID 4
+
+ROW
+  SENSOR navigation/position SIZE 2 STYLE compact
+  SENSOR navigation/gnss/satellites SIZE 1 STYLE compact
+  SENSOR bilge/thermo SIZE 1 STYLE compact`,
+
+        gauges: `# Dashboard mit Gauges
+GRID 3
+
+ROW hero
+  SENSOR navigation/position SIZE 2 STYLE hero
+  GAUGE navigation/speedOverGround MAX 20 UNIT "kn" COLOR cyan
+
+ROW gauges
+  GAUGE navigation/speedOverGround MAX 20 UNIT "kn"
+  GAUGE navigation/gnss/satellites MAX 20 UNIT "" COLOR green
+  TEXT "Mehr Daten" STYLE subtitle`
+    };
+
+    editor.value = examples[type] || examples.default;
+};
+
 // Export
 window.SettingsRenderer = {
     renderGeneralSettings: renderGeneralSettings,
     renderSensorsSettings: renderSensorsSettings,
     renderMqttConnectionCard: renderMqttConnectionCard,
+    renderDashboardSettings: renderDashboardSettings,
     createSettingsHeroCard: createSettingsHeroCard,
     createSettingsCard: createSettingsCard
 };

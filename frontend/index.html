@@ -940,9 +940,10 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="i18n.js?v=1760348000"></script>
     <script src="boat_icons.js?v=1760348000"></script>
-    <script src="settings.js?v=1760360000"></script>
+    <script src="settings.js?v=1760970000"></script>
     <script src="settings_screen.js?v=1.1"></script>
-    <script src="settings_renderer.js?v=2.0"></script>
+    <script src="settings_renderer.js?v=3.0"></script>
+    <script src="dashboard_renderer.js?v=1.0"></script>
     <script src="logbook.js?v=1760346500"></script>
     <script src="charts.js?v=1760345500"></script>
     <script src="units.js?v=1760345500"></script>
@@ -1031,6 +1032,7 @@
                     <button class="settings-tab" onclick="switchSettingsTab('gps')" data-i18n="settings_gps">GPS</button>
                     <button class="settings-tab" onclick="switchSettingsTab('weather')" data-i18n="settings_weather">Wetter</button>
                     <button class="settings-tab" onclick="switchSettingsTab('sensors')" data-i18n="settings_sensors">Sensoren</button>
+                    <button class="settings-tab" onclick="switchSettingsTab('dashboard')">📊 Dashboard</button>
                     <button class="settings-tab" onclick="switchSettingsTab('ais')" data-i18n="settings_ais">AIS</button>
                     <button class="settings-tab" onclick="switchSettingsTab('routing')" data-i18n="settings_routing">Routing</button>
                     <button class="settings-tab" onclick="switchSettingsTab('data')" data-i18n="settings_data">Daten</button>
@@ -1385,6 +1387,11 @@
                     <!-- Sensors Tab -->
                     <div id="settings-sensors" class="settings-tab-content">
                         <!-- Sensor cards and MQTT connection card will be rendered here by settings_renderer.js -->
+                    </div>
+
+                    <!-- Dashboard Tab -->
+                    <div id="settings-dashboard" class="settings-tab-content">
+                        <!-- Dashboard layout editor will be rendered here by settings_renderer.js -->
                     </div>
 
                     <!-- AIS Tab -->

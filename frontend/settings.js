@@ -298,6 +298,19 @@ function switchSettingsTab(tabName) {
             }
         }
     }
+
+    // Load dashboard if dashboard tab is selected
+    if (tabName === 'dashboard') {
+        if (typeof window.SettingsRenderer !== 'undefined' &&
+            typeof window.SettingsRenderer.renderDashboardSettings === 'function') {
+            const dashboardTab = document.getElementById('settings-dashboard');
+            if (dashboardTab) {
+                window.SettingsRenderer.renderDashboardSettings().then(html => {
+                    dashboardTab.innerHTML = html;
+                });
+            }
+        }
+    }
 }
 
 // Load settings into form

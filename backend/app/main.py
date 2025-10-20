@@ -24,6 +24,7 @@ import fuel_tracking
 import statistics
 import weather_alerts
 import locks_storage
+import dashboard_dsl
 
 app = FastAPI(title="BoatOS API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -39,6 +40,7 @@ active_connections: List[WebSocket] = []
 sensor_data: Dict[str, Any] = {"gps": {"lat": 0, "lon": 0, "satellites": 0, "altitude": 0, "course": 0}, "speed": 0, "heading": 0, "depth": 0, "wind": {"speed": 0, "direction": 0}, "engine": {"rpm": 0, "temp": 0, "oil_pressure": 0}, "battery": {"voltage": 0, "current": 0}, "bilge": {"temperature": 0, "humidity": 0}}
 sensor_timestamps: Dict[str, float] = {}  # Track last update time for each sensor/topic
 topic_values: Dict[str, str] = {}  # Store actual MQTT payload values for each topic
+known_topics: Dict[str, Dict[str, Any]] = {}  # Persistent storage of all known topics with their last known values
 routes, waypoints = {}, []
 # Current session entries (cleared on stop)
 current_session_entries = []
@@ -190,7 +192,42 @@ async def get_sensors_list():
         pass
 
     # Group all topics by base name (e.g., "arielle/bilge/thermo/temperature" → "arielle/bilge/thermo")
+    # Use both sensor_timestamps (current) and known_topics (historical) to show ALL topics
     grouped_sensors = {}
+
+    # First, process all known topics (including historical ones)
+    for topic, info in known_topics.items():
+        last_seen = info.get("last_seen", 0)
+        age_seconds = current_time - last_seen
+
+        # Determine base name (everything before the last '/')
+        if '/' in topic:
+            base_name = topic.rsplit('/', 1)[0]
+            subtopic = topic.rsplit('/', 1)[1]
+        else:
+            base_name = topic
+            subtopic = "value"
+
+        if base_name not in grouped_sensors:
+            grouped_sensors[base_name] = {
+                "values": {},
+                "topics": [],
+                "last_update": last_seen,
+                "age_seconds": age_seconds
+            }
+
+        grouped_sensors[base_name]["topics"].append(topic)
+
+        # Use last known value from known_topics
+        last_value = info.get("last_value", "")
+        grouped_sensors[base_name]["values"][subtopic] = last_value
+
+        # Update last_update to the most recent
+        if last_seen > grouped_sensors[base_name]["last_update"]:
+            grouped_sensors[base_name]["last_update"] = last_seen
+            grouped_sensors[base_name]["age_seconds"] = age_seconds
+
+    # Then, update with current values from sensor_timestamps (overrides old values if newer)
     for topic, timestamp in sensor_timestamps.items():
         age_seconds = current_time - timestamp
 
@@ -210,7 +247,8 @@ async def get_sensors_list():
                 "age_seconds": age_seconds
             }
 
-        grouped_sensors[base_name]["topics"].append(topic)
+        if topic not in grouped_sensors[base_name]["topics"]:
+            grouped_sensors[base_name]["topics"].append(topic)
 
         # Store actual value from topic_values instead of placeholder
         actual_value = topic_values.get(topic, "")
@@ -327,6 +365,63 @@ async def save_settings(settings: Dict[str, Any]):
         return {"status": "success", "message": "Settings saved"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# ==================== DASHBOARD LAYOUT ====================
+@app.get("/api/dashboard/layout")
+async def get_dashboard_layout():
+    """Get dashboard layout DSL"""
+    settings_file = "data/settings.json"
+    try:
+        with open(settings_file, 'r') as f:
+            settings = json.load(f)
+            layout_dsl = settings.get("dashboard_layout", "")
+
+            # If empty, return default layout
+            if not layout_dsl:
+                layout_dsl = dashboard_dsl.get_default_layout()
+
+            return {"layout": layout_dsl}
+    except FileNotFoundError:
+        # Return default layout if no settings file
+        return {"layout": dashboard_dsl.get_default_layout()}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/dashboard/layout")
+async def save_dashboard_layout(data: Dict[str, Any]):
+    """Save dashboard layout DSL"""
+    settings_file = "data/settings.json"
+    try:
+        layout_dsl = data.get("layout", "")
+
+        # Load existing settings
+        settings = {}
+        try:
+            with open(settings_file, 'r') as f:
+                settings = json.load(f)
+        except FileNotFoundError:
+            pass
+
+        # Update dashboard_layout
+        settings["dashboard_layout"] = layout_dsl
+
+        # Save settings
+        with open(settings_file, 'w') as f:
+            json.dump(settings, f, indent=2)
+
+        return {"status": "success", "message": "Dashboard layout saved"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/dashboard/parse")
+async def parse_dashboard_layout(data: Dict[str, Any]):
+    """Parse DSL and return structured layout for preview"""
+    try:
+        layout_dsl = data.get("layout", "")
+        parsed = dashboard_dsl.parse_dashboard_dsl(layout_dsl)
+        return parsed
+    except Exception as e:
+        return {"status": "error", "message": str(e), "errors": [str(e)]}
 
 @app.post("/api/mqtt/test")
 async def test_mqtt_connection(mqtt_config: Dict[str, Any]):
@@ -1915,6 +2010,26 @@ async def track_recording_loop():
             current_track.append(point)
 
 # ==================== MQTT ====================
+def load_known_topics():
+    """Load known topics from persistent storage"""
+    global known_topics
+    try:
+        with open("data/known_topics.json", "r") as f:
+            known_topics = json.load(f)
+            print(f"✅ Loaded {len(known_topics)} known topics from storage")
+    except (FileNotFoundError, json.JSONDecodeError):
+        known_topics = {}
+        print("📋 No known topics file found, starting fresh")
+
+def save_known_topics():
+    """Save known topics to persistent storage"""
+    try:
+        os.makedirs("data", exist_ok=True)
+        with open("data/known_topics.json", "w") as f:
+            json.dump(known_topics, f, indent=2)
+    except Exception as e:
+        print(f"⚠️ Failed to save known topics: {e}")
+
 def on_mqtt_message(client, userdata, msg):
     topic, payload = msg.topic, msg.payload.decode()
     import time
@@ -1925,6 +2040,19 @@ def on_mqtt_message(client, userdata, msg):
         sensor_timestamps[topic] = current_time
         # Store actual payload value
         topic_values[topic] = payload
+
+        # Store in known_topics (persistent)
+        if topic not in known_topics:
+            known_topics[topic] = {}
+        known_topics[topic] = {
+            "last_value": payload,
+            "last_seen": current_time,
+            "first_seen": known_topics.get(topic, {}).get("first_seen", current_time)
+        }
+
+        # Save known topics every 10 messages (throttled)
+        if len(sensor_timestamps) % 10 == 0:
+            save_known_topics()
 
         if topic == "boat/gps/latitude":
             gps_module_data["latitude"] = float(payload)
@@ -2961,6 +3089,7 @@ async def startup_event():
     asyncio.create_task(fetch_weather())
     asyncio.create_task(fetch_weather_alerts_periodic())  # Start periodic weather alerts
     asyncio.create_task(gps_service.read_gps_from_signalk())  # Start GPS service from SignalK
+    load_known_topics()  # Load persistent topic history
     mqtt_client_init()
     # mqtt_publisher_init()  # DISABLED: Home Assistant removed, no longer needed
     # asyncio.create_task(publish_sensor_data())  # DISABLED: Home Assistant removed, no longer needed
@@ -2990,6 +3119,12 @@ async def startup_event():
         print("⚠️ No settings file found, services not configured")
 
     print("🚢 BoatOS Backend started!")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Save known topics on shutdown"""
+    save_known_topics()
+    print("💾 Known topics saved on shutdown")
 
 if __name__ == "__main__":
     import uvicorn
