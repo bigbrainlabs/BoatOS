@@ -1038,6 +1038,7 @@ async function renderDashboardSettings() {
         return `
             <div style="max-width: 1400px; margin: 0 auto; position: relative; z-index: 2;">
                 <!-- Hero Card -->
+                <div style="position: relative; z-index: 1; margin-bottom: 30px;">
                 ${createSettingsHeroCard('📊', 'Dashboard Layout', `
                     <p style="color: #8892b0; font-size: 14px; line-height: 1.6; margin: 0;">
                         Konfiguriere das Dashboard-Layout mit der BoatOS DSL (Domain Specific Language).
@@ -1046,9 +1047,42 @@ async function renderDashboardSettings() {
                         </a>
                     </p>
                 `)}
+                </div>
 
-                <!-- Code Editor -->
-                <div style="margin-bottom: 30px;">
+                <!-- Editor Mode Switcher -->
+                <div style="margin-bottom: 20px; display: flex; gap: 10px; justify-content: center; position: relative; z-index: 100;">
+                    <button id="code-editor-btn" onclick="switchDashboardEditorMode('code')" style="
+                        padding: 12px 24px;
+                        background: linear-gradient(135deg, rgba(100, 255, 218, 0.2), rgba(52, 152, 219, 0.2));
+                        border: 2px solid rgba(100, 255, 218, 0.5);
+                        border-radius: 10px;
+                        color: #64ffda;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        pointer-events: auto;
+                        position: relative;
+                        z-index: 101;
+                    ">📝 Code Editor</button>
+                    <button id="visual-editor-btn" onclick="switchDashboardEditorMode('visual')" style="
+                        padding: 12px 24px;
+                        background: rgba(30, 60, 114, 0.3);
+                        border: 2px solid rgba(100, 255, 218, 0.2);
+                        border-radius: 10px;
+                        color: #8892b0;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        pointer-events: auto;
+                        position: relative;
+                        z-index: 101;
+                    ">🎨 Visual Editor</button>
+                </div>
+
+                <!-- Code Editor Container -->
+                <div id="code-editor-container" style="margin-bottom: 30px;">
                     <div style="
                         background: linear-gradient(135deg, rgba(30, 60, 114, 0.6), rgba(42, 82, 152, 0.6));
                         backdrop-filter: blur(15px);
@@ -1103,6 +1137,12 @@ async function renderDashboardSettings() {
 
                         <div id="dashboard-errors" style="margin-top: 15px;"></div>
                     </div>
+                </div>
+                </div>
+
+                <!-- Visual Editor Container -->
+                <div id="visual-editor-container" style="margin-bottom: 30px; display: none;">
+                    <!-- Visual editor will be rendered here by dashboard_visual_editor.js -->
                 </div>
 
                 <!-- Example Layouts -->
@@ -1357,6 +1397,64 @@ ROW gauges
     };
 
     editor.value = examples[type] || examples.default;
+};
+
+/**
+ * Switch Dashboard Editor Mode (Code ↔ Visual)
+ */
+window.switchDashboardEditorMode = async function(mode) {
+    const codeContainer = document.getElementById('code-editor-container');
+    const visualContainer = document.getElementById('visual-editor-container');
+    const codeBtn = document.getElementById('code-editor-btn');
+    const visualBtn = document.getElementById('visual-editor-btn');
+
+    if (!codeContainer || !visualContainer || !codeBtn || !visualBtn) return;
+
+    if (mode === 'code') {
+        // Sync DSL from visual editor to code editor if visual editor exists
+        if (window.visualEditor) {
+            const dsl = window.visualEditor.toDSL();
+            const editor = document.getElementById('dashboard-layout-editor');
+            if (editor) {
+                editor.value = dsl;
+            }
+        }
+
+        // Show code editor
+        codeContainer.style.display = 'block';
+        visualContainer.style.display = 'none';
+
+        // Update button styles
+        codeBtn.style.background = 'linear-gradient(135deg, rgba(100, 255, 218, 0.2), rgba(52, 152, 219, 0.2))';
+        codeBtn.style.borderColor = 'rgba(100, 255, 218, 0.5)';
+        codeBtn.style.color = '#64ffda';
+
+        visualBtn.style.background = 'rgba(30, 60, 114, 0.3)';
+        visualBtn.style.borderColor = 'rgba(100, 255, 218, 0.2)';
+        visualBtn.style.color = '#8892b0';
+    } else if (mode === 'visual') {
+        // Initialize visual editor if not already done
+        if (!window.visualEditor) {
+            window.visualEditor = new DashboardVisualEditor();
+            await window.visualEditor.init('visual-editor-container');
+        }
+
+        // Show visual editor
+        codeContainer.style.display = 'none';
+        visualContainer.style.display = 'block';
+
+        // Update button styles
+        visualBtn.style.background = 'linear-gradient(135deg, rgba(100, 255, 218, 0.2), rgba(52, 152, 219, 0.2))';
+        visualBtn.style.borderColor = 'rgba(100, 255, 218, 0.5)';
+        visualBtn.style.color = '#64ffda';
+
+        codeBtn.style.background = 'rgba(30, 60, 114, 0.3)';
+        codeBtn.style.borderColor = 'rgba(100, 255, 218, 0.2)';
+        codeBtn.style.color = '#8892b0';
+
+        // Reload layout to sync with code editor
+        await window.visualEditor.loadLayout();
+    }
 };
 
 // Export
