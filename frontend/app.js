@@ -1334,10 +1334,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Geolocation API (Browser GPS als Fallback)
-    // Skip browser geolocation on Pi (localhost) since hardware GPS is always available
+    // Skip browser geolocation on Pi since hardware GPS is always available
+    // Pi accesses via localhost or its own IP (192.168.2.217)
     const isRunningOnPi = window.location.hostname === 'localhost' ||
                           window.location.hostname === '127.0.0.1' ||
-                          window.location.hostname === '::1';
+                          window.location.hostname === '::1' ||
+                          window.location.hostname === '192.168.2.217';
 
     if (isRunningOnPi) {
         console.log('🔧 Running on Pi - browser geolocation disabled (using hardware GPS only)');
