@@ -7,9 +7,11 @@ Wants=signalk.service mosquitto.service
 Type=simple
 User=arielle
 WorkingDirectory=/home/arielle/BoatOS
-ExecStart=/usr/bin/python3 /home/arielle/BoatOS/signalk_to_mqtt.py
+ExecStart=/usr/bin/python3 -u /home/arielle/BoatOS/signalk_to_mqtt.py
 Restart=always
 RestartSec=10
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
