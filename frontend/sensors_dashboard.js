@@ -17,6 +17,8 @@ let sensorData = {
     battery: { voltage: 0, current: 0 },
     bilge: { temperature: 0, humidity: 0 }
 };
+let dashboardUpdateTimer = null;
+let lastDashboardUpdate = 0;
 
 // ==================== WebSocket Connection ====================
 
@@ -87,9 +89,24 @@ function updateSensorData(data) {
         sensorData.bilge = { ...sensorData.bilge, ...data.bilge };
     }
 
-    // Update UI
-    if (isDashboardVisible()) {
-        renderSensorDashboard();
+    // Throttle dashboard updates to avoid flicker (max once per 2 seconds)
+    if (isDashboardVisible() && window.dashboardRenderer) {
+        const now = Date.now();
+        if (now - lastDashboardUpdate > 2000) {
+            lastDashboardUpdate = now;
+            window.dashboardRenderer.loadAndRender();
+        } else {
+            // Schedule an update after 2 seconds if not already scheduled
+            if (!dashboardUpdateTimer) {
+                dashboardUpdateTimer = setTimeout(() => {
+                    lastDashboardUpdate = Date.now();
+                    if (isDashboardVisible() && window.dashboardRenderer) {
+                        window.dashboardRenderer.loadAndRender();
+                    }
+                    dashboardUpdateTimer = null;
+                }, 2000 - (now - lastDashboardUpdate));
+            }
+        }
     }
 }
 
@@ -153,6 +170,12 @@ function hideSensorsDashboard() {
     const mapContainer = document.getElementById('map-container');
     const controls = document.getElementById('controls');
     const viewLabel = document.getElementById('current-view');
+
+    // Clear dashboard update timer
+    if (dashboardUpdateTimer) {
+        clearTimeout(dashboardUpdateTimer);
+        dashboardUpdateTimer = null;
+    }
 
     if (dashboard) dashboard.style.display = 'none';
     if (header) header.style.display = 'flex';
@@ -218,43 +241,7 @@ function renderSensorDashboard() {
     // Save current connection status before re-rendering
     const wasConnected = sensorWebSocket && sensorWebSocket.readyState === WebSocket.OPEN;
 
-    // Get current unit settings (from units.js)
-    const units = typeof getCurrentUnits === 'function' ? getCurrentUnits() : {
-        speed: 'kn',
-        depth: 'm',
-        temperature: 'c'
-    };
-
-    // Convert sensor values to selected units
-    const speedConverted = typeof convertSpeed === 'function'
-        ? convertSpeed(sensorData.speed, units.speed)
-        : sensorData.speed;
-    const speedUnit = typeof getUnitLabel === 'function'
-        ? getUnitLabel('speed')
-        : 'kn';
-
-    const depthConverted = typeof convertDepth === 'function'
-        ? convertDepth(sensorData.depth, units.depth)
-        : sensorData.depth;
-    const depthUnit = typeof getUnitLabel === 'function'
-        ? getUnitLabel('depth')
-        : 'm';
-
-    const bilgeTempConverted = typeof convertTemperature === 'function'
-        ? convertTemperature(sensorData.bilge.temperature, units.temperature)
-        : sensorData.bilge.temperature;
-    const tempUnit = typeof getUnitLabel === 'function'
-        ? getUnitLabel('temperature')
-        : '°C';
-
-    const windSpeedConverted = typeof convertSpeed === 'function'
-        ? convertSpeed(sensorData.wind.speed, units.speed)
-        : sensorData.wind.speed;
-
-    const engineTempConverted = typeof convertTemperature === 'function'
-        ? convertTemperature(sensorData.engine.temp, units.temperature)
-        : sensorData.engine.temp;
-
+    // Create dashboard structure with header and content area
     dashboard.innerHTML = `
         <!-- Animated Background -->
         <div class="animated-bg"></div>
@@ -282,8 +269,8 @@ function renderSensorDashboard() {
             </div>
         </div>
 
-        <!-- Dashboard Content -->
-        <div style="flex: 1; overflow-y: auto; padding: 20px; position: relative;">
+        <!-- Dashboard Content (DSL-based) -->
+        <div style="flex: 1; overflow-y: auto; position: relative;">
             <!-- Background Anchor Icon -->
             <div style="
                 position: absolute;
@@ -296,40 +283,21 @@ function renderSensorDashboard() {
                 pointer-events: none;
             ">⚓</div>
 
-            <div style="max-width: 1400px; margin: 0 auto; position: relative; z-index: 2;">
-                <!-- Hero Cards - Main Values -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; margin-bottom: 30px; position: relative; z-index: 10;">
-                    ${createHeroCard('SPD', 'Speed', speedConverted.toFixed(1), speedUnit, 'Geschwindigkeit')}
-                    ${createHeroCard('BAT', 'Batterie', sensorData.battery.voltage.toFixed(1), 'V', 'Hauptbatterie')}
-                    ${createHeroCard('TMP', 'Bilge', bilgeTempConverted.toFixed(1), tempUnit, 'Temperatur')}
-                </div>
-
-                <!-- Navigation Details -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin-bottom: 30px; position: relative; z-index: 10;">
-                    ${createStatCard('POS', 'Position', formatPosition(sensorData.gps.lat, sensorData.gps.lon), '', 'cyan')}
-                    ${createStatCard('CRS', 'Kurs', Math.round(sensorData.gps.course || 0), '°', 'purple')}
-                    ${createStatCard('HDG', 'Heading', Math.round(sensorData.heading), '°', 'purple')}
-                    ${createStatCard('SAT', 'Satelliten', sensorData.gps.satellites, '', 'cyan')}
-                </div>
-
-                <!-- Environment & Systems -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; position: relative; z-index: 10;">
-                    ${createStatCard('DPH', 'Tiefe', depthConverted.toFixed(1), depthUnit, 'cyan')}
-                    ${createStatCard('WND', 'Wind', windSpeedConverted.toFixed(1), speedUnit, 'blue')}
-                    ${createStatCard('DIR', 'Richtung', Math.round(sensorData.wind.direction), '°', 'blue')}
-                    ${createStatCard('HUM', 'Humidity', sensorData.bilge.humidity.toFixed(1), '%', 'blue')}
-                    ${createStatCard('RPM', 'Motor RPM', sensorData.engine.rpm, 'RPM', 'red')}
-                    ${createStatCard('TMP', 'Motor Temp', engineTempConverted.toFixed(0), tempUnit, 'orange')}
-                    ${createStatCard('OIL', 'Öldruck', sensorData.engine.oil_pressure.toFixed(1), 'bar', 'amber')}
-                    ${createStatCard('AMP', 'Strom', sensorData.battery.current.toFixed(1), 'A', 'green')}
-                </div>
-            </div>
+            <!-- DSL Dashboard Container -->
+            <div id="sensor-dashboard" style="padding: 20px; position: relative; z-index: 2;"></div>
         </div>
     `;
 
     // Restore connection status after re-rendering
     if (wasConnected) {
         updateConnectionStatus(true);
+    }
+
+    // Load and render DSL-based dashboard
+    if (window.dashboardRenderer) {
+        window.dashboardRenderer.loadAndRender();
+    } else {
+        console.error('Dashboard renderer not available');
     }
 
     // Add settings button to dashboard header (if available)
