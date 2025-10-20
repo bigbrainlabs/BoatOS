@@ -9,6 +9,7 @@ class DashboardVisualEditor {
         this.sensors = [];
         this.gridColumns = 3;
         this.widgets = [];
+        this.rows = ['main']; // Available row names
     }
 
     /**
@@ -40,6 +41,17 @@ class DashboardVisualEditor {
             const data = await response.json();
             const dslText = data.layout;
 
+            await this.loadFromDSL(dslText);
+        } catch (error) {
+            console.error('Error loading layout:', error);
+        }
+    }
+
+    /**
+     * Load layout from DSL text (for Code → Visual sync)
+     */
+    async loadFromDSL(dslText) {
+        try {
             // Parse DSL
             const parseResponse = await fetch('/api/dashboard/parse', {
                 method: 'POST',
@@ -49,9 +61,16 @@ class DashboardVisualEditor {
             this.currentLayout = await parseResponse.json();
             this.gridColumns = this.currentLayout.grid || 3;
 
-            // Extract widgets from rows
+            // Extract widgets from rows and collect row names
             this.widgets = [];
+            this.rows = [];
             this.currentLayout.rows.forEach(row => {
+                // Add row name to rows list
+                if (!this.rows.includes(row.name)) {
+                    this.rows.push(row.name);
+                }
+
+                // Add widgets with row info
                 row.widgets.forEach(widget => {
                     this.widgets.push({
                         ...widget,
@@ -59,8 +78,17 @@ class DashboardVisualEditor {
                     });
                 });
             });
+
+            // Ensure 'main' is always available
+            if (!this.rows.includes('main')) {
+                this.rows.push('main');
+            }
+
+            // Re-render with new widgets
+            this.render();
         } catch (error) {
-            console.error('Error loading layout:', error);
+            console.error('Error parsing DSL:', error);
+            alert('❌ Fehler beim Parsen des DSL-Codes');
         }
     }
 
@@ -277,7 +305,43 @@ class DashboardVisualEditor {
             `;
         }
 
-        return this.widgets.map((widget, index) => this.renderCanvasWidget(widget, index)).join('');
+        // Group widgets by row
+        const widgetsByRow = {};
+        this.widgets.forEach((widget, index) => {
+            const rowName = widget.rowName || 'main';
+            if (!widgetsByRow[rowName]) {
+                widgetsByRow[rowName] = [];
+            }
+            widgetsByRow[rowName].push({ widget, index });
+        });
+
+        // Render each row with header
+        let html = '';
+        Object.entries(widgetsByRow).forEach(([rowName, items]) => {
+            // Row header
+            html += `
+                <div style="
+                    grid-column: 1 / -1;
+                    color: #64ffda;
+                    font-size: 13px;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    padding: 8px 0;
+                    margin-top: 16px;
+                    border-bottom: 1px solid rgba(100, 255, 218, 0.2);
+                ">
+                    📍 ROW ${rowName}
+                </div>
+            `;
+
+            // Widgets in this row
+            items.forEach(({ widget, index }) => {
+                html += this.renderCanvasWidget(widget, index);
+            });
+        });
+
+        return html;
     }
 
     /**
@@ -431,6 +495,109 @@ class DashboardVisualEditor {
     }
 
     /**
+     * Render sensor-specific properties
+     */
+    renderSensorProperties(widget, index) {
+        // Find sensor data to get available topics
+        const sensor = this.sensors.find(s => s.base_name === widget.sensor);
+        const availableTopics = sensor ? Object.keys(sensor.values) : [];
+
+        return `
+            <!-- Alias -->
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; color: #8892b0; font-size: 12px; margin-bottom: 6px;">
+                    Name (Optional)
+                </label>
+                <input type="text" value="${widget.alias || ''}" placeholder="Standard-Name verwenden"
+                    onchange="window.visualEditor.updateWidgetProperty(${index}, 'alias', this.value)"
+                    style="
+                        width: 100%;
+                        background: rgba(10, 14, 39, 0.8);
+                        color: white;
+                        border: 1px solid rgba(100, 255, 218, 0.3);
+                        padding: 8px;
+                        border-radius: 6px;
+                    ">
+            </div>
+
+            ${availableTopics.length > 0 ? `
+                <!-- SHOW Topics -->
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; color: #8892b0; font-size: 12px; margin-bottom: 8px;">
+                        🔍 Angezeigte Topics
+                    </label>
+                    <div style="
+                        background: rgba(10, 14, 39, 0.8);
+                        border: 1px solid rgba(100, 255, 218, 0.3);
+                        border-radius: 6px;
+                        padding: 8px;
+                        max-height: 150px;
+                        overflow-y: auto;
+                    ">
+                        ${availableTopics.map(topic => {
+                            const isShown = !widget.show || widget.show.includes(topic);
+                            const isHidden = widget.hide && widget.hide.includes(topic);
+                            const checked = isShown && !isHidden;
+                            return `
+                                <label style="display: flex; align-items: center; padding: 4px 0; cursor: pointer;">
+                                    <input type="checkbox"
+                                        ${checked ? 'checked' : ''}
+                                        onchange="window.visualEditor.toggleTopic(${index}, '${topic}', this.checked)"
+                                        style="margin-right: 8px; cursor: pointer;">
+                                    <span style="color: white; font-size: 13px;">${topic}</span>
+                                </label>
+                            `;
+                        }).join('')}
+                    </div>
+                    <div style="color: #8892b0; font-size: 11px; margin-top: 6px;">
+                        💡 Wähle welche Topics angezeigt werden sollen
+                    </div>
+                </div>
+
+                <!-- UNITS -->
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; color: #8892b0; font-size: 12px; margin-bottom: 8px;">
+                        📏 Einheiten (Units)
+                    </label>
+                    <div style="
+                        background: rgba(10, 14, 39, 0.8);
+                        border: 1px solid rgba(100, 255, 218, 0.3);
+                        border-radius: 6px;
+                        padding: 8px;
+                        max-height: 200px;
+                        overflow-y: auto;
+                    ">
+                        ${availableTopics.map(topic => {
+                            const unit = widget.units && widget.units[topic] ? widget.units[topic] : '';
+                            return `
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                    <span style="color: #8892b0; font-size: 12px; min-width: 80px;">${topic}:</span>
+                                    <input type="text"
+                                        value="${unit}"
+                                        placeholder="z.B. °C, %, V"
+                                        onchange="window.visualEditor.updateUnit(${index}, '${topic}', this.value)"
+                                        style="
+                                            flex: 1;
+                                            background: rgba(10, 14, 39, 0.6);
+                                            color: white;
+                                            border: 1px solid rgba(100, 255, 218, 0.2);
+                                            padding: 6px;
+                                            border-radius: 4px;
+                                            font-size: 12px;
+                                        ">
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    <div style="color: #8892b0; font-size: 11px; margin-top: 6px;">
+                        💡 Füge Einheiten wie °C, %, kn, V hinzu
+                    </div>
+                </div>
+            ` : ''}
+        `;
+    }
+
+    /**
      * Select widget for editing
      */
     selectWidget(index) {
@@ -440,6 +607,37 @@ class DashboardVisualEditor {
         propertiesContent.innerHTML = `
             <div style="color: white; font-weight: 600; margin-bottom: 16px;">
                 ${widget.type.toUpperCase()} Widget
+            </div>
+
+            <!-- Row Selection -->
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; color: #8892b0; font-size: 12px; margin-bottom: 6px;">
+                    📍 Reihe (Row)
+                </label>
+                <div style="display: flex; gap: 8px;">
+                    <select onchange="window.visualEditor.updateWidgetProperty(${index}, 'rowName', this.value)"
+                        style="
+                            flex: 1;
+                            background: rgba(10, 14, 39, 0.8);
+                            color: white;
+                            border: 1px solid rgba(100, 255, 218, 0.3);
+                            padding: 8px;
+                            border-radius: 6px;
+                        ">
+                        ${this.rows.map(row => `
+                            <option value="${row}" ${(widget.rowName || 'main') === row ? 'selected' : ''}>${row}</option>
+                        `).join('')}
+                    </select>
+                    <button onclick="window.visualEditor.promptNewRow(${index})" style="
+                        background: rgba(100, 255, 218, 0.2);
+                        color: #64ffda;
+                        border: 1px solid rgba(100, 255, 218, 0.3);
+                        padding: 8px 12px;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        white-space: nowrap;
+                    ">+ Neu</button>
+                </div>
             </div>
 
             <!-- Size -->
@@ -501,24 +699,7 @@ class DashboardVisualEditor {
                 </select>
             </div>
 
-            ${widget.type === 'sensor' ? `
-                <!-- Alias -->
-                <div style="margin-bottom: 16px;">
-                    <label style="display: block; color: #8892b0; font-size: 12px; margin-bottom: 6px;">
-                        Name (Optional)
-                    </label>
-                    <input type="text" value="${widget.alias || ''}" placeholder="Standard-Name verwenden"
-                        onchange="window.visualEditor.updateWidgetProperty(${index}, 'alias', this.value)"
-                        style="
-                            width: 100%;
-                            background: rgba(10, 14, 39, 0.8);
-                            color: white;
-                            border: 1px solid rgba(100, 255, 218, 0.3);
-                            padding: 8px;
-                            border-radius: 6px;
-                        ">
-                </div>
-            ` : ''}
+            ${widget.type === 'sensor' ? this.renderSensorProperties(widget, index) : ''}
 
             ${widget.type === 'text' ? `
                 <!-- Text Content -->
@@ -556,6 +737,60 @@ class DashboardVisualEditor {
     }
 
     /**
+     * Toggle topic visibility (SHOW/HIDE)
+     */
+    toggleTopic(index, topic, checked) {
+        const widget = this.widgets[index];
+
+        // Initialize arrays if needed
+        if (!widget.show) widget.show = [];
+        if (!widget.hide) widget.hide = [];
+
+        if (checked) {
+            // Show topic: add to show, remove from hide
+            if (!widget.show.includes(topic)) {
+                widget.show.push(topic);
+            }
+            widget.hide = widget.hide.filter(t => t !== topic);
+        } else {
+            // Hide topic: add to hide, remove from show
+            if (!widget.hide.includes(topic)) {
+                widget.hide.push(topic);
+            }
+            widget.show = widget.show.filter(t => t !== topic);
+        }
+
+        // Clean up empty arrays
+        if (widget.show.length === 0) delete widget.show;
+        if (widget.hide.length === 0) delete widget.hide;
+
+        this.updateCanvas();
+    }
+
+    /**
+     * Update unit for a topic
+     */
+    updateUnit(index, topic, value) {
+        const widget = this.widgets[index];
+
+        if (!widget.units) {
+            widget.units = {};
+        }
+
+        if (value.trim() === '') {
+            delete widget.units[topic];
+            // Clean up empty units object
+            if (Object.keys(widget.units).length === 0) {
+                delete widget.units;
+            }
+        } else {
+            widget.units[topic] = value.trim();
+        }
+
+        this.updateCanvas();
+    }
+
+    /**
      * Update only the canvas (without destroying properties panel)
      */
     updateCanvas() {
@@ -564,6 +799,23 @@ class DashboardVisualEditor {
             canvasGrid.innerHTML = this.renderCanvasWidgets();
             // Re-initialize drag & drop for new widgets
             this.initDragDrop();
+        }
+    }
+
+    /**
+     * Prompt for new row name
+     */
+    promptNewRow(widgetIndex) {
+        const rowName = prompt('Name der neuen Reihe (z.B. "hero", "sensors", "details"):');
+        if (rowName && rowName.trim() !== '') {
+            const cleanName = rowName.trim().replace(/\s+/g, '_');
+            if (!this.rows.includes(cleanName)) {
+                this.rows.push(cleanName);
+            }
+            this.widgets[widgetIndex].rowName = cleanName;
+            // Re-render properties to update dropdown
+            this.selectWidget(widgetIndex);
+            this.updateCanvas();
         }
     }
 
@@ -587,30 +839,46 @@ class DashboardVisualEditor {
      */
     toDSL() {
         let dsl = `GRID ${this.gridColumns}\n\n`;
-        dsl += `ROW main\n`;
 
+        // Group widgets by row
+        const widgetsByRow = {};
         this.widgets.forEach(widget => {
-            dsl += `  ${widget.type.toUpperCase()} `;
-
-            if (widget.type === 'sensor') {
-                dsl += widget.sensor;
-            } else if (widget.type === 'text') {
-                dsl += `"${widget.text || 'Text'}"`;
-            } else if (widget.type === 'gauge') {
-                dsl += widget.sensor;
+            const rowName = widget.rowName || 'main';
+            if (!widgetsByRow[rowName]) {
+                widgetsByRow[rowName] = [];
             }
+            widgetsByRow[rowName].push(widget);
+        });
 
-            if (widget.size && widget.size !== 1) dsl += ` SIZE ${widget.size}`;
-            if (widget.style && widget.style !== 'card') dsl += ` STYLE ${widget.style}`;
-            if (widget.color && widget.color !== 'cyan') dsl += ` COLOR ${widget.color}`;
-            if (widget.alias) dsl += ` ALIAS "${widget.alias}"`;
-            if (widget.icon) dsl += ` ICON ${widget.icon}`;
-            if (widget.show && widget.show.length > 0) dsl += ` SHOW ${widget.show.join(',')}`;
-            if (widget.hide && widget.hide.length > 0) dsl += ` HIDE ${widget.hide.join(',')}`;
-            if (widget.units) {
-                const unitsStr = Object.entries(widget.units).map(([k, v]) => `${k}:${v}`).join(',');
-                dsl += ` UNITS "${unitsStr}"`;
-            }
+        // Generate DSL for each row
+        Object.entries(widgetsByRow).forEach(([rowName, rowWidgets]) => {
+            dsl += `ROW ${rowName}\n`;
+
+            rowWidgets.forEach(widget => {
+                dsl += `  ${widget.type.toUpperCase()} `;
+
+                if (widget.type === 'sensor') {
+                    dsl += widget.sensor;
+                } else if (widget.type === 'text') {
+                    dsl += `"${widget.text || 'Text'}"`;
+                } else if (widget.type === 'gauge') {
+                    dsl += widget.sensor;
+                }
+
+                if (widget.size && widget.size !== 1) dsl += ` SIZE ${widget.size}`;
+                if (widget.style && widget.style !== 'card') dsl += ` STYLE ${widget.style}`;
+                if (widget.color && widget.color !== 'cyan') dsl += ` COLOR ${widget.color}`;
+                if (widget.alias) dsl += ` ALIAS "${widget.alias}"`;
+                if (widget.icon) dsl += ` ICON ${widget.icon}`;
+                if (widget.show && widget.show.length > 0) dsl += ` SHOW ${widget.show.join(',')}`;
+                if (widget.hide && widget.hide.length > 0) dsl += ` HIDE ${widget.hide.join(',')}`;
+                if (widget.units) {
+                    const unitsStr = Object.entries(widget.units).map(([k, v]) => `${k}:${v}`).join(',');
+                    dsl += ` UNITS "${unitsStr}"`;
+                }
+
+                dsl += '\n';
+            });
 
             dsl += '\n';
         });

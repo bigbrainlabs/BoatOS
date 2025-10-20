@@ -1439,6 +1439,15 @@ window.switchDashboardEditorMode = async function(mode) {
             await window.visualEditor.init('visual-editor-container');
         }
 
+        // Parse current code editor content (not saved layout)
+        const editor = document.getElementById('dashboard-layout-editor');
+        if (editor && editor.value.trim() !== '') {
+            await window.visualEditor.loadFromDSL(editor.value);
+        } else {
+            // Fallback to saved layout if editor is empty
+            await window.visualEditor.loadLayout();
+        }
+
         // Show visual editor
         codeContainer.style.display = 'none';
         visualContainer.style.display = 'block';
@@ -1451,9 +1460,6 @@ window.switchDashboardEditorMode = async function(mode) {
         codeBtn.style.background = 'rgba(30, 60, 114, 0.3)';
         codeBtn.style.borderColor = 'rgba(100, 255, 218, 0.2)';
         codeBtn.style.color = '#8892b0';
-
-        // Reload layout to sync with code editor
-        await window.visualEditor.loadLayout();
     }
 };
 
