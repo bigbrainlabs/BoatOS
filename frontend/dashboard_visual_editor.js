@@ -10,6 +10,9 @@ class DashboardVisualEditor {
         this.gridColumns = 3;
         this.widgets = [];
         this.rows = ['main']; // Available row names
+        this.history = []; // Undo history
+        this.historyIndex = -1; // Current position in history
+        this.maxHistorySize = 50; // Maximum history entries
     }
 
     /**
@@ -29,6 +32,99 @@ class DashboardVisualEditor {
         await this.loadSensors();
 
         // Render editor
+        this.render();
+
+        // Setup keyboard shortcuts for undo/redo
+        this.setupKeyboardShortcuts();
+
+        // Save initial state
+        this.saveHistory();
+    }
+
+    /**
+     * Setup keyboard shortcuts
+     */
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Only handle if visual editor is visible
+            const visualContainer = document.getElementById('visual-editor-container');
+            if (!visualContainer || visualContainer.style.display === 'none') {
+                return;
+            }
+
+            // Ctrl+Z or Cmd+Z = Undo
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                this.undo();
+            }
+
+            // Ctrl+Shift+Z or Cmd+Shift+Z or Ctrl+Y = Redo
+            if (((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) ||
+                ((e.ctrlKey || e.metaKey) && e.key === 'y')) {
+                e.preventDefault();
+                this.redo();
+            }
+        });
+    }
+
+    /**
+     * Save current state to history
+     */
+    saveHistory() {
+        // Create deep copy of current state
+        const state = {
+            widgets: JSON.parse(JSON.stringify(this.widgets)),
+            rows: [...this.rows],
+            gridColumns: this.gridColumns
+        };
+
+        // Remove any history after current index (when making new change after undo)
+        this.history = this.history.slice(0, this.historyIndex + 1);
+
+        // Add new state
+        this.history.push(state);
+
+        // Limit history size
+        if (this.history.length > this.maxHistorySize) {
+            this.history.shift();
+        } else {
+            this.historyIndex++;
+        }
+    }
+
+    /**
+     * Undo last change
+     */
+    undo() {
+        if (this.historyIndex > 0) {
+            this.historyIndex--;
+            this.restoreState(this.history[this.historyIndex]);
+            console.log('↩️ Undo');
+        } else {
+            console.log('❌ Nothing to undo');
+        }
+    }
+
+    /**
+     * Redo last undone change
+     */
+    redo() {
+        if (this.historyIndex < this.history.length - 1) {
+            this.historyIndex++;
+            this.restoreState(this.history[this.historyIndex]);
+            console.log('↪️ Redo');
+        } else {
+            console.log('❌ Nothing to redo');
+        }
+    }
+
+    /**
+     * Restore state from history
+     */
+    restoreState(state) {
+        this.widgets = JSON.parse(JSON.stringify(state.widgets));
+        this.rows = [...state.rows];
+        this.gridColumns = state.gridColumns;
         this.render();
     }
 
@@ -320,7 +416,7 @@ class DashboardVisualEditor {
         Object.entries(widgetsByRow).forEach(([rowName, items]) => {
             // Row header
             html += `
-                <div style="
+                <div class="row-header" data-row-name="${rowName}" style="
                     grid-column: 1 / -1;
                     color: #64ffda;
                     font-size: 13px;
@@ -367,8 +463,9 @@ class DashboardVisualEditor {
                 border: 2px solid rgba(100, 255, 218, 0.3);
                 border-radius: 12px;
                 padding: 16px;
-                cursor: pointer;
+                cursor: move;
                 position: relative;
+                transition: all 0.2s ease;
             " onclick="window.visualEditor.selectWidget(${index})">
                 <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
                     <div style="color: white; font-weight: 600; font-size: 14px;">
@@ -378,12 +475,14 @@ class DashboardVisualEditor {
                         background: rgba(231, 76, 60, 0.8);
                         color: white;
                         border: none;
-                        width: 24px;
-                        height: 24px;
+                        width: 32px;
+                        height: 32px;
                         border-radius: 50%;
                         cursor: pointer;
-                        font-size: 16px;
+                        font-size: 18px;
                         line-height: 1;
+                        touch-action: manipulation;
+                        -webkit-tap-highlight-color: transparent;
                     ">×</button>
                 </div>
                 <div style="color: #8892b0; font-size: 11px; margin-bottom: 4px;">
@@ -421,12 +520,55 @@ class DashboardVisualEditor {
         new Sortable(canvasGrid, {
             animation: 150,
             ghostClass: 'sortable-ghost',
-            handle: '.canvas-widget',
+            draggable: '.canvas-widget', // Only widgets, not row headers
+            filter: '.row-header', // Don't drag row headers
+            preventOnFilter: false,
+            touchStartThreshold: 5, // px before drag starts (prevents accidental drags)
+            delay: 200, // 200ms delay for touch (distinguish between tap and drag)
+            delayOnTouchOnly: true, // Only apply delay on touch devices
+            forceFallback: false, // Use native HTML5 drag on desktop
+
             onEnd: (evt) => {
-                // Reorder widgets array
-                const item = this.widgets.splice(evt.oldIndex, 1)[0];
-                this.widgets.splice(evt.newIndex, 0, item);
-                this.render();
+                // Get all canvas widgets in their new DOM order
+                const allWidgets = Array.from(canvasGrid.querySelectorAll('.canvas-widget'));
+
+                // Extract the data-index values to build new order
+                const newOrder = allWidgets.map(el => parseInt(el.getAttribute('data-index')));
+
+                // Detect which row each widget is now in
+                allWidgets.forEach((widgetEl, domIndex) => {
+                    const widgetIndex = parseInt(widgetEl.getAttribute('data-index'));
+
+                    // Find the nearest row header before this widget
+                    let currentRow = 'main';
+                    let prevElement = widgetEl.previousElementSibling;
+                    while (prevElement) {
+                        if (prevElement.classList && prevElement.classList.contains('row-header')) {
+                            currentRow = prevElement.getAttribute('data-row-name') || 'main';
+                            break;
+                        }
+                        prevElement = prevElement.previousElementSibling;
+                    }
+
+                    // Update widget's rowName if it changed
+                    if (this.widgets[widgetIndex]) {
+                        this.widgets[widgetIndex].rowName = currentRow;
+                    }
+                });
+
+                // Reorder widgets array based on new DOM order
+                const reorderedWidgets = newOrder.map(index => this.widgets[index]);
+
+                // Check if order actually changed
+                const orderChanged = !newOrder.every((idx, i) => idx === i);
+
+                if (orderChanged) {
+                    this.widgets = reorderedWidgets;
+                }
+
+                // Always save and update (row might have changed even if order didn't)
+                this.saveHistory();
+                this.updateCanvas();
             }
         });
 
@@ -438,6 +580,7 @@ class DashboardVisualEditor {
                 const type = item.getAttribute('data-type');
                 const sensor = item.getAttribute('data-sensor');
                 e.dataTransfer.setData('widget-type', type);
+                e.dataTransfer.setData('source', 'palette'); // Mark as palette drag
                 if (sensor) e.dataTransfer.setData('widget-sensor', sensor);
             });
         });
@@ -448,10 +591,19 @@ class DashboardVisualEditor {
 
         canvasGrid.addEventListener('drop', (e) => {
             e.preventDefault();
+
+            // Only handle drops from palette, not from sortable reordering
+            const source = e.dataTransfer.getData('source');
+            if (source !== 'palette') {
+                return; // Ignore drops from canvas reordering
+            }
+
             const type = e.dataTransfer.getData('widget-type');
             const sensor = e.dataTransfer.getData('widget-sensor');
 
-            this.addWidget(type, sensor);
+            if (type) {
+                this.addWidget(type, sensor);
+            }
         });
     }
 
@@ -478,6 +630,7 @@ class DashboardVisualEditor {
         }
 
         this.widgets.push(newWidget);
+        this.saveHistory();
         this.updateCanvas();
     }
 
@@ -486,6 +639,7 @@ class DashboardVisualEditor {
      */
     deleteWidget(index) {
         this.widgets.splice(index, 1);
+        this.saveHistory();
         // Clear properties panel when deleting selected widget
         const propertiesContent = document.getElementById('properties-content');
         if (propertiesContent) {
@@ -732,6 +886,7 @@ class DashboardVisualEditor {
         } else {
             this.widgets[index][property] = value;
         }
+        this.saveHistory();
         // Only update canvas, not properties panel (to keep focus)
         this.updateCanvas();
     }
@@ -764,6 +919,7 @@ class DashboardVisualEditor {
         if (widget.show.length === 0) delete widget.show;
         if (widget.hide.length === 0) delete widget.hide;
 
+        this.saveHistory();
         this.updateCanvas();
     }
 
@@ -787,6 +943,7 @@ class DashboardVisualEditor {
             widget.units[topic] = value.trim();
         }
 
+        this.saveHistory();
         this.updateCanvas();
     }
 
@@ -813,6 +970,7 @@ class DashboardVisualEditor {
                 this.rows.push(cleanName);
             }
             this.widgets[widgetIndex].rowName = cleanName;
+            this.saveHistory();
             // Re-render properties to update dropdown
             this.selectWidget(widgetIndex);
             this.updateCanvas();
@@ -824,6 +982,7 @@ class DashboardVisualEditor {
      */
     updateGridColumns(columns) {
         this.gridColumns = parseInt(columns);
+        this.saveHistory();
         // Update canvas grid
         this.updateCanvas();
         // Also need to update the grid-template-columns style
