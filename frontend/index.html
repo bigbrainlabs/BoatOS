@@ -529,6 +529,42 @@
             box-shadow: 0 0 15px rgba(100, 255, 218, 0.4);
         }
 
+        /* Visual Editor - Sortable Drag & Drop */
+        .sortable-ghost {
+            opacity: 0.4;
+            background: rgba(100, 255, 218, 0.1) !important;
+            border: 2px dashed rgba(100, 255, 218, 0.5) !important;
+        }
+
+        .canvas-widget:hover {
+            border-color: rgba(100, 255, 218, 0.5) !important;
+            box-shadow: 0 0 10px rgba(100, 255, 218, 0.3);
+        }
+
+        /* Touch-specific optimizations */
+        @media (hover: none) and (pointer: coarse) {
+            .canvas-widget {
+                min-height: 80px; /* Larger touch targets */
+            }
+
+            .canvas-widget:active {
+                transform: scale(0.98);
+                background: rgba(100, 255, 218, 0.15) !important;
+            }
+
+            /* Larger buttons on touch */
+            .palette-widget {
+                min-height: 60px;
+                padding: 16px !important;
+            }
+        }
+
+        /* Active state for touch */
+        .canvas-widget:active,
+        .palette-widget:active {
+            opacity: 0.8;
+        }
+
     </style>
 </head>
 <body>
