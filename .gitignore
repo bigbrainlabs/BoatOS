@@ -70,5 +70,5 @@ TODO_*.md
 PLAN_*.md
 *_PLANUNG.md
 
-# Sensitive documentation
-README_SSH.md
+# Development documentation (except main README.md)
+README_*.md
