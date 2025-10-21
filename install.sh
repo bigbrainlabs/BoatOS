@@ -40,8 +40,8 @@ echo ""
 # System-Pakete installieren
 info "Installiere System-Pakete..."
 sudo apt update
-sudo apt install -y python3 python3-pip python3-venv nginx git curl gdal-bin python3-gdal openssl || error "System-Pakete konnten nicht installiert werden"
-success "System-Pakete installiert (inkl. GDAL für Kartenkonvertierung)"
+sudo apt install -y python3 python3-pip python3-venv nginx git curl gdal-bin python3-gdal openssl mosquitto mosquitto-clients sqlite3 || error "System-Pakete konnten nicht installiert werden"
+success "System-Pakete installiert (inkl. GDAL für Kartenkonvertierung, MQTT Broker, SQLite)"
 
 # Node.js für SignalK installieren
 info "Installiere Node.js..."
@@ -81,6 +81,18 @@ sudo systemctl daemon-reload
 sudo systemctl enable signalk
 success "SignalK Service erstellt"
 
+# MQTT Broker konfigurieren
+info "Konfiguriere MQTT Broker (Mosquitto)..."
+sudo tee /etc/mosquitto/conf.d/boatos.conf > /dev/null << MQTT
+# BoatOS MQTT Configuration
+listener 1883
+allow_anonymous true
+MQTT
+
+sudo systemctl enable mosquitto
+sudo systemctl restart mosquitto
+success "MQTT Broker konfiguriert und gestartet"
+
 # GPS Berechtigungen
 info "Füge Benutzer zur dialout-Gruppe hinzu..."
 sudo usermod -a -G dialout $INSTALL_USER
@@ -112,8 +124,16 @@ info "Erstelle Datenverzeichnisse..."
 mkdir -p $INSTALL_DIR/data/charts
 mkdir -p $INSTALL_DIR/data/enc_downloads
 mkdir -p $INSTALL_DIR/data/osrm
+mkdir -p $INSTALL_DIR/data/layouts
+mkdir -p $INSTALL_DIR/data/logbook
+mkdir -p $INSTALL_DIR/data/crew
+mkdir -p $INSTALL_DIR/data/fuel
+mkdir -p $INSTALL_DIR/data/locks
 touch $INSTALL_DIR/data/.gitkeep
-success "Datenverzeichnisse erstellt"
+
+# Set proper permissions for data directories
+chmod -R 755 $INSTALL_DIR/data
+success "Datenverzeichnisse erstellt (Charts, Layouts, Logbook, Crew, Fuel, Locks)"
 
 # Waterway Routing Setup
 info "Waterway Routing wird konfiguriert..."
@@ -338,6 +358,7 @@ success "Nginx konfiguriert"
 
 # Services starten
 info "Starte Services..."
+sudo systemctl start mosquitto
 sudo systemctl start signalk
 sudo systemctl start boatos
 sudo systemctl restart nginx
@@ -348,7 +369,7 @@ if systemctl list-unit-files | grep -q osrm.service; then
     success "OSRM Service gestartet"
 fi
 
-success "Services gestartet"
+success "Services gestartet (MQTT, SignalK, BoatOS, Nginx)"
 
 echo ""
 echo "============================="
@@ -357,8 +378,20 @@ echo ""
 echo "Zugriff:"
 echo "  - BoatOS UI: https://$(hostname -I | awk '{print $1}')/"
 echo "  - SignalK:   http://$(hostname -I | awk '{print $1}'):3000/"
+echo "  - MQTT:      mqtt://$(hostname -I | awk '{print $1}'):1883/"
 echo ""
 echo -e "${YELLOW}⚠️  Hinweis: Selbstsigniertes SSL-Zertifikat - Browser-Warnung ignorieren${NC}"
+echo ""
+echo "Installierte Features:"
+echo "  ✅ Drag & Drop Dashboard Editor"
+echo "  ✅ GPS & AIS Tracking"
+echo "  ✅ Digitales Logbuch mit PDF Export"
+echo "  ✅ Crew Management"
+echo "  ✅ Fuel Tracking & Statistiken"
+echo "  ✅ Waterway Routing (Elbe, Kanäle)"
+echo "  ✅ Weather Alerts (DWD)"
+echo "  ✅ Schleusen-Datenbank"
+echo "  ✅ MQTT Sensor Integration"
 echo ""
 echo "Nächste Schritte:"
 echo "  1. GPS-Device identifizieren: ls -la /dev/ttyACM*"
@@ -375,8 +408,12 @@ fi
 echo "Status prüfen:"
 echo "  sudo systemctl status signalk"
 echo "  sudo systemctl status boatos"
+echo "  sudo systemctl status mosquitto"
 if systemctl list-unit-files | grep -q osrm.service; then
 echo "  sudo systemctl status osrm"
 fi
+echo ""
+echo "MQTT Sensor Topics testen:"
+echo "  mosquitto_sub -h localhost -t '#' -v"
 echo ""
 echo -e "${YELLOW}⚠️  WICHTIG: Bitte melde dich ab und wieder an, damit die dialout-Gruppe wirksam wird!${NC}"

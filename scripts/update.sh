@@ -110,6 +110,12 @@ success "Services neu gestartet"
 step "Prüfe Service Status..."
 sleep 2
 
+if systemctl is-active --quiet mosquitto; then
+    success "MQTT Broker (Mosquitto) läuft"
+else
+    echo -e "${RED}❌ MQTT Broker läuft nicht${NC}"
+fi
+
 if systemctl is-active --quiet signalk; then
     success "SignalK läuft"
 else
@@ -140,11 +146,16 @@ echo ""
 echo "============================="
 echo -e "${GREEN}🎉 BoatOS erfolgreich aktualisiert!${NC}"
 echo ""
-echo "Änderungen in diesem Update:"
-echo "  ✅ Location Search mit Nominatim"
-echo "  ✅ Koordinaten-Eingabe (Decimal, DMS, DM)"
-echo "  ✅ Verbessertes Auto-Follow (respektiert manuelle Interaktion)"
-echo "  ✅ Such-Marker mit Popups"
+echo "Aktuelle BoatOS Features:"
+echo "  ✅ Drag & Drop Dashboard Editor mit Undo/Redo"
+echo "  ✅ GPS & AIS Tracking (SignalK + AISStream)"
+echo "  ✅ Digitales Logbuch mit PDF Export"
+echo "  ✅ Crew Management & Fuel Tracking"
+echo "  ✅ Waterway Routing (OSRM + PyRouteLib3)"
+echo "  ✅ Weather Alerts (DWD/BrightSky API)"
+echo "  ✅ Schleusen-Datenbank (SQLite)"
+echo "  ✅ MQTT Sensor Integration"
+echo "  ✅ Touch-optimiertes UI"
 echo ""
 echo "Zugriff:"
 echo "  - BoatOS UI: https://$(hostname -I | awk '{print $1}')/"
@@ -154,7 +165,11 @@ echo ""
 echo "Logs ansehen:"
 echo "  sudo journalctl -u boatos -f"
 echo "  sudo journalctl -u signalk -f"
+echo "  sudo journalctl -u mosquitto -f"
 if systemctl list-unit-files | grep -q osrm.service; then
 echo "  sudo journalctl -u osrm -f"
 fi
+echo ""
+echo "MQTT Topics testen:"
+echo "  mosquitto_sub -h localhost -t '#' -v"
 echo ""
