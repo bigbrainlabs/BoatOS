@@ -49,3 +49,6 @@ Thumbs.db
 # Temp files
 *.tmp
 .cache/
+
+# Sensitive documentation
+README_SSH.md
