@@ -24,6 +24,36 @@ Das Installations-Skript richtet automatisch ein:
 
 ---
 
+## ⚙️ Konfiguration
+
+### OpenWeather API Key (Optional, aber empfohlen)
+
+BoatOS verwendet die OpenWeatherMap API für Wettervorhersagen. Um diese Funktion zu nutzen:
+
+1. **Kostenlosen API Key erstellen:**
+   - Registriere dich bei [OpenWeatherMap](https://home.openweathermap.org/users/sign_up)
+   - Erstelle einen API Key unter [API Keys](https://home.openweathermap.org/api_keys)
+   - Der kostenlose "Free Plan" reicht aus (60 Calls/Minute, 1M Calls/Monat)
+
+2. **API Key in .env eintragen:**
+   ```bash
+   nano ~/BoatOS/.env
+   ```
+
+   Ersetze `your_api_key_here` mit deinem echten API Key:
+   ```
+   OPENWEATHER_API_KEY=dein_api_key_hier
+   ```
+
+3. **Service neu starten:**
+   ```bash
+   sudo systemctl restart boatos
+   ```
+
+**Wichtig:** Committe niemals die `.env` Datei in Git! Diese enthält sensitive Daten und ist bereits in `.gitignore`.
+
+---
+
 ## Systemanforderungen
 
 - **Betriebssystem**: Debian/Ubuntu basiert (getestet auf Debian 12 Bookworm)
