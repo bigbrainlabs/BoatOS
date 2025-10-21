@@ -60,8 +60,15 @@ build_reel*.py
 REEL_*.md
 FINAL_REEL_*.md
 reel_*.png
+pi-*.png
 boatos_live.png
 reel_material/
+
+# Development planning files
+TODO.md
+TODO_*.md
+PLAN_*.md
+*_PLANUNG.md
 
 # Sensitive documentation
 README_SSH.md
