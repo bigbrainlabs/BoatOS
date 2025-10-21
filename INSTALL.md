@@ -1,20 +1,57 @@
 # BoatOS Installation Guide
 
+## 🚀 Schnellstart (Empfohlen)
+
+Für eine vollautomatische Installation mit allen Features:
+
+```bash
+cd /home/$(whoami)
+git clone https://github.com/yourusername/BoatOS.git
+cd BoatOS
+chmod +x install.sh
+./install.sh
+```
+
+Das Installations-Skript richtet automatisch ein:
+- ✅ SignalK Server (GPS/NMEA Integration)
+- ✅ MQTT Broker (Mosquitto für Sensordaten)
+- ✅ BoatOS Backend (FastAPI mit allen Services)
+- ✅ Nginx Reverse Proxy mit SSL
+- ✅ OSRM Waterway Routing (ARM64)
+- ✅ Alle Datenverzeichnisse (Logbook, Charts, Crew, etc.)
+
+**Nach der Installation:** Abmelden und wieder anmelden (für dialout-Gruppe).
+
+---
+
 ## Systemanforderungen
 
-- **Betriebssystem**: Debian/Ubuntu basiert (getestet auf Debian 12)
-- **Hardware**: Raspberry Pi 4 oder vergleichbar (min. 2GB RAM)
+- **Betriebssystem**: Debian/Ubuntu basiert (getestet auf Debian 12 Bookworm)
+- **Hardware**: Raspberry Pi 4/5 oder vergleichbar (min. 2GB RAM, 4GB empfohlen)
+- **Speicher**: Min. 16GB SD-Karte (32GB empfohlen für Karten-Cache)
 - **GPS**: USB GPS-Empfänger (z.B. U-blox, wird als /dev/ttyACM* erkannt)
 - **Netzwerk**: WiFi oder Ethernet
+- **Optional**: Touchscreen (7" oder größer für optimale Bedienung)
 
 ## Abhängigkeiten
+
+> **Hinweis:** Bei Verwendung des `install.sh` Skripts werden alle Abhängigkeiten automatisch installiert.
 
 ### 1. System-Pakete installieren
 
 ```bash
 sudo apt update
-sudo apt install -y python3 python3-pip python3-venv nginx git curl
+sudo apt install -y python3 python3-pip python3-venv nginx git curl \
+  gdal-bin python3-gdal openssl mosquitto mosquitto-clients sqlite3
 ```
+
+Installierte Komponenten:
+- **Python 3.9+**: Backend Runtime
+- **Nginx**: Webserver & Reverse Proxy
+- **GDAL**: Geospatial Data Abstraction Library (für Kartenkonvertierung)
+- **Mosquitto**: MQTT Broker für Sensordaten
+- **SQLite3**: Datenbank für Schleusen, Logbook, etc.
+- **OpenSSL**: SSL-Zertifikate
 
 ### 2. Node.js für SignalK installieren
 
@@ -134,15 +171,33 @@ pip install -r requirements.txt
 
 **requirements.txt** sollte enthalten:
 ```
-fastapi
-uvicorn[standard]
-paho-mqtt
-httpx
-pynmea2
-beautifulsoup4
+fastapi==0.118.0
+uvicorn[standard]==0.37.0
+paho-mqtt==2.1.0
+httpx==0.28.1
+pynmea2==1.19.0
+beautifulsoup4==4.14.2
 lxml
 pyproj
+aiohttp==3.10.11
+requests==2.32.5
+python-multipart==0.0.20
+networkx==3.2.1
+pyroutelib3>=2.0.0
+reportlab>=4.0.0
+websockets>=12.0
 ```
+
+**Was diese Pakete bieten:**
+- **FastAPI/Uvicorn**: Modernes async Web-Framework
+- **paho-mqtt**: MQTT Client für Sensordaten
+- **httpx/aiohttp/requests**: HTTP Clients für APIs (SignalK, Weather, etc.)
+- **pynmea2**: NMEA GPS-Daten Parser
+- **beautifulsoup4/lxml**: Web Scraping (ELWIS Charts, etc.)
+- **pyproj**: Koordinaten-Transformationen
+- **networkx/pyroutelib3**: Routing-Algorithmen
+- **reportlab**: PDF Generation (Logbook Export)
+- **websockets**: AIS Stream WebSocket Client
 
 ### 3. BoatOS Systemd Service erstellen
 
@@ -271,9 +326,53 @@ sudo systemctl restart nginx
 
 Nach erfolgreicher Installation:
 
-- **BoatOS UI**: http://your-pi-ip/
+- **BoatOS UI**: https://your-pi-ip/ (mit SSL)
 - **SignalK Dashboard**: http://your-pi-ip:3000/
 - **Backend API**: http://your-pi-ip/api/sensors
+- **MQTT Broker**: mqtt://your-pi-ip:1883/
+
+## Features & Module
+
+Nach der Installation sind folgende Features verfügbar:
+
+### 🎨 Dashboard & UI
+- **Drag & Drop Editor**: Visueller Dashboard-Builder mit SortableJS
+- **Touch-optimiert**: Gestensteuerung für Tablets/Smartphones
+- **Undo/Redo**: Vollständige History (Strg+Z)
+- **Responsive**: Automatische Anpassung an Bildschirmgröße
+
+### 🧭 Navigation
+- **GPS Tracking**: Live-Position via SignalK
+- **AIS Integration**: Schiffsverfolgung (AISStream WebSocket)
+- **Waterway Routing**: Elbe, Kanäle mit OSRM + PyRouteLib3
+- **Offline Maps**: OpenStreetMap + ELWIS ENC Charts
+
+### 📊 Sensoren & Daten
+- **MQTT Broker**: Mosquitto für beliebige Sensoren
+- **SignalK Integration**: NMEA0183/NMEA2000 Daten
+- **Dynamic Topics**: Auto-Discovery von MQTT Topics
+- **Sensor Dashboard**: Live-Visualisierung
+
+### 📖 Logbuch & Management
+- **Digitales Logbuch**: Automatische Trip-Aufzeichnung
+- **PDF Export**: Professionelle Reports (ReportLab)
+- **Crew Management**: Personen, Rollen, Zertifikate
+- **Fuel Tracking**: Tankungen, Verbrauch, Statistiken
+
+### 🌊 Marine Data
+- **Pegel Online**: Echtzeit-Wasserstände (WSV API)
+- **Schleusen-Datenbank**: Öffnungszeiten, Dimensionen (SQLite)
+- **Wetter-Warnungen**: DWD Alerts via BrightSky API
+- **Strömungsdaten**: Water Current Service
+
+### 📦 Datenverzeichnisse
+- `data/charts/` - Offline Seekarten (MBTiles, GeoJSON)
+- `data/layouts/` - Dashboard-Konfigurationen
+- `data/logbook/` - Trip-Daten & Sessions
+- `data/crew/` - Crew-Member Informationen
+- `data/fuel/` - Tankungen & Statistiken
+- `data/locks/` - Schleusen-Datenbank (SQLite)
+- `data/osrm/` - Routing-Engine Daten
 
 ## Fehlerbehebung
 
@@ -314,39 +413,116 @@ sudo journalctl -u boatos -n 50
 curl http://localhost:8000/api/sensors
 ```
 
-## Updates
+### MQTT Broker funktioniert nicht
 
 ```bash
-cd /home//BoatOS
+# Mosquitto Status prüfen
+sudo systemctl status mosquitto
+
+# Mosquitto Logs
+sudo journalctl -u mosquitto -n 50
+
+# MQTT Topics live überwachen
+mosquitto_sub -h localhost -t '#' -v
+
+# Test-Nachricht senden
+mosquitto_pub -h localhost -t 'test/topic' -m 'Hello MQTT'
+```
+
+### Dashboard wird nicht geladen / alte Version
+
+```bash
+# Browser-Cache leeren
+# Chrome/Firefox: Strg+Shift+R oder Strg+F5
+
+# Nginx Cache leeren
+sudo rm -rf /var/cache/nginx/*
+sudo systemctl restart nginx
+
+# BoatOS neu starten
+sudo systemctl restart boatos
+```
+
+## Updates
+
+### Automatisches Update (Empfohlen)
+
+```bash
+cd /home/$(whoami)/BoatOS
+./scripts/update.sh
+```
+
+Das Update-Skript:
+- Pullt neueste Änderungen von Git
+- Aktualisiert Python Dependencies
+- Updated Frontend Cache Busting
+- Startet alle Services neu
+- Prüft Service-Status
+
+### Manuelles Update
+
+```bash
+cd /home/$(whoami)/BoatOS
 git pull
 
-# Backend neu starten
-sudo systemctl restart boatos
+# Backend Dependencies aktualisieren
+cd backend
+source venv/bin/activate
+pip install --upgrade -r requirements.txt
 
-# Frontend wird automatisch von Nginx bereitgestellt
+# Services neu starten
+sudo systemctl restart boatos
+sudo systemctl restart nginx
+
+# Browser-Cache leeren: Strg+Shift+R
 ```
 
 ## Deinstallation
 
 ```bash
 # Services stoppen und deaktivieren
-sudo systemctl stop boatos signalk
-sudo systemctl disable boatos signalk
+sudo systemctl stop boatos signalk mosquitto osrm 2>/dev/null
+sudo systemctl disable boatos signalk osrm 2>/dev/null
 
 # Service-Dateien entfernen
-sudo rm /etc/systemd/system/boatos.service
-sudo rm /etc/systemd/system/signalk.service
+sudo rm -f /etc/systemd/system/boatos.service
+sudo rm -f /etc/systemd/system/signalk.service
+sudo rm -f /etc/systemd/system/osrm.service
 sudo systemctl daemon-reload
 
 # Nginx-Konfiguration entfernen
-sudo rm /etc/nginx/sites-enabled/boatos
-sudo rm /etc/nginx/sites-available/boatos
+sudo rm -f /etc/nginx/sites-enabled/boatos
+sudo rm -f /etc/nginx/sites-available/boatos
 sudo systemctl restart nginx
 
 # BoatOS Dateien entfernen
-rm -rf /home//BoatOS
-rm -rf /home//.signalk
+rm -rf /home/$(whoami)/BoatOS
+rm -rf /home/$(whoami)/.signalk
+rm -rf /home/$(whoami)/osrm_regions
+rm -rf /home/$(whoami)/osrm-backend
 
-# SignalK deinstallieren
-sudo npm uninstall -g signalk-server
+# Optional: Mosquitto deinstallieren (falls nicht anderweitig genutzt)
+# sudo apt remove --purge mosquitto mosquitto-clients
+
+# Optional: SignalK deinstallieren
+# sudo npm uninstall -g signalk-server
 ```
+
+---
+
+## 📚 Weitere Ressourcen
+
+- **GitHub Repository**: https://github.com/yourusername/BoatOS
+- **Issues & Support**: https://github.com/yourusername/BoatOS/issues
+- **SignalK Dokumentation**: https://signalk.org/
+- **MQTT/Mosquitto**: https://mosquitto.org/
+- **OSRM Routing**: http://project-osrm.org/
+- **Leaflet Maps**: https://leafletjs.com/
+
+## 🤝 Beitragen
+
+Contributions sind willkommen! Siehe [CONTRIBUTING.md](CONTRIBUTING.md) für Details.
+
+## 📄 Lizenz
+
+MIT License - Siehe [LICENSE](LICENSE) für Details.
