@@ -1,3 +1,7 @@
+# Environment variables
+.env
+.env.local
+
 # Python
 backend/venv/
 backend/__pycache__/

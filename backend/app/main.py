@@ -54,7 +54,7 @@ gps_module_data: Dict[str, Any] = {}
 chart_layers: List[Dict[str, Any]] = []
 
 # OpenWeatherMap API Configuration
-OPENWEATHER_API_KEY = "bfe93865949cf3e87b49a29c13a526c4"
+OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
 OPENWEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5"
 
 # ELWIS ENC Download Configuration

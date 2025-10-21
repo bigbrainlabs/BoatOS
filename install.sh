@@ -135,6 +135,20 @@ touch $INSTALL_DIR/data/.gitkeep
 chmod -R 755 $INSTALL_DIR/data
 success "Datenverzeichnisse erstellt (Charts, Layouts, Logbook, Crew, Fuel, Locks)"
 
+# Environment Configuration
+if [ ! -f "$INSTALL_DIR/.env" ]; then
+    info "Erstelle .env Konfigurationsdatei..."
+    cp $INSTALL_DIR/.env.example $INSTALL_DIR/.env
+    success ".env Datei erstellt"
+    echo ""
+    echo "⚠️  WICHTIG: Bitte OpenWeather API Key in .env eintragen!"
+    echo "   1. Kostenlosen API Key erstellen: https://home.openweathermap.org/api_keys"
+    echo "   2. In $INSTALL_DIR/.env eintragen"
+    echo ""
+else
+    info ".env Datei existiert bereits"
+fi
+
 # Waterway Routing Setup
 info "Waterway Routing wird konfiguriert..."
 info "Installiert:"
@@ -236,6 +250,7 @@ Requires=signalk.service
 Type=simple
 User=$INSTALL_USER
 WorkingDirectory=$INSTALL_DIR/backend
+EnvironmentFile=$INSTALL_DIR/.env
 ExecStart=$INSTALL_DIR/backend/venv/bin/python app/main.py
 Restart=always
 RestartSec=10
