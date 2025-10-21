@@ -50,5 +50,14 @@ Thumbs.db
 *.tmp
 .cache/
 
+# Instagram Reel production files
+*.mp4
+build_reel*.py
+REEL_*.md
+FINAL_REEL_*.md
+reel_*.png
+boatos_live.png
+reel_material/
+
 # Sensitive documentation
 README_SSH.md
