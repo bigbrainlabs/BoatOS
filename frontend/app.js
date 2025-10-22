@@ -580,6 +580,11 @@ function updateBoatPosition(gps) {
 
         // Update course deviation warning (XTE)
         updateCourseDeviationWarning(newLat, newLon);
+
+        // Update locks timeline distances (if visible)
+        if (locksOnRoute.length > 0) {
+            displayLocksTimeline();
+        }
     } else {
         // No valid GPS data - check if GPS is stale
         if (lastGpsUpdate && (Date.now() - lastGpsUpdate) > 10000) {
@@ -771,6 +776,10 @@ async function updateRoute() {
                 console.log(`🌊 Waterway Route: ${distanceNM.toFixed(2)} NM`);
                 showRouteInfo(distanceNM.toFixed(2), etaHoursInt, etaMinutes, routeInfo, false, true, avgSpeed);
                 hideRoutingLoader();
+
+                // Update locks timeline
+                updateLocksTimeline();
+
                 return;
             }
         }
@@ -872,6 +881,9 @@ function drawDirectRoute() {
 
     console.log(`📏 Rhumbline Route: ${totalNM} NM`);
     showRouteInfo(totalNM, etaHoursInt, etaMinutes, routeInfo, false, false, avgSpeed);
+
+    // Update locks timeline
+    updateLocksTimeline();
 }
 
 function calculateBearing(lat1, lon1, lat2, lon2) {
@@ -972,6 +984,13 @@ function clearRoute() {
     // Clear route data for XTE calculation
     currentRouteCoordinates = null;
     currentRoutePolyline = null;
+
+    // Remove locks timeline
+    if (locksTimelinePanel) {
+        locksTimelinePanel.remove();
+        locksTimelinePanel = null;
+    }
+    locksOnRoute = [];
 
     showNotification('🗑️ Route gelöscht');
 }
@@ -2501,6 +2520,184 @@ function updateCourseDeviationWarning(boatLat, boatLon) {
             currentRoutePolyline.setStyle({ color: normalColor, weight: 5 });
         }
     }
+}
+
+// ==================== LOCKS TIMELINE ====================
+
+let locksTimelinePanel = null;
+let locksOnRoute = [];
+
+/**
+ * Update locks timeline with locks along the route
+ */
+async function updateLocksTimeline() {
+    if (!currentRouteCoordinates || currentRouteCoordinates.length < 2) {
+        // No route - hide timeline
+        if (locksTimelinePanel) {
+            locksTimelinePanel.remove();
+            locksTimelinePanel = null;
+        }
+        locksOnRoute = [];
+        return;
+    }
+
+    try {
+        // Calculate bounding box of route
+        const lats = currentRouteCoordinates.map(p => p.lat);
+        const lons = currentRouteCoordinates.map(p => p.lon);
+        const lat_min = Math.min(...lats);
+        const lat_max = Math.max(...lats);
+        const lon_min = Math.min(...lons);
+        const lon_max = Math.max(...lons);
+
+        // Fetch locks in bounding box
+        const response = await fetch(`${API_URL}/api/locks/bounds?lat_min=${lat_min}&lon_min=${lon_min}&lat_max=${lat_max}&lon_max=${lon_max}`);
+        if (!response.ok) {
+            console.warn('Failed to fetch locks:', response.statusText);
+            return;
+        }
+
+        const locks = await response.json();
+        console.log(`🔒 Found ${locks.length} locks in route bounds`);
+
+        // Filter locks that are actually near the route (within 2km)
+        locksOnRoute = locks.filter(lock => {
+            const lockLatLon = { lat: lock.lat, lon: lock.lon };
+            // Check if lock is within 2km of any route segment
+            for (let i = 0; i < currentRouteCoordinates.length - 1; i++) {
+                const seg1 = currentRouteCoordinates[i];
+                const seg2 = currentRouteCoordinates[i + 1];
+                const result = pointToLineSegmentDistance(
+                    lockLatLon.lat, lockLatLon.lon,
+                    seg1.lat, seg1.lon,
+                    seg2.lat, seg2.lon
+                );
+                if (result.distance < 2000) { // 2km threshold
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        console.log(`🔒 ${locksOnRoute.length} locks are on or near route`);
+
+        // Sort locks by distance from start of route
+        const routeStart = currentRouteCoordinates[0];
+        locksOnRoute.forEach(lock => {
+            const lockLatLng = L.latLng(lock.lat, lock.lon);
+            const startLatLng = L.latLng(routeStart.lat, routeStart.lon);
+            lock._distanceFromStart = startLatLng.distanceTo(lockLatLng);
+        });
+        locksOnRoute.sort((a, b) => a._distanceFromStart - b._distanceFromStart);
+
+        // Display locks timeline
+        displayLocksTimeline();
+
+    } catch (error) {
+        console.error('Error updating locks timeline:', error);
+    }
+}
+
+/**
+ * Display locks timeline panel
+ */
+function displayLocksTimeline() {
+    if (locksOnRoute.length === 0) {
+        if (locksTimelinePanel) {
+            locksTimelinePanel.remove();
+            locksTimelinePanel = null;
+        }
+        return;
+    }
+
+    // Create or update panel
+    if (!locksTimelinePanel) {
+        locksTimelinePanel = document.createElement('div');
+        locksTimelinePanel.id = 'locks-timeline-panel';
+        locksTimelinePanel.style.cssText = `
+            position: absolute;
+            bottom: 80px;
+            left: 20px;
+            max-width: 350px;
+            max-height: 400px;
+            overflow-y: auto;
+            background: rgba(10, 14, 39, 0.95);
+            backdrop-filter: blur(10px);
+            border: 3px solid #64ffda;
+            border-radius: 12px;
+            padding: 16px;
+            z-index: 1002;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        `;
+        document.getElementById('map-container').appendChild(locksTimelinePanel);
+    }
+
+    // Calculate current position distances
+    const currentLat = currentPosition.lat;
+    const currentLon = currentPosition.lon;
+    const currentSpeed = window.lastSensorData?.speed || 5; // knots
+
+    let html = `
+        <div style="font-size: 13px; color: #8892b0; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; font-weight: 700;">
+            🔒 Schleusen auf Route (${locksOnRoute.length})
+        </div>
+    `;
+
+    locksOnRoute.forEach((lock, index) => {
+        const lockLatLng = L.latLng(lock.lat, lock.lon);
+        const currentLatLng = L.latLng(currentLat, currentLon);
+        const distanceMeters = currentLatLng.distanceTo(lockLatLng);
+        const distanceNM = distanceMeters / 1852;
+
+        // Calculate ETA
+        let etaText = 'N/A';
+        if (currentSpeed > 0) {
+            const etaHours = distanceNM / currentSpeed;
+            const hours = Math.floor(etaHours);
+            const minutes = Math.round((etaHours - hours) * 60);
+
+            if (hours > 0) {
+                etaText = `${hours}h ${minutes}min`;
+            } else {
+                etaText = `${minutes}min`;
+            }
+        }
+
+        const distanceFormatted = distanceNM < 1
+            ? `${(distanceNM * 1000).toFixed(0)} m`
+            : `${distanceNM.toFixed(1)} NM`;
+
+        // Lock name
+        const lockName = lock.name || `Schleuse ${index + 1}`;
+
+        // Status indicator (green if passed, yellow if upcoming)
+        const isPassed = distanceMeters < 100; // Consider passed if within 100m behind
+        const statusColor = isPassed ? '#2ecc71' : '#f39c12';
+        const statusIcon = isPassed ? '✓' : '→';
+
+        html += `
+            <div style="background: rgba(42, 82, 152, 0.2); padding: 12px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid ${statusColor};">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <div style="font-size: 15px; font-weight: 600; color: white;">${statusIcon} ${escapeHTML(lockName)}</div>
+                    <div style="font-size: 12px; color: #8892b0;">#${index + 1}</div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
+                    <div>
+                        <div style="color: #8892b0;">DISTANZ</div>
+                        <div style="color: white; font-weight: 600;">${distanceFormatted}</div>
+                    </div>
+                    <div>
+                        <div style="color: #8892b0;">ETA</div>
+                        <div style="color: white; font-weight: 600;">${etaText}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    locksTimelinePanel.innerHTML = html;
 }
 
 // ==================== GPX IMPORT/EXPORT ====================
