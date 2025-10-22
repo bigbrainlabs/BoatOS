@@ -562,6 +562,10 @@ function updateBoatPosition(gps) {
 
         lastGpsUpdate = Date.now();
         console.log(`📍 GPS: ${newLat.toFixed(6)}, ${newLon.toFixed(6)}`);
+
+        // Update next waypoint display
+        const currentSpeed = window.lastSensorData?.speed || 0;
+        updateNextWaypointDisplay(newLat, newLon, currentSpeed);
     } else {
         // No valid GPS data - check if GPS is stale
         if (lastGpsUpdate && (Date.now() - lastGpsUpdate) > 10000) {
@@ -930,6 +934,12 @@ function clearRoute() {
 
     const panel = document.getElementById('route-info-panel');
     if (panel) panel.remove();
+
+    // Remove next waypoint display
+    if (nextWaypointDisplay) {
+        nextWaypointDisplay.remove();
+        nextWaypointDisplay = null;
+    }
 
     showNotification('🗑️ Route gelöscht');
 }
@@ -2090,6 +2100,113 @@ function updateBoatMarkerIcon(iconType) {
     const newIcon = createBoatMarkerIcon(iconType || 'motorboat_small', currentBoatHeading);
     boatMarker.setIcon(newIcon);
     console.log(`✅ Boat marker icon updated to: ${iconType} (rotation: ${currentBoatHeading}°)`);
+}
+
+// ==================== NEXT WAYPOINT DISPLAY ====================
+let nextWaypointDisplay = null;
+
+function updateNextWaypointDisplay(currentLat, currentLon, currentSpeed) {
+    // Only show if we have waypoints
+    if (!waypoints || waypoints.length === 0) {
+        if (nextWaypointDisplay) {
+            nextWaypointDisplay.remove();
+            nextWaypointDisplay = null;
+        }
+        return;
+    }
+
+    // Find next waypoint (closest one ahead in route)
+    let nextWaypoint = null;
+    let minDistance = Infinity;
+    let waypointIndex = -1;
+
+    for (let i = 0; i < waypoints.length; i++) {
+        const wp = waypoints[i];
+        const wpLatLng = wp.marker.getLatLng();
+        const distance = L.latLng(currentLat, currentLon).distanceTo(wpLatLng);
+
+        if (distance < minDistance) {
+            minDistance = distance;
+            nextWaypoint = wp;
+            waypointIndex = i;
+        }
+    }
+
+    if (!nextWaypoint) return;
+
+    // Calculate bearing to waypoint
+    const wpLatLng = nextWaypoint.marker.getLatLng();
+    const bearing = calculateBearing(currentLat, currentLon, wpLatLng.lat, wpLatLng.lng);
+
+    // Distance in meters, convert to NM or km based on settings
+    const distanceMeters = minDistance;
+    const distanceFormatted = typeof formatDistance === 'function'
+        ? formatDistance(distanceMeters)
+        : `${(distanceMeters / 1852).toFixed(2)} NM`;
+
+    // Calculate ETA based on current speed
+    let etaText = 'N/A';
+    if (currentSpeed && currentSpeed > 0) {
+        const distanceNM = distanceMeters / 1852;
+        const etaHours = distanceNM / currentSpeed;
+        const hours = Math.floor(etaHours);
+        const minutes = Math.round((etaHours - hours) * 60);
+
+        if (hours > 0) {
+            etaText = `${hours}h ${minutes}min`;
+        } else {
+            etaText = `${minutes}min`;
+        }
+    }
+
+    // Create or update display
+    if (!nextWaypointDisplay) {
+        nextWaypointDisplay = document.createElement('div');
+        nextWaypointDisplay.id = 'next-waypoint-display';
+        nextWaypointDisplay.style.cssText = `
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(10, 14, 39, 0.95);
+            backdrop-filter: blur(10px);
+            border: 3px solid #64ffda;
+            border-radius: 16px;
+            padding: 20px;
+            z-index: 1002;
+            min-width: 280px;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        `;
+        document.getElementById('map-container').appendChild(nextWaypointDisplay);
+    }
+
+    // Update content
+    const waypointNumber = waypointIndex + 1;
+    const totalWaypoints = waypoints.length;
+
+    nextWaypointDisplay.innerHTML = `
+        <div style="font-size: 11px; color: #8892b0; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">
+            Next Waypoint (${waypointNumber}/${totalWaypoints})
+        </div>
+        <div style="font-size: 24px; font-weight: 700; color: #64ffda; margin-bottom: 12px; line-height: 1.2;">
+            ${nextWaypoint.name || `WP ${waypointNumber}`}
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+            <div style="background: rgba(42, 82, 152, 0.2); padding: 12px; border-radius: 10px;">
+                <div style="font-size: 11px; color: #8892b0; margin-bottom: 4px;">DISTANCE</div>
+                <div style="font-size: 20px; font-weight: 600; color: white;">${distanceFormatted}</div>
+            </div>
+            <div style="background: rgba(42, 82, 152, 0.2); padding: 12px; border-radius: 10px;">
+                <div style="font-size: 11px; color: #8892b0; margin-bottom: 4px;">BEARING</div>
+                <div style="font-size: 20px; font-weight: 600; color: white;">${Math.round(bearing)}°</div>
+            </div>
+        </div>
+        <div style="background: rgba(100, 255, 218, 0.1); padding: 12px; border-radius: 10px; margin-top: 12px; text-align: center;">
+            <div style="font-size: 11px; color: #8892b0; margin-bottom: 4px;">ETA</div>
+            <div style="font-size: 18px; font-weight: 600; color: #64ffda;">${etaText}</div>
+        </div>
+    `;
 }
 
 // ==================== SERVICE WORKER (PWA) ====================
