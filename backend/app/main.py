@@ -2661,16 +2661,16 @@ async def calculate_route(request: dict):
                     route_geometry = route["geometry"]["coordinates"]
                     distance_km = route["properties"]["distance_m"] / 1000
 
-                    # Get boat speed from boat_data or use default
+                    # Get boat speed from settings or use default
                     boat_speed_kmh = 15  # Default cruise speed
-                    if boat_data:
-                        # Try to get cruise speed from settings
-                        try:
-                            with open("data/settings.json", 'r') as f:
-                                settings = json.load(f)
-                                boat_speed_kmh = settings.get('boat', {}).get('cruise_speed', 15)
-                        except:
-                            pass
+                    try:
+                        with open("data/settings.json", 'r') as f:
+                            settings = json.load(f)
+                            boat_settings = settings.get('boat', {})
+                            # Try both camelCase (cruiseSpeed) and snake_case (cruise_speed)
+                            boat_speed_kmh = boat_settings.get('cruiseSpeed') or boat_settings.get('cruise_speed') or 15
+                    except Exception as e:
+                        pass
 
                     adjusted_duration_h, current_info = water_current_service.adjust_route_duration(
                         route_geometry, distance_km, boat_speed_kmh

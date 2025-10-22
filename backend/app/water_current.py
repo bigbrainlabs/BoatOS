@@ -231,16 +231,50 @@ class WaterCurrentService:
             # No adjustment, return original duration
             return distance_km / boat_speed_kmh if boat_speed_kmh > 0 else 0, {}
 
-        # Identify which waterway we're on - use first configured waterway with current > 0
+        # Identify which waterway we're on - try to detect from route geometry
         detected_waterway = None
         flow_direction = None
 
+        # First, estimate the route's general direction
+        route_bearing = self._estimate_flow_direction_from_route(route_geometry)
+
+        # Find the waterway whose known flow direction is closest to route bearing
+        # This assumes the route follows the waterway direction
+        best_match_waterway = None
+        best_angle_diff = 180  # Start with worst case
+
         for waterway_name, waterway_data in self.static_currents['byName'].items():
             if waterway_data.get('current_kmh', 0) > 0:
-                detected_waterway = waterway_name
-                flow_direction = self.known_flow_directions.get(waterway_name)
-                if flow_direction is not None:
-                    break
+                known_direction = self.known_flow_directions.get(waterway_name)
+                if known_direction is not None:
+                    # Calculate angle difference (considering both directions of travel)
+                    angle_diff = abs(route_bearing - known_direction)
+                    if angle_diff > 180:
+                        angle_diff = 360 - angle_diff
+
+                    # Also check reverse direction (traveling upstream)
+                    reverse_diff = abs(route_bearing - ((known_direction + 180) % 360))
+                    if reverse_diff > 180:
+                        reverse_diff = 360 - reverse_diff
+
+                    # Use the smaller angle (either downstream or upstream)
+                    final_diff = min(angle_diff, reverse_diff)
+
+                    if final_diff < best_angle_diff and final_diff < 45:  # Must be within 45° to match
+                        best_angle_diff = final_diff
+                        best_match_waterway = waterway_name
+                        flow_direction = known_direction
+
+        if best_match_waterway:
+            detected_waterway = best_match_waterway
+        else:
+            # Fallback: use first configured waterway (old behavior)
+            for waterway_name, waterway_data in self.static_currents['byName'].items():
+                if waterway_data.get('current_kmh', 0) > 0:
+                    detected_waterway = waterway_name
+                    flow_direction = self.known_flow_directions.get(waterway_name)
+                    if flow_direction is not None:
+                        break
 
         # If no specific waterway detected, use route bearing (old behavior)
         if flow_direction is None:
@@ -254,7 +288,11 @@ class WaterCurrentService:
 
         # Sample points along route (every ~10km)
         num_samples = max(3, int(distance_km / 10))
-        sample_indices = [int(i * len(route_geometry) / num_samples) for i in range(num_samples)]
+        # Create sample indices, ensuring we include the last point
+        sample_indices = [int(i * (len(route_geometry) - 1) / (num_samples - 1)) for i in range(num_samples)]
+
+        # Ensure last index is exactly the last point
+        sample_indices[-1] = len(route_geometry) - 1
 
         total_adjusted_time = 0
         segment_infos = []
@@ -275,7 +313,7 @@ class WaterCurrentService:
             # Get current at midpoint
             mid_lat = (lat1 + lat2) / 2
             mid_lon = (lon1 + lon2) / 2
-            current_kmh = self.get_current_at_point(mid_lat, mid_lon)
+            current_kmh = self.get_current_at_point(mid_lat, mid_lon, detected_waterway)
 
             if current_kmh:
                 # Use detected flow direction (either from known waterway or estimated)

@@ -31,7 +31,7 @@ function getDistanceUnit() {
     return userSettings?.general?.distanceUnit || 'nm';
 }
 
-function convertDistance(distanceNM) {
+function convertFuelDistance(distanceNM) {
     const unit = getDistanceUnit();
     if (unit === 'km') {
         return distanceNM * NM_TO_KM;
@@ -208,7 +208,7 @@ function updateFuelUI() {
                     ${entry.odometer ? `
                     <div class="fuel-detail">
                         <span class="fuel-detail-icon">📏</span>
-                        <span class="fuel-detail-text">${convertDistance(entry.odometer).toFixed(1)} ${getDistanceUnitLabel()}</span>
+                        <span class="fuel-detail-text">${convertFuelDistance(entry.odometer).toFixed(1)} ${getDistanceUnitLabel()}</span>
                     </div>
                     ` : ''}
                     ${entry.notes ? `
@@ -359,8 +359,8 @@ async function updateFuelStats() {
         const distUnit = getDistanceUnitLabel();
         const consUnit = getConsumptionUnitLabel();
         const avgConsumption = convertConsumption(consumption.avg_consumption_per_nm);
-        const estimatedRange = convertDistance(consumption.estimated_range_nm);
-        const totalDistance = convertDistance(consumption.total_distance_with_fuel);
+        const estimatedRange = convertFuelDistance(consumption.estimated_range_nm);
+        const totalDistance = convertFuelDistance(consumption.total_distance_with_fuel);
 
         consumptionHtml = `
             <div class="consumption-section">
@@ -457,7 +457,7 @@ async function updateFuelTrendChart() {
 
     // Prepare data
     const labels = trendData.map(m => m.month_name.split(' ')[0]); // Extract month name only
-    const distances = trendData.map(m => convertDistance(m.distance_nm));
+    const distances = trendData.map(m => convertFuelDistance(m.distance_nm));
     const fuelUsed = trendData.map(m => m.fuel_liters);
     const consumption = trendData.map(m => convertConsumption(m.consumption_per_nm));
 

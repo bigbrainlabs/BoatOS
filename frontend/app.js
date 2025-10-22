@@ -63,6 +63,17 @@ let xteWarningDisplay = null; // DOM element for XTE warning
 let navigationActive = false; // true when actively navigating (not just planning)
 let navigationStartButton = null; // Button to start/pause/stop navigation
 
+// Route calculation abort controller
+let routeCalculationController = null; // AbortController to cancel pending route requests
+
+// Route data for live ETA calculation
+let currentRouteData = {
+    totalDistanceNM: 0,
+    plannedEtaHours: 0,
+    plannedEtaMinutes: 0,
+    plannedSpeed: 5
+};
+
 // ==================== MAP INIT ====================
 function initMap() {
     console.log('🗺️ initMap() called');
@@ -582,6 +593,9 @@ function updateBoatPosition(gps) {
         const currentSpeed = window.lastSensorData?.speed || 0;
         updateNextWaypointDisplay(newLat, newLon, currentSpeed);
 
+        // Update live ETA
+        updateLiveETA();
+
         // Update course deviation warning (XTE)
         updateCourseDeviationWarning(newLat, newLon);
 
@@ -655,6 +669,15 @@ function addWaypoint(waypoint) {
 }
 
 async function updateRoute() {
+    // Cancel any pending route calculation
+    if (routeCalculationController) {
+        routeCalculationController.abort();
+        console.log('🚫 Aborted pending route calculation');
+    }
+
+    // Create new abort controller for this request
+    routeCalculationController = new AbortController();
+
     // Alte Route löschen
     routeLayer.eachLayer(layer => {
         if (layer instanceof L.Polyline || layer._icon) {
@@ -662,7 +685,10 @@ async function updateRoute() {
         }
     });
 
-    if (waypoints.length < 2) return;
+    if (waypoints.length < 2) {
+        routeCalculationController = null;
+        return;
+    }
 
     // Zeige Loading-Indikator
     showRoutingLoader();
@@ -677,7 +703,8 @@ async function updateRoute() {
         const response = await fetch(`${API_URL}/api/route`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({waypoints: coordinates})
+            body: JSON.stringify({waypoints: coordinates}),
+            signal: routeCalculationController.signal
         });
 
         if (response.ok) {
@@ -788,12 +815,20 @@ async function updateRoute() {
             }
         }
     } catch (error) {
+        // If request was aborted, silently return (user deleted waypoint or started new route)
+        if (error.name === 'AbortError') {
+            console.log('🚫 Route calculation aborted');
+            hideRoutingLoader();
+            routeCalculationController = null;
+            return;
+        }
         console.error('❌ ENC routing failed:', error);
     }
 
     // Fallback auf direkte Route
     drawDirectRoute();
     hideRoutingLoader();
+    routeCalculationController = null;
 }
 
 function drawDirectRoute() {
@@ -911,6 +946,14 @@ function showRouteInfo(totalNM, hours, minutes, segments, isDirect, isWaterway, 
     const oldPanel = document.getElementById('route-info-panel');
     if (oldPanel) oldPanel.remove();
 
+    // Store route data for live ETA calculation
+    currentRouteData = {
+        totalDistanceNM: parseFloat(totalNM),
+        plannedEtaHours: hours,
+        plannedEtaMinutes: minutes,
+        plannedSpeed: avgSpeed
+    };
+
     const routeType = isWaterway ? 'waterway' : 'rhumbline';
     const routeColor = isWaterway ? 'rgba(46, 204, 113, 0.6)' : 'rgba(52, 152, 219, 0.6)';
     const routeIcon = isWaterway ? '🌊' : '🧭';
@@ -940,7 +983,8 @@ function showRouteInfo(totalNM, hours, minutes, segments, isDirect, isWaterway, 
         '</div>' +
         '<div style="background: rgba(42, 82, 152, 0.2); padding: 10px; border-radius: 8px; margin-bottom: 10px;">' +
         '<div style="font-size: 24px; font-weight: 700; color: #64ffda;">' + totalDistFormatted + '</div>' +
-        '<div style="font-size: 12px; color: #8892b0;">ETA: ' + hours + 'h ' + minutes + 'min @ ' + speedFormatted + '</div>' +
+        '<div style="font-size: 12px; color: #8892b0;">Planned ETA: ' + hours + 'h ' + minutes + 'min @ ' + speedFormatted + '</div>' +
+        '<div id="live-eta-display" style="font-size: 12px; color: #64ffda; margin-top: 4px; display: none;"></div>' +
         '</div>' +
         '<div style="max-height: 200px; overflow-y: auto;">' +
         segments.map(s => {
@@ -988,6 +1032,14 @@ function clearRoute() {
     // Clear route data for XTE calculation
     currentRouteCoordinates = null;
     currentRoutePolyline = null;
+
+    // Clear route data for live ETA
+    currentRouteData = {
+        totalDistanceNM: 0,
+        plannedEtaHours: 0,
+        plannedEtaMinutes: 0,
+        plannedSpeed: 5
+    };
 
     // Remove locks timeline
     if (locksTimelinePanel) {
@@ -2328,6 +2380,83 @@ function updateNextWaypointDisplay(currentLat, currentLon, currentSpeed) {
     `;
 }
 
+// ==================== LIVE ETA CALCULATION ====================
+
+/**
+ * Update live ETA based on current GPS speed and remaining distance
+ */
+function updateLiveETA() {
+    // Only update if we have a route and navigation is active
+    if (!navigationActive || !waypoints || waypoints.length === 0 || !currentPosition.lat || !currentPosition.lon) {
+        const liveEtaDisplay = document.getElementById('live-eta-display');
+        if (liveEtaDisplay) {
+            liveEtaDisplay.style.display = 'none';
+        }
+        return;
+    }
+
+    const currentSpeed = window.lastSensorData?.speed || 0;
+
+    // Need at least 0.5 knots to calculate meaningful ETA
+    if (currentSpeed < 0.5) {
+        const liveEtaDisplay = document.getElementById('live-eta-display');
+        if (liveEtaDisplay) {
+            liveEtaDisplay.innerHTML = 'Live ETA: Waiting for GPS speed...';
+            liveEtaDisplay.style.display = 'block';
+        }
+        return;
+    }
+
+    // Calculate total remaining distance
+    let totalRemainingDistanceMeters = 0;
+    const currentLat = currentPosition.lat;
+    const currentLon = currentPosition.lon;
+
+    if (waypoints.length > 0) {
+        // Distance to first waypoint
+        const firstWP = waypoints[0].marker.getLatLng();
+        totalRemainingDistanceMeters = L.latLng(currentLat, currentLon).distanceTo(firstWP);
+
+        // Add distance between all remaining waypoints
+        for (let i = 0; i < waypoints.length - 1; i++) {
+            const wp1 = waypoints[i].marker.getLatLng();
+            const wp2 = waypoints[i + 1].marker.getLatLng();
+            totalRemainingDistanceMeters += wp1.distanceTo(wp2);
+        }
+    }
+
+    const remainingDistanceNM = totalRemainingDistanceMeters / 1852;
+
+    // Calculate ETA based on current GPS speed (SOG)
+    const etaHours = remainingDistanceNM / currentSpeed;
+    const hours = Math.floor(etaHours);
+    const minutes = Math.round((etaHours - hours) * 60);
+
+    // Format speed with units
+    const speedFormatted = typeof formatSpeed === 'function'
+        ? formatSpeed(currentSpeed)
+        : `${currentSpeed.toFixed(1)} kn`;
+
+    // Calculate arrival time
+    const now = new Date();
+    const arrivalTime = new Date(now.getTime() + etaHours * 60 * 60 * 1000);
+    const arrivalTimeStr = arrivalTime.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+
+    let etaText = '';
+    if (hours > 0) {
+        etaText = `${hours}h ${minutes}min`;
+    } else {
+        etaText = `${minutes}min`;
+    }
+
+    // Update display
+    const liveEtaDisplay = document.getElementById('live-eta-display');
+    if (liveEtaDisplay) {
+        liveEtaDisplay.innerHTML = `<strong>Live ETA (GPS):</strong> ${etaText} @ ${speedFormatted} • Arrival: ${arrivalTimeStr}`;
+        liveEtaDisplay.style.display = 'block';
+    }
+}
+
 // ==================== CROSS-TRACK ERROR & COURSE DEVIATION ====================
 
 /**
@@ -2588,6 +2717,7 @@ function toggleNavigation() {
         if (currentPosition.lat && currentPosition.lon) {
             const currentSpeed = window.lastSensorData?.speed || 0;
             updateNextWaypointDisplay(currentPosition.lat, currentPosition.lon, currentSpeed);
+            updateLiveETA();
             updateCourseDeviationWarning(currentPosition.lat, currentPosition.lon);
         }
     } else {
@@ -2624,6 +2754,7 @@ function stopNavigation() {
             navigationStartButton.title = 'Navigation starten';
             navigationStartButton.style.background = 'white';
         }
+        showNotification('🛑 Navigation beendet', 'info');
         console.log('🛑 Navigation STOPPED');
     }
 }
