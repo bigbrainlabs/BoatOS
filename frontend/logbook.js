@@ -304,6 +304,14 @@ async function confirmStartTrackRecording() {
         if (typeof showMsg === 'function') showMsg("🚢 Fahrt gestartet - Track-Aufzeichnung läuft");
         updateTrackStatus();
         loadLogbookEntries(); // Reload to show the trip_start entry
+
+        // Start navigation if route is available
+        if (typeof toggleNavigation === 'function' && typeof navigationActive !== 'undefined' && !navigationActive) {
+            if (typeof waypoints !== 'undefined' && waypoints && waypoints.length >= 2) {
+                toggleNavigation();
+                console.log('🧭 Navigation automatically started with logbook');
+            }
+        }
     } catch (error) {
         console.error("Error starting track:", error);
         if (typeof showMsg === 'function') showMsg("❌ Fehler beim Starten der Aufzeichnung");
@@ -312,6 +320,14 @@ async function confirmStartTrackRecording() {
 
 async function stopTrackRecording() {
     try {
+        // Stop navigation first
+        if (typeof navigationActive !== 'undefined' && navigationActive) {
+            if (typeof toggleNavigation === 'function') {
+                toggleNavigation(); // This will pause it
+                console.log('🧭 Navigation stopped with logbook');
+            }
+        }
+
         const response = await fetch(`${getAPI()}/api/track/stop`, { method: "POST" });
         const result = await response.json();
         if (result.distance) {
@@ -333,6 +349,14 @@ async function stopTrackRecording() {
 
 async function pauseTrackRecording() {
     try {
+        // Pause navigation
+        if (typeof navigationActive !== 'undefined' && navigationActive) {
+            if (typeof toggleNavigation === 'function') {
+                toggleNavigation();
+                console.log('🧭 Navigation paused with logbook');
+            }
+        }
+
         const response = await fetch(`${getAPI()}/api/track/pause`, { method: "POST" });
         const result = await response.json();
         if (typeof showMsg === 'function') showMsg("⏸️ Aufzeichnung pausiert");
@@ -346,6 +370,16 @@ async function pauseTrackRecording() {
 
 async function resumeTrackRecording() {
     try {
+        // Resume navigation if route is available
+        if (typeof navigationActive !== 'undefined' && !navigationActive) {
+            if (typeof waypoints !== 'undefined' && waypoints && waypoints.length >= 2) {
+                if (typeof toggleNavigation === 'function') {
+                    toggleNavigation();
+                    console.log('🧭 Navigation resumed with logbook');
+                }
+            }
+        }
+
         const response = await fetch(`${getAPI()}/api/track/resume`, { method: "POST" });
         const result = await response.json();
         if (typeof showMsg === 'function') showMsg("▶️ Aufzeichnung fortgesetzt");
