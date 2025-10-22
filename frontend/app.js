@@ -23,6 +23,11 @@ let trackHistoryLayer; // GPS track history polyline
 let trackHistory = []; // Array of {lat, lon, timestamp}
 let maxTrackPoints = 500; // Maximum track points to keep
 let currentPosition = { lat: 50.8, lon: 5.6 }; // Default: Albertkanal
+
+// Favorites
+let favorites = [];
+let favoritesPanel = null;
+let favoriteMarkers = L.layerGroup(); // Layer group for favorite markers
 let ws;
 let routePlanningMode = false;
 let weatherData = null;
@@ -184,6 +189,36 @@ function initMap() {
 
     // Zoom Control (rechts unten)
     L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
+    // Favorites Button
+    const FavoritesControl = L.Control.extend({
+        options: { position: 'topleft' },
+        onAdd: function(map) {
+            const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+            container.innerHTML = `
+                <a href="#" style="
+                    background: rgba(10, 14, 39, 0.95);
+                    backdrop-filter: blur(10px);
+                    border: 2px solid #64ffda;
+                    border-radius: 8px;
+                    width: 40px;
+                    height: 40px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 20px;
+                    text-decoration: none;
+                    cursor: pointer;
+                " title="Favoriten">⭐</a>
+            `;
+            container.onclick = (e) => {
+                e.preventDefault();
+                showFavoritesPanel();
+            };
+            return container;
+        }
+    });
+    map.addControl(new FavoritesControl());
 
     // Boot-Position Marker
     // Get boat icon from settings
@@ -1427,6 +1462,9 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('📄 DOM loaded - initializing map...');
     initMap();
     connectWebSocket();
+
+    // Load favorites from backend
+    loadFavorites();
 
     // Add center button to map
     centerButton.addTo(map);
@@ -2959,6 +2997,309 @@ function stopNavigation() {
         }
         showNotification('🛑 Navigation beendet', 'info');
         console.log('🛑 Navigation STOPPED');
+    }
+}
+
+// ==================== FAVORITES ====================
+
+/**
+ * Load favorites from backend
+ */
+async function loadFavorites() {
+    try {
+        const response = await fetch(`${API_URL}/api/favorites`);
+        if (response.ok) {
+            const data = await response.json();
+            favorites = data.favorites || [];
+            updateFavoritesMarkers();
+            console.log(`📍 Loaded ${favorites.length} favorites`);
+        }
+    } catch (error) {
+        console.error('❌ Error loading favorites:', error);
+    }
+}
+
+/**
+ * Save a new favorite
+ */
+async function saveFavorite(name, lat, lon, category, notes = '') {
+    try {
+        const response = await fetch(`${API_URL}/api/favorites`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, lat, lon, category, notes })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.status === 'success') {
+                favorites.push(data.favorite);
+                updateFavoritesMarkers();
+                showNotification(`⭐ Favorit gespeichert: ${name}`, 'success');
+                return true;
+            }
+        }
+        showNotification('❌ Fehler beim Speichern des Favoriten', 'error');
+        return false;
+    } catch (error) {
+        console.error('❌ Error saving favorite:', error);
+        showNotification('❌ Fehler beim Speichern des Favoriten', 'error');
+        return false;
+    }
+}
+
+/**
+ * Delete a favorite
+ */
+async function deleteFavorite(favoriteId) {
+    try {
+        const response = await fetch(`${API_URL}/api/favorites/${favoriteId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            favorites = favorites.filter(f => f.id !== favoriteId);
+            updateFavoritesMarkers();
+            showNotification('🗑️ Favorit gelöscht', 'info');
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('❌ Error deleting favorite:', error);
+        return false;
+    }
+}
+
+/**
+ * Update favorite markers on map
+ */
+function updateFavoritesMarkers() {
+    // Clear existing markers
+    favoriteMarkers.clearLayers();
+
+    // Add markers for each favorite
+    favorites.forEach(fav => {
+        // Get category icon
+        const categoryIcons = {
+            'marina': '⚓',
+            'anchorage': '🔱',
+            'fuel': '⛽',
+            'lock': '🚧',
+            'bridge': '🌉',
+            'restaurant': '🍽️',
+            'shop': '🏪',
+            'other': '📍'
+        };
+
+        const icon = categoryIcons[fav.category] || '📍';
+
+        const marker = L.marker([fav.lat, fav.lon], {
+            icon: L.divIcon({
+                html: `<div style="font-size: 24px;">${icon}</div>`,
+                className: 'favorite-marker',
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            })
+        });
+
+        const popupContent = `
+            <div style="min-width: 200px;">
+                <h3 style="margin: 0 0 8px 0; color: #64ffda;">${icon} ${fav.name}</h3>
+                <div style="font-size: 12px; color: #8892b0; margin-bottom: 8px;">
+                    ${fav.lat.toFixed(5)}, ${fav.lon.toFixed(5)}
+                </div>
+                ${fav.notes ? `<div style="font-size: 12px; margin-bottom: 8px;">${fav.notes}</div>` : ''}
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button onclick="addFavoriteAsWaypoint('${fav.id}')" style="flex: 1; background: #27ae60; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                        Als Waypoint
+                    </button>
+                    <button onclick="deleteFavorite('${fav.id}')" style="flex: 1; background: #e74c3c; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                        Löschen
+                    </button>
+                </div>
+            </div>
+        `;
+
+        marker.bindPopup(popupContent);
+        marker.addTo(favoriteMarkers);
+    });
+
+    // Add layer to map if not already added
+    if (map && !map.hasLayer(favoriteMarkers)) {
+        favoriteMarkers.addTo(map);
+    }
+}
+
+/**
+ * Add favorite as waypoint
+ */
+function addFavoriteAsWaypoint(favoriteId) {
+    const fav = favorites.find(f => f.id === favoriteId);
+    if (fav) {
+        addWaypoint({ lat: fav.lat, lon: fav.lon, name: fav.name });
+        showNotification(`📍 Waypoint hinzugefügt: ${fav.name}`, 'success');
+    }
+}
+
+/**
+ * Show favorites panel
+ */
+function showFavoritesPanel() {
+    // Close if already open
+    if (favoritesPanel) {
+        favoritesPanel.remove();
+        favoritesPanel = null;
+        return;
+    }
+
+    favoritesPanel = document.createElement('div');
+    favoritesPanel.id = 'favorites-panel';
+    favoritesPanel.style.cssText = `
+        position: absolute;
+        top: 20px;
+        right: 380px;
+        background: rgba(10, 14, 39, 0.95);
+        backdrop-filter: blur(10px);
+        border: 2px solid #64ffda;
+        border-radius: 12px;
+        padding: 20px;
+        z-index: 1004;
+        min-width: 320px;
+        max-width: 400px;
+        max-height: 70vh;
+        overflow-y: auto;
+        color: white;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    `;
+
+    let html = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0; color: #64ffda; font-size: 18px;">⭐ Favoriten</h3>
+            <button onclick="closeFavoritesPanel()" style="background: rgba(231, 76, 60, 0.3); border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                ✕
+            </button>
+        </div>
+        <button onclick="saveCurrentLocationAsFavorite()" style="width: 100%; background: #27ae60; color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; margin-bottom: 16px;">
+            ➕ Aktuelle Position speichern
+        </button>
+        <div style="max-height: 50vh; overflow-y: auto;">
+    `;
+
+    if (favorites.length === 0) {
+        html += `
+            <div style="text-align: center; padding: 20px; color: #8892b0;">
+                <div style="font-size: 48px; margin-bottom: 12px;">📍</div>
+                <div>Keine Favoriten vorhanden</div>
+                <div style="font-size: 12px; margin-top: 8px;">Speichere Orte für schnellen Zugriff</div>
+            </div>
+        `;
+    } else {
+        // Group by category
+        const categoryIcons = {
+            'marina': '⚓',
+            'anchorage': '🔱',
+            'fuel': '⛽',
+            'lock': '🚧',
+            'bridge': '🌉',
+            'restaurant': '🍽️',
+            'shop': '🏪',
+            'other': '📍'
+        };
+
+        favorites.forEach(fav => {
+            const icon = categoryIcons[fav.category] || '📍';
+            html += `
+                <div style="background: rgba(42, 82, 152, 0.2); padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                        <div>
+                            <div style="font-size: 16px; font-weight: 600; color: #64ffda; margin-bottom: 4px;">
+                                ${icon} ${fav.name}
+                            </div>
+                            <div style="font-size: 11px; color: #8892b0;">
+                                ${fav.lat.toFixed(5)}, ${fav.lon.toFixed(5)}
+                            </div>
+                        </div>
+                    </div>
+                    ${fav.notes ? `<div style="font-size: 12px; color: #ccc; margin-bottom: 8px;">${fav.notes}</div>` : ''}
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="addFavoriteAsWaypoint('${fav.id}')" style="flex: 1; background: #27ae60; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 11px;">
+                            📍 Als Waypoint
+                        </button>
+                        <button onclick="panToFavorite('${fav.id}')" style="flex: 1; background: #3498db; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 11px;">
+                            🗺️ Anzeigen
+                        </button>
+                        <button onclick="deleteFavorite('${fav.id}'); updateFavoritesPanel();" style="background: #e74c3c; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 11px;">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    html += '</div>';
+    favoritesPanel.innerHTML = html;
+    document.getElementById('map-container').appendChild(favoritesPanel);
+}
+
+function closeFavoritesPanel() {
+    if (favoritesPanel) {
+        favoritesPanel.remove();
+        favoritesPanel = null;
+    }
+}
+
+function updateFavoritesPanel() {
+    if (favoritesPanel) {
+        closeFavoritesPanel();
+        showFavoritesPanel();
+    }
+}
+
+/**
+ * Pan map to favorite location
+ */
+function panToFavorite(favoriteId) {
+    const fav = favorites.find(f => f.id === favoriteId);
+    if (fav && map) {
+        map.setView([fav.lat, fav.lon], 14);
+        showNotification(`🗺️ Karte zentriert auf: ${fav.name}`, 'info');
+    }
+}
+
+/**
+ * Save current location as favorite
+ */
+async function saveCurrentLocationAsFavorite() {
+    const lat = currentPosition.lat;
+    const lon = currentPosition.lon;
+
+    // Prompt for name
+    const name = prompt('Name des Favoriten:', '');
+    if (!name) return;
+
+    // Prompt for category
+    const categories = [
+        'marina (⚓)',
+        'anchorage (🔱)',
+        'fuel (⛽)',
+        'lock (🚧)',
+        'bridge (🌉)',
+        'restaurant (🍽️)',
+        'shop (🏪)',
+        'other (📍)'
+    ];
+    const categoryChoice = prompt('Kategorie:\n' + categories.map((c, i) => `${i + 1}. ${c}`).join('\n'), '1');
+    const categoryIndex = parseInt(categoryChoice) - 1;
+    const category = ['marina', 'anchorage', 'fuel', 'lock', 'bridge', 'restaurant', 'shop', 'other'][categoryIndex] || 'other';
+
+    // Optional notes
+    const notes = prompt('Notizen (optional):', '');
+
+    const success = await saveFavorite(name, lat, lon, category, notes);
+    if (success) {
+        updateFavoritesPanel();
     }
 }
 
