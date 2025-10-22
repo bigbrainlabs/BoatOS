@@ -58,6 +58,7 @@ let aisSettings = { enabled: false, apiKey: '', updateInterval: 60, showLabels: 
 let currentRouteCoordinates = null; // Array of {lat, lon} for XTE calculation
 let currentRoutePolyline = null; // Reference to main route polyline for color changes
 let xteWarningDisplay = null; // DOM element for XTE warning
+let turnByTurnDisplay = null; // DOM element for turn-by-turn navigation instructions
 
 // Navigation State
 let navigationActive = false; // true when actively navigating (not just planning)
@@ -593,6 +594,9 @@ function updateBoatPosition(gps) {
         const currentSpeed = window.lastSensorData?.speed || 0;
         updateNextWaypointDisplay(newLat, newLon, currentSpeed);
 
+        // Update turn-by-turn navigation
+        updateTurnByTurnDisplay(newLat, newLon);
+
         // Update live ETA
         updateLiveETA();
 
@@ -1021,6 +1025,12 @@ function clearRoute() {
     if (nextWaypointDisplay) {
         nextWaypointDisplay.remove();
         nextWaypointDisplay = null;
+    }
+
+    // Remove turn-by-turn display
+    if (turnByTurnDisplay) {
+        turnByTurnDisplay.remove();
+        turnByTurnDisplay = null;
     }
 
     // Remove XTE warning display
@@ -2380,6 +2390,192 @@ function updateNextWaypointDisplay(currentLat, currentLon, currentSpeed) {
     `;
 }
 
+// ==================== TURN-BY-TURN NAVIGATION ====================
+
+/**
+ * Calculate turn direction and angle between two bearings
+ */
+function calculateTurnDirection(currentBearing, nextBearing) {
+    // Normalize bearings to 0-360
+    currentBearing = (currentBearing + 360) % 360;
+    nextBearing = (nextBearing + 360) % 360;
+
+    // Calculate smallest angle difference
+    let turnAngle = nextBearing - currentBearing;
+    if (turnAngle > 180) turnAngle -= 360;
+    if (turnAngle < -180) turnAngle += 360;
+
+    // Determine turn type based on angle
+    let turnType, turnIcon, turnText;
+
+    if (Math.abs(turnAngle) < 10) {
+        turnType = 'straight';
+        turnIcon = '⬆️';
+        turnText = 'Geradeaus';
+    } else if (turnAngle > 0 && turnAngle < 45) {
+        turnType = 'slight-right';
+        turnIcon = '↗️';
+        turnText = 'Leicht rechts';
+    } else if (turnAngle >= 45 && turnAngle < 135) {
+        turnType = 'right';
+        turnIcon = '➡️';
+        turnText = 'Rechts abbiegen';
+    } else if (turnAngle >= 135) {
+        turnType = 'sharp-right';
+        turnIcon = '↪️';
+        turnText = 'Scharf rechts';
+    } else if (turnAngle < 0 && turnAngle > -45) {
+        turnType = 'slight-left';
+        turnIcon = '↖️';
+        turnText = 'Leicht links';
+    } else if (turnAngle <= -45 && turnAngle > -135) {
+        turnType = 'left';
+        turnIcon = '⬅️';
+        turnText = 'Links abbiegen';
+    } else {
+        turnType = 'sharp-left';
+        turnIcon = '↩️';
+        turnText = 'Scharf links';
+    }
+
+    return { turnType, turnIcon, turnText, turnAngle };
+}
+
+/**
+ * Update turn-by-turn navigation display
+ */
+function updateTurnByTurnDisplay(currentLat, currentLon) {
+    // Only show during active navigation
+    if (!navigationActive || !waypoints || waypoints.length < 2) {
+        if (turnByTurnDisplay) {
+            turnByTurnDisplay.remove();
+            turnByTurnDisplay = null;
+        }
+        return;
+    }
+
+    // Find next waypoint (closest one ahead)
+    let nextWaypointIndex = 0;
+    let minDistance = Infinity;
+
+    for (let i = 0; i < waypoints.length; i++) {
+        const wp = waypoints[i];
+        const wpLatLng = wp.marker.getLatLng();
+        const distance = L.latLng(currentLat, currentLon).distanceTo(wpLatLng);
+
+        if (distance < minDistance) {
+            minDistance = distance;
+            nextWaypointIndex = i;
+        }
+    }
+
+    // If we're at the last waypoint, show arrival message
+    if (nextWaypointIndex >= waypoints.length - 1) {
+        const lastWP = waypoints[waypoints.length - 1];
+        const lastWPLatLng = lastWP.marker.getLatLng();
+        const distanceToLast = L.latLng(currentLat, currentLon).distanceTo(lastWPLatLng);
+
+        const distanceFormatted = typeof formatDistance === 'function'
+            ? formatDistance(distanceToLast)
+            : `${(distanceToLast / 1852).toFixed(2)} NM`;
+
+        // Show final approach
+        if (!turnByTurnDisplay) {
+            turnByTurnDisplay = document.createElement('div');
+            turnByTurnDisplay.id = 'turn-by-turn-display';
+            turnByTurnDisplay.style.cssText = `
+                position: absolute;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(10, 14, 39, 0.95);
+                backdrop-filter: blur(10px);
+                border: 3px solid #27ae60;
+                border-radius: 16px;
+                padding: 20px 30px;
+                z-index: 1003;
+                color: white;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+                text-align: center;
+            `;
+            document.getElementById('map-container').appendChild(turnByTurnDisplay);
+        }
+
+        turnByTurnDisplay.innerHTML = `
+            <div style="font-size: 48px; margin-bottom: 10px;">🎯</div>
+            <div style="font-size: 18px; font-weight: 700; color: #27ae60; margin-bottom: 8px;">
+                Ziel erreichen
+            </div>
+            <div style="font-size: 24px; font-weight: 600; color: #64ffda;">
+                ${distanceFormatted}
+            </div>
+            <div style="font-size: 14px; color: #8892b0; margin-top: 8px;">
+                ${lastWP.name || 'Ziel'}
+            </div>
+        `;
+        return;
+    }
+
+    // Calculate turn for next segment
+    const currentWP = waypoints[nextWaypointIndex];
+    const nextWP = waypoints[nextWaypointIndex + 1];
+
+    const currentWPLatLng = currentWP.marker.getLatLng();
+    const nextWPLatLng = nextWP.marker.getLatLng();
+
+    // Bearing to current waypoint
+    const bearingToCurrent = calculateBearing(currentLat, currentLon, currentWPLatLng.lat, currentWPLatLng.lng);
+
+    // Bearing from current to next waypoint (the upcoming segment)
+    const bearingToNext = calculateBearing(currentWPLatLng.lat, currentWPLatLng.lng, nextWPLatLng.lat, nextWPLatLng.lng);
+
+    // Calculate turn direction
+    const turn = calculateTurnDirection(bearingToCurrent, bearingToNext);
+
+    // Distance to waypoint where turn happens
+    const distanceToTurn = L.latLng(currentLat, currentLon).distanceTo(currentWPLatLng);
+    const distanceFormatted = typeof formatDistance === 'function'
+        ? formatDistance(distanceToTurn)
+        : `${(distanceToTurn / 1852).toFixed(2)} NM`;
+
+    // Create or update display
+    if (!turnByTurnDisplay) {
+        turnByTurnDisplay = document.createElement('div');
+        turnByTurnDisplay.id = 'turn-by-turn-display';
+        turnByTurnDisplay.style.cssText = `
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10, 14, 39, 0.95);
+            backdrop-filter: blur(10px);
+            border: 3px solid #64ffda;
+            border-radius: 16px;
+            padding: 20px 30px;
+            z-index: 1003;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            text-align: center;
+        `;
+        document.getElementById('map-container').appendChild(turnByTurnDisplay);
+    }
+
+    turnByTurnDisplay.innerHTML = `
+        <div style="font-size: 48px; margin-bottom: 10px;">${turn.turnIcon}</div>
+        <div style="font-size: 18px; font-weight: 700; color: #64ffda; margin-bottom: 8px;">
+            ${turn.turnText}
+        </div>
+        <div style="font-size: 24px; font-weight: 600; color: white;">
+            in ${distanceFormatted}
+        </div>
+        <div style="font-size: 14px; color: #8892b0; margin-top: 8px;">
+            bei ${currentWP.name || `WP ${nextWaypointIndex + 1}`}
+        </div>
+    `;
+}
+
 // ==================== LIVE ETA CALCULATION ====================
 
 /**
@@ -2717,6 +2913,7 @@ function toggleNavigation() {
         if (currentPosition.lat && currentPosition.lon) {
             const currentSpeed = window.lastSensorData?.speed || 0;
             updateNextWaypointDisplay(currentPosition.lat, currentPosition.lon, currentSpeed);
+            updateTurnByTurnDisplay(currentPosition.lat, currentPosition.lon);
             updateLiveETA();
             updateCourseDeviationWarning(currentPosition.lat, currentPosition.lon);
         }
@@ -2732,6 +2929,12 @@ function toggleNavigation() {
         if (xteWarningDisplay) {
             xteWarningDisplay.remove();
             xteWarningDisplay = null;
+        }
+
+        // Clear turn-by-turn display when paused
+        if (turnByTurnDisplay) {
+            turnByTurnDisplay.remove();
+            turnByTurnDisplay = null;
         }
 
         // Reset route color
