@@ -28,7 +28,7 @@ Ein vollständiges Marine-Navigationssystem für Binnenschifffahrt und Küstenna
 
 <!-- TODO: Add screenshots here -->
 ```
-Coming soon! Check Instagram @your_handle for live demos
+Coming soon! Check Instagram @bigbrainlabs for live demos
 ```
 
 ---

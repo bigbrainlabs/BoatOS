@@ -2,7 +2,7 @@
 
 ## Reporting Security Issues
 
-If you discover a security vulnerability in BoatOS, please report it by emailing **security@yourproject.com** (or create a private security advisory on GitHub).
+If you discover a security vulnerability in BoatOS, please report it by emailing **bigbrain2012@gmail.com** (or create a private security advisory on GitHub).
 
 **Do not** create public GitHub issues for security vulnerabilities.
 
