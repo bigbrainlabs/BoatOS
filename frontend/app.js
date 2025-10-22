@@ -1343,6 +1343,49 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add center button to map
     centerButton.addTo(map);
 
+    // Add GPX Import/Export buttons
+    const gpxControl = L.control({ position: 'topleft' });
+    gpxControl.onAdd = function() {
+        const container = L.DomUtil.create('div', 'gpx-control leaflet-bar');
+        container.style.cssText = 'background: white; display: flex; flex-direction: column; gap: 2px;';
+
+        // GPX Export button
+        const exportBtn = L.DomUtil.create('button', 'gpx-btn', container);
+        exportBtn.innerHTML = '📥';
+        exportBtn.title = 'Route als GPX exportieren';
+        exportBtn.style.cssText = 'background: white; width: 30px; height: 30px; border: none; cursor: pointer; font-size: 16px; padding: 0;';
+        exportBtn.onclick = function(e) {
+            L.DomEvent.stopPropagation(e);
+            exportRouteAsGPX();
+        };
+
+        // GPX Import button
+        const importBtn = L.DomUtil.create('button', 'gpx-btn', container);
+        importBtn.innerHTML = '📤';
+        importBtn.title = 'GPX-Datei importieren';
+        importBtn.style.cssText = 'background: white; width: 30px; height: 30px; border: none; cursor: pointer; font-size: 16px; padding: 0;';
+
+        // Create hidden file input
+        const fileInput = L.DomUtil.create('input', '', container);
+        fileInput.type = 'file';
+        fileInput.accept = '.gpx';
+        fileInput.style.display = 'none';
+        fileInput.onchange = function(e) {
+            if (e.target.files && e.target.files[0]) {
+                importGPXFile(e.target.files[0]);
+                e.target.value = ''; // Reset for re-import
+            }
+        };
+
+        importBtn.onclick = function(e) {
+            L.DomEvent.stopPropagation(e);
+            fileInput.click();
+        };
+
+        return container;
+    };
+    gpxControl.addTo(map);
+
     // Add compass rose to map (check settings first)
     const settings = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
     if (settings.navigation?.showCompassRose !== false) {
@@ -2458,6 +2501,191 @@ function updateCourseDeviationWarning(boatLat, boatLon) {
             currentRoutePolyline.setStyle({ color: normalColor, weight: 5 });
         }
     }
+}
+
+// ==================== GPX IMPORT/EXPORT ====================
+
+/**
+ * Export current waypoints as GPX file
+ */
+function exportRouteAsGPX() {
+    if (!waypoints || waypoints.length === 0) {
+        showNotification('⚠️ Keine Wegpunkte zum Exportieren', 'warning');
+        return;
+    }
+
+    // Generate GPX XML
+    const gpxHeader = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="BoatOS Marine Navigation"
+     xmlns="http://www.topografix.com/GPX/1/1"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+  <metadata>
+    <name>BoatOS Route</name>
+    <desc>Exported from BoatOS Marine Navigation System</desc>
+    <time>${new Date().toISOString()}</time>
+  </metadata>
+`;
+
+    let gpxWaypoints = '';
+    let gpxRoutePoints = '  <rte>\n    <name>BoatOS Route</name>\n';
+
+    waypoints.forEach((wp, index) => {
+        const latlng = wp.marker.getLatLng();
+        const name = wp.name || `WP${index + 1}`;
+
+        // Add as waypoint (for Garmin/Navionics compatibility)
+        gpxWaypoints += `  <wpt lat="${latlng.lat.toFixed(7)}" lon="${latlng.lng.toFixed(7)}">
+    <name>${escapeXML(name)}</name>
+    <sym>Waypoint</sym>
+  </wpt>
+`;
+
+        // Add as route point
+        gpxRoutePoints += `    <rtept lat="${latlng.lat.toFixed(7)}" lon="${latlng.lng.toFixed(7)}">
+      <name>${escapeXML(name)}</name>
+    </rtept>
+`;
+    });
+
+    gpxRoutePoints += '  </rte>\n';
+
+    const gpxFooter = '</gpx>';
+
+    const gpxContent = gpxHeader + gpxWaypoints + gpxRoutePoints + gpxFooter;
+
+    // Trigger download
+    const blob = new Blob([gpxContent], { type: 'application/gpx+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `boatos-route-${new Date().toISOString().split('T')[0]}.gpx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showNotification(`📥 Route als GPX exportiert (${waypoints.length} Wegpunkte)`, 'success');
+}
+
+/**
+ * Import waypoints from GPX file
+ */
+function importGPXFile(file) {
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+        try {
+            const gpxContent = e.target.result;
+            const parser = new DOMParser();
+            const gpxDoc = parser.parseFromString(gpxContent, 'text/xml');
+
+            // Check for parsing errors
+            const parserError = gpxDoc.querySelector('parsererror');
+            if (parserError) {
+                throw new Error('Ungültiges GPX-Format');
+            }
+
+            // Extract waypoints (try <wpt> first, then <rtept>)
+            let wptElements = gpxDoc.querySelectorAll('wpt');
+            if (wptElements.length === 0) {
+                wptElements = gpxDoc.querySelectorAll('rtept');
+            }
+            if (wptElements.length === 0) {
+                wptElements = gpxDoc.querySelectorAll('trkpt');
+            }
+
+            if (wptElements.length === 0) {
+                throw new Error('Keine Wegpunkte in GPX-Datei gefunden');
+            }
+
+            // Clear existing route
+            clearRoute();
+
+            // Add waypoints from GPX
+            let importedCount = 0;
+            wptElements.forEach((wpt, index) => {
+                const lat = parseFloat(wpt.getAttribute('lat'));
+                const lon = parseFloat(wpt.getAttribute('lon'));
+
+                if (isNaN(lat) || isNaN(lon)) return;
+
+                const nameEl = wpt.querySelector('name');
+                const name = nameEl ? nameEl.textContent : `WP${index + 1}`;
+
+                // Add waypoint to map
+                const marker = L.marker([lat, lon], {
+                    draggable: true,
+                    icon: L.divIcon({
+                        className: 'waypoint-marker',
+                        html: `<div style="background: #e74c3c; color: white; padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: 13px; white-space: nowrap; box-shadow: 0 4px 8px rgba(0,0,0,0.3); border: 2px solid white;">${escapeHTML(name)}</div>`,
+                        iconSize: [90, 35],
+                        iconAnchor: [45, 18]
+                    })
+                }).addTo(map);
+
+                // Add event listeners
+                marker.on('dragend', updateRoute);
+                marker.on('click', function() {
+                    if (confirm(`Wegpunkt "${name}" löschen?`)) {
+                        map.removeLayer(marker);
+                        const wpIndex = waypoints.findIndex(w => w.marker === marker);
+                        if (wpIndex > -1) {
+                            waypoints.splice(wpIndex, 1);
+                        }
+                        updateRoute();
+                    }
+                });
+
+                waypoints.push({ marker: marker, name: name });
+                importedCount++;
+            });
+
+            // Update route
+            if (waypoints.length >= 2) {
+                updateRoute();
+            }
+
+            // Zoom to fit all waypoints
+            if (waypoints.length > 0) {
+                const bounds = L.latLngBounds(waypoints.map(w => w.marker.getLatLng()));
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+
+            showNotification(`📤 GPX importiert: ${importedCount} Wegpunkte`, 'success');
+
+        } catch (error) {
+            console.error('GPX Import Error:', error);
+            showNotification(`❌ GPX-Import fehlgeschlagen: ${error.message}`, 'error');
+        }
+    };
+
+    reader.onerror = function() {
+        showNotification('❌ Fehler beim Lesen der GPX-Datei', 'error');
+    };
+
+    reader.readAsText(file);
+}
+
+/**
+ * Helper function to escape XML special characters
+ */
+function escapeXML(str) {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+}
+
+/**
+ * Helper function to escape HTML special characters
+ */
+function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
 }
 
 // ==================== SERVICE WORKER (PWA) ====================
