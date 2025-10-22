@@ -42,6 +42,12 @@ let osmLayer;
 let satelliteLayer;
 let currentBaseLayer = 'osm'; // 'osm' or 'satellite'
 
+// Overlay layers (for layer control)
+let seaMarkLayer;
+let inlandLayer;  // Contains locks/schleusen
+let railwayLayer;  // Contains bridges/brücken
+let trafficLayer;
+
 // AIS
 let aisVessels = {};  // MMSI -> {marker, data}
 let aisEnabled = false;
@@ -118,25 +124,25 @@ function initMap() {
     console.log('📏 Initial map size:', map.getSize());
 
     // ==================== OVERLAY LAYERS ====================
-    const seaMarkLayer = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
+    seaMarkLayer = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
         maxZoom: 18,
         opacity: 0.8,
         attribution: '© OpenSeaMap'
     });
 
-    const inlandLayer = L.tileLayer('https://tiles.openseamap.org/inland/{z}/{x}/{y}.png', {
+    inlandLayer = L.tileLayer('https://tiles.openseamap.org/inland/{z}/{x}/{y}.png', {
         maxZoom: 18,
         opacity: 0.8,
         attribution: '© OpenSeaMap Inland'
     });
 
-    const railwayLayer = L.tileLayer('https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', {
+    railwayLayer = L.tileLayer('https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', {
         maxZoom: 19,
         opacity: 0.5,
         attribution: '© OpenRailwayMap'
     });
 
-    const trafficLayer = L.tileLayer('https://tiles.marinetraffic.com/ais_helpers/shiptilesingle.aspx?output=png&sat=1&grouping=shiptype&tile_size=256&legends=1&zoom={z}&X={x}&Y={y}', {
+    trafficLayer = L.tileLayer('https://tiles.marinetraffic.com/ais_helpers/shiptilesingle.aspx?output=png&sat=1&grouping=shiptype&tile_size=256&legends=1&zoom={z}&X={x}&Y={y}', {
         maxZoom: 15,
         opacity: 0.7,
         attribution: '© MarineTraffic'
@@ -144,20 +150,20 @@ function initMap() {
 
     // Add default overlays
     seaMarkLayer.addTo(map);
-    // inlandLayer.addTo(map); // DISABLED: Inland layer temporarily disabled (contains lock POIs from OpenSeaMap)
+    // inlandLayer now controlled by layer control (contains locks/schleusen)
     railwayLayer.addTo(map);
 
     // ==================== LAYER CONTROL ====================
     const overlays = {
         "⚓ Seezeichen": seaMarkLayer,
-        "🚢 Binnengewässer": inlandLayer,
+        "🔒 Schleusen & Wasserwege": inlandLayer,
         "🌉 Brücken": railwayLayer,
-        "🚢 Schiffsverkehr": trafficLayer
+        "🚢 Schiffsverkehr (AIS)": trafficLayer
     };
 
     L.control.layers(null, overlays, {
         position: 'bottomright',
-        collapsed: true
+        collapsed: false  // Always visible for easy access
     }).addTo(map);
 
     // Zoom Control (rechts unten)
