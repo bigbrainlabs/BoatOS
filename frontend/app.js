@@ -59,6 +59,10 @@ let currentRouteCoordinates = null; // Array of {lat, lon} for XTE calculation
 let currentRoutePolyline = null; // Reference to main route polyline for color changes
 let xteWarningDisplay = null; // DOM element for XTE warning
 
+// Navigation State
+let navigationActive = false; // true when actively navigating (not just planning)
+let navigationStartButton = null; // Button to start/pause/stop navigation
+
 // ==================== MAP INIT ====================
 function initMap() {
     console.log('🗺️ initMap() called');
@@ -992,6 +996,9 @@ function clearRoute() {
     }
     locksOnRoute = [];
 
+    // Stop navigation when route is cleared
+    stopNavigation();
+
     showNotification('🗑️ Route gelöscht');
 }
 
@@ -1404,6 +1411,24 @@ document.addEventListener('DOMContentLoaded', () => {
         return container;
     };
     gpxControl.addTo(map);
+
+    // Add Navigation Start/Stop button
+    const navControl = L.control({ position: 'topleft' });
+    navControl.onAdd = function() {
+        const container = L.DomUtil.create('div', 'nav-control leaflet-bar');
+
+        navigationStartButton = L.DomUtil.create('button', 'nav-btn', container);
+        navigationStartButton.innerHTML = '▶️';
+        navigationStartButton.title = 'Navigation starten';
+        navigationStartButton.style.cssText = 'background: white; width: 30px; height: 30px; border: none; cursor: pointer; font-size: 16px; padding: 0;';
+        navigationStartButton.onclick = function(e) {
+            L.DomEvent.stopPropagation(e);
+            toggleNavigation();
+        };
+
+        return container;
+    };
+    navControl.addTo(map);
 
     // Add compass rose to map (check settings first)
     const settings = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
@@ -2405,6 +2430,22 @@ function calculateCrossTrackError(boatLat, boatLon) {
  * Update course deviation warning display
  */
 function updateCourseDeviationWarning(boatLat, boatLon) {
+    // Only show XTE warning when navigation is actively started
+    if (!navigationActive) {
+        // Remove warning if navigation is not active
+        if (xteWarningDisplay) {
+            xteWarningDisplay.remove();
+            xteWarningDisplay = null;
+        }
+        // Reset route color
+        if (currentRoutePolyline) {
+            const isWaterway = currentRoutePolyline.options.originalColor === '#2ecc71';
+            const normalColor = isWaterway ? '#2ecc71' : '#3498db';
+            currentRoutePolyline.setStyle({ color: normalColor, weight: 5 });
+        }
+        return;
+    }
+
     const xte = calculateCrossTrackError(boatLat, boatLon);
 
     if (!xte) {
@@ -2519,6 +2560,71 @@ function updateCourseDeviationWarning(boatLat, boatLon) {
             const normalColor = isWaterway ? '#2ecc71' : '#3498db';
             currentRoutePolyline.setStyle({ color: normalColor, weight: 5 });
         }
+    }
+}
+
+// ==================== NAVIGATION CONTROL ====================
+
+/**
+ * Toggle navigation state (Start/Pause/Stop)
+ */
+function toggleNavigation() {
+    if (!waypoints || waypoints.length < 2) {
+        showNotification('⚠️ Erstelle zuerst eine Route mit mindestens 2 Wegpunkten', 'warning');
+        return;
+    }
+
+    navigationActive = !navigationActive;
+
+    if (navigationActive) {
+        // Start navigation
+        navigationStartButton.innerHTML = '⏸️';
+        navigationStartButton.title = 'Navigation pausieren';
+        navigationStartButton.style.background = '#27ae60'; // Green
+        showNotification('🧭 Navigation gestartet', 'success');
+        console.log('🧭 Navigation STARTED');
+
+        // Force update displays
+        if (currentPosition.lat && currentPosition.lon) {
+            const currentSpeed = window.lastSensorData?.speed || 0;
+            updateNextWaypointDisplay(currentPosition.lat, currentPosition.lon, currentSpeed);
+            updateCourseDeviationWarning(currentPosition.lat, currentPosition.lon);
+        }
+    } else {
+        // Pause navigation
+        navigationStartButton.innerHTML = '▶️';
+        navigationStartButton.title = 'Navigation starten';
+        navigationStartButton.style.background = 'white';
+        showNotification('⏸️ Navigation pausiert', 'info');
+        console.log('⏸️ Navigation PAUSED');
+
+        // Clear XTE warning when paused
+        if (xteWarningDisplay) {
+            xteWarningDisplay.remove();
+            xteWarningDisplay = null;
+        }
+
+        // Reset route color
+        if (currentRoutePolyline) {
+            const isWaterway = currentRoutePolyline.options.originalColor === '#2ecc71';
+            const normalColor = isWaterway ? '#2ecc71' : '#3498db';
+            currentRoutePolyline.setStyle({ color: normalColor, weight: 5 });
+        }
+    }
+}
+
+/**
+ * Stop navigation completely (called when route is cleared)
+ */
+function stopNavigation() {
+    if (navigationActive) {
+        navigationActive = false;
+        if (navigationStartButton) {
+            navigationStartButton.innerHTML = '▶️';
+            navigationStartButton.title = 'Navigation starten';
+            navigationStartButton.style.background = 'white';
+        }
+        console.log('🛑 Navigation STOPPED');
     }
 }
 
