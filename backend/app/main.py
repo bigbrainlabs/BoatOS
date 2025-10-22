@@ -548,6 +548,117 @@ async def save_route(route: Dict[str, Any]):
     routes[route_id] = route
     return {"status": "saved"}
 
+# ==================== FAVORITES ====================
+
+def load_favorites():
+    """Load favorites from data/favorites.json"""
+    favorites_file = "data/favorites.json"
+    if os.path.exists(favorites_file):
+        try:
+            with open(favorites_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data.get('favorites', [])
+        except Exception as e:
+            print(f"❌ Error loading favorites: {e}")
+            return []
+    return []
+
+def save_favorites(favorites_list):
+    """Save favorites to data/favorites.json"""
+    favorites_file = "data/favorites.json"
+    try:
+        with open(favorites_file, 'w', encoding='utf-8') as f:
+            json.dump({'favorites': favorites_list}, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"❌ Error saving favorites: {e}")
+        return False
+
+@app.get("/api/favorites")
+async def get_favorites():
+    """Get all favorites"""
+    return {"favorites": load_favorites()}
+
+@app.post("/api/favorites")
+async def add_favorite(favorite: Dict[str, Any]):
+    """Add a new favorite"""
+    import uuid
+    favorites_list = load_favorites()
+
+    # Generate unique ID
+    favorite['id'] = str(uuid.uuid4())
+    favorite['created'] = datetime.now().isoformat()
+    favorite['modified'] = datetime.now().isoformat()
+
+    # Validate required fields
+    if 'name' not in favorite or 'lat' not in favorite or 'lon' not in favorite:
+        return {"status": "error", "message": "Missing required fields: name, lat, lon"}
+
+    # Default category if not provided
+    if 'category' not in favorite:
+        favorite['category'] = 'other'
+
+    favorites_list.append(favorite)
+
+    if save_favorites(favorites_list):
+        return {"status": "success", "favorite": favorite}
+    else:
+        return {"status": "error", "message": "Failed to save favorite"}
+
+@app.put("/api/favorites/{favorite_id}")
+async def update_favorite(favorite_id: str, favorite: Dict[str, Any]):
+    """Update an existing favorite"""
+    favorites_list = load_favorites()
+
+    # Find favorite by ID
+    for i, fav in enumerate(favorites_list):
+        if fav.get('id') == favorite_id:
+            # Update fields
+            favorite['id'] = favorite_id
+            favorite['created'] = fav.get('created', datetime.now().isoformat())
+            favorite['modified'] = datetime.now().isoformat()
+            favorites_list[i] = favorite
+
+            if save_favorites(favorites_list):
+                return {"status": "success", "favorite": favorite}
+            else:
+                return {"status": "error", "message": "Failed to save favorite"}
+
+    return {"status": "error", "message": "Favorite not found"}
+
+@app.delete("/api/favorites/{favorite_id}")
+async def delete_favorite(favorite_id: str):
+    """Delete a favorite"""
+    favorites_list = load_favorites()
+    original_count = len(favorites_list)
+
+    # Filter out the favorite to delete
+    favorites_list = [fav for fav in favorites_list if fav.get('id') != favorite_id]
+
+    if len(favorites_list) < original_count:
+        if save_favorites(favorites_list):
+            return {"status": "success", "message": "Favorite deleted"}
+        else:
+            return {"status": "error", "message": "Failed to save after deletion"}
+    else:
+        return {"status": "error", "message": "Favorite not found"}
+
+@app.get("/api/favorites/categories")
+async def get_favorite_categories():
+    """Get list of available favorite categories"""
+    return {
+        "categories": [
+            {"id": "marina", "name": "Marina", "icon": "⚓"},
+            {"id": "anchorage", "name": "Ankerplatz", "icon": "🔱"},
+            {"id": "fuel", "name": "Tankstelle", "icon": "⛽"},
+            {"id": "lock", "name": "Schleuse", "icon": "🚧"},
+            {"id": "bridge", "name": "Brücke", "icon": "🌉"},
+            {"id": "restaurant", "name": "Restaurant", "icon": "🍽️"},
+            {"id": "shop", "name": "Geschäft", "icon": "🏪"},
+            {"id": "other", "name": "Sonstiges", "icon": "📍"}
+        ]
+    }
+
 # ==================== AIS ====================
 @app.get("/api/ais/vessels")
 async def get_ais_vessels(lat_min: float, lon_min: float, lat_max: float, lon_max: float):
