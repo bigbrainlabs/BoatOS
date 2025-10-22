@@ -48,6 +48,11 @@ let aisEnabled = false;
 let aisUpdateInterval = null;
 let aisSettings = { enabled: false, apiKey: '', updateInterval: 60, showLabels: true };
 
+// Course Deviation / Cross-Track Error
+let currentRouteCoordinates = null; // Array of {lat, lon} for XTE calculation
+let currentRoutePolyline = null; // Reference to main route polyline for color changes
+let xteWarningDisplay = null; // DOM element for XTE warning
+
 // ==================== MAP INIT ====================
 function initMap() {
     console.log('🗺️ initMap() called');
@@ -566,6 +571,9 @@ function updateBoatPosition(gps) {
         // Update next waypoint display
         const currentSpeed = window.lastSensorData?.speed || 0;
         updateNextWaypointDisplay(newLat, newLon, currentSpeed);
+
+        // Update course deviation warning (XTE)
+        updateCourseDeviationWarning(newLat, newLon);
     } else {
         // No valid GPS data - check if GPS is stale
         if (lastGpsUpdate && (Date.now() - lastGpsUpdate) > 10000) {
@@ -698,12 +706,16 @@ async function updateRoute() {
                 }).addTo(routeLayer);
 
                 // Hauptlinie (grün für ENC-Routing)
-                L.polyline(routePoints, {
+                currentRoutePolyline = L.polyline(routePoints, {
                     color: '#2ecc71',
                     weight: 5,
                     opacity: 0.9,
-                    lineCap: 'round'
+                    lineCap: 'round',
+                    originalColor: '#2ecc71' // Store original color for XTE reset
                 }).addTo(routeLayer);
+
+                // Store route coordinates for XTE calculation
+                currentRouteCoordinates = routePoints.map(p => ({ lat: p[0], lon: p[1] }));
 
                 // Distanz und Segment-Infos
                 const distanceNM = routeData.properties?.distance_nm || 0;
@@ -782,13 +794,17 @@ function drawDirectRoute() {
     }).addTo(routeLayer);
 
     // Hauptlinie (blau, durchgezogen)
-    L.polyline(points, {
+    currentRoutePolyline = L.polyline(points, {
         color: '#3498db',
         weight: 5,
         opacity: 0.9,
         lineCap: 'round',
-        lineJoin: 'round'
+        lineJoin: 'round',
+        originalColor: '#3498db' // Store original color for XTE reset
     }).addTo(routeLayer);
+
+    // Store route coordinates for XTE calculation
+    currentRouteCoordinates = points.map(p => ({ lat: p[0], lon: p[1] }));
 
     let totalDistance = 0;
     let routeInfo = [];
@@ -940,6 +956,16 @@ function clearRoute() {
         nextWaypointDisplay.remove();
         nextWaypointDisplay = null;
     }
+
+    // Remove XTE warning display
+    if (xteWarningDisplay) {
+        xteWarningDisplay.remove();
+        xteWarningDisplay = null;
+    }
+
+    // Clear route data for XTE calculation
+    currentRouteCoordinates = null;
+    currentRoutePolyline = null;
 
     showNotification('🗑️ Route gelöscht');
 }
@@ -2207,6 +2233,225 @@ function updateNextWaypointDisplay(currentLat, currentLon, currentSpeed) {
             <div style="font-size: 18px; font-weight: 600; color: #64ffda;">${etaText}</div>
         </div>
     `;
+}
+
+// ==================== CROSS-TRACK ERROR & COURSE DEVIATION ====================
+
+/**
+ * Calculate the shortest distance from a point to a line segment
+ * Returns: {distance: meters, side: 'port'|'starboard', nearestPoint: {lat, lon}}
+ */
+function pointToLineSegmentDistance(pointLat, pointLon, lineLat1, lineLon1, lineLat2, lineLon2) {
+    // Convert to Leaflet LatLng for distance calculations
+    const point = L.latLng(pointLat, pointLon);
+    const lineStart = L.latLng(lineLat1, lineLon1);
+    const lineEnd = L.latLng(lineLat2, lineLon2);
+
+    // Vector from line start to point
+    const pointVec = {
+        lat: point.lat - lineStart.lat,
+        lng: point.lng - lineStart.lng
+    };
+
+    // Vector from line start to line end
+    const lineVec = {
+        lat: lineEnd.lat - lineStart.lat,
+        lng: lineEnd.lng - lineStart.lng
+    };
+
+    // Project point onto line (dot product)
+    const lineLengthSquared = lineVec.lat * lineVec.lat + lineVec.lng * lineVec.lng;
+
+    if (lineLengthSquared === 0) {
+        // Line segment is actually a point
+        return {
+            distance: point.distanceTo(lineStart),
+            side: 'unknown',
+            nearestPoint: { lat: lineStart.lat, lon: lineStart.lng }
+        };
+    }
+
+    // Parameter t represents position along line (0 = start, 1 = end)
+    let t = (pointVec.lat * lineVec.lat + pointVec.lng * lineVec.lng) / lineLengthSquared;
+    t = Math.max(0, Math.min(1, t)); // Clamp to [0, 1]
+
+    // Nearest point on line segment
+    const nearestLat = lineStart.lat + t * lineVec.lat;
+    const nearestLng = lineStart.lng + t * lineVec.lng;
+    const nearest = L.latLng(nearestLat, nearestLng);
+
+    // Distance from point to nearest point on line
+    const distance = point.distanceTo(nearest);
+
+    // Determine which side (port/starboard) using cross product
+    // Positive = starboard (right), Negative = port (left)
+    const crossProduct = lineVec.lng * pointVec.lat - lineVec.lat * pointVec.lng;
+    const side = crossProduct > 0 ? 'starboard' : 'port';
+
+    return {
+        distance: distance,
+        side: side,
+        nearestPoint: { lat: nearestLat, lon: nearestLng }
+    };
+}
+
+/**
+ * Calculate Cross-Track Error (XTE) - distance from boat to route
+ */
+function calculateCrossTrackError(boatLat, boatLon) {
+    if (!currentRouteCoordinates || currentRouteCoordinates.length < 2) {
+        return null;
+    }
+
+    // Find closest segment in route
+    let minDistance = Infinity;
+    let closestSegment = null;
+    let xteInfo = null;
+
+    for (let i = 0; i < currentRouteCoordinates.length - 1; i++) {
+        const seg1 = currentRouteCoordinates[i];
+        const seg2 = currentRouteCoordinates[i + 1];
+
+        const result = pointToLineSegmentDistance(
+            boatLat, boatLon,
+            seg1.lat, seg1.lon,
+            seg2.lat, seg2.lon
+        );
+
+        if (result.distance < minDistance) {
+            minDistance = result.distance;
+            closestSegment = i;
+            xteInfo = result;
+        }
+    }
+
+    return {
+        distance: xteInfo.distance,
+        side: xteInfo.side,
+        segment: closestSegment,
+        nearestPoint: xteInfo.nearestPoint
+    };
+}
+
+/**
+ * Update course deviation warning display
+ */
+function updateCourseDeviationWarning(boatLat, boatLon) {
+    const xte = calculateCrossTrackError(boatLat, boatLon);
+
+    if (!xte) {
+        // No active route - remove warning if exists
+        if (xteWarningDisplay) {
+            xteWarningDisplay.remove();
+            xteWarningDisplay = null;
+        }
+
+        // Reset route color to normal
+        if (currentRoutePolyline) {
+            currentRoutePolyline.setStyle({ color: '#3498db', weight: 5 });
+        }
+        return;
+    }
+
+    const WARN_THRESHOLD = 100; // meters - show warning
+    const CRITICAL_THRESHOLD = 500; // meters - critical warning
+
+    if (xte.distance > WARN_THRESHOLD) {
+        // Show deviation warning
+
+        // Change route color to indicate deviation
+        if (currentRoutePolyline) {
+            if (xte.distance > CRITICAL_THRESHOLD) {
+                currentRoutePolyline.setStyle({ color: '#e74c3c', weight: 6 }); // Red for critical
+            } else {
+                currentRoutePolyline.setStyle({ color: '#f39c12', weight: 5.5 }); // Orange for warning
+            }
+        }
+
+        // Format distance
+        const distanceFormatted = xte.distance < 1000
+            ? `${Math.round(xte.distance)} m`
+            : `${(xte.distance / 1000).toFixed(2)} km`;
+
+        // Side indicator
+        const sideText = xte.side === 'port' ? 'Backbord ←' : 'Steuerbord →';
+        const sideColor = xte.side === 'port' ? '#e74c3c' : '#27ae60';
+
+        // Warning level
+        const isCritical = xte.distance > CRITICAL_THRESHOLD;
+        const warningIcon = isCritical ? '⚠️' : '⚡';
+        const warningText = isCritical ? 'KRITISCHE ABWEICHUNG' : 'Kursabweichung';
+        const bgColor = isCritical ? 'rgba(231, 76, 60, 0.95)' : 'rgba(243, 156, 18, 0.95)';
+
+        // Create or update display
+        if (!xteWarningDisplay) {
+            xteWarningDisplay = document.createElement('div');
+            xteWarningDisplay.id = 'xte-warning-display';
+            xteWarningDisplay.style.cssText = `
+                position: absolute;
+                top: 180px;
+                right: 20px;
+                background: ${bgColor};
+                backdrop-filter: blur(10px);
+                border: 3px solid white;
+                border-radius: 12px;
+                padding: 16px;
+                z-index: 1003;
+                min-width: 260px;
+                color: white;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+                animation: pulse 2s ease-in-out infinite;
+            `;
+            document.getElementById('map-container').appendChild(xteWarningDisplay);
+
+            // Add pulse animation
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes pulse {
+                    0%, 100% { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); }
+                    50% { box-shadow: 0 8px 32px rgba(255, 255, 255, 0.3), 0 0 20px rgba(255, 255, 255, 0.2); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        // Update background color based on severity
+        xteWarningDisplay.style.background = bgColor;
+
+        xteWarningDisplay.innerHTML = `
+            <div style="font-size: 13px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: 700;">
+                ${warningIcon} ${warningText}
+            </div>
+            <div style="font-size: 28px; font-weight: 700; margin-bottom: 12px; text-align: center;">
+                ${distanceFormatted}
+            </div>
+            <div style="background: rgba(255, 255, 255, 0.2); padding: 10px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 11px; margin-bottom: 4px;">RICHTUNG</div>
+                <div style="font-size: 18px; font-weight: 600; color: ${sideColor};">
+                    ${sideText}
+                </div>
+            </div>
+            <div style="margin-top: 12px; font-size: 11px; text-align: center; opacity: 0.9;">
+                Zurück zum Kurs navigieren
+            </div>
+        `;
+
+    } else {
+        // Within acceptable range - remove warning
+        if (xteWarningDisplay) {
+            xteWarningDisplay.remove();
+            xteWarningDisplay = null;
+        }
+
+        // Reset route color
+        if (currentRoutePolyline) {
+            // Determine original color based on route type
+            const isWaterway = currentRoutePolyline.options.originalColor === '#2ecc71';
+            const normalColor = isWaterway ? '#2ecc71' : '#3498db';
+            currentRoutePolyline.setStyle({ color: normalColor, weight: 5 });
+        }
+    }
 }
 
 // ==================== SERVICE WORKER (PWA) ====================
