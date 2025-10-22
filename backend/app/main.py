@@ -338,6 +338,18 @@ async def save_settings(settings: Dict[str, Any]):
     """Save user settings"""
     settings_file = "data/settings.json"
     try:
+        # Load existing settings to preserve dashboard_layout
+        existing_settings = {}
+        try:
+            with open(settings_file, 'r') as f:
+                existing_settings = json.load(f)
+        except FileNotFoundError:
+            pass
+
+        # Merge new settings with existing, preserving dashboard_layout if not provided
+        if 'dashboard_layout' in existing_settings and 'dashboard_layout' not in settings:
+            settings['dashboard_layout'] = existing_settings['dashboard_layout']
+
         with open(settings_file, 'w') as f:
             json.dump(settings, f, indent=2)
 
