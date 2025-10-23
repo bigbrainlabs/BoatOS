@@ -875,8 +875,16 @@ async function updateRoute() {
                 showRouteInfo(distanceNM.toFixed(2), etaHoursInt, etaMinutes, routeInfo, false, true, avgSpeed);
                 hideRoutingLoader();
 
-                // Update locks timeline (will show locks + warnings)
-                displayLocksTimeline();
+                // Display locks timeline
+                // If we have locks from route response, display them
+                // Otherwise updateLocksTimeline() will fetch them
+                if (locksOnRoute.length > 0) {
+                    console.log(`📍 Displaying ${locksOnRoute.length} locks from route response`);
+                    displayLocksTimeline();
+                } else {
+                    console.log(`📍 Fetching locks from API bounds`);
+                    updateLocksTimeline();
+                }
 
                 return;
             }
@@ -3678,7 +3686,8 @@ async function updateLocksTimeline() {
             return;
         }
 
-        const locks = await response.json();
+        const data = await response.json();
+        const locks = data.locks || [];
         console.log(`🔒 Found ${locks.length} locks in route bounds`);
 
         // Filter locks that are actually near the route (within 2km)
@@ -3817,6 +3826,11 @@ function displayLocksTimeline() {
                             Öffnet um: ${escapeHTML(warning.opens_at)}
                         </div>
                     ` : ''}
+                    ${warning.delay_formatted ? `
+                        <div style="font-size: 11px; color: #ff6b6b; margin-top: 4px; font-weight: 600;">
+                            ⏱️ Wartezeit: ${escapeHTML(warning.delay_formatted)}
+                        </div>
+                    ` : ''}
                     ${warning.suggested_departure_formatted ? `
                         <div style="font-size: 11px; color: #64ffda; margin-top: 4px;">
                             💡 Empfohlene Abfahrt: ${escapeHTML(warning.suggested_departure_formatted)}
@@ -3830,6 +3844,42 @@ function displayLocksTimeline() {
         } else {
             statusColor = '#f39c12'; // Yellow
             statusIcon = '→';
+        }
+
+        // VHF Channel and Contact Info
+        let contactHtml = '';
+        if (lock.vhf_channel || lock.phone || lock.email) {
+            contactHtml = `
+                <div style="background: rgba(100, 255, 218, 0.1); padding: 8px; border-radius: 6px; margin-top: 8px; font-size: 11px;">
+                    ${lock.vhf_channel ? `
+                        <div style="color: #64ffda; font-weight: 600; margin-bottom: 4px;">
+                            📻 VHF: ${escapeHTML(lock.vhf_channel)}
+                        </div>
+                    ` : ''}
+                    ${lock.phone ? `
+                        <div style="color: #8892b0; margin-bottom: 2px;">
+                            📞 ${escapeHTML(lock.phone)}
+                        </div>
+                    ` : ''}
+                    ${lock.email ? `
+                        <div style="margin-top: 6px;">
+                            <button onclick="prepareLockNotification(${lock.id})" style="
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                color: white;
+                                border: none;
+                                padding: 6px 12px;
+                                border-radius: 4px;
+                                cursor: pointer;
+                                font-size: 11px;
+                                font-weight: 600;
+                                width: 100%;
+                            ">
+                                📧 Anmelden
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
         }
 
         html += `
@@ -3849,11 +3899,80 @@ function displayLocksTimeline() {
                     </div>
                 </div>
                 ${warningHtml}
+                ${contactHtml}
             </div>
         `;
     });
 
     locksTimelinePanel.innerHTML = html;
+}
+
+/**
+ * Prepare lock notification email
+ */
+async function prepareLockNotification(lockId) {
+    try {
+        // Fetch lock details
+        const lockResponse = await fetch(`${API_URL}/api/locks/${lockId}`);
+        if (!lockResponse.ok) {
+            alert('Fehler beim Laden der Schleusen-Details');
+            return;
+        }
+        const lock = await lockResponse.json();
+
+        // Get boat settings
+        const boatSettings = typeof getBoatSettings === 'function' ? getBoatSettings() : {};
+        const boatName = boatSettings.name || 'Unbekannt';
+        const boatLength = boatSettings.length || 'N/A';
+        const boatWidth = boatSettings.width || 'N/A';
+        const boatDraft = boatSettings.draft || 'N/A';
+
+        // Calculate ETA
+        let etaText = 'in ca. X Stunden';
+        const lockLatLng = L.latLng(lock.lat, lock.lon);
+        const currentLatLng = L.latLng(currentPosition.lat, currentPosition.lon);
+        if (currentPosition.lat && currentPosition.lon) {
+            const distanceMeters = currentLatLng.distanceTo(lockLatLng);
+            const distanceNM = distanceMeters / 1852;
+            const currentSpeed = window.lastSensorData?.speed || 5; // knots
+            if (currentSpeed > 0) {
+                const etaHours = distanceNM / currentSpeed;
+                const hours = Math.floor(etaHours);
+                const minutes = Math.round((etaHours - hours) * 60);
+                if (hours > 0) {
+                    etaText = `in ca. ${hours}h ${minutes}min`;
+                } else {
+                    etaText = `in ca. ${minutes}min`;
+                }
+            }
+        }
+
+        // Create email subject and body
+        const subject = `Schleusung ${lock.name} - ${boatName}`;
+        const body = `Guten Tag,
+
+ich möchte mich für eine Schleusung anmelden:
+
+Schleuse: ${lock.name}
+Voraussichtliche Ankunft: ${etaText}
+
+Bootsdaten:
+- Name: ${boatName}
+- Länge: ${boatLength} m
+- Breite: ${boatWidth} m
+- Tiefgang: ${boatDraft} m
+
+Mit freundlichen Grüßen`;
+
+        // Open email client with pre-filled template
+        const mailtoLink = `mailto:${lock.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        window.location.href = mailtoLink;
+
+        console.log(`📧 Email-Vorlage vorbereitet für ${lock.name}`);
+    } catch (error) {
+        console.error('Fehler beim Vorbereiten der Anmeldung:', error);
+        alert('Fehler beim Vorbereiten der Email-Vorlage');
+    }
 }
 
 // ==================== GPX IMPORT/EXPORT ====================
