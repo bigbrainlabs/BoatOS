@@ -856,12 +856,27 @@ async function updateRoute() {
                     });
                 }
 
+                // Extract locks data from route response
+                if (routeData.properties.locks_from_db) {
+                    locksOnRoute = routeData.properties.locks_from_db;
+                    console.log(`🔒 Found ${locksOnRoute.length} locks on route from DB`);
+                }
+
+                // Extract lock warnings from route response
+                if (routeData.properties.lock_warnings) {
+                    lockWarnings = routeData.properties.lock_warnings;
+                    console.log(`⚠️  ${lockWarnings.length} lock warning(s):`);
+                    lockWarnings.forEach(w => {
+                        console.log(`   - ${w.lock_name}: ${w.reason} (arrives ${w.estimated_arrival_formatted})`);
+                    });
+                }
+
                 console.log(`🌊 Waterway Route: ${distanceNM.toFixed(2)} NM`);
                 showRouteInfo(distanceNM.toFixed(2), etaHoursInt, etaMinutes, routeInfo, false, true, avgSpeed);
                 hideRoutingLoader();
 
-                // Update locks timeline
-                updateLocksTimeline();
+                // Update locks timeline (will show locks + warnings)
+                displayLocksTimeline();
 
                 return;
             }
@@ -1136,6 +1151,7 @@ function clearRoute() {
         locksTimelinePanel = null;
     }
     locksOnRoute = [];
+    lockWarnings = [];
 
     // Stop navigation when route is cleared
     stopNavigation();
@@ -3630,6 +3646,7 @@ async function saveCurrentLocationAsFavorite() {
 
 let locksTimelinePanel = null;
 let locksOnRoute = [];
+let lockWarnings = []; // Warnings for closed locks
 
 /**
  * Update locks timeline with locks along the route
@@ -3776,10 +3793,44 @@ function displayLocksTimeline() {
         // Lock name
         const lockName = lock.name || `Schleuse ${index + 1}`;
 
-        // Status indicator (green if passed, yellow if upcoming)
+        // Check if there's a warning for this lock
+        const warning = lockWarnings.find(w => w.lock_id === lock.id);
+
+        // Status indicator (green if passed, red if closed warning, yellow if upcoming)
         const isPassed = distanceMeters < 100; // Consider passed if within 100m behind
-        const statusColor = isPassed ? '#2ecc71' : '#f39c12';
-        const statusIcon = isPassed ? '✓' : '→';
+        let statusColor, statusIcon, warningHtml = '';
+
+        if (warning && !isPassed) {
+            // Lock will be closed at arrival
+            statusColor = '#e74c3c'; // Red
+            statusIcon = '⚠️';
+            warningHtml = `
+                <div style="background: rgba(231, 76, 60, 0.2); padding: 8px; border-radius: 6px; margin-top: 8px; border-left: 3px solid #e74c3c;">
+                    <div style="font-size: 12px; font-weight: 600; color: #e74c3c; margin-bottom: 4px;">
+                        GESCHLOSSEN
+                    </div>
+                    <div style="font-size: 11px; color: #ffa07a;">
+                        ${escapeHTML(warning.reason)}
+                    </div>
+                    ${warning.opens_at ? `
+                        <div style="font-size: 11px; color: #8892b0; margin-top: 4px;">
+                            Öffnet um: ${escapeHTML(warning.opens_at)}
+                        </div>
+                    ` : ''}
+                    ${warning.suggested_departure_formatted ? `
+                        <div style="font-size: 11px; color: #64ffda; margin-top: 4px;">
+                            💡 Empfohlene Abfahrt: ${escapeHTML(warning.suggested_departure_formatted)}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        } else if (isPassed) {
+            statusColor = '#2ecc71'; // Green
+            statusIcon = '✓';
+        } else {
+            statusColor = '#f39c12'; // Yellow
+            statusIcon = '→';
+        }
 
         html += `
             <div style="background: rgba(42, 82, 152, 0.2); padding: 12px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid ${statusColor};">
@@ -3797,6 +3848,7 @@ function displayLocksTimeline() {
                         <div style="color: white; font-weight: 600;">${etaText}</div>
                     </div>
                 </div>
+                ${warningHtml}
             </div>
         `;
     });
