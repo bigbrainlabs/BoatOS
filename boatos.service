@@ -1,13 +1,17 @@
 [Unit]
-Description=BoatOS Backend
-After=network.target
+Description=BoatOS Backend API
+After=network.target signalk.service
+Requires=signalk.service
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/BoatOS/backend
-ExecStart=/home/pi/BoatOS/backend/venv/bin/python app/main.py
+User=arielle
+WorkingDirectory=/home/arielle/BoatOS/backend
+EnvironmentFile=/home/arielle/BoatOS/.env
+ExecStart=/home/arielle/BoatOS/backend/venv/bin/python app/main.py
 Restart=always
+RestartSec=10
+Nice=10
 
 [Install]
 WantedBy=multi-user.target

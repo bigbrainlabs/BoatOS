@@ -15,6 +15,32 @@ alerts_cache: Dict[str, Any] = {
     "location": None
 }
 
+def is_valid_alert(alert: Dict[str, Any]) -> bool:
+    """
+    Check if alert contains useful information
+
+    Filters out alerts with:
+    - "Unknown Event" AND no headline/description/instruction
+
+    Args:
+        alert: Alert dict from Bright Sky API
+
+    Returns:
+        bool: True if alert is valid and useful
+    """
+    event = alert.get("event", "")
+    headline = alert.get("headline", "")
+    description = alert.get("description", "")
+    instruction = alert.get("instruction", "")
+
+    # If event is "Unknown Event" and no other useful info, filter it out
+    if event == "Unknown Event" or not event:
+        has_info = bool(headline or description or instruction)
+        return has_info
+
+    # Event name exists and is not "Unknown Event" - keep it
+    return True
+
 async def fetch_weather_alerts(lat: float, lon: float) -> Dict[str, Any]:
     """
     Fetch weather alerts for a given location from Bright Sky (DWD data)
@@ -36,12 +62,20 @@ async def fetch_weather_alerts(lat: float, lon: float) -> Dict[str, Any]:
                 if resp.status == 200:
                     data = await resp.json()
 
+                    # Filter out invalid/useless alerts
+                    raw_alerts = data.get("alerts", [])
+                    valid_alerts = [alert for alert in raw_alerts if is_valid_alert(alert)]
+
+                    filtered_count = len(raw_alerts) - len(valid_alerts)
+                    if filtered_count > 0:
+                        print(f"🗑️ Filtered out {filtered_count} invalid alert(s)")
+
                     # Update cache
                     alerts_cache = {
-                        "alerts": data.get("alerts", []),
+                        "alerts": valid_alerts,
                         "last_updated": datetime.now().isoformat(),
                         "location": {"lat": lat, "lon": lon},
-                        "count": len(data.get("alerts", []))
+                        "count": len(valid_alerts)
                     }
 
                     print(f"✅ Weather alerts updated: {alerts_cache['count']} active warning(s)")
