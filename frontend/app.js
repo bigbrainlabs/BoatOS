@@ -65,6 +65,13 @@ let currentRoutePolyline = null; // Reference to main route polyline for color c
 let xteWarningDisplay = null; // DOM element for XTE warning
 let turnByTurnDisplay = null; // DOM element for turn-by-turn navigation instructions
 
+// Route Segment Highlighting
+let currentSegmentPolyline = null; // Highlighted current segment (yellow)
+let completedSegmentsPolyline = null; // Completed segments (faded)
+let remainingSegmentsPolyline = null; // Remaining segments (blue/green)
+let routeProgressDisplay = null; // Progress display element
+let routeArrows = []; // Direction arrows along route
+
 // Navigation State
 let navigationActive = false; // true when actively navigating (not just planning)
 let navigationStartButton = null; // Button to start/pause/stop navigation
@@ -635,6 +642,9 @@ function updateBoatPosition(gps) {
         // Update live ETA
         updateLiveETA();
 
+        // Update route segment highlighting and progress
+        updateRouteSegmentHighlighting(newLat, newLon);
+
         // Update course deviation warning (XTE)
         updateCourseDeviationWarning(newLat, newLon);
 
@@ -798,6 +808,9 @@ async function updateRoute() {
                 // Store route coordinates for XTE calculation
                 currentRouteCoordinates = routePoints.map(p => ({ lat: p[0], lon: p[1] }));
 
+                // Add route arrows for direction indication
+                addRouteArrows();
+
                 // Distanz und Segment-Infos
                 const distanceNM = routeData.properties?.distance_nm || 0;
 
@@ -898,6 +911,9 @@ function drawDirectRoute() {
 
     // Store route coordinates for XTE calculation
     currentRouteCoordinates = points.map(p => ({ lat: p[0], lon: p[1] }));
+
+    // Add route arrows for direction indication
+    addRouteArrows();
 
     let totalDistance = 0;
     let routeInfo = [];
@@ -1073,6 +1089,34 @@ function clearRoute() {
         xteWarningDisplay.remove();
         xteWarningDisplay = null;
     }
+
+    // Remove route progress display
+    if (routeProgressDisplay) {
+        routeProgressDisplay.remove();
+        routeProgressDisplay = null;
+    }
+
+    // Remove segment highlighting polylines
+    if (currentSegmentPolyline) {
+        currentSegmentPolyline.remove();
+        currentSegmentPolyline = null;
+    }
+    if (completedSegmentsPolyline) {
+        completedSegmentsPolyline.remove();
+        completedSegmentsPolyline = null;
+    }
+    if (remainingSegmentsPolyline) {
+        remainingSegmentsPolyline.remove();
+        remainingSegmentsPolyline = null;
+    }
+
+    // Remove route arrows
+    routeArrows.forEach(arrow => {
+        if (arrow) {
+            map.removeLayer(arrow);
+        }
+    });
+    routeArrows = [];
 
     // Clear route data for XTE calculation
     currentRouteCoordinates = null;
@@ -2691,6 +2735,284 @@ function updateLiveETA() {
     }
 }
 
+// ==================== ROUTE SEGMENT HIGHLIGHTING & PROGRESS ====================
+
+/**
+ * Update route segment highlighting based on current position
+ */
+function updateRouteSegmentHighlighting(currentLat, currentLon) {
+    // Only highlight during active navigation
+    if (!navigationActive || !waypoints || waypoints.length < 2 || !currentRouteCoordinates || currentRouteCoordinates.length < 2) {
+        // Clear highlighting
+        if (currentSegmentPolyline) {
+            currentSegmentPolyline.remove();
+            currentSegmentPolyline = null;
+        }
+        if (completedSegmentsPolyline) {
+            completedSegmentsPolyline.remove();
+            completedSegmentsPolyline = null;
+        }
+        if (remainingSegmentsPolyline) {
+            remainingSegmentsPolyline.remove();
+            remainingSegmentsPolyline = null;
+        }
+        return;
+    }
+
+    // Find closest point on route
+    let minDistance = Infinity;
+    let closestSegmentIndex = 0;
+    let closestPoint = null;
+
+    for (let i = 0; i < currentRouteCoordinates.length - 1; i++) {
+        const seg1 = currentRouteCoordinates[i];
+        const seg2 = currentRouteCoordinates[i + 1];
+
+        const result = pointToLineSegmentDistance(
+            currentLat, currentLon,
+            seg1.lat, seg1.lon,
+            seg2.lat, seg2.lon
+        );
+
+        if (result.distance < minDistance) {
+            minDistance = result.distance;
+            closestSegmentIndex = i;
+            closestPoint = result.nearestPoint;
+        }
+    }
+
+    // Get route color
+    const isWaterway = currentRoutePolyline && currentRoutePolyline.options.originalColor === '#2ecc71';
+    const normalColor = isWaterway ? '#2ecc71' : '#3498db';
+
+    // Clear old polylines
+    if (currentSegmentPolyline) currentSegmentPolyline.remove();
+    if (completedSegmentsPolyline) completedSegmentsPolyline.remove();
+    if (remainingSegmentsPolyline) remainingSegmentsPolyline.remove();
+
+    // Draw completed segments (faded)
+    if (closestSegmentIndex > 0) {
+        const completedPoints = [];
+        for (let i = 0; i <= closestSegmentIndex; i++) {
+            completedPoints.push([currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon]);
+        }
+        completedSegmentsPolyline = L.polyline(completedPoints, {
+            color: '#666',
+            weight: 4,
+            opacity: 0.3,
+            lineCap: 'round',
+            lineJoin: 'round'
+        }).addTo(routeLayer);
+    }
+
+    // Draw current segment (bright yellow/orange)
+    const currentSegmentPoints = [
+        [closestPoint.lat, closestPoint.lon],
+        [currentRouteCoordinates[closestSegmentIndex + 1].lat, currentRouteCoordinates[closestSegmentIndex + 1].lon]
+    ];
+    currentSegmentPolyline = L.polyline(currentSegmentPoints, {
+        color: '#ffd700', // Gold/Yellow
+        weight: 6,
+        opacity: 1.0,
+        lineCap: 'round',
+        lineJoin: 'round'
+    }).addTo(routeLayer);
+
+    // Draw remaining segments (normal color)
+    if (closestSegmentIndex < currentRouteCoordinates.length - 2) {
+        const remainingPoints = [];
+        for (let i = closestSegmentIndex + 1; i < currentRouteCoordinates.length; i++) {
+            remainingPoints.push([currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon]);
+        }
+        remainingSegmentsPolyline = L.polyline(remainingPoints, {
+            color: normalColor,
+            weight: 5,
+            opacity: 0.9,
+            lineCap: 'round',
+            lineJoin: 'round'
+        }).addTo(routeLayer);
+    }
+
+    // Update progress display
+    updateRouteProgress(closestSegmentIndex, closestPoint);
+}
+
+/**
+ * Update route progress display
+ */
+function updateRouteProgress(segmentIndex, closestPoint) {
+    if (!currentRouteCoordinates || currentRouteCoordinates.length < 2) return;
+
+    // Calculate completed distance
+    let completedDistance = 0;
+    for (let i = 0; i < segmentIndex; i++) {
+        const p1 = L.latLng(currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon);
+        const p2 = L.latLng(currentRouteCoordinates[i + 1].lat, currentRouteCoordinates[i + 1].lon);
+        completedDistance += p1.distanceTo(p2);
+    }
+    // Add distance from last completed segment to current position
+    if (segmentIndex < currentRouteCoordinates.length - 1) {
+        const p1 = L.latLng(currentRouteCoordinates[segmentIndex].lat, currentRouteCoordinates[segmentIndex].lon);
+        const current = L.latLng(closestPoint.lat, closestPoint.lon);
+        completedDistance += p1.distanceTo(current);
+    }
+
+    // Calculate total route distance
+    let totalDistance = 0;
+    for (let i = 0; i < currentRouteCoordinates.length - 1; i++) {
+        const p1 = L.latLng(currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon);
+        const p2 = L.latLng(currentRouteCoordinates[i + 1].lat, currentRouteCoordinates[i + 1].lon);
+        totalDistance += p1.distanceTo(p2);
+    }
+
+    // Calculate progress percentage
+    const progressPercent = totalDistance > 0 ? (completedDistance / totalDistance) * 100 : 0;
+    const remainingDistance = totalDistance - completedDistance;
+
+    // Format distances
+    const remainingDistFormatted = typeof formatDistance === 'function'
+        ? formatDistance(remainingDistance)
+        : `${(remainingDistance / 1852).toFixed(1)} NM`;
+
+    // Create or update progress display
+    if (!routeProgressDisplay) {
+        routeProgressDisplay = document.createElement('div');
+        routeProgressDisplay.id = 'route-progress-display';
+        routeProgressDisplay.style.cssText = `
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10, 14, 39, 0.95);
+            backdrop-filter: blur(10px);
+            border: 2px solid #64ffda;
+            border-radius: 12px;
+            padding: 12px 20px;
+            z-index: 1003;
+            min-width: 280px;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        `;
+        document.getElementById('map-container').appendChild(routeProgressDisplay);
+    }
+
+    routeProgressDisplay.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="flex: 1;">
+                <div style="font-size: 11px; color: #8892b0; margin-bottom: 4px;">ROUTE PROGRESS</div>
+                <div style="font-size: 18px; font-weight: 700; color: #64ffda;">${progressPercent.toFixed(0)}%</div>
+            </div>
+            <div style="flex: 1; text-align: right;">
+                <div style="font-size: 11px; color: #8892b0; margin-bottom: 4px;">REMAINING</div>
+                <div style="font-size: 16px; font-weight: 600; color: white;">${remainingDistFormatted}</div>
+            </div>
+        </div>
+        <div style="
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        ">
+            <div style="
+                width: ${progressPercent.toFixed(1)}%;
+                height: 100%;
+                background: linear-gradient(90deg, #ffd700, #64ffda);
+                border-radius: 3px;
+                transition: width 0.5s ease;
+            "></div>
+        </div>
+    `;
+}
+
+/**
+ * Add direction arrows along the route
+ */
+function addRouteArrows() {
+    // Clear existing arrows
+    routeArrows.forEach(arrow => arrow.remove());
+    routeArrows = [];
+
+    if (!currentRouteCoordinates || currentRouteCoordinates.length < 2) return;
+
+    // Calculate total route distance
+    let totalDistance = 0;
+    for (let i = 0; i < currentRouteCoordinates.length - 1; i++) {
+        const p1 = L.latLng(currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon);
+        const p2 = L.latLng(currentRouteCoordinates[i + 1].lat, currentRouteCoordinates[i + 1].lon);
+        totalDistance += p1.distanceTo(p2);
+    }
+
+    // Arrow spacing: 1-2 NM (approximately 1852-3704 meters)
+    const arrowSpacing = 2000; // 2 km
+    const numArrows = Math.floor(totalDistance / arrowSpacing);
+
+    if (numArrows < 1) return; // Route too short
+
+    // Place arrows at intervals
+    let currentDistance = arrowSpacing; // Start after first interval
+
+    for (let arrowNum = 0; arrowNum < numArrows; arrowNum++) {
+        // Find position along route at currentDistance
+        let accumulatedDistance = 0;
+        let arrowPlaced = false;
+
+        for (let i = 0; i < currentRouteCoordinates.length - 1; i++) {
+            const p1 = L.latLng(currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon);
+            const p2 = L.latLng(currentRouteCoordinates[i + 1].lat, currentRouteCoordinates[i + 1].lon);
+            const segmentDistance = p1.distanceTo(p2);
+
+            if (accumulatedDistance + segmentDistance >= currentDistance) {
+                // Arrow position is in this segment
+                const distanceIntoSegment = currentDistance - accumulatedDistance;
+                const fraction = distanceIntoSegment / segmentDistance;
+
+                // Interpolate position
+                const arrowLat = currentRouteCoordinates[i].lat +
+                    (currentRouteCoordinates[i + 1].lat - currentRouteCoordinates[i].lat) * fraction;
+                const arrowLon = currentRouteCoordinates[i].lon +
+                    (currentRouteCoordinates[i + 1].lon - currentRouteCoordinates[i].lon) * fraction;
+
+                // Calculate bearing for arrow rotation
+                const bearing = calculateBearing(
+                    currentRouteCoordinates[i].lat,
+                    currentRouteCoordinates[i].lon,
+                    currentRouteCoordinates[i + 1].lat,
+                    currentRouteCoordinates[i + 1].lon
+                );
+
+                // Create arrow marker
+                const arrowIcon = L.divIcon({
+                    html: `<div style="
+                        transform: rotate(${bearing}deg);
+                        font-size: 20px;
+                        text-shadow: 0 0 3px rgba(0,0,0,0.8);
+                    ">⬆️</div>`,
+                    className: 'route-arrow-icon',
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                });
+
+                const arrowMarker = L.marker([arrowLat, arrowLon], {
+                    icon: arrowIcon,
+                    interactive: false // Not clickable
+                }).addTo(routeLayer);
+
+                routeArrows.push(arrowMarker);
+                arrowPlaced = true;
+                break;
+            }
+
+            accumulatedDistance += segmentDistance;
+        }
+
+        if (!arrowPlaced) break;
+        currentDistance += arrowSpacing;
+    }
+}
+
 // ==================== CROSS-TRACK ERROR & COURSE DEVIATION ====================
 
 /**
@@ -2953,6 +3275,7 @@ function toggleNavigation() {
             updateNextWaypointDisplay(currentPosition.lat, currentPosition.lon, currentSpeed);
             updateTurnByTurnDisplay(currentPosition.lat, currentPosition.lon);
             updateLiveETA();
+            updateRouteSegmentHighlighting(currentPosition.lat, currentPosition.lon);
             updateCourseDeviationWarning(currentPosition.lat, currentPosition.lon);
         }
     } else {
