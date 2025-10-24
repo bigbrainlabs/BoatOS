@@ -102,11 +102,20 @@ def load_locks() -> List[Dict[str, Any]]:
         lock = dict(row)
         # Parse JSON fields
         if lock['opening_hours']:
-            lock['opening_hours'] = json.loads(lock['opening_hours'])
+            try:
+                lock['opening_hours'] = json.loads(lock['opening_hours'])
+            except:
+                lock['opening_hours'] = None
         if lock['break_times']:
-            lock['break_times'] = json.loads(lock['break_times'])
+            try:
+                lock['break_times'] = json.loads(lock['break_times'])
+            except:
+                lock['break_times'] = None
         if lock['facilities']:
-            lock['facilities'] = json.loads(lock['facilities'])
+            try:
+                lock['facilities'] = json.loads(lock['facilities'])
+            except:
+                lock['facilities'] = None
         locks.append(lock)
 
     conn.close()
@@ -158,11 +167,20 @@ def get_locks_in_bounds(lat_min: float, lon_min: float,
         lock = dict(row)
         # Parse JSON fields
         if lock['opening_hours']:
-            lock['opening_hours'] = json.loads(lock['opening_hours'])
+            try:
+                lock['opening_hours'] = json.loads(lock['opening_hours'])
+            except:
+                lock['opening_hours'] = None
         if lock['break_times']:
-            lock['break_times'] = json.loads(lock['break_times'])
+            try:
+                lock['break_times'] = json.loads(lock['break_times'])
+            except:
+                lock['break_times'] = None
         if lock['facilities']:
-            lock['facilities'] = json.loads(lock['facilities'])
+            try:
+                lock['facilities'] = json.loads(lock['facilities'])
+            except:
+                lock['facilities'] = None
         locks.append(lock)
 
     return locks
