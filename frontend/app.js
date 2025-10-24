@@ -164,11 +164,12 @@ function initMap() {
         attribution: '© OpenSeaMap Inland'
     });
 
-    railwayLayer = L.tileLayer('https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        opacity: 0.5,
-        attribution: '© OpenRailwayMap'
-    });
+    // Railway layer removed - not useful for boat navigation
+    // railwayLayer = L.tileLayer('https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', {
+    //     maxZoom: 19,
+    //     opacity: 0.5,
+    //     attribution: '© OpenRailwayMap'
+    // });
 
     trafficLayer = L.tileLayer('https://tiles.marinetraffic.com/ais_helpers/shiptilesingle.aspx?output=png&sat=1&grouping=shiptype&tile_size=256&legends=1&zoom={z}&X={x}&Y={y}', {
         maxZoom: 15,
@@ -179,7 +180,7 @@ function initMap() {
     // Add default overlays (all always visible now, layer control removed)
     seaMarkLayer.addTo(map);
     inlandLayer.addTo(map);  // Contains locks/schleusen
-    railwayLayer.addTo(map);
+    // railwayLayer removed - not useful for boat navigation
 
     // ==================== LAYER CONTROL ====================
     // Removed: User found it annoying and not useful (2025-10-24)
