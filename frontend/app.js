@@ -176,23 +176,24 @@ function initMap() {
         attribution: '© MarineTraffic'
     });
 
-    // Add default overlays
+    // Add default overlays (all always visible now, layer control removed)
     seaMarkLayer.addTo(map);
-    // inlandLayer now controlled by layer control (contains locks/schleusen)
+    inlandLayer.addTo(map);  // Contains locks/schleusen
     railwayLayer.addTo(map);
 
     // ==================== LAYER CONTROL ====================
-    const overlays = {
-        "⚓ Seezeichen": seaMarkLayer,
-        "🔒 Schleusen & Wasserwege": inlandLayer,
-        "🌉 Brücken": railwayLayer,
-        "🚢 Schiffsverkehr (AIS)": trafficLayer
-    };
-
-    L.control.layers(null, overlays, {
-        position: 'bottomright',
-        collapsed: false  // Always visible for easy access
-    }).addTo(map);
+    // Removed: User found it annoying and not useful (2025-10-24)
+    // const overlays = {
+    //     "⚓ Seezeichen": seaMarkLayer,
+    //     "🔒 Schleusen & Wasserwege": inlandLayer,
+    //     "🌉 Brücken": railwayLayer,
+    //     "🚢 Schiffsverkehr (AIS)": trafficLayer
+    // };
+    //
+    // L.control.layers(null, overlays, {
+    //     position: 'bottomright',
+    //     collapsed: false  // Always visible for easy access
+    // }).addTo(map);
 
     // Zoom Control (rechts unten)
     L.control.zoom({ position: 'bottomleft' }).addTo(map);
@@ -1970,7 +1971,8 @@ function updateInfrastructureMarkers(pois) {
             });
 
             marker.bindPopup(() => createInfrastructurePopup(poi));
-            marker.on('click', () => showInfrastructureDetails(poi));
+            // Removed: Infrastructure details panel (user found it annoying)
+            // marker.on('click', () => showInfrastructureDetails(poi));
             marker.addTo(map);
 
             infrastructurePOIs[poi.id] = { marker, data: poi };
@@ -2037,7 +2039,7 @@ function createInfrastructurePopup(poi) {
     return html;
 }
 
-function showInfrastructureDetails(poi) {
+async function showInfrastructureDetails(poi) {
     const panel = document.getElementById('infrastructure-details-panel');
     if (!panel) return;
 
@@ -2072,7 +2074,62 @@ function showInfrastructureDetails(poi) {
         `;
     }
 
+    // For locks, try to fetch status from database
+    let lockStatus = null;
     if (poi.type === 'lock') {
+        try {
+            // Find matching lock in database by searching nearby (within 200m)
+            const nearbyResponse = await fetch(`${API_URL}/api/locks/nearby?lat=${poi.lat}&lon=${poi.lon}&radius=0.2`);
+            if (nearbyResponse.ok) {
+                const nearbyData = await nearbyResponse.json();
+                if (nearbyData.locks && nearbyData.locks.length > 0) {
+                    // Use closest lock
+                    const dbLock = nearbyData.locks[0];
+
+                    // Fetch status
+                    const statusResponse = await fetch(`${API_URL}/api/locks/${dbLock.id}/status`);
+                    if (statusResponse.ok) {
+                        lockStatus = await statusResponse.json();
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn('Could not fetch lock status:', error);
+        }
+
+        // Display status if available
+        if (lockStatus) {
+            const isOpen = lockStatus.is_open;
+            const statusColor = isOpen ? '#2ecc71' : '#e74c3c';
+            const statusIcon = isOpen ? '✅' : '🔒';
+            const statusText = isOpen ? 'OFFEN' : 'GESCHLOSSEN';
+
+            detailsHtml += `
+                <div class="info-item" style="grid-column: span 2;">
+                    <div style="background: ${statusColor}20; border: 2px solid ${statusColor}; border-radius: 8px; padding: 12px; text-align: center;">
+                        <div style="font-size: 18px; font-weight: 700; color: ${statusColor}; margin-bottom: 4px;">
+                            ${statusIcon} ${statusText}
+                        </div>
+                        ${lockStatus.reason ? `
+                            <div style="font-size: 11px; color: #8892b0; margin-top: 4px;">
+                                ${lockStatus.reason}
+                            </div>
+                        ` : ''}
+                        ${!isOpen && lockStatus.opens_at ? `
+                            <div style="font-size: 11px; color: #64ffda; margin-top: 6px; font-weight: 600;">
+                                Öffnet um: ${lockStatus.opens_at}
+                            </div>
+                        ` : ''}
+                        ${isOpen && lockStatus.closes_at ? `
+                            <div style="font-size: 11px; color: #ffa07a; margin-top: 6px;">
+                                Schließt um: ${lockStatus.closes_at}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
         if (props.height) detailsHtml += `<div class="info-item"><div class="info-label">Hubhöhe</div><div class="info-value">${props.height}</div></div>`;
         if (props.length) detailsHtml += `<div class="info-item"><div class="info-label">Länge</div><div class="info-value">${props.length}</div></div>`;
         if (props.width) detailsHtml += `<div class="info-item"><div class="info-label">Breite</div><div class="info-value">${props.width}</div></div>`;
@@ -3747,7 +3804,7 @@ function displayLocksTimeline() {
         locksTimelinePanel.style.cssText = `
             position: absolute;
             bottom: 80px;
-            left: 20px;
+            right: 20px;
             max-width: 350px;
             max-height: 400px;
             overflow-y: auto;
@@ -3776,14 +3833,21 @@ function displayLocksTimeline() {
     `;
 
     locksOnRoute.forEach((lock, index) => {
-        const lockLatLng = L.latLng(lock.lat, lock.lon);
-        const currentLatLng = L.latLng(currentLat, currentLon);
-        const distanceMeters = currentLatLng.distanceTo(lockLatLng);
-        const distanceNM = distanceMeters / 1852;
+        // Calculate distance and ETA
+        let distanceMeters = 0;
+        let distanceNM = 0;
+        let etaText = 'N/A';
+
+        // Only calculate if we have valid current position
+        if (currentLat && currentLon && !isNaN(currentLat) && !isNaN(currentLon)) {
+            const lockLatLng = L.latLng(lock.lat, lock.lon);
+            const currentLatLng = L.latLng(currentLat, currentLon);
+            distanceMeters = currentLatLng.distanceTo(lockLatLng);
+            distanceNM = distanceMeters / 1852;
+        }
 
         // Calculate ETA
-        let etaText = 'N/A';
-        if (currentSpeed > 0) {
+        if (currentSpeed > 0 && distanceNM > 0) {
             const etaHours = distanceNM / currentSpeed;
             const hours = Math.floor(etaHours);
             const minutes = Math.round((etaHours - hours) * 60);

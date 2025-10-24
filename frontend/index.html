@@ -752,14 +752,7 @@
             </div>
         </div>
 
-        <!-- Infrastructure Details Panel -->
-        <div id="infrastructure-details-panel" class="info-panel">
-            <button class="panel-close" onclick="closeInfrastructureDetails()">×</button>
-            <h3 id="infrastructure-details-title" data-i18n="infrastructure_details">🔒 Infrastructure Details</h3>
-            <div class="info-details" id="infrastructure-details-content">
-                <!-- Details will be populated by JavaScript -->
-            </div>
-        </div>
+        <!-- Infrastructure Details Panel: Removed (user found it annoying) -->
 
         <!-- AIS Details Panel -->
         <div id="ais-details-panel" class="info-panel">
@@ -990,6 +983,7 @@
     <script src="search.js?v=1760348000"></script>
     <script src="weather_alerts.js?v=1.0"></script>
     <script src="locks.js?v=1.0"></script>
+    <script src="osrm_regions.js?v=1.0"></script>
     <script src="app.js?v=1760356000"></script>
 
     <!-- Include Units Modal -->
@@ -1506,6 +1500,68 @@
                             <small style="color: #7f8c8d; display: block; margin-top: 5px;">
                                 URL des lokalen OSRM-Servers
                             </small>
+                        </div>
+
+                        <!-- OSRM Region Switching -->
+                        <div id="osrm-region-field" class="setting-item" style="background: rgba(100, 255, 218, 0.1); padding: 15px; border-radius: 8px;">
+                            <h4 style="margin-top: 0; color: #64ffda;">🗺️ OSRM Region</h4>
+                            <small style="color: #8892b0; display: block; margin-bottom: 15px;">
+                                Wähle die geladene Karten-Region für OSRM-Routing
+                            </small>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="font-size: 13px; color: #8892b0; margin-bottom: 5px; display: block;">Aktuelle Region:</label>
+                                <div id="current-region-display" style="
+                                    padding: 10px 15px;
+                                    background: rgba(42, 82, 152, 0.3);
+                                    border: 2px solid rgba(100, 255, 218, 0.3);
+                                    border-radius: 6px;
+                                    color: #64ffda;
+                                    font-weight: 600;
+                                    font-size: 14px;
+                                ">
+                                    <span id="current-region-name">Lade...</span>
+                                    <span id="region-status" style="margin-left: 10px; font-size: 12px; opacity: 0.8;"></span>
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 10px;">
+                                <label style="font-size: 13px; color: #8892b0; margin-bottom: 5px; display: block;">Verfügbare Regionen:</label>
+                                <select id="region-selector" style="
+                                    width: 100%;
+                                    padding: 10px;
+                                    background: rgba(42, 82, 152, 0.2);
+                                    border: 2px solid rgba(42, 82, 152, 0.4);
+                                    border-radius: 6px;
+                                    color: white;
+                                    font-size: 14px;
+                                ">
+                                    <option value="">Lade Regionen...</option>
+                                </select>
+                            </div>
+
+                            <button id="switch-region-btn" onclick="switchOSRMRegion()" style="
+                                width: 100%;
+                                padding: 12px;
+                                background: linear-gradient(135deg, #667eea, #764ba2);
+                                border: none;
+                                border-radius: 6px;
+                                color: white;
+                                font-size: 14px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                transition: all 0.3s;
+                            " onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                                🔄 Region wechseln
+                            </button>
+
+                            <div id="region-switch-status" style="
+                                margin-top: 10px;
+                                padding: 10px;
+                                border-radius: 6px;
+                                font-size: 13px;
+                                display: none;
+                            "></div>
                         </div>
 
                         <!-- GraphHopper Settings -->
