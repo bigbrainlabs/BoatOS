@@ -3356,6 +3356,49 @@ async def import_all_data(request: Request):
         traceback.print_exc()
         return {"status": "error", "error": str(e)}
 
+# ==================== ONSCREEN KEYBOARD ====================
+@app.post("/api/keyboard/toggle")
+async def toggle_onscreen_keyboard(action: str = "show"):
+    """Toggle onscreen keyboard (onboard) for touch input"""
+    try:
+        if action == "show":
+            # Check if onboard is already running
+            check = subprocess.run(
+                ["pgrep", "-x", "onboard"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+
+            # Only start if not already running
+            if check.returncode != 0:
+                # Show onboard keyboard with full X11 environment
+                env = os.environ.copy()
+                env['DISPLAY'] = ':0'
+                env['XAUTHORITY'] = '/home/arielle/.Xauthority'
+                env['HOME'] = '/home/arielle'
+
+                subprocess.Popen(
+                    ["onboard", "--size", "1024x400"],
+                    env=env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True
+                )
+            return {"status": "success", "action": "shown"}
+        elif action == "hide":
+            # Hide onboard keyboard
+            subprocess.run(
+                ["pkill", "-9", "onboard"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            return {"status": "success", "action": "hidden"}
+        else:
+            return {"status": "error", "message": "Invalid action. Use 'show' or 'hide'"}
+    except Exception as e:
+        print(f"⚠️ Keyboard toggle error: {e}")
+        return {"status": "error", "error": str(e)}
+
 # ==================== STARTUP ====================
 @app.on_event("startup")
 async def startup_event():
