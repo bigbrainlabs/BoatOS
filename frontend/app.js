@@ -1627,6 +1627,47 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchWeather();
     setInterval(fetchWeather, 1800000); // 30 min
 
+    // Onscreen keyboard for search input (only in kiosk mode)
+    const isKioskMode = window.location.hostname === 'localhost' ||
+                        window.location.hostname === '127.0.0.1' ||
+                        window.location.hostname === '::1';
+
+    console.log(`🖥️ Hostname: ${window.location.hostname}, isKioskMode: ${isKioskMode}`);
+
+    const searchInput = document.getElementById('search-input');
+    if (searchInput && isKioskMode) {
+        console.log('⌨️ Onscreen keyboard enabled for kiosk mode');
+
+        // Show keyboard when search input is focused
+        searchInput.addEventListener('focus', async () => {
+            console.log('🎯 Search input focused - showing keyboard');
+            try {
+                const response = await fetch(`${API_URL}/api/keyboard/toggle?action=show`, { method: 'POST' });
+                console.log('✅ Keyboard show response:', await response.json());
+            } catch (error) {
+                console.error('❌ Failed to show keyboard:', error);
+            }
+        });
+
+        // Hide keyboard when search input loses focus
+        searchInput.addEventListener('blur', async () => {
+            console.log('👋 Search input blurred - hiding keyboard');
+            // Small delay to allow clicking on keyboard
+            setTimeout(async () => {
+                try {
+                    const response = await fetch(`${API_URL}/api/keyboard/toggle?action=hide`, { method: 'POST' });
+                    console.log('✅ Keyboard hide response:', await response.json());
+                } catch (error) {
+                    console.error('❌ Failed to hide keyboard:', error);
+                }
+            }, 300);
+        });
+
+        console.log('✅ Keyboard event listeners attached to search input');
+    } else {
+        console.log(`⚠️ Keyboard not enabled. searchInput: ${!!searchInput}, isKioskMode: ${isKioskMode}`);
+    }
+
     // Initialize locks layer
     if (typeof initLocksLayer === 'function') {
         initLocksLayer(map);
@@ -1634,11 +1675,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Geolocation API (Browser GPS als Fallback)
     // Skip browser geolocation on Pi since hardware GPS is always available
-    // Pi accesses via localhost or its own IP (192.168.2.217)
+    // Pi accesses via localhost or its own IP (192.168.x.x)
     const isRunningOnPi = window.location.hostname === 'localhost' ||
                           window.location.hostname === '127.0.0.1' ||
                           window.location.hostname === '::1' ||
-                          window.location.hostname === '192.168.2.217';
+                          window.location.hostname.startsWith('192.168.');
 
     if (isRunningOnPi) {
         console.log('🔧 Running on Pi - browser geolocation disabled (using hardware GPS only)');

@@ -6,7 +6,7 @@
 class VirtualKeyboard {
     constructor() {
         this.isKioskMode = window.location.hostname === 'localhost' ||
-                          window.location.hostname === '192.168.2.217';
+                          window.location.hostname.startsWith('192.168.');
 
         if (!this.isKioskMode) return;
 
