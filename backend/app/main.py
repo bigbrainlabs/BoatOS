@@ -3,7 +3,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, B
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 from fastapi.staticfiles import StaticFiles
-import asyncio, json, websockets, os, shutil, zipfile, subprocess
+import asyncio, json, websockets, os, shutil, zipfile, subprocess, re
 from datetime import datetime
 from typing import List, Dict, Any
 import paho.mqtt.client as mqtt
@@ -12,6 +12,7 @@ import aiohttp
 import requests
 from bs4 import BeautifulSoup
 from pathlib import Path
+from dotenv import load_dotenv
 import gps_service
 import logbook_storage
 import pdf_export
@@ -25,6 +26,10 @@ import statistics
 import weather_alerts
 import locks_storage
 import dashboard_dsl
+
+# Load environment variables from .env file (one level up from backend/)
+dotenv_path = Path(__file__).resolve().parent.parent.parent / ".env"
+load_dotenv(dotenv_path=dotenv_path)
 
 app = FastAPI(title="BoatOS API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -1691,8 +1696,9 @@ async def download_enc(request: Request):
 @app.get("/api/weather")
 async def get_weather(lang: str = "de"):
     """Get weather data with optional language parameter (de/en)"""
-    if lang != weather_data.get("lang", "de"):
-        asyncio.create_task(fetch_weather_once(lang))
+    # If weather_data is empty or language changed, fetch it
+    if not weather_data or lang != weather_data.get("lang", "de"):
+        await fetch_weather_once(lang)
     return weather_data
 
 async def fetch_weather_once(lang: str = "de"):
@@ -2881,6 +2887,152 @@ async def calculate_route(request: dict):
         import traceback
         traceback.print_exc()
         return {"error": str(e)}
+
+# ==================== ROUTING REGIONS MANAGEMENT ====================
+@app.get("/api/routing/regions")
+async def get_available_regions():
+    """
+    Get list of available OSRM regions
+
+    Returns:
+        List of region names that are available for routing
+    """
+    osrm_dir = Path("/home/arielle/BoatOS/data/osrm")
+
+    # Find all .osrm.properties files
+    properties_files = list(osrm_dir.glob("*-latest.osrm.properties"))
+
+    regions = []
+    for prop_file in sorted(properties_files):
+        region_name = prop_file.name.replace("-latest.osrm.properties", "")
+
+        # Pretty names
+        display_names = {
+            "baden-wuerttemberg": "Baden-Württemberg",
+            "bayern": "Bayern",
+            "berlin": "Berlin",
+            "brandenburg": "Brandenburg",
+            "bremen": "Bremen",
+            "hamburg": "Hamburg",
+            "hessen": "Hessen",
+            "mecklenburg-vorpommern": "Mecklenburg-Vorpommern",
+            "niedersachsen": "Niedersachsen",
+            "nordrhein-westfalen": "Nordrhein-Westfalen",
+            "rheinland-pfalz": "Rheinland-Pfalz",
+            "saarland": "Saarland",
+            "sachsen": "Sachsen",
+            "sachsen-anhalt": "Sachsen-Anhalt",
+            "schleswig-holstein": "Schleswig-Holstein",
+            "thueringen": "Thüringen",
+            "germany": "Deutschland (komplett)",
+            "elbe": "Elbe (Sachsen-Anhalt + Brandenburg + Sachsen)"
+        }
+
+        regions.append({
+            "id": region_name,
+            "name": display_names.get(region_name, region_name.replace("-", " ").title())
+        })
+
+    return {"regions": regions, "count": len(regions)}
+
+@app.get("/api/routing/current-region")
+async def get_current_region():
+    """
+    Get currently active OSRM region
+
+    Returns:
+        Currently loaded region name
+    """
+    try:
+        # Check which osrm-routed process is running
+        result = subprocess.run(
+            ["ps", "aux"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+
+        for line in result.stdout.split('\n'):
+            if 'osrm-routed' in line and '--algorithm=MLD' in line:
+                # Extract filename from command line
+                match = re.search(r'/([^/]+)-latest\.osrm', line)
+                if match:
+                    region = match.group(1)
+                    return {"region": region, "running": True}
+
+        return {"region": None, "running": False}
+    except Exception as e:
+        return {"error": str(e), "running": False}
+
+@app.post("/api/routing/switch-region")
+async def switch_region(request: dict):
+    """
+    Switch to a different OSRM region
+
+    Request body: {
+        "region": "region-name"  # e.g., "hamburg", "germany"
+    }
+
+    Returns:
+        Status of the region switch
+    """
+    region = request.get("region")
+
+    if not region:
+        return {"success": False, "error": "Region name required"}
+
+    # Check if region files exist (use .osrm.properties as indicator)
+    osrm_properties = Path(f"/home/arielle/BoatOS/data/osrm/{region}-latest.osrm.properties")
+
+    if not osrm_properties.exists():
+        return {"success": False, "error": f"Region '{region}' not found"}
+
+    # osrm-routed needs the base path without extension
+    osrm_file = Path(f"/home/arielle/BoatOS/data/osrm/{region}-latest.osrm")
+
+    try:
+        # Kill current osrm-routed process
+        subprocess.run(["pkill", "-9", "osrm-routed"], timeout=5)
+        print(f"🛑 Stopped osrm-routed")
+
+        # Wait a moment for process to fully terminate
+        await asyncio.sleep(1)
+
+        # Start new osrm-routed with selected region
+        subprocess.Popen([
+            "/usr/local/bin/osrm-routed",
+            "--algorithm=MLD",
+            str(osrm_file),
+            "--port", "5000"
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        print(f"✅ Started osrm-routed with region: {region}")
+
+        # Wait for OSRM to start
+        await asyncio.sleep(2)
+
+        # Verify it started
+        result = subprocess.run(
+            ["ps", "aux"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+
+        if 'osrm-routed' in result.stdout and region in result.stdout:
+            return {
+                "success": True,
+                "region": region,
+                "message": f"Successfully switched to region: {region}"
+            }
+        else:
+            return {
+                "success": False,
+                "error": "OSRM failed to start with new region"
+            }
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 # ==================== CREW MANAGEMENT ====================
 @app.get("/api/crew")
