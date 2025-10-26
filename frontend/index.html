@@ -565,6 +565,80 @@
             opacity: 0.8;
         }
 
+        /* ========== VIRTUAL KEYBOARD ========== */
+        .virtual-keyboard {
+            position: fixed;
+            bottom: -350px;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, rgba(26, 31, 58, 0.98) 0%, rgba(10, 14, 39, 0.98) 100%);
+            backdrop-filter: blur(20px);
+            box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.5);
+            border-top: 2px solid rgba(100, 255, 218, 0.3);
+            padding: 15px;
+            transition: bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .virtual-keyboard.visible {
+            bottom: 0;
+        }
+
+        .keyboard-row {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .key {
+            background: linear-gradient(135deg, rgba(100, 255, 218, 0.15) 0%, rgba(100, 255, 218, 0.05) 100%);
+            border: 2px solid rgba(100, 255, 218, 0.3);
+            border-radius: 8px;
+            color: #64ffda;
+            font-size: 18px;
+            font-weight: 600;
+            padding: 15px 20px;
+            min-width: 60px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .key:active {
+            transform: scale(0.95);
+            background: linear-gradient(135deg, rgba(100, 255, 218, 0.3) 0%, rgba(100, 255, 218, 0.15) 100%);
+            border-color: #64ffda;
+        }
+
+        .key-special {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+            border-color: rgba(255, 255, 255, 0.2);
+            color: #fff;
+        }
+
+        .key-special:active {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%);
+        }
+
+        .key-space {
+            flex: 1;
+            max-width: 400px;
+        }
+
+        .key-enter {
+            min-width: 80px;
+        }
+
+        .key-caps.active {
+            background: linear-gradient(135deg, #64ffda 0%, #00b894 100%);
+            color: #0a0e27;
+            border-color: #64ffda;
+        }
+
     </style>
 </head>
 <body>
@@ -1994,6 +2068,9 @@
             window.SensorsDashboard.show();
         });
     </script>
+
+    <!-- Virtual Keyboard for Kiosk Mode -->
+    <script src="virtual-keyboard.js"></script>
 
 </body>
 </html>
