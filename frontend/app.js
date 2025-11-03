@@ -116,10 +116,11 @@ function initMap() {
     console.log('🗺️ Map created, zoom:', map.getZoom(), 'center:', map.getCenter());
 
     // ==================== BASE LAYERS ====================
-    // Using local Nginx tile proxy to avoid HTTPS mixed content issues
-    osmLayer = L.tileLayer('/tiles/{z}/{x}/{y}.png', {
+    // Using HTTPS tile servers (works with our HTTPS setup)
+    osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        attribution: '© OpenStreetMap'
+        attribution: '© OpenStreetMap',
+        subdomains: ['a', 'b', 'c']
     });
 
     // Add tile loading event listeners for debugging
