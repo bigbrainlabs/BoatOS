@@ -3,7 +3,7 @@
  * v2 - Skip tile caching
  */
 
-const CACHE_NAME = 'boatos-v4';
+const CACHE_NAME = 'boatos-v5';
 const urlsToCache = [
     '/',
     '/index.html',

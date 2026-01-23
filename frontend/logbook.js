@@ -681,3 +681,22 @@ async function deleteTrip(tripId) {
         if (typeof showMsg === 'function') showMsg("❌ Fehler beim Löschen");
     }
 }
+
+// Export functions to window for onclick handlers
+window.startTrackRecording = startTrackRecording;
+window.stopTrackRecording = stopTrackRecording;
+window.submitManualEntry = submitManualEntry;
+window.openManualEntryModal = openManualEntryModal;
+window.closeManualEntryModal = closeManualEntryModal;
+window.exportTrack = exportTrack;
+window.viewTrackOnMap = viewTrackOnMap;
+window.deleteLogbookEntry = deleteLogbookEntry;
+window.openLogbook = openLogbook;
+window.closeLogbook = closeLogbook;
+window.confirmStartTrackRecording = confirmStartTrackRecording;
+window.closeCrewSelectionModal = closeCrewSelectionModal;
+window.viewTripDetails = viewTripDetails;
+window.closeTripDetails = closeTripDetails;
+window.exportTrip = exportTrip;
+window.exportTripPDF = exportTripPDF;
+window.deleteTrip = deleteTrip;
