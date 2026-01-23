@@ -157,6 +157,22 @@ function initMap() {
                 'route': {
                     type: 'geojson',
                     data: { type: 'FeatureCollection', features: [] }
+                },
+                'route-shadow': {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
+                },
+                'completed-segments': {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
+                },
+                'current-segment': {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
+                },
+                'remaining-segments': {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
                 }
             },
             layers: [
@@ -170,8 +186,16 @@ function initMap() {
                 { id: 'roads', type: 'line', source: 'germany', 'source-layer': 'transportation', paint: { 'line-color': '#ffffff', 'line-width': 1 } },
                 { id: 'roads-major', type: 'line', source: 'germany', 'source-layer': 'transportation', filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary']]], paint: { 'line-color': '#ffcc80', 'line-width': 3 } },
                 { id: 'boundary', type: 'line', source: 'germany', 'source-layer': 'boundary', paint: { 'line-color': '#808080', 'line-width': 1, 'line-dasharray': [2, 2] } },
-                // Route layer
-                { id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#2196F3', 'line-width': 4 } },
+                // Route shadow (white outline)
+                { id: 'route-shadow-line', type: 'line', source: 'route-shadow', paint: { 'line-color': 'white', 'line-width': 8, 'line-opacity': 0.4 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+                // Completed segments (faded)
+                { id: 'completed-segments-line', type: 'line', source: 'completed-segments', paint: { 'line-color': '#666', 'line-width': 4, 'line-opacity': 0.3 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+                // Main route layer
+                { id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#2ecc71', 'line-width': 5, 'line-opacity': 0.9 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+                // Current segment (highlighted)
+                { id: 'current-segment-line', type: 'line', source: 'current-segment', paint: { 'line-color': '#ffd700', 'line-width': 6, 'line-opacity': 1.0 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+                // Remaining segments
+                { id: 'remaining-segments-line', type: 'line', source: 'remaining-segments', paint: { 'line-color': '#3498db', 'line-width': 5, 'line-opacity': 0.9 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
                 // Track history layer
                 { id: 'track-line', type: 'line', source: 'track-history', paint: { 'line-color': '#4CAF50', 'line-width': 3 } }
             ]
