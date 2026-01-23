@@ -1,6 +1,7 @@
 /**
  * BoatOS Frontend - Marine Dashboard
  */
+console.log('🚀 app.js LOADING - LINE 4');
 
 // Debug console disabled - was causing JavaScript errors
 // Auto-detect protocol (http/https) for API and WebSocket
@@ -16,18 +17,18 @@ const WS_URL = window.location.hostname === 'localhost'
 
 // ==================== STATE ====================
 let map;
-let boatMarker;
+let boatMarker; // HTML marker element for boat
+let boatMarkerElement = null; // DOM element for boat marker
 let waypoints = [];
-let routeLayer;
-let trackHistoryLayer; // GPS track history polyline
+let waypointMarkers = []; // Array of MapLibre marker objects
 let trackHistory = []; // Array of {lat, lon, timestamp}
 let maxTrackPoints = 500; // Maximum track points to keep
-let currentPosition = { lat: 50.8, lon: 5.6 }; // Default: Albertkanal
+let currentPosition = { lat: 51.34, lon: 12.37 }; // Default: Leipzig
 
 // Favorites
 let favorites = [];
 let favoritesPanel = null;
-let favoriteMarkers = L.layerGroup(); // Layer group for favorite markers
+let favoriteMarkerElements = []; // Array of HTML marker elements for favorites
 let ws;
 let routePlanningMode = false;
 let weatherData = null;
@@ -39,25 +40,57 @@ let lowSatelliteStartTime = null; // Timestamp when satellite count first droppe
 let LOW_SATELLITE_THRESHOLD = 15000; // 15 seconds in milliseconds (can be changed in settings)
 let lastBackendGpsTime = null; // Track when we last received valid backend GPS
 let backendGpsUnavailableStartTime = null; // Track when backend GPS first became unavailable
+let firstGpsPositionReceived = false; // Track if we've centered map on first GPS position
 const BACKEND_GPS_FALLBACK_DELAY = 30000; // Wait 30 seconds before falling back to browser GPS (only as true fallback)
 let currentBoatHeading = 0; // Current boat heading/course for rotation
 
 // Map layers (global references)
-let osmLayer;
-let satelliteLayer;
 let currentBaseLayer = 'osm'; // 'osm' or 'satellite'
-
-// Overlay layers (for layer control)
-let seaMarkLayer;
-let inlandLayer;  // Contains locks/schleusen
-let railwayLayer;  // Contains bridges/brücken
-let trafficLayer;
+let seaMarkLayerVisible = true;
+let inlandLayerVisible = true;
 
 // AIS
-let aisVessels = {};  // MMSI -> {marker, data}
+let aisVessels = {};  // MMSI -> {marker: MapLibre Marker, data}
 let aisEnabled = false;
 let aisUpdateInterval = null;
 let aisSettings = { enabled: false, apiKey: '', updateInterval: 60, showLabels: true };
+
+// MapLibre marker arrays for various POI types
+let favoriteMarkers = []; // Array of MapLibre Marker objects
+let infrastructureMarkers = {}; // id -> MapLibre Marker
+let waterLevelMarkers = {}; // id -> MapLibre Marker
+let routeLabelMarkers = []; // Array of MapLibre Marker objects for route labels
+let routeArrowMarkers = []; // Array of MapLibre Marker objects for route arrows
+let displayedTrackMarkers = []; // Start/end markers for displayed tracks
+
+// Helper function to calculate distance between two points (meters)
+// Replaces L.latLng().distanceTo()
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // Earth's radius in meters
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+// Helper function to create bounds from array of [lat, lon] points
+function createBoundsFromPoints(points) {
+    if (!points || points.length === 0) return null;
+    let minLat = Infinity, maxLat = -Infinity;
+    let minLon = Infinity, maxLon = -Infinity;
+    points.forEach(p => {
+        const lat = Array.isArray(p) ? p[0] : p.lat;
+        const lon = Array.isArray(p) ? p[1] : p.lon;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+        if (lon < minLon) minLon = lon;
+        if (lon > maxLon) maxLon = lon;
+    });
+    return [[minLon, minLat], [maxLon, maxLat]];
+}
 
 // Course Deviation / Cross-Track Error
 let currentRouteCoordinates = null; // Array of {lat, lon} for XTE calculation
@@ -65,10 +98,10 @@ let currentRoutePolyline = null; // Reference to main route polyline for color c
 let xteWarningDisplay = null; // DOM element for XTE warning
 let turnByTurnDisplay = null; // DOM element for turn-by-turn navigation instructions
 
-// Route Segment Highlighting
-let currentSegmentPolyline = null; // Highlighted current segment (yellow)
-let completedSegmentsPolyline = null; // Completed segments (faded)
-let remainingSegmentsPolyline = null; // Remaining segments (blue/green)
+// Route Segment Highlighting (now using GeoJSON sources in MapLibre)
+// Route segment highlighting state (using GeoJSON sources in MapLibre)
+let currentSegmentActive = false;
+let completedSegmentsActive = false;
 let routeProgressDisplay = null; // Progress display element
 let routeArrows = []; // Direction arrows along route
 
@@ -91,177 +124,204 @@ let currentRouteData = {
 function initMap() {
     console.log('🗺️ initMap() called');
 
+    try {
+
     // Check map container dimensions
     const mapContainer = document.getElementById('map');
     if (mapContainer) {
         const rect = mapContainer.getBoundingClientRect();
-        console.log('📐 Map container dimensions:', {
-            width: rect.width,
-            height: rect.height,
-            display: window.getComputedStyle(mapContainer).display,
-            visibility: window.getComputedStyle(mapContainer).visibility
-        });
+        console.log('📐 Container: ' + rect.width + 'x' + rect.height);
     } else {
         console.error('❌ Map container not found!');
+        return;
     }
 
-    console.log('📍 Initial position:', currentPosition);
 
-    // Karte initialisieren
-    map = L.map('map', {
-        zoomControl: false,
+    // Create MapLibre GL Map with simple vector tiles style (like test_tiles.html)
+    map = new maplibregl.Map({
+        container: 'map',
+        style: {
+            version: 8,
+            sources: {
+                'germany': {
+                    type: 'vector',
+                    tiles: [window.location.origin + '/tiles/germany/{z}/{x}/{y}'],
+                    minzoom: 0,
+                    maxzoom: 14
+                },
+                // GeoJSON sources for dynamic data
+                'track-history': {
+                    type: 'geojson',
+                    data: { type: 'LineString', coordinates: [] }
+                },
+                'route': {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
+                }
+            },
+            layers: [
+                { id: 'background', type: 'background', paint: { 'background-color': '#e0e0e0' } },
+                { id: 'water', type: 'fill', source: 'germany', 'source-layer': 'water', paint: { 'fill-color': '#80b0d0' } },
+                { id: 'waterway', type: 'line', source: 'germany', 'source-layer': 'waterway', paint: { 'line-color': '#80b0d0', 'line-width': 2 } },
+                { id: 'landcover', type: 'fill', source: 'germany', 'source-layer': 'landcover', paint: { 'fill-color': '#c0e0c0', 'fill-opacity': 0.5 } },
+                { id: 'park', type: 'fill', source: 'germany', 'source-layer': 'park', paint: { 'fill-color': '#a0d0a0', 'fill-opacity': 0.5 } },
+                { id: 'landuse', type: 'fill', source: 'germany', 'source-layer': 'landuse', paint: { 'fill-color': '#f0f0e0', 'fill-opacity': 0.3 } },
+                { id: 'building', type: 'fill', source: 'germany', 'source-layer': 'building', minzoom: 13, paint: { 'fill-color': '#d0d0d0' } },
+                { id: 'roads', type: 'line', source: 'germany', 'source-layer': 'transportation', paint: { 'line-color': '#ffffff', 'line-width': 1 } },
+                { id: 'roads-major', type: 'line', source: 'germany', 'source-layer': 'transportation', filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary']]], paint: { 'line-color': '#ffcc80', 'line-width': 3 } },
+                { id: 'boundary', type: 'line', source: 'germany', 'source-layer': 'boundary', paint: { 'line-color': '#808080', 'line-width': 1, 'line-dasharray': [2, 2] } },
+                // Route layer
+                { id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#2196F3', 'line-width': 4 } },
+                // Track history layer
+                { id: 'track-line', type: 'line', source: 'track-history', paint: { 'line-color': '#4CAF50', 'line-width': 3 } }
+            ]
+        },
+        center: [currentPosition.lon, currentPosition.lat], // MapLibre uses [lon, lat]
+        zoom: 13,
         attributionControl: false
-    }).setView([currentPosition.lat, currentPosition.lon], 13);
-
-    console.log('🗺️ Map created, zoom:', map.getZoom(), 'center:', map.getCenter());
-
-    // ==================== BASE LAYERS ====================
-    // Using HTTPS tile servers (works with our HTTPS setup)
-    osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '© OpenStreetMap',
-        subdomains: ['a', 'b', 'c']
     });
 
-    // Add tile loading event listeners for debugging
-    osmLayer.on('tileerror', function(error, tile) {
-        console.error('❌ Tile load error:', error.tile.src, error);
-    });
-    osmLayer.on('tileloadstart', function(event) {
-        console.log('⏳ Tile loading:', event.tile.src);
-    });
-    osmLayer.on('tileload', function(event) {
-        console.log('✅ Tile loaded:', event.tile.src);
-    });
-    osmLayer.on('load', function() {
-        console.log('✅ All tiles loaded for current view');
+    console.log('🗺️ MapLibre GL Map created');
+
+    // Error handler
+    map.on('error', (e) => {
+        console.error('❌ Map error:', e.error);
     });
 
-    satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 19,
-        attribution: '© ESRI'
-    });
+    // Add navigation controls
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-left');
 
-    // Default base layer
-    console.log('➕ Adding OSM layer to map');
-    osmLayer.addTo(map);
-    console.log('🗺️ OSM layer added. Map bounds:', map.getBounds());
+    // Wait for map to load before adding markers
+    map.on('load', () => {
+        console.log('✅ Map loaded');
 
-    // DO NOT call invalidateSize() here!
-    // The map initializes with correct size (1920x508)
-    // invalidateSize() will be called when switching from dashboard to map view
-    console.log('📏 Initial map size:', map.getSize());
+        // Add labels dynamically (fonts can cause issues if not available)
+        try {
+            // Add glyphs source for text labels
+            map.setGlyphs('https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf');
 
-    // ==================== OVERLAY LAYERS ====================
-    seaMarkLayer = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
-        maxZoom: 18,
-        opacity: 0.8,
-        attribution: '© OpenSeaMap'
-    });
+            // City labels
+            map.addLayer({
+                id: 'place-city',
+                type: 'symbol',
+                source: 'germany',
+                'source-layer': 'place',
+                filter: ['==', ['get', 'class'], 'city'],
+                minzoom: 5,
+                layout: {
+                    'text-field': ['get', 'name'],
+                    'text-font': ['Noto Sans Bold'],
+                    'text-size': 16
+                },
+                paint: {
+                    'text-color': '#333',
+                    'text-halo-color': '#fff',
+                    'text-halo-width': 2
+                }
+            });
 
-    inlandLayer = L.tileLayer('https://tiles.openseamap.org/inland/{z}/{x}/{y}.png', {
-        maxZoom: 18,
-        opacity: 0.8,
-        attribution: '© OpenSeaMap Inland'
-    });
+            // Town labels
+            map.addLayer({
+                id: 'place-town',
+                type: 'symbol',
+                source: 'germany',
+                'source-layer': 'place',
+                filter: ['==', ['get', 'class'], 'town'],
+                minzoom: 8,
+                layout: {
+                    'text-field': ['get', 'name'],
+                    'text-font': ['Noto Sans Regular'],
+                    'text-size': 13
+                },
+                paint: {
+                    'text-color': '#444',
+                    'text-halo-color': '#fff',
+                    'text-halo-width': 1.5
+                }
+            });
 
-    // Railway layer removed - not useful for boat navigation
-    // railwayLayer = L.tileLayer('https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png', {
-    //     maxZoom: 19,
-    //     opacity: 0.5,
-    //     attribution: '© OpenRailwayMap'
-    // });
+            // Village labels
+            map.addLayer({
+                id: 'place-village',
+                type: 'symbol',
+                source: 'germany',
+                'source-layer': 'place',
+                filter: ['==', ['get', 'class'], 'village'],
+                minzoom: 11,
+                layout: {
+                    'text-field': ['get', 'name'],
+                    'text-font': ['Noto Sans Regular'],
+                    'text-size': 11
+                },
+                paint: {
+                    'text-color': '#555',
+                    'text-halo-color': '#fff',
+                    'text-halo-width': 1
+                }
+            });
 
-    trafficLayer = L.tileLayer('https://tiles.marinetraffic.com/ais_helpers/shiptilesingle.aspx?output=png&sat=1&grouping=shiptype&tile_size=256&legends=1&zoom={z}&X={x}&Y={y}', {
-        maxZoom: 15,
-        opacity: 0.7,
-        attribution: '© MarineTraffic'
-    });
+            // Waterway labels
+            map.addLayer({
+                id: 'waterway-label',
+                type: 'symbol',
+                source: 'germany',
+                'source-layer': 'waterway',
+                filter: ['has', 'name'],
+                layout: {
+                    'symbol-placement': 'line',
+                    'text-field': ['get', 'name'],
+                    'text-font': ['Noto Sans Regular'],
+                    'text-size': 12
+                },
+                paint: {
+                    'text-color': '#4a90d9',
+                    'text-halo-color': '#fff',
+                    'text-halo-width': 1.5
+                }
+            });
 
-    // Add default overlays (all always visible now, layer control removed)
-    seaMarkLayer.addTo(map);
-    inlandLayer.addTo(map);  // Contains locks/schleusen
-    // railwayLayer removed - not useful for boat navigation
-
-    // ==================== LAYER CONTROL ====================
-    // Removed: User found it annoying and not useful (2025-10-24)
-    // const overlays = {
-    //     "⚓ Seezeichen": seaMarkLayer,
-    //     "🔒 Schleusen & Wasserwege": inlandLayer,
-    //     "🌉 Brücken": railwayLayer,
-    //     "🚢 Schiffsverkehr (AIS)": trafficLayer
-    // };
-    //
-    // L.control.layers(null, overlays, {
-    //     position: 'bottomright',
-    //     collapsed: false  // Always visible for easy access
-    // }).addTo(map);
-
-    // Zoom Control (rechts unten)
-    L.control.zoom({ position: 'bottomleft' }).addTo(map);
-
-    // Favorites Button
-    const FavoritesControl = L.Control.extend({
-        options: { position: 'topleft' },
-        onAdd: function(map) {
-            const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-            container.innerHTML = `
-                <a href="#" style="
-                    background: rgba(10, 14, 39, 0.95);
-                    backdrop-filter: blur(10px);
-                    border: 2px solid #64ffda;
-                    border-radius: 8px;
-                    width: 40px;
-                    height: 40px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 20px;
-                    text-decoration: none;
-                    cursor: pointer;
-                " title="Favoriten">⭐</a>
-            `;
-            container.onclick = (e) => {
-                e.preventDefault();
-                showFavoritesPanel();
-            };
-            return container;
+            console.log('✅ Labels added');
+        } catch (e) {
+            console.warn('⚠️ Labels failed:', e.message);
         }
+
+        // Add OpenSeaMap overlays (Schifffahrtszeichen, Betonnung, Häfen, etc.)
+        try {
+            // Seamark layer (Betonnung, Leuchtfeuer, etc.)
+            map.addSource('seamark', {
+                type: 'raster',
+                tiles: ['https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png'],
+                tileSize: 256
+            });
+            map.addLayer({
+                id: 'seamark-overlay',
+                type: 'raster',
+                source: 'seamark',
+                paint: { 'raster-opacity': 1.0 }
+            });
+
+            // Inland waterway layer (Binnenschifffahrt)
+            map.addSource('inland', {
+                type: 'raster',
+                tiles: ['https://tiles.openseamap.org/inland/{z}/{x}/{y}.png'],
+                tileSize: 256
+            });
+            map.addLayer({
+                id: 'inland-overlay',
+                type: 'raster',
+                source: 'inland',
+                paint: { 'raster-opacity': 1.0 }
+            });
+
+            console.log('✅ OpenSeaMap overlays added');
+        } catch (e) {
+            console.warn('⚠️ Could not add OpenSeaMap overlays:', e);
+        }
+
+        initMapMarkers();
     });
-    map.addControl(new FavoritesControl());
 
-    // Boot-Position Marker
-    // Get boat icon from settings
-    const settings = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
-    const boatIconType = settings.boat?.icon || 'motorboat_small';
-    const boatIconHtml = (typeof getBoatIcon === 'function') ? getBoatIcon(boatIconType) : '⛵';
-
-    boatMarker = L.marker([currentPosition.lat, currentPosition.lon], {
-        icon: L.divIcon({
-            html: boatIconHtml,
-            className: 'boat-marker',
-            iconSize: [40, 40]
-        }),
-        rotationAngle: 0
-    }).addTo(map);
-
-    // Route Layer
-    routeLayer = L.layerGroup().addTo(map);
-
-    // Track History Layer (initially empty polyline)
-    trackHistoryLayer = L.polyline([], {
-        color: '#3498db',
-        weight: 3,
-        opacity: 0.7,
-        smoothFactor: 1
-    }).addTo(map);
-
-    // Check if track history should be shown from settings
-    if (settings.showTrackHistory === false) {
-        map.removeLayer(trackHistoryLayer);
-    }
-
-    // Click Handler für Wegpunkte
+    // Click handler for waypoints
     map.on('click', onMapClick);
 
     // Disable auto-follow when user manually interacts with map
@@ -270,15 +330,50 @@ function initMap() {
         console.log('🔓 Auto-follow deaktiviert (Karte verschoben)');
     });
 
-    map.on('zoomstart', (e) => {
-        // Only disable auto-follow if zoom was initiated by user (not programmatically)
-        if (e.originalEvent) {
-            autoFollow = false;
-            console.log('🔓 Auto-follow deaktiviert (Zoom geändert)');
-        }
+    map.on('zoomstart', () => {
+        // Note: MapLibre doesn't easily distinguish user vs programmatic zoom
+        // We'll be more conservative here
     });
 
     console.log('✅ Map initialized');
+
+    } catch (err) {
+        console.error('❌ initMap error:', err);
+    }
+}
+
+// Initialize markers after map load
+function initMapMarkers() {
+    // Get boat icon from settings
+    const settings = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
+    const boatIconType = settings.boat?.icon || 'motorboat_small';
+    const boatIconHtml = (typeof getBoatIcon === 'function') ? getBoatIcon(boatIconType) : '⛵';
+
+    // Create boat marker as HTML element
+    const el = document.createElement('div');
+    el.className = 'boat-marker';
+    el.innerHTML = boatIconHtml;
+    el.style.width = '40px';
+    el.style.height = '40px';
+    el.style.display = 'flex';
+    el.style.alignItems = 'center';
+    el.style.justifyContent = 'center';
+    el.style.fontSize = '32px';
+    boatMarkerElement = el;
+
+    boatMarker = new maplibregl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([currentPosition.lon, currentPosition.lat])
+        .addTo(map);
+
+    console.log('🚤 Boat marker added');
+
+    // Check if track history should be shown from settings
+    if (settings.showTrackHistory === false) {
+        map.setLayoutProperty('track-history-line', 'visibility', 'none');
+    }
+
+    // Add favorites button
+    addFavoritesButton();
 }
 
 // ==================== WEBSOCKET ====================
@@ -302,6 +397,14 @@ function connectWebSocket() {
                 gpsSource = "backend";
                 updateGpsSourceIndicator();
             }
+
+            // Center map on first GPS position received
+            if (!firstGpsPositionReceived && map) {
+                firstGpsPositionReceived = true;
+                console.log('📍 First GPS position - centering map on: ' + data.gps.lat.toFixed(6) + ', ' + data.gps.lon.toFixed(6));
+                map.flyTo({ center: [data.gps.lon, data.gps.lat], zoom: 14, duration: 1500 });
+            }
+
             updateBoatPosition(data.gps);
         } else {
             // Backend GPS invalid or missing
@@ -505,46 +608,94 @@ function addToTrackHistory(lat, lon) {
         trackHistory.shift(); // Remove oldest point
     }
 
-    // Update polyline with new points
-    const latLngs = trackHistory.map(point => [point.lat, point.lon]);
-    trackHistoryLayer.setLatLngs(latLngs);
+    // Update GeoJSON source - MapLibre uses [lon, lat]
+    const coordinates = trackHistory.map(point => [point.lon, point.lat]);
+    if (map && map.getSource('track-history')) {
+        map.getSource('track-history').setData({
+            type: 'LineString',
+            coordinates: coordinates
+        });
+    }
 }
 
 function clearTrackHistory() {
     trackHistory = [];
-    trackHistoryLayer.setLatLngs([]);
+    if (map && map.getSource('track-history')) {
+        map.getSource('track-history').setData({
+            type: 'LineString',
+            coordinates: []
+        });
+    }
     if (typeof showMsg === 'function') {
         showMsg('🗑️ Track-Historie gelöscht');
     }
 }
 
 function toggleTrackHistory(show) {
-    if (show) {
-        if (!map.hasLayer(trackHistoryLayer)) {
-            map.addLayer(trackHistoryLayer);
-        }
-    } else {
-        if (map.hasLayer(trackHistoryLayer)) {
-            map.removeLayer(trackHistoryLayer);
-        }
+    if (map && map.getLayer('track-history-line')) {
+        map.setLayoutProperty('track-history-line', 'visibility', show ? 'visible' : 'none');
     }
 }
 
 // ==================== MAP VIEW TOGGLE ====================
 function toggleMapView() {
+    // Note: With MapLibre vector tiles, satellite view requires adding a raster source
+    // For now, just toggle between style modes
     if (currentBaseLayer === 'osm') {
-        // Switch to satellite
-        map.removeLayer(osmLayer);
-        satelliteLayer.addTo(map);
         currentBaseLayer = 'satellite';
         document.getElementById('current-map-view').textContent = '🛰️ Satellit';
+        // Add satellite raster source if not exists
+        if (!map.getSource('satellite')) {
+            map.addSource('satellite', {
+                type: 'raster',
+                tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+                tileSize: 256,
+                maxzoom: 19
+            });
+        }
+        // Hide vector layers and show satellite
+        hideVectorLayers();
+        if (!map.getLayer('satellite-layer')) {
+            map.addLayer({
+                id: 'satellite-layer',
+                type: 'raster',
+                source: 'satellite',
+                paint: { 'raster-opacity': 1 }
+            }, 'seamark-overlay'); // Insert before seamark
+        } else {
+            map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
+        }
     } else {
-        // Switch to OSM
-        map.removeLayer(satelliteLayer);
-        osmLayer.addTo(map);
         currentBaseLayer = 'osm';
         document.getElementById('current-map-view').textContent = '🗺️ Karte';
+        // Hide satellite and show vector layers
+        if (map.getLayer('satellite-layer')) {
+            map.setLayoutProperty('satellite-layer', 'visibility', 'none');
+        }
+        showVectorLayers();
     }
+}
+
+function hideVectorLayers() {
+    const vectorLayers = ['background', 'water', 'waterway', 'landuse-forest', 'landuse-park',
+                          'landuse-residential', 'building', 'road-highway', 'road-primary',
+                          'road-secondary', 'road-minor', 'railway', 'place-city', 'place-town', 'place-village'];
+    vectorLayers.forEach(layerId => {
+        if (map.getLayer(layerId)) {
+            map.setLayoutProperty(layerId, 'visibility', 'none');
+        }
+    });
+}
+
+function showVectorLayers() {
+    const vectorLayers = ['background', 'water', 'waterway', 'landuse-forest', 'landuse-park',
+                          'landuse-residential', 'building', 'road-highway', 'road-primary',
+                          'road-secondary', 'road-minor', 'railway', 'place-city', 'place-town', 'place-village'];
+    vectorLayers.forEach(layerId => {
+        if (map.getLayer(layerId)) {
+            map.setLayoutProperty(layerId, 'visibility', 'visible');
+        }
+    });
 }
 
 // ==================== PANEL MANAGEMENT ====================
@@ -600,19 +751,18 @@ function updateBoatPosition(gps) {
         // Add to track history
         addToTrackHistory(newLat, newLon);
 
-        // Marker aktualisieren
-        boatMarker.setLatLng([newLat, newLon]);
+        // Update boat marker position - MapLibre uses [lon, lat]
+        if (boatMarker) {
+            boatMarker.setLngLat([newLon, newLat]);
+        }
 
         // Rotate marker based on course (if available)
         let heading = gps.course || gps.heading || 0;
         if (heading !== undefined && heading !== 0) {
             currentBoatHeading = heading;
-            // Update marker icon with rotation
-            const settings = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
-            const boatIconType = settings.boat?.icon || 'motorboat_small';
-            if (typeof createBoatMarkerIcon === 'function') {
-                const rotatedIcon = createBoatMarkerIcon(boatIconType, heading);
-                boatMarker.setIcon(rotatedIcon);
+            // Rotate the boat marker element
+            if (boatMarkerElement) {
+                boatMarkerElement.style.transform = `rotate(${heading}deg)`;
             }
             // Update compass rose with heading
             updateCompassRose(heading);
@@ -625,10 +775,10 @@ function updateBoatPosition(gps) {
         // Don't override it here
 
         // Karte folgt Boot wenn auto-follow aktiv
-        if (autoFollow) {
-            map.setView([newLat, newLon], map.getZoom(), {
-                animate: true,
-                duration: 0.5
+        if (autoFollow && map) {
+            map.easeTo({
+                center: [newLon, newLat],
+                duration: 500
             });
         }
 
@@ -667,9 +817,10 @@ function updateBoatPosition(gps) {
 function onMapClick(e) {
     if (!routePlanningMode) return;
 
+    // MapLibre click event has lngLat property
     const waypoint = {
-        lat: e.latlng.lat,
-        lon: e.latlng.lng,
+        lat: e.lngLat.lat,
+        lon: e.lngLat.lng,
         name: `WP${waypoints.length + 1}`,
         timestamp: new Date().toISOString()
     };
@@ -680,29 +831,38 @@ function onMapClick(e) {
 function addWaypoint(waypoint) {
     const waypointNumber = waypoints.length + 1;
 
-    // Schöner Marker mit Pin-Design - direkt zur Karte hinzufügen
-    const marker = L.marker([waypoint.lat, waypoint.lon], {
-        icon: L.divIcon({
-            html: `
-                <div style="display: flex; flex-direction: column; align-items: center; width: 40px;">
-                    <div style="background: #3498db; color: white; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.4); margin-bottom: 4px;">${waypoint.name}</div>
-                    <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); border: 4px solid white; border-radius: 50%; box-shadow: 0 3px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; color: white;">${waypointNumber}</div>
-                </div>
-            `,
-            className: 'waypoint-marker',
-            iconSize: [40, 60],
-            iconAnchor: [20, 60]
-        }),
-        draggable: true
-    }).addTo(map);  // Direkt zur Karte statt zu routeLayer
+    // Create HTML element for waypoint marker
+    const el = document.createElement('div');
+    el.className = 'waypoint-marker';
+    el.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; width: 40px;">
+            <div style="background: #3498db; color: white; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.4); margin-bottom: 4px;">${waypoint.name}</div>
+            <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); border: 4px solid white; border-radius: 50%; box-shadow: 0 3px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; color: white;">${waypointNumber}</div>
+        </div>
+    `;
 
-    marker.on('drag', () => {
+    // Create MapLibre marker with drag support
+    const marker = new maplibregl.Marker({ element: el, draggable: true, anchor: 'bottom' })
+        .setLngLat([waypoint.lon, waypoint.lat])
+        .addTo(map);
+
+    // Handle drag event
+    marker.on('dragend', () => {
+        const lngLat = marker.getLngLat();
+        // Update waypoint coordinates
+        const wp = waypoints.find(w => w.marker === marker);
+        if (wp) {
+            wp.lat = lngLat.lat;
+            wp.lon = lngLat.lng;
+        }
         updateRoute();
     });
 
-    marker.on('click', () => {
+    // Handle click to delete
+    el.addEventListener('click', (e) => {
+        e.stopPropagation();
         if (confirm(`Wegpunkt ${waypoint.name} löschen?`)) {
-            map.removeLayer(marker);  // Von der Karte entfernen statt von routeLayer
+            marker.remove();
             waypoints = waypoints.filter(w => w.name !== waypoint.name);
             updateRoute();
         }
@@ -720,6 +880,15 @@ function addWaypoint(waypoint) {
     updateRoute();
 }
 
+// Helper function to get waypoint LngLat (for compatibility)
+function getWaypointLatLng(wp) {
+    if (wp.marker && wp.marker.getLngLat) {
+        const lngLat = wp.marker.getLngLat();
+        return { lat: lngLat.lat, lng: lngLat.lng };
+    }
+    return { lat: wp.lat, lng: wp.lon };
+}
+
 async function updateRoute() {
     // Cancel any pending route calculation
     if (routeCalculationController) {
@@ -730,12 +899,8 @@ async function updateRoute() {
     // Create new abort controller for this request
     routeCalculationController = new AbortController();
 
-    // Alte Route löschen
-    routeLayer.eachLayer(layer => {
-        if (layer instanceof L.Polyline || layer._icon) {
-            routeLayer.removeLayer(layer);
-        }
-    });
+    // Clear existing route data
+    clearRouteDisplay();
 
     if (waypoints.length < 2) {
         routeCalculationController = null;
@@ -748,8 +913,8 @@ async function updateRoute() {
     // Versuche ENC-basiertes Wasserrouting
     try {
         const coordinates = waypoints.map(w => {
-            const latlng = w.marker.getLatLng();
-            return [latlng.lng, latlng.lat]; // [lon, lat]
+            const lngLat = w.marker.getLngLat();
+            return [lngLat.lng, lngLat.lat]; // [lon, lat]
         });
 
         const response = await fetch(`${API_URL}/api/route`, {
@@ -776,7 +941,8 @@ async function updateRoute() {
             // Route aus ENC-Daten zeichnen
             if (routeData.geometry && routeData.geometry.coordinates) {
                 const coords = routeData.geometry.coordinates;
-                const routePoints = coords.map(c => [c[1], c[0]]); // [lat, lon] für Leaflet
+                // MapLibre uses [lon, lat] - coords are already in this format
+                const routeCoords = coords;
 
                 // Prüfe ob es echtes Routing ist oder nur Fallback
                 const isWaterwayRouted = routeData.properties?.waterway_routed || false;
@@ -791,25 +957,29 @@ async function updateRoute() {
                     return;
                 }
 
-                // Schatten-Linie
-                L.polyline(routePoints, {
-                    color: 'white',
-                    weight: 8,
-                    opacity: 0.4,
-                    lineCap: 'round'
-                }).addTo(routeLayer);
+                // Update route GeoJSON sources
+                const routeFeature = {
+                    type: 'Feature',
+                    properties: { color: '#2ecc71' },
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: routeCoords
+                    }
+                };
 
-                // Hauptlinie (grün für ENC-Routing)
-                currentRoutePolyline = L.polyline(routePoints, {
-                    color: '#2ecc71',
-                    weight: 5,
-                    opacity: 0.9,
-                    lineCap: 'round',
-                    originalColor: '#2ecc71' // Store original color for XTE reset
-                }).addTo(routeLayer);
+                map.getSource('route-shadow').setData({
+                    type: 'FeatureCollection',
+                    features: [routeFeature]
+                });
 
-                // Store route coordinates for XTE calculation
-                currentRouteCoordinates = routePoints.map(p => ({ lat: p[0], lon: p[1] }));
+                map.getSource('route').setData({
+                    type: 'FeatureCollection',
+                    features: [routeFeature]
+                });
+
+                // Store route coordinates for XTE calculation - convert to {lat, lon}
+                currentRouteCoordinates = routeCoords.map(c => ({ lat: c[1], lon: c[0] }));
+                currentRouteColor = '#2ecc71';
 
                 // Add route arrows for direction indication
                 addRouteArrows();
@@ -846,10 +1016,10 @@ async function updateRoute() {
                 // Segment-Infos
                 const routeInfo = [];
                 for (let i = 0; i < waypoints.length - 1; i++) {
-                    const from = waypoints[i].marker.getLatLng();
-                    const to = waypoints[i + 1].marker.getLatLng();
+                    const from = getWaypointLatLng(waypoints[i]);
+                    const to = getWaypointLatLng(waypoints[i + 1]);
                     const bearing = calculateBearing(from.lat, from.lng, to.lat, to.lng);
-                    const segmentDist = from.distanceTo(to) / 1852;
+                    const segmentDist = haversineDistance(from.lat, from.lng, to.lat, to.lng) / 1852;
 
                     routeInfo.push({
                         from: waypoints[i].name,
@@ -909,34 +1079,89 @@ async function updateRoute() {
     routeCalculationController = null;
 }
 
+// Store current route color for XTE calculations
+let currentRouteColor = '#3498db';
+
+// Clear route display
+function clearRouteDisplay() {
+    if (map && map.getSource('route')) {
+        map.getSource('route').setData({ type: 'FeatureCollection', features: [] });
+    }
+    if (map && map.getSource('route-shadow')) {
+        map.getSource('route-shadow').setData({ type: 'FeatureCollection', features: [] });
+    }
+    if (map && map.getSource('completed-segments')) {
+        map.getSource('completed-segments').setData({ type: 'FeatureCollection', features: [] });
+    }
+    if (map && map.getSource('current-segment')) {
+        map.getSource('current-segment').setData({ type: 'FeatureCollection', features: [] });
+    }
+    if (map && map.getSource('remaining-segments')) {
+        map.getSource('remaining-segments').setData({ type: 'FeatureCollection', features: [] });
+    }
+    // Remove route label markers
+    removeRouteLabels();
+    // Clear route arrows
+    routeArrows.forEach(marker => marker.remove());
+    routeArrows = [];
+    currentRouteCoordinates = null;
+}
+
+function removeRouteLabels() {
+    routeLabelMarkers.forEach(marker => marker.remove());
+    routeLabelMarkers = [];
+}
+
+// Haversine distance calculation (replaces L.latLng().distanceTo())
+function haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // Earth radius in meters
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
 function drawDirectRoute() {
     // Direkte Rhumbline-Route (Luftlinie)
+    // Get waypoint positions - MapLibre markers use getLngLat()
     const points = waypoints.map(w => {
-        const latlng = w.marker.getLatLng();
-        return [latlng.lat, latlng.lng];
+        const lnglat = w.marker.getLngLat();
+        return [lnglat.lat, lnglat.lng];
     });
 
-    // Schatten-Linie (weiß, breiter)
-    L.polyline(points, {
-        color: 'white',
-        weight: 8,
-        opacity: 0.4,
-        lineCap: 'round',
-        lineJoin: 'round'
-    }).addTo(routeLayer);
+    // Convert to GeoJSON coordinates [lon, lat]
+    const routeCoords = points.map(p => [p[1], p[0]]);
 
-    // Hauptlinie (blau, durchgezogen)
-    currentRoutePolyline = L.polyline(points, {
-        color: '#3498db',
-        weight: 5,
-        opacity: 0.9,
-        lineCap: 'round',
-        lineJoin: 'round',
-        originalColor: '#3498db' // Store original color for XTE reset
-    }).addTo(routeLayer);
+    // Update route shadow source
+    if (map.getSource('route-shadow')) {
+        map.getSource('route-shadow').setData({
+            type: 'Feature',
+            geometry: {
+                type: 'LineString',
+                coordinates: routeCoords
+            }
+        });
+    }
+
+    // Update main route source
+    if (map.getSource('route')) {
+        map.getSource('route').setData({
+            type: 'Feature',
+            properties: { color: '#3498db' },
+            geometry: {
+                type: 'LineString',
+                coordinates: routeCoords
+            }
+        });
+    }
 
     // Store route coordinates for XTE calculation
     currentRouteCoordinates = points.map(p => ({ lat: p[0], lon: p[1] }));
+    // Store route color for segment highlighting
+    currentRoutePolyline = { options: { originalColor: '#3498db' } };
 
     // Add route arrows for direction indication
     addRouteArrows();
@@ -944,10 +1169,15 @@ function drawDirectRoute() {
     let totalDistance = 0;
     let routeInfo = [];
 
+    // Remove old route labels
+    removeRouteLabels();
+
     for (let i = 0; i < waypoints.length - 1; i++) {
-        const from = waypoints[i].marker.getLatLng();
-        const to = waypoints[i + 1].marker.getLatLng();
-        const segmentDistance = from.distanceTo(to);
+        const fromLngLat = waypoints[i].marker.getLngLat();
+        const toLngLat = waypoints[i + 1].marker.getLngLat();
+        const from = { lat: fromLngLat.lat, lng: fromLngLat.lng };
+        const to = { lat: toLngLat.lat, lng: toLngLat.lng };
+        const segmentDistance = haversineDistance(from.lat, from.lng, to.lat, to.lng);
         totalDistance += segmentDistance;
 
         const bearing = calculateBearing(from.lat, from.lng, to.lat, to.lng);
@@ -967,17 +1197,19 @@ function drawDirectRoute() {
             ? formatDistance(segmentDistance)
             : `${(segmentDistance / 1852).toFixed(2)} NM`;
 
-        L.marker([midLat, midLng], {
-            icon: L.divIcon({
-                className: 'route-label',
-                html: '<div style="background: rgba(52, 152, 219, 0.95); color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; white-space: nowrap; box-shadow: 0 3px 6px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.3);">' +
-                    segmentDistFormatted + '<br>' +
-                    Math.round(bearing) + '°' +
-                    '</div>',
-                iconSize: [90, 35],
-                iconAnchor: [45, 18]
-            })
-        }).addTo(routeLayer);
+        // Create route label as MapLibre HTML marker
+        const labelEl = document.createElement('div');
+        labelEl.className = 'route-label';
+        labelEl.innerHTML = '<div style="background: rgba(52, 152, 219, 0.95); color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; white-space: nowrap; box-shadow: 0 3px 6px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.3);">' +
+            segmentDistFormatted + '<br>' +
+            Math.round(bearing) + '°' +
+            '</div>';
+
+        const labelMarker = new maplibregl.Marker({ element: labelEl, anchor: 'center' })
+            .setLngLat([midLng, midLat])
+            .addTo(map);
+
+        routeLabelMarkers.push(labelMarker);
     }
 
     const totalNM = (totalDistance / 1852).toFixed(2);
@@ -1084,16 +1316,16 @@ function showRouteInfo(totalNM, hours, minutes, segments, isDirect, isWaterway, 
 }
 
 function clearRoute() {
-    // Entferne Wegpunkt-Marker von der Karte
+    // Entferne Wegpunkt-Marker von der Karte (MapLibre markers)
     waypoints.forEach(w => {
         if (w.marker) {
-            map.removeLayer(w.marker);  // Von der Karte entfernen
+            w.marker.remove();  // MapLibre marker.remove()
         }
     });
     waypoints = [];
 
-    // Entferne Routen-Linien vom routeLayer
-    routeLayer.clearLayers();
+    // Clear route GeoJSON sources
+    clearRouteDisplay();
 
     const panel = document.getElementById('route-info-panel');
     if (panel) panel.remove();
@@ -1122,27 +1354,19 @@ function clearRoute() {
         routeProgressDisplay = null;
     }
 
-    // Remove segment highlighting polylines
-    if (currentSegmentPolyline) {
-        currentSegmentPolyline.remove();
-        currentSegmentPolyline = null;
-    }
-    if (completedSegmentsPolyline) {
-        completedSegmentsPolyline.remove();
-        completedSegmentsPolyline = null;
-    }
-    if (remainingSegmentsPolyline) {
-        remainingSegmentsPolyline.remove();
-        remainingSegmentsPolyline = null;
-    }
+    // Clear segment highlighting (sources already cleared by clearRouteDisplay)
+    currentSegmentActive = false;
+    completedSegmentsActive = false;
 
-    // Remove route arrows
+    // Remove route arrows (MapLibre markers)
     routeArrows.forEach(arrow => {
-        if (arrow) {
-            map.removeLayer(arrow);
+        if (arrow && arrow.remove) {
+            arrow.remove();
         }
     });
     routeArrows = [];
+    routeArrowMarkers.forEach(m => m.remove());
+    routeArrowMarkers = [];
 
     // Clear route data for XTE calculation
     currentRouteCoordinates = null;
@@ -1375,81 +1599,62 @@ document.getElementById('btn-sensors').addEventListener('click', (e) => {
 // Center on boat button
 function centerOnBoat() {
     autoFollow = true;
-    map.setView([currentPosition.lat, currentPosition.lon], 15, {
-        animate: true,
-        duration: 1
+    map.flyTo({
+        center: [currentPosition.lon, currentPosition.lat],
+        zoom: 15,
+        duration: 1000
     });
     showNotification('🎯 Karte zentriert auf Boot');
 }
 
-// Add center button to map
-const centerButton = L.control({ position: 'bottomleft' });
-centerButton.onAdd = function() {
-    const btn = L.DomUtil.create('button', 'leaflet-bar leaflet-control');
-    btn.innerHTML = '🎯';
-    btn.style.cssText = 'background: white; width: 30px; height: 30px; border: 2px solid rgba(0,0,0,0.2); cursor: pointer; font-size: 18px;';
-    btn.onclick = centerOnBoat;
-    btn.title = 'Auf Boot zentrieren';
-    return btn;
-};
+// Center button will be added as a custom control in initMapMarkers
 
-// Compass Rose Control
+// Compass Rose Control (now using DOM element instead of L.control)
 let compassRoseElement = null;
+let compassRoseContainer = null;
 let currentHeading = 0;
 
-const compassRose = L.control({ position: 'topleft' });
-compassRose.onAdd = function() {
-    const container = L.DomUtil.create('div', 'compass-rose-container');
-    container.style.cssText = 'width: 100px; height: 100px; background: rgba(255,255,255,0.9); border: 3px solid rgba(0,0,0,0.3); border-radius: 50%; position: relative; box-shadow: 0 2px 10px rgba(0,0,0,0.3);';
+function createCompassRose() {
+    const container = document.createElement('div');
+    container.className = 'compass-rose-container';
+    container.style.cssText = 'position: absolute; top: 10px; left: 10px; width: 100px; height: 100px; background: rgba(255,255,255,0.9); border: 3px solid rgba(0,0,0,0.3); border-radius: 50%; box-shadow: 0 2px 10px rgba(0,0,0,0.3); z-index: 1000;';
+
+    // Generate compass markings
+    const markings = Array.from({length: 12}, (_, i) => {
+        const angle = i * 30;
+        const rad = (angle - 90) * Math.PI / 180;
+        const x1 = 50 + 40 * Math.cos(rad);
+        const y1 = 50 + 40 * Math.sin(rad);
+        const x2 = 50 + 45 * Math.cos(rad);
+        const y2 = 50 + 45 * Math.sin(rad);
+        return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#7f8c8d" stroke-width="2"/>`;
+    }).join('');
 
     // Compass rose SVG
     container.innerHTML = `
         <svg width="100" height="100" viewBox="0 0 100 100" style="position: absolute; top: 0; left: 0; transition: transform 0.5s ease-out;">
-            <!-- Background circle -->
             <circle cx="50" cy="50" r="48" fill="#fff" stroke="#333" stroke-width="2"/>
-
-            <!-- Cardinal directions -->
             <text x="50" y="15" text-anchor="middle" font-size="14" font-weight="bold" fill="#e74c3c">N</text>
             <text x="85" y="54" text-anchor="middle" font-size="12" font-weight="bold" fill="#34495e">E</text>
             <text x="50" y="92" text-anchor="middle" font-size="12" font-weight="bold" fill="#34495e">S</text>
             <text x="15" y="54" text-anchor="middle" font-size="12" font-weight="bold" fill="#34495e">W</text>
-
-            <!-- Needle (North pointer - red) -->
             <polygon points="50,10 45,55 50,50 55,55" fill="#e74c3c" stroke="#c0392b" stroke-width="1"/>
-
-            <!-- Needle (South pointer - white/gray) -->
             <polygon points="50,90 45,45 50,50 55,45" fill="#ecf0f1" stroke="#95a5a6" stroke-width="1"/>
-
-            <!-- Center dot -->
             <circle cx="50" cy="50" r="4" fill="#2c3e50"/>
-
-            <!-- Degree markings -->
-            <g id="compass-markings">
-                ${Array.from({length: 12}, (_, i) => {
-                    const angle = i * 30;
-                    const rad = (angle - 90) * Math.PI / 180;
-                    const x1 = 50 + 40 * Math.cos(rad);
-                    const y1 = 50 + 40 * Math.sin(rad);
-                    const x2 = 50 + 45 * Math.cos(rad);
-                    const y2 = 50 + 45 * Math.sin(rad);
-                    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#7f8c8d" stroke-width="2"/>`;
-                }).join('')}
-            </g>
+            <g id="compass-markings">${markings}</g>
         </svg>
         <div style="position: absolute; bottom: -25px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); color: #64ffda; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; white-space: nowrap; font-family: monospace;" id="compass-heading">000°</div>
     `;
 
     compassRoseElement = container.querySelector('svg');
+    compassRoseContainer = container;
     return container;
-};
+}
 
 function updateCompassRose(heading) {
     if (compassRoseElement && heading !== undefined && heading !== null) {
         currentHeading = heading;
-        // Rotate compass to show heading (negative rotation because compass rotates opposite to heading)
         compassRoseElement.style.transform = `rotate(${-heading}deg)`;
-
-        // Update heading text
         const headingText = document.getElementById('compass-heading');
         if (headingText) {
             headingText.textContent = `${Math.round(heading).toString().padStart(3, '0')}°`;
@@ -1458,17 +1663,17 @@ function updateCompassRose(heading) {
 }
 
 function toggleCompassRose(show) {
-    const compassContainer = document.querySelector('.compass-rose-container');
+    const mapContainer = document.getElementById('map-container');
+    const existingCompass = document.querySelector('.compass-rose-container');
 
     if (show) {
-        // Add compass if not already on map
-        if (!compassContainer || !compassContainer.parentElement) {
-            compassRose.addTo(map);
+        if (!existingCompass && mapContainer) {
+            mapContainer.appendChild(createCompassRose());
         }
     } else {
-        // Remove compass from map
-        if (compassContainer && compassContainer.parentElement) {
-            map.removeControl(compassRose);
+        if (existingCompass) {
+            existingCompass.remove();
+            compassRoseContainer = null;
         }
     }
 }
@@ -1476,11 +1681,14 @@ function toggleCompassRose(show) {
 function saveRoute() {
     const route = {
         name: `Route ${new Date().toLocaleDateString('de-DE')}`,
-        waypoints: waypoints.map(w => ({
-            lat: w.lat,
-            lon: w.lon,
-            name: w.name
-        })),
+        waypoints: waypoints.map(w => {
+            const lnglat = w.marker.getLngLat();
+            return {
+                lat: lnglat.lat,
+                lon: lnglat.lng,
+                name: w.name
+            };
+        }),
         timestamp: new Date().toISOString()
     };
 
@@ -1497,6 +1705,74 @@ function saveRoute() {
     .catch(err => {
         console.error('❌ Route speichern fehlgeschlagen:', err);
     });
+}
+
+// ==================== MAP CONTROLS (DOM-based for MapLibre) ====================
+function addMapControls() {
+    const mapContainer = document.getElementById('map-container');
+    if (!mapContainer) return;
+
+    // Create controls container on the left side
+    const controlsContainer = document.createElement('div');
+    controlsContainer.id = 'map-controls';
+    controlsContainer.style.cssText = 'position: absolute; top: 120px; left: 10px; z-index: 1000; display: flex; flex-direction: column; gap: 8px;';
+
+    // Center on boat button
+    const centerBtn = document.createElement('button');
+    centerBtn.innerHTML = '🎯';
+    centerBtn.title = 'Auf Boot zentrieren';
+    centerBtn.style.cssText = 'background: white; width: 30px; height: 30px; border: 2px solid rgba(0,0,0,0.2); border-radius: 4px; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center;';
+    centerBtn.onclick = (e) => { e.stopPropagation(); centerOnBoat(); };
+    controlsContainer.appendChild(centerBtn);
+
+    // GPX Controls container
+    const gpxContainer = document.createElement('div');
+    gpxContainer.style.cssText = 'background: white; border: 2px solid rgba(0,0,0,0.2); border-radius: 4px; display: flex; flex-direction: column;';
+
+    // GPX Export button
+    const exportBtn = document.createElement('button');
+    exportBtn.innerHTML = '📥';
+    exportBtn.title = 'Route als GPX exportieren';
+    exportBtn.style.cssText = 'background: white; width: 30px; height: 30px; border: none; cursor: pointer; font-size: 16px; padding: 0;';
+    exportBtn.onclick = (e) => { e.stopPropagation(); exportRouteAsGPX(); };
+    gpxContainer.appendChild(exportBtn);
+
+    // GPX Import button
+    const importBtn = document.createElement('button');
+    importBtn.innerHTML = '📤';
+    importBtn.title = 'GPX-Datei importieren';
+    importBtn.style.cssText = 'background: white; width: 30px; height: 30px; border: none; border-top: 1px solid rgba(0,0,0,0.1); cursor: pointer; font-size: 16px; padding: 0;';
+
+    // Hidden file input for GPX import
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.gpx';
+    fileInput.style.display = 'none';
+    fileInput.onchange = (e) => {
+        if (e.target.files && e.target.files[0]) {
+            importGPXFile(e.target.files[0]);
+            e.target.value = '';
+        }
+    };
+
+    importBtn.onclick = (e) => { e.stopPropagation(); fileInput.click(); };
+    gpxContainer.appendChild(importBtn);
+    gpxContainer.appendChild(fileInput);
+    controlsContainer.appendChild(gpxContainer);
+
+    // Navigation Start/Stop button
+    const navContainer = document.createElement('div');
+    navContainer.style.cssText = 'background: white; border: 2px solid rgba(0,0,0,0.2); border-radius: 4px;';
+
+    navigationStartButton = document.createElement('button');
+    navigationStartButton.innerHTML = '▶️';
+    navigationStartButton.title = 'Navigation starten';
+    navigationStartButton.style.cssText = 'background: white; width: 30px; height: 30px; border: none; cursor: pointer; font-size: 16px; padding: 0;';
+    navigationStartButton.onclick = (e) => { e.stopPropagation(); toggleNavigation(); };
+    navContainer.appendChild(navigationStartButton);
+    controlsContainer.appendChild(navContainer);
+
+    mapContainer.appendChild(controlsContainer);
 }
 
 // ==================== NOTIFICATIONS ====================
@@ -1529,82 +1805,23 @@ function showNotification(message) {
 
 // ==================== STARTUP ====================
 // Initialize map as soon as DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('📄 DOM loaded - initializing map...');
+
+// Check if DOM is already ready (DOMContentLoaded may have already fired)
+
+function doStartup() {
     initMap();
     connectWebSocket();
 
     // Load favorites from backend
     loadFavorites();
 
-    // Add center button to map
-    centerButton.addTo(map);
-
-    // Add GPX Import/Export buttons
-    const gpxControl = L.control({ position: 'topleft' });
-    gpxControl.onAdd = function() {
-        const container = L.DomUtil.create('div', 'gpx-control leaflet-bar');
-        container.style.cssText = 'background: white; display: flex; flex-direction: column; gap: 2px;';
-
-        // GPX Export button
-        const exportBtn = L.DomUtil.create('button', 'gpx-btn', container);
-        exportBtn.innerHTML = '📥';
-        exportBtn.title = 'Route als GPX exportieren';
-        exportBtn.style.cssText = 'background: white; width: 30px; height: 30px; border: none; cursor: pointer; font-size: 16px; padding: 0;';
-        exportBtn.onclick = function(e) {
-            L.DomEvent.stopPropagation(e);
-            exportRouteAsGPX();
-        };
-
-        // GPX Import button
-        const importBtn = L.DomUtil.create('button', 'gpx-btn', container);
-        importBtn.innerHTML = '📤';
-        importBtn.title = 'GPX-Datei importieren';
-        importBtn.style.cssText = 'background: white; width: 30px; height: 30px; border: none; cursor: pointer; font-size: 16px; padding: 0;';
-
-        // Create hidden file input
-        const fileInput = L.DomUtil.create('input', '', container);
-        fileInput.type = 'file';
-        fileInput.accept = '.gpx';
-        fileInput.style.display = 'none';
-        fileInput.onchange = function(e) {
-            if (e.target.files && e.target.files[0]) {
-                importGPXFile(e.target.files[0]);
-                e.target.value = ''; // Reset for re-import
-            }
-        };
-
-        importBtn.onclick = function(e) {
-            L.DomEvent.stopPropagation(e);
-            fileInput.click();
-        };
-
-        return container;
-    };
-    gpxControl.addTo(map);
-
-    // Add Navigation Start/Stop button
-    const navControl = L.control({ position: 'topleft' });
-    navControl.onAdd = function() {
-        const container = L.DomUtil.create('div', 'nav-control leaflet-bar');
-
-        navigationStartButton = L.DomUtil.create('button', 'nav-btn', container);
-        navigationStartButton.innerHTML = '▶️';
-        navigationStartButton.title = 'Navigation starten';
-        navigationStartButton.style.cssText = 'background: white; width: 30px; height: 30px; border: none; cursor: pointer; font-size: 16px; padding: 0;';
-        navigationStartButton.onclick = function(e) {
-            L.DomEvent.stopPropagation(e);
-            toggleNavigation();
-        };
-
-        return container;
-    };
-    navControl.addTo(map);
+    // Add custom map controls as DOM elements
+    addMapControls();
 
     // Add compass rose to map (check settings first)
     const settings = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
     if (settings.navigation?.showCompassRose !== false) {
-        compassRose.addTo(map);
+        toggleCompassRose(true);
     }
 
     // Apply infrastructure settings on startup
@@ -1686,7 +1903,6 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('🔧 Running on Pi - browser geolocation disabled (using hardware GPS only)');
     }
 
-    let firstPositionReceived = false;
     if (navigator.geolocation && !isRunningOnPi) {
         console.log('🌍 Requesting browser geolocation...');
         navigator.geolocation.watchPosition(
@@ -1695,9 +1911,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('📍 Browser GPS: ' + position.coords.latitude.toFixed(6) + ', ' + position.coords.longitude.toFixed(6) + ' (±' + Math.round(position.coords.accuracy) + 'm)');
 
                 // Center map on first browser position ONLY if backend GPS has never been received
-                if (!firstPositionReceived && gpsSource === null && lastBackendGpsTime === null) {
-                    firstPositionReceived = true;
-                    map.setView([position.coords.latitude, position.coords.longitude], 15);
+                if (!firstGpsPositionReceived && gpsSource === null && lastBackendGpsTime === null && map) {
+                    firstGpsPositionReceived = true;
+                    map.flyTo({ center: [position.coords.longitude, position.coords.latitude], zoom: 15, duration: 1500 });
                     console.log('✅ Centered map on browser location (no backend GPS yet)');
                 }
 
@@ -1747,7 +1963,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     console.log('🚢 BoatOS Frontend started!');
-});
+}
+
+// Call doStartup based on DOM ready state
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', doStartup);
+} else {
+    doStartup();
+}
 
 // ==================== GPS SOURCE INDICATOR ====================
 function updateGpsSourceIndicator() {
@@ -1805,7 +2028,7 @@ function updateAISMarkers(vessels) {
     const currentMMSIs = new Set(vessels.map(v => v.mmsi));
     Object.keys(aisVessels).forEach(mmsi => {
         if (!currentMMSIs.has(mmsi)) {
-            map.removeLayer(aisVessels[mmsi].marker);
+            aisVessels[mmsi].marker.remove(); // MapLibre marker.remove()
             delete aisVessels[mmsi];
         }
     });
@@ -1813,47 +2036,49 @@ function updateAISMarkers(vessels) {
     // Add/update vessels
     vessels.forEach(vessel => {
         if (aisVessels[vessel.mmsi]) {
-            // Update existing
-            const { marker } = aisVessels[vessel.mmsi];
-            marker.setLatLng([vessel.lat, vessel.lon]);
-            if (marker.setRotationAngle) {
-                marker.setRotationAngle(vessel.heading || vessel.cog || 0);
+            // Update existing marker position and rotation
+            const { marker, element } = aisVessels[vessel.mmsi];
+            marker.setLngLat([vessel.lon, vessel.lat]); // MapLibre uses [lon, lat]
+            // Update rotation via element style
+            if (element) {
+                const rotation = vessel.heading || vessel.cog || 0;
+                element.style.transform = `rotate(${rotation}deg)`;
             }
             aisVessels[vessel.mmsi].data = vessel;
         } else {
-            // Create new marker
-            const icon = createShipIcon(vessel);
-            const marker = L.marker([vessel.lat, vessel.lon], {
-                icon: icon,
-                rotationAngle: vessel.heading || vessel.cog || 0,
-                rotationOrigin: 'center'
+            // Create new MapLibre marker
+            const { element, size } = createShipElement(vessel);
+            const rotation = vessel.heading || vessel.cog || 0;
+            element.style.transform = `rotate(${rotation}deg)`;
+
+            const marker = new maplibregl.Marker({ element, anchor: 'center' })
+                .setLngLat([vessel.lon, vessel.lat])
+                .addTo(map);
+
+            // Add popup on click
+            element.addEventListener('click', () => {
+                showAISDetails(vessel);
             });
 
-            marker.bindPopup(() => createAISPopup(vessel));
-            marker.on('click', () => showAISDetails(vessel));
-            marker.addTo(map);
-
-            aisVessels[vessel.mmsi] = { marker, data: vessel };
+            aisVessels[vessel.mmsi] = { marker, element, data: vessel };
         }
     });
 }
 
-function createShipIcon(vessel) {
+function createShipElement(vessel) {
     const color = getShipColor(vessel.navstat);
     const size = vessel.length > 100 ? 24 : 16;
 
-    const svgIcon = `
+    const el = document.createElement('div');
+    el.className = 'ais-ship-icon';
+    el.style.cssText = `width: ${size}px; height: ${size}px; cursor: pointer;`;
+    el.innerHTML = `
         <svg width="${size}" height="${size}" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path d="M12 2 L20 20 L12 17 L4 20 Z" fill="${color}" stroke="white" stroke-width="1.5"/>
         </svg>
     `;
 
-    return L.divIcon({
-        html: svgIcon,
-        className: 'ais-ship-icon',
-        iconSize: [size, size],
-        iconAnchor: [size/2, size/2]
-    });
+    return { element: el, size };
 }
 
 function getShipColor(navstat) {
@@ -1941,8 +2166,8 @@ function updateAISSettings(settings) {
         aisUpdateInterval = null;
     }
 
-    // Remove all markers
-    Object.values(aisVessels).forEach(({marker}) => map.removeLayer(marker));
+    // Remove all markers (MapLibre)
+    Object.values(aisVessels).forEach(({marker}) => marker.remove());
     aisVessels = {};
 
     // Start if enabled
@@ -1993,7 +2218,7 @@ function updateInfrastructureMarkers(pois) {
     const currentIDs = new Set(pois.map(p => p.id));
     Object.keys(infrastructurePOIs).forEach(id => {
         if (!currentIDs.has(parseInt(id))) {
-            map.removeLayer(infrastructurePOIs[id].marker);
+            infrastructurePOIs[id].marker.remove(); // MapLibre marker.remove()
             delete infrastructurePOIs[id];
         }
     });
@@ -2003,27 +2228,28 @@ function updateInfrastructureMarkers(pois) {
         if (infrastructurePOIs[poi.id]) {
             // Update existing marker position (if changed)
             const { marker } = infrastructurePOIs[poi.id];
-            marker.setLatLng([poi.lat, poi.lon]);
+            marker.setLngLat([poi.lon, poi.lat]); // MapLibre uses [lon, lat]
             infrastructurePOIs[poi.id].data = poi;
         } else {
-            // Create new marker
-            const icon = createInfrastructureIcon(poi.type);
-            const marker = L.marker([poi.lat, poi.lon], {
-                icon: icon,
-                title: poi.name
-            });
+            // Create new MapLibre marker
+            const el = createInfrastructureElement(poi.type);
+            el.title = poi.name;
 
-            marker.bindPopup(() => createInfrastructurePopup(poi));
-            // Removed: Infrastructure details panel (user found it annoying)
-            // marker.on('click', () => showInfrastructureDetails(poi));
-            marker.addTo(map);
+            const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+                .setLngLat([poi.lon, poi.lat])
+                .addTo(map);
+
+            // Add popup on click
+            const popup = new maplibregl.Popup({ offset: 15 })
+                .setHTML(createInfrastructurePopup(poi));
+            marker.setPopup(popup);
 
             infrastructurePOIs[poi.id] = { marker, data: poi };
         }
     });
 }
 
-function createInfrastructureIcon(type) {
+function createInfrastructureElement(type) {
     const icons = {
         'lock': '🔒',
         'bridge': '🌉',
@@ -2043,12 +2269,12 @@ function createInfrastructureIcon(type) {
     const emoji = icons[type] || '📍';
     const color = colors[type] || '#95a5a6';
 
-    return L.divIcon({
-        html: `<div style="font-size: 20px; text-shadow: 0 0 3px ${color}, 0 0 5px rgba(0,0,0,0.8); filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));">${emoji}</div>`,
-        className: 'infrastructure-icon',
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
-    });
+    const el = document.createElement('div');
+    el.className = 'infrastructure-icon';
+    el.style.cssText = `font-size: 20px; text-shadow: 0 0 3px ${color}, 0 0 5px rgba(0,0,0,0.8); filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5)); cursor: pointer;`;
+    el.innerHTML = emoji;
+
+    return el;
 }
 
 function createInfrastructurePopup(poi) {
@@ -2237,8 +2463,8 @@ function updateInfrastructureSettings(settings) {
         infrastructureUpdateInterval = null;
     }
 
-    // Remove all markers
-    Object.values(infrastructurePOIs).forEach(({marker}) => map.removeLayer(marker));
+    // Remove all markers (MapLibre)
+    Object.values(infrastructurePOIs).forEach(({marker}) => marker.remove());
     infrastructurePOIs = {};
 
     // Start if enabled
@@ -2286,7 +2512,7 @@ function updateWaterLevelMarkers(gauges) {
     const currentIDs = new Set(gauges.map(g => g.id));
     Object.keys(waterLevelGauges).forEach(id => {
         if (!currentIDs.has(id)) {
-            map.removeLayer(waterLevelGauges[id].marker);
+            waterLevelGauges[id].marker.remove(); // MapLibre marker.remove()
             delete waterLevelGauges[id];
         }
     });
@@ -2295,38 +2521,41 @@ function updateWaterLevelMarkers(gauges) {
     gauges.forEach(gauge => {
         if (waterLevelGauges[gauge.id]) {
             // Update existing marker
-            const { marker } = waterLevelGauges[gauge.id];
-            marker.setLatLng([gauge.lat, gauge.lon]);
-            // Update icon with new water level
-            marker.setIcon(createWaterLevelIcon(gauge));
+            const { marker, element } = waterLevelGauges[gauge.id];
+            marker.setLngLat([gauge.lon, gauge.lat]); // MapLibre uses [lon, lat]
+            // Update water level text
+            if (element) {
+                element.innerHTML = `📊 ${gauge.water_level_cm} cm`;
+            }
             waterLevelGauges[gauge.id].data = gauge;
         } else {
-            // Create new marker
-            const icon = createWaterLevelIcon(gauge);
-            const marker = L.marker([gauge.lat, gauge.lon], {
-                icon: icon,
-                title: gauge.name
-            });
+            // Create new MapLibre marker
+            const el = createWaterLevelElement(gauge);
 
-            marker.bindPopup(() => createWaterLevelPopup(gauge));
-            marker.addTo(map);
+            const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+                .setLngLat([gauge.lon, gauge.lat])
+                .addTo(map);
 
-            waterLevelGauges[gauge.id] = { marker, data: gauge };
+            // Add popup
+            const popup = new maplibregl.Popup({ offset: 15 })
+                .setHTML(createWaterLevelPopup(gauge));
+            marker.setPopup(popup);
+
+            waterLevelGauges[gauge.id] = { marker, element: el, data: gauge };
         }
     });
 }
 
-function createWaterLevelIcon(gauge) {
+function createWaterLevelElement(gauge) {
     const level = gauge.water_level_cm;
 
-    return L.divIcon({
-        html: `<div style="background: rgba(10, 14, 39, 0.95); border: 2px solid #3498db; border-radius: 8px; padding: 4px 8px; font-size: 11px; font-weight: bold; color: #64ffda; text-align: center; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.4);">
-            📊 ${level} cm
-        </div>`,
-        className: 'water-level-icon',
-        iconSize: [70, 24],
-        iconAnchor: [35, 12]
-    });
+    const el = document.createElement('div');
+    el.className = 'water-level-icon';
+    el.title = gauge.name;
+    el.style.cssText = 'background: rgba(10, 14, 39, 0.95); border: 2px solid #3498db; border-radius: 8px; padding: 4px 8px; font-size: 11px; font-weight: bold; color: #64ffda; text-align: center; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.4); cursor: pointer;';
+    el.innerHTML = `📊 ${level} cm`;
+
+    return el;
 }
 
 function createWaterLevelPopup(gauge) {
@@ -2347,8 +2576,8 @@ function createWaterLevelPopup(gauge) {
 function updateWaterLevelSettings(settings) {
     waterLevelSettings = settings;
 
-    // Remove all markers
-    Object.values(waterLevelGauges).forEach(({marker}) => map.removeLayer(marker));
+    // Remove all markers (MapLibre)
+    Object.values(waterLevelGauges).forEach(({marker}) => marker.remove());
     waterLevelGauges = {};
 
     // Start if enabled
@@ -2364,53 +2593,76 @@ function updateWaterLevelSettings(settings) {
 }
 
 // ==================== TRACK VISUALIZATION ====================
-let displayedTrackLayer = null;
+let displayedTrackSourceAdded = false;
 
 window.showTrackOnMap = function(trackData, entry) {
-    // Remove previous track if exists
-    if (displayedTrackLayer) {
-        map.removeLayer(displayedTrackLayer);
+    // Remove previous track markers
+    displayedTrackMarkers.forEach(m => m.remove());
+    displayedTrackMarkers = [];
+
+    // Convert track data to GeoJSON coordinates [lon, lat]
+    const trackCoords = trackData.map(point => [point.lon, point.lat]);
+
+    // Add source if not exists, otherwise update data
+    if (!displayedTrackSourceAdded && map.loaded()) {
+        map.addSource('displayed-track', {
+            type: 'geojson',
+            data: { type: 'LineString', coordinates: trackCoords }
+        });
+        map.addLayer({
+            id: 'displayed-track-line',
+            type: 'line',
+            source: 'displayed-track',
+            paint: {
+                'line-color': '#9b59b6',
+                'line-width': 4,
+                'line-opacity': 0.8
+            },
+            layout: {
+                'line-cap': 'round',
+                'line-join': 'round'
+            }
+        });
+        displayedTrackSourceAdded = true;
+    } else if (map.getSource('displayed-track')) {
+        map.getSource('displayed-track').setData({ type: 'LineString', coordinates: trackCoords });
+        map.setLayoutProperty('displayed-track-line', 'visibility', 'visible');
     }
 
-    // Convert track data to LatLng array
-    const trackPoints = trackData.map(point => [point.lat, point.lon]);
-
-    // Create polyline for the track
-    displayedTrackLayer = L.polyline(trackPoints, {
-        color: '#9b59b6',  // Purple color to distinguish from live track
-        weight: 4,
-        opacity: 0.8,
-        smoothFactor: 1
-    }).addTo(map);
-
     // Add start marker
-    if (trackPoints.length > 0) {
-        const startIcon = L.divIcon({
-            html: '<div style="background: #2ecc71; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.4);">▶</div>',
-            className: 'track-start-marker',
-            iconSize: [24, 24],
-            iconAnchor: [12, 12]
-        });
-        L.marker(trackPoints[0], { icon: startIcon }).addTo(map)
-            .bindPopup(`<b>Start</b><br>${new Date(trackData[0].timestamp).toLocaleString('de-DE')}`);
+    if (trackCoords.length > 0) {
+        const startEl = document.createElement('div');
+        startEl.className = 'track-start-marker';
+        startEl.style.cssText = 'background: #2ecc71; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.4);';
+        startEl.innerHTML = '▶';
+
+        const startMarker = new maplibregl.Marker({ element: startEl, anchor: 'center' })
+            .setLngLat(trackCoords[0])
+            .setPopup(new maplibregl.Popup().setHTML(`<b>Start</b><br>${new Date(trackData[0].timestamp).toLocaleString('de-DE')}`))
+            .addTo(map);
+        displayedTrackMarkers.push(startMarker);
     }
 
     // Add end marker
-    if (trackPoints.length > 1) {
-        const endIcon = L.divIcon({
-            html: '<div style="background: #e74c3c; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.4);">⏹</div>',
-            className: 'track-end-marker',
-            iconSize: [24, 24],
-            iconAnchor: [12, 12]
-        });
-        L.marker(trackPoints[trackPoints.length - 1], { icon: endIcon }).addTo(map)
-            .bindPopup(`<b>Ende</b><br>${new Date(trackData[trackData.length - 1].timestamp).toLocaleString('de-DE')}`);
+    if (trackCoords.length > 1) {
+        const endEl = document.createElement('div');
+        endEl.className = 'track-end-marker';
+        endEl.style.cssText = 'background: #e74c3c; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.4);';
+        endEl.innerHTML = '⏹';
+
+        const endMarker = new maplibregl.Marker({ element: endEl, anchor: 'center' })
+            .setLngLat(trackCoords[trackCoords.length - 1])
+            .setPopup(new maplibregl.Popup().setHTML(`<b>Ende</b><br>${new Date(trackData[trackData.length - 1].timestamp).toLocaleString('de-DE')}`))
+            .addTo(map);
+        displayedTrackMarkers.push(endMarker);
     }
 
     // Zoom map to fit track bounds
-    if (trackPoints.length > 0) {
-        const bounds = L.latLngBounds(trackPoints);
-        map.fitBounds(bounds, { padding: [50, 50] });
+    if (trackCoords.length > 0) {
+        const bounds = createBoundsFromPoints(trackData);
+        if (bounds) {
+            map.fitBounds(bounds, { padding: 50 });
+        }
     }
 
     // Add info panel with track statistics
@@ -2451,19 +2703,14 @@ window.showTrackOnMap = function(trackData, entry) {
 };
 
 window.clearDisplayedTrack = function() {
-    if (displayedTrackLayer) {
-        map.removeLayer(displayedTrackLayer);
-        displayedTrackLayer = null;
+    // Hide the track line layer
+    if (map.getLayer('displayed-track-line')) {
+        map.setLayoutProperty('displayed-track-line', 'visibility', 'none');
     }
 
     // Remove markers (start/end)
-    map.eachLayer(layer => {
-        if (layer.options && layer.options.icon &&
-            (layer.options.icon.options.className === 'track-start-marker' ||
-             layer.options.icon.options.className === 'track-end-marker')) {
-            map.removeLayer(layer);
-        }
-    });
+    displayedTrackMarkers.forEach(m => m.remove());
+    displayedTrackMarkers = [];
 
     const panel = document.getElementById('track-view-panel');
     if (panel) panel.remove();
@@ -2509,8 +2756,8 @@ function updateNextWaypointDisplay(currentLat, currentLon, currentSpeed) {
 
     for (let i = 0; i < waypoints.length; i++) {
         const wp = waypoints[i];
-        const wpLatLng = wp.marker.getLatLng();
-        const distance = L.latLng(currentLat, currentLon).distanceTo(wpLatLng);
+        const wpLngLat = wp.marker.getLngLat(); // MapLibre uses getLngLat()
+        const distance = haversineDistance(currentLat, currentLon, wpLngLat.lat, wpLngLat.lng);
 
         if (distance < minDistance) {
             minDistance = distance;
@@ -2522,8 +2769,8 @@ function updateNextWaypointDisplay(currentLat, currentLon, currentSpeed) {
     if (!nextWaypoint) return;
 
     // Calculate bearing to waypoint
-    const wpLatLng = nextWaypoint.marker.getLatLng();
-    const bearing = calculateBearing(currentLat, currentLon, wpLatLng.lat, wpLatLng.lng);
+    const wpLngLat = nextWaypoint.marker.getLngLat();
+    const bearing = calculateBearing(currentLat, currentLon, wpLngLat.lat, wpLngLat.lng);
 
     // Distance in meters, convert to NM or km based on settings
     const distanceMeters = minDistance;
@@ -2666,8 +2913,8 @@ function updateTurnByTurnDisplay(currentLat, currentLon) {
 
     for (let i = 0; i < waypoints.length; i++) {
         const wp = waypoints[i];
-        const wpLatLng = wp.marker.getLatLng();
-        const distance = L.latLng(currentLat, currentLon).distanceTo(wpLatLng);
+        const wpLngLat = wp.marker.getLngLat();
+        const distance = haversineDistance(currentLat, currentLon, wpLngLat.lat, wpLngLat.lng);
 
         if (distance < minDistance) {
             minDistance = distance;
@@ -2678,8 +2925,8 @@ function updateTurnByTurnDisplay(currentLat, currentLon) {
     // If we're at the last waypoint, show arrival message
     if (nextWaypointIndex >= waypoints.length - 1) {
         const lastWP = waypoints[waypoints.length - 1];
-        const lastWPLatLng = lastWP.marker.getLatLng();
-        const distanceToLast = L.latLng(currentLat, currentLon).distanceTo(lastWPLatLng);
+        const lastWPLngLat = lastWP.marker.getLngLat();
+        const distanceToLast = haversineDistance(currentLat, currentLon, lastWPLngLat.lat, lastWPLngLat.lng);
 
         const distanceFormatted = typeof formatDistance === 'function'
             ? formatDistance(distanceToLast)
@@ -2727,20 +2974,20 @@ function updateTurnByTurnDisplay(currentLat, currentLon) {
     const currentWP = waypoints[nextWaypointIndex];
     const nextWP = waypoints[nextWaypointIndex + 1];
 
-    const currentWPLatLng = currentWP.marker.getLatLng();
-    const nextWPLatLng = nextWP.marker.getLatLng();
+    const currentWPLngLat = currentWP.marker.getLngLat();
+    const nextWPLngLat = nextWP.marker.getLngLat();
 
     // Bearing to current waypoint
-    const bearingToCurrent = calculateBearing(currentLat, currentLon, currentWPLatLng.lat, currentWPLatLng.lng);
+    const bearingToCurrent = calculateBearing(currentLat, currentLon, currentWPLngLat.lat, currentWPLngLat.lng);
 
     // Bearing from current to next waypoint (the upcoming segment)
-    const bearingToNext = calculateBearing(currentWPLatLng.lat, currentWPLatLng.lng, nextWPLatLng.lat, nextWPLatLng.lng);
+    const bearingToNext = calculateBearing(currentWPLngLat.lat, currentWPLngLat.lng, nextWPLngLat.lat, nextWPLngLat.lng);
 
     // Calculate turn direction
     const turn = calculateTurnDirection(bearingToCurrent, bearingToNext);
 
     // Distance to waypoint where turn happens
-    const distanceToTurn = L.latLng(currentLat, currentLon).distanceTo(currentWPLatLng);
+    const distanceToTurn = haversineDistance(currentLat, currentLon, currentWPLngLat.lat, currentWPLngLat.lng);
     const distanceFormatted = typeof formatDistance === 'function'
         ? formatDistance(distanceToTurn)
         : `${(distanceToTurn / 1852).toFixed(2)} NM`;
@@ -2816,14 +3063,14 @@ function updateLiveETA() {
 
     if (waypoints.length > 0) {
         // Distance to first waypoint
-        const firstWP = waypoints[0].marker.getLatLng();
-        totalRemainingDistanceMeters = L.latLng(currentLat, currentLon).distanceTo(firstWP);
+        const firstWP = waypoints[0].marker.getLngLat();
+        totalRemainingDistanceMeters = haversineDistance(currentLat, currentLon, firstWP.lat, firstWP.lng);
 
         // Add distance between all remaining waypoints
         for (let i = 0; i < waypoints.length - 1; i++) {
-            const wp1 = waypoints[i].marker.getLatLng();
-            const wp2 = waypoints[i + 1].marker.getLatLng();
-            totalRemainingDistanceMeters += wp1.distanceTo(wp2);
+            const wp1 = waypoints[i].marker.getLngLat();
+            const wp2 = waypoints[i + 1].marker.getLngLat();
+            totalRemainingDistanceMeters += haversineDistance(wp1.lat, wp1.lng, wp2.lat, wp2.lng);
         }
     }
 
@@ -2867,19 +3114,18 @@ function updateLiveETA() {
 function updateRouteSegmentHighlighting(currentLat, currentLon) {
     // Only highlight during active navigation
     if (!navigationActive || !waypoints || waypoints.length < 2 || !currentRouteCoordinates || currentRouteCoordinates.length < 2) {
-        // Clear highlighting
-        if (currentSegmentPolyline) {
-            currentSegmentPolyline.remove();
-            currentSegmentPolyline = null;
+        // Clear highlighting via GeoJSON sources
+        if (map.getSource('completed-segments')) {
+            map.getSource('completed-segments').setData({ type: 'FeatureCollection', features: [] });
         }
-        if (completedSegmentsPolyline) {
-            completedSegmentsPolyline.remove();
-            completedSegmentsPolyline = null;
+        if (map.getSource('current-segment')) {
+            map.getSource('current-segment').setData({ type: 'FeatureCollection', features: [] });
         }
-        if (remainingSegmentsPolyline) {
-            remainingSegmentsPolyline.remove();
-            remainingSegmentsPolyline = null;
+        if (map.getSource('remaining-segments')) {
+            map.getSource('remaining-segments').setData({ type: 'FeatureCollection', features: [] });
         }
+        currentSegmentActive = false;
+        completedSegmentsActive = false;
         return;
     }
 
@@ -2909,52 +3155,52 @@ function updateRouteSegmentHighlighting(currentLat, currentLon) {
     const isWaterway = currentRoutePolyline && currentRoutePolyline.options.originalColor === '#2ecc71';
     const normalColor = isWaterway ? '#2ecc71' : '#3498db';
 
-    // Clear old polylines
-    if (currentSegmentPolyline) currentSegmentPolyline.remove();
-    if (completedSegmentsPolyline) completedSegmentsPolyline.remove();
-    if (remainingSegmentsPolyline) remainingSegmentsPolyline.remove();
-
-    // Draw completed segments (faded)
+    // Update completed segments GeoJSON source
     if (closestSegmentIndex > 0) {
-        const completedPoints = [];
+        const completedCoords = [];
         for (let i = 0; i <= closestSegmentIndex; i++) {
-            completedPoints.push([currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon]);
+            completedCoords.push([currentRouteCoordinates[i].lon, currentRouteCoordinates[i].lat]);
         }
-        completedSegmentsPolyline = L.polyline(completedPoints, {
-            color: '#666',
-            weight: 4,
-            opacity: 0.3,
-            lineCap: 'round',
-            lineJoin: 'round'
-        }).addTo(routeLayer);
+        if (map.getSource('completed-segments')) {
+            map.getSource('completed-segments').setData({
+                type: 'Feature',
+                geometry: { type: 'LineString', coordinates: completedCoords }
+            });
+        }
+        completedSegmentsActive = true;
+    } else if (map.getSource('completed-segments')) {
+        map.getSource('completed-segments').setData({ type: 'FeatureCollection', features: [] });
+        completedSegmentsActive = false;
     }
 
-    // Draw current segment (bright yellow/orange)
-    const currentSegmentPoints = [
-        [closestPoint.lat, closestPoint.lon],
-        [currentRouteCoordinates[closestSegmentIndex + 1].lat, currentRouteCoordinates[closestSegmentIndex + 1].lon]
+    // Update current segment GeoJSON source (bright yellow/orange)
+    const currentSegmentCoords = [
+        [closestPoint.lon, closestPoint.lat],
+        [currentRouteCoordinates[closestSegmentIndex + 1].lon, currentRouteCoordinates[closestSegmentIndex + 1].lat]
     ];
-    currentSegmentPolyline = L.polyline(currentSegmentPoints, {
-        color: '#ffd700', // Gold/Yellow
-        weight: 6,
-        opacity: 1.0,
-        lineCap: 'round',
-        lineJoin: 'round'
-    }).addTo(routeLayer);
+    if (map.getSource('current-segment')) {
+        map.getSource('current-segment').setData({
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: currentSegmentCoords }
+        });
+    }
+    currentSegmentActive = true;
 
-    // Draw remaining segments (normal color)
+    // Update remaining segments GeoJSON source
     if (closestSegmentIndex < currentRouteCoordinates.length - 2) {
-        const remainingPoints = [];
+        const remainingCoords = [];
         for (let i = closestSegmentIndex + 1; i < currentRouteCoordinates.length; i++) {
-            remainingPoints.push([currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon]);
+            remainingCoords.push([currentRouteCoordinates[i].lon, currentRouteCoordinates[i].lat]);
         }
-        remainingSegmentsPolyline = L.polyline(remainingPoints, {
-            color: normalColor,
-            weight: 5,
-            opacity: 0.9,
-            lineCap: 'round',
-            lineJoin: 'round'
-        }).addTo(routeLayer);
+        if (map.getSource('remaining-segments')) {
+            map.getSource('remaining-segments').setData({
+                type: 'Feature',
+                properties: { color: normalColor },
+                geometry: { type: 'LineString', coordinates: remainingCoords }
+            });
+        }
+    } else if (map.getSource('remaining-segments')) {
+        map.getSource('remaining-segments').setData({ type: 'FeatureCollection', features: [] });
     }
 
     // Update progress display
@@ -2970,23 +3216,26 @@ function updateRouteProgress(segmentIndex, closestPoint) {
     // Calculate completed distance
     let completedDistance = 0;
     for (let i = 0; i < segmentIndex; i++) {
-        const p1 = L.latLng(currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon);
-        const p2 = L.latLng(currentRouteCoordinates[i + 1].lat, currentRouteCoordinates[i + 1].lon);
-        completedDistance += p1.distanceTo(p2);
+        completedDistance += haversineDistance(
+            currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon,
+            currentRouteCoordinates[i + 1].lat, currentRouteCoordinates[i + 1].lon
+        );
     }
     // Add distance from last completed segment to current position
     if (segmentIndex < currentRouteCoordinates.length - 1) {
-        const p1 = L.latLng(currentRouteCoordinates[segmentIndex].lat, currentRouteCoordinates[segmentIndex].lon);
-        const current = L.latLng(closestPoint.lat, closestPoint.lon);
-        completedDistance += p1.distanceTo(current);
+        completedDistance += haversineDistance(
+            currentRouteCoordinates[segmentIndex].lat, currentRouteCoordinates[segmentIndex].lon,
+            closestPoint.lat, closestPoint.lon
+        );
     }
 
     // Calculate total route distance
     let totalDistance = 0;
     for (let i = 0; i < currentRouteCoordinates.length - 1; i++) {
-        const p1 = L.latLng(currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon);
-        const p2 = L.latLng(currentRouteCoordinates[i + 1].lat, currentRouteCoordinates[i + 1].lon);
-        totalDistance += p1.distanceTo(p2);
+        totalDistance += haversineDistance(
+            currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon,
+            currentRouteCoordinates[i + 1].lat, currentRouteCoordinates[i + 1].lon
+        );
     }
 
     // Calculate progress percentage
@@ -3052,21 +3301,24 @@ function updateRouteProgress(segmentIndex, closestPoint) {
 }
 
 /**
- * Add direction arrows along the route
+ * Add direction arrows along the route (MapLibre version)
  */
 function addRouteArrows() {
     // Clear existing arrows
     routeArrows.forEach(arrow => arrow.remove());
     routeArrows = [];
+    routeArrowMarkers.forEach(m => m.remove());
+    routeArrowMarkers = [];
 
     if (!currentRouteCoordinates || currentRouteCoordinates.length < 2) return;
 
     // Calculate total route distance
     let totalDistance = 0;
     for (let i = 0; i < currentRouteCoordinates.length - 1; i++) {
-        const p1 = L.latLng(currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon);
-        const p2 = L.latLng(currentRouteCoordinates[i + 1].lat, currentRouteCoordinates[i + 1].lon);
-        totalDistance += p1.distanceTo(p2);
+        totalDistance += haversineDistance(
+            currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon,
+            currentRouteCoordinates[i + 1].lat, currentRouteCoordinates[i + 1].lon
+        );
     }
 
     // Arrow spacing: 1-2 NM (approximately 1852-3704 meters)
@@ -3076,21 +3328,22 @@ function addRouteArrows() {
     if (numArrows < 1) return; // Route too short
 
     // Place arrows at intervals
-    let currentDistance = arrowSpacing; // Start after first interval
+    let currentDist = arrowSpacing; // Start after first interval
 
     for (let arrowNum = 0; arrowNum < numArrows; arrowNum++) {
-        // Find position along route at currentDistance
+        // Find position along route at currentDist
         let accumulatedDistance = 0;
         let arrowPlaced = false;
 
         for (let i = 0; i < currentRouteCoordinates.length - 1; i++) {
-            const p1 = L.latLng(currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon);
-            const p2 = L.latLng(currentRouteCoordinates[i + 1].lat, currentRouteCoordinates[i + 1].lon);
-            const segmentDistance = p1.distanceTo(p2);
+            const segmentDistance = haversineDistance(
+                currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon,
+                currentRouteCoordinates[i + 1].lat, currentRouteCoordinates[i + 1].lon
+            );
 
-            if (accumulatedDistance + segmentDistance >= currentDistance) {
+            if (accumulatedDistance + segmentDistance >= currentDist) {
                 // Arrow position is in this segment
-                const distanceIntoSegment = currentDistance - accumulatedDistance;
+                const distanceIntoSegment = currentDist - accumulatedDistance;
                 const fraction = distanceIntoSegment / segmentDistance;
 
                 // Interpolate position
@@ -3107,24 +3360,17 @@ function addRouteArrows() {
                     currentRouteCoordinates[i + 1].lon
                 );
 
-                // Create arrow marker
-                const arrowIcon = L.divIcon({
-                    html: `<div style="
-                        transform: rotate(${bearing}deg);
-                        font-size: 20px;
-                        text-shadow: 0 0 3px rgba(0,0,0,0.8);
-                    ">⬆️</div>`,
-                    className: 'route-arrow-icon',
-                    iconSize: [24, 24],
-                    iconAnchor: [12, 12]
-                });
+                // Create arrow element
+                const arrowEl = document.createElement('div');
+                arrowEl.className = 'route-arrow-icon';
+                arrowEl.style.cssText = `transform: rotate(${bearing}deg); font-size: 20px; text-shadow: 0 0 3px rgba(0,0,0,0.8); pointer-events: none;`;
+                arrowEl.innerHTML = '⬆️';
 
-                const arrowMarker = L.marker([arrowLat, arrowLon], {
-                    icon: arrowIcon,
-                    interactive: false // Not clickable
-                }).addTo(routeLayer);
+                const arrowMarker = new maplibregl.Marker({ element: arrowEl, anchor: 'center' })
+                    .setLngLat([arrowLon, arrowLat])
+                    .addTo(map);
 
-                routeArrows.push(arrowMarker);
+                routeArrowMarkers.push(arrowMarker);
                 arrowPlaced = true;
                 break;
             }
@@ -3133,7 +3379,7 @@ function addRouteArrows() {
         }
 
         if (!arrowPlaced) break;
-        currentDistance += arrowSpacing;
+        currentDist += arrowSpacing;
     }
 }
 
@@ -3144,21 +3390,16 @@ function addRouteArrows() {
  * Returns: {distance: meters, side: 'port'|'starboard', nearestPoint: {lat, lon}}
  */
 function pointToLineSegmentDistance(pointLat, pointLon, lineLat1, lineLon1, lineLat2, lineLon2) {
-    // Convert to Leaflet LatLng for distance calculations
-    const point = L.latLng(pointLat, pointLon);
-    const lineStart = L.latLng(lineLat1, lineLon1);
-    const lineEnd = L.latLng(lineLat2, lineLon2);
-
     // Vector from line start to point
     const pointVec = {
-        lat: point.lat - lineStart.lat,
-        lng: point.lng - lineStart.lng
+        lat: pointLat - lineLat1,
+        lng: pointLon - lineLon1
     };
 
     // Vector from line start to line end
     const lineVec = {
-        lat: lineEnd.lat - lineStart.lat,
-        lng: lineEnd.lng - lineStart.lng
+        lat: lineLat2 - lineLat1,
+        lng: lineLon2 - lineLon1
     };
 
     // Project point onto line (dot product)
@@ -3167,9 +3408,9 @@ function pointToLineSegmentDistance(pointLat, pointLon, lineLat1, lineLon1, line
     if (lineLengthSquared === 0) {
         // Line segment is actually a point
         return {
-            distance: point.distanceTo(lineStart),
+            distance: haversineDistance(pointLat, pointLon, lineLat1, lineLon1),
             side: 'unknown',
-            nearestPoint: { lat: lineStart.lat, lon: lineStart.lng }
+            nearestPoint: { lat: lineLat1, lon: lineLon1 }
         };
     }
 
@@ -3178,12 +3419,11 @@ function pointToLineSegmentDistance(pointLat, pointLon, lineLat1, lineLon1, line
     t = Math.max(0, Math.min(1, t)); // Clamp to [0, 1]
 
     // Nearest point on line segment
-    const nearestLat = lineStart.lat + t * lineVec.lat;
-    const nearestLng = lineStart.lng + t * lineVec.lng;
-    const nearest = L.latLng(nearestLat, nearestLng);
+    const nearestLat = lineLat1 + t * lineVec.lat;
+    const nearestLng = lineLon1 + t * lineVec.lng;
 
     // Distance from point to nearest point on line
-    const distance = point.distanceTo(nearest);
+    const distance = haversineDistance(pointLat, pointLon, nearestLat, nearestLng);
 
     // Determine which side (port/starboard) using cross product
     // Positive = starboard (right), Negative = port (left)
@@ -3518,11 +3758,12 @@ async function deleteFavorite(favoriteId) {
 }
 
 /**
- * Update favorite markers on map
+ * Update favorite markers on map (MapLibre version)
  */
 function updateFavoritesMarkers() {
     // Clear existing markers
-    favoriteMarkers.clearLayers();
+    favoriteMarkers.forEach(m => m.remove());
+    favoriteMarkers = [];
 
     // Add markers for each favorite
     favorites.forEach(fav => {
@@ -3540,14 +3781,14 @@ function updateFavoritesMarkers() {
 
         const icon = categoryIcons[fav.category] || '📍';
 
-        const marker = L.marker([fav.lat, fav.lon], {
-            icon: L.divIcon({
-                html: `<div style="font-size: 24px;">${icon}</div>`,
-                className: 'favorite-marker',
-                iconSize: [30, 30],
-                iconAnchor: [15, 15]
-            })
-        });
+        // Create marker element
+        const el = document.createElement('div');
+        el.className = 'favorite-marker';
+        el.style.cssText = 'font-size: 24px; cursor: pointer;';
+        el.innerHTML = icon;
+
+        const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+            .setLngLat([fav.lon, fav.lat]);
 
         const popupContent = `
             <div style="min-width: 200px;">
@@ -3567,14 +3808,10 @@ function updateFavoritesMarkers() {
             </div>
         `;
 
-        marker.bindPopup(popupContent);
-        marker.addTo(favoriteMarkers);
+        marker.setPopup(new maplibregl.Popup({ offset: 15 }).setHTML(popupContent));
+        marker.addTo(map);
+        favoriteMarkers.push(marker);
     });
-
-    // Add layer to map if not already added
-    if (map && !map.hasLayer(favoriteMarkers)) {
-        favoriteMarkers.addTo(map);
-    }
 }
 
 /**
@@ -3710,7 +3947,7 @@ function updateFavoritesPanel() {
 function panToFavorite(favoriteId) {
     const fav = favorites.find(f => f.id === favoriteId);
     if (fav && map) {
-        map.setView([fav.lat, fav.lon], 14);
+        map.flyTo({ center: [fav.lon, fav.lat], zoom: 14 });
         showNotification(`🗺️ Karte zentriert auf: ${fav.name}`, 'info');
     }
 }
@@ -3814,9 +4051,7 @@ async function updateLocksTimeline() {
         // Sort locks by distance from start of route
         const routeStart = currentRouteCoordinates[0];
         locksOnRoute.forEach(lock => {
-            const lockLatLng = L.latLng(lock.lat, lock.lon);
-            const startLatLng = L.latLng(routeStart.lat, routeStart.lon);
-            lock._distanceFromStart = startLatLng.distanceTo(lockLatLng);
+            lock._distanceFromStart = haversineDistance(routeStart.lat, routeStart.lon, lock.lat, lock.lon);
         });
         locksOnRoute.sort((a, b) => a._distanceFromStart - b._distanceFromStart);
 
@@ -3883,9 +4118,7 @@ function displayLocksTimeline() {
 
         // Only calculate if we have valid current position
         if (currentLat && currentLon && !isNaN(currentLat) && !isNaN(currentLon)) {
-            const lockLatLng = L.latLng(lock.lat, lock.lon);
-            const currentLatLng = L.latLng(currentLat, currentLon);
-            distanceMeters = currentLatLng.distanceTo(lockLatLng);
+            distanceMeters = haversineDistance(currentLat, currentLon, lock.lat, lock.lon);
             distanceNM = distanceMeters / 1852;
         }
 
@@ -4036,10 +4269,8 @@ async function prepareLockNotification(lockId) {
 
         // Calculate ETA
         let etaText = 'in ca. X Stunden';
-        const lockLatLng = L.latLng(lock.lat, lock.lon);
-        const currentLatLng = L.latLng(currentPosition.lat, currentPosition.lon);
         if (currentPosition.lat && currentPosition.lon) {
-            const distanceMeters = currentLatLng.distanceTo(lockLatLng);
+            const distanceMeters = haversineDistance(currentPosition.lat, currentPosition.lon, lock.lat, lock.lon);
             const distanceNM = distanceMeters / 1852;
             const currentSpeed = window.lastSensorData?.speed || 5; // knots
             if (currentSpeed > 0) {
@@ -4110,18 +4341,18 @@ function exportRouteAsGPX() {
     let gpxRoutePoints = '  <rte>\n    <name>BoatOS Route</name>\n';
 
     waypoints.forEach((wp, index) => {
-        const latlng = wp.marker.getLatLng();
+        const lnglat = wp.marker.getLngLat(); // MapLibre uses getLngLat()
         const name = wp.name || `WP${index + 1}`;
 
         // Add as waypoint (for Garmin/Navionics compatibility)
-        gpxWaypoints += `  <wpt lat="${latlng.lat.toFixed(7)}" lon="${latlng.lng.toFixed(7)}">
+        gpxWaypoints += `  <wpt lat="${lnglat.lat.toFixed(7)}" lon="${lnglat.lng.toFixed(7)}">
     <name>${escapeXML(name)}</name>
     <sym>Waypoint</sym>
   </wpt>
 `;
 
         // Add as route point
-        gpxRoutePoints += `    <rtept lat="${latlng.lat.toFixed(7)}" lon="${latlng.lng.toFixed(7)}">
+        gpxRoutePoints += `    <rtept lat="${lnglat.lat.toFixed(7)}" lon="${lnglat.lng.toFixed(7)}">
       <name>${escapeXML(name)}</name>
     </rtept>
 `;
@@ -4192,22 +4423,21 @@ function importGPXFile(file) {
                 const nameEl = wpt.querySelector('name');
                 const name = nameEl ? nameEl.textContent : `WP${index + 1}`;
 
-                // Add waypoint to map
-                const marker = L.marker([lat, lon], {
-                    draggable: true,
-                    icon: L.divIcon({
-                        className: 'waypoint-marker',
-                        html: `<div style="background: #e74c3c; color: white; padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: 13px; white-space: nowrap; box-shadow: 0 4px 8px rgba(0,0,0,0.3); border: 2px solid white;">${escapeHTML(name)}</div>`,
-                        iconSize: [90, 35],
-                        iconAnchor: [45, 18]
-                    })
-                }).addTo(map);
+                // Add waypoint to map (MapLibre)
+                const el = document.createElement('div');
+                el.className = 'waypoint-marker';
+                el.style.cssText = 'cursor: grab;';
+                el.innerHTML = `<div style="background: #e74c3c; color: white; padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: 13px; white-space: nowrap; box-shadow: 0 4px 8px rgba(0,0,0,0.3); border: 2px solid white;">${escapeHTML(name)}</div>`;
+
+                const marker = new maplibregl.Marker({ element: el, draggable: true, anchor: 'center' })
+                    .setLngLat([lon, lat])
+                    .addTo(map);
 
                 // Add event listeners
                 marker.on('dragend', updateRoute);
-                marker.on('click', function() {
-                    if (confirm(`Wegpunkt "${name}" löschen?`)) {
-                        map.removeLayer(marker);
+                el.addEventListener('click', function() {
+                    if (confirm(`Wegpunkt "${name}" loeschen?`)) {
+                        marker.remove();
                         const wpIndex = waypoints.findIndex(w => w.marker === marker);
                         if (wpIndex > -1) {
                             waypoints.splice(wpIndex, 1);
@@ -4227,8 +4457,13 @@ function importGPXFile(file) {
 
             // Zoom to fit all waypoints
             if (waypoints.length > 0) {
-                const bounds = L.latLngBounds(waypoints.map(w => w.marker.getLatLng()));
-                map.fitBounds(bounds, { padding: [50, 50] });
+                const bounds = createBoundsFromPoints(waypoints.map(w => {
+                    const lnglat = w.marker.getLngLat();
+                    return { lat: lnglat.lat, lon: lnglat.lng };
+                }));
+                if (bounds) {
+                    map.fitBounds(bounds, { padding: 50 });
+                }
             }
 
             showNotification(`📤 GPX importiert: ${importedCount} Wegpunkte`, 'success');
