@@ -8,7 +8,7 @@ import asyncio
 import math
 
 class OSRMRouter:
-    def __init__(self, osrm_url: str = "http://localhost:5000"):
+    def __init__(self, osrm_url: str = "http://127.0.0.1:5000"):
         """
         Initialize OSRM router
 
@@ -174,6 +174,12 @@ class OSRMRouter:
                             geometry = route["geometry"]
                             distance_m = route["distance"]
                             duration_s = route.get("duration", 0)
+
+                            # Check if route is valid (distance > 0)
+                            # OSRM returns distance=0 when coordinates are outside loaded map data
+                            if distance_m == 0:
+                                print(f"⚠️ OSRM returned distance=0 (coordinates outside map data)")
+                                return self._direct_route(waypoints)
 
                             # Extract infrastructure (locks, bridges)
                             infrastructure = self._extract_infrastructure(route)
