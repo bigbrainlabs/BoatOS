@@ -2706,7 +2706,7 @@ def init_waterway_router():
     global osrm_router, pyroutelib_router
 
     # Load settings
-    osrm_url = "http://localhost:5000"
+    osrm_url = "http://127.0.0.1:5000"
     routing_provider = "osrm"  # Default
     osm_file = None
 
