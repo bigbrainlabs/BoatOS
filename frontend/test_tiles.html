@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Tile Test - Leipzig</title>
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"/>
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        #debug { position: absolute; top: 10px; left: 10px; background: white; padding: 10px; z-index: 1000; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div id="debug">Loading...</div>
+    <div id="map"></div>
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    <script>
+        const debug = document.getElementById('debug');
+        function log(msg) {
+            debug.innerHTML += '<br>' + msg;
+            console.log(msg);
+        }
+
+        log('Starting map...');
+
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    'germany': {
+                        type: 'vector',
+                        tiles: [window.location.origin + '/tiles/germany/{z}/{x}/{y}'],
+                        minzoom: 0,
+                        maxzoom: 14
+                    }
+                },
+                layers: [
+                    {
+                        id: 'background',
+                        type: 'background',
+                        paint: { 'background-color': '#e0e0e0' }
+                    },
+                    {
+                        id: 'water',
+                        type: 'fill',
+                        source: 'germany',
+                        'source-layer': 'water',
+                        paint: { 'fill-color': '#80b0d0' }
+                    },
+                    {
+                        id: 'waterway',
+                        type: 'line',
+                        source: 'germany',
+                        'source-layer': 'waterway',
+                        paint: { 'line-color': '#80b0d0', 'line-width': 2 }
+                    },
+                    {
+                        id: 'landcover',
+                        type: 'fill',
+                        source: 'germany',
+                        'source-layer': 'landcover',
+                        paint: { 'fill-color': '#c0e0c0', 'fill-opacity': 0.5 }
+                    },
+                    {
+                        id: 'park',
+                        type: 'fill',
+                        source: 'germany',
+                        'source-layer': 'park',
+                        paint: { 'fill-color': '#a0d0a0', 'fill-opacity': 0.5 }
+                    },
+                    {
+                        id: 'landuse',
+                        type: 'fill',
+                        source: 'germany',
+                        'source-layer': 'landuse',
+                        paint: { 'fill-color': '#f0f0e0', 'fill-opacity': 0.3 }
+                    },
+                    {
+                        id: 'building',
+                        type: 'fill',
+                        source: 'germany',
+                        'source-layer': 'building',
+                        minzoom: 13,
+                        paint: { 'fill-color': '#d0d0d0' }
+                    },
+                    {
+                        id: 'roads',
+                        type: 'line',
+                        source: 'germany',
+                        'source-layer': 'transportation',
+                        paint: { 'line-color': '#ffffff', 'line-width': 1 }
+                    },
+                    {
+                        id: 'roads-major',
+                        type: 'line',
+                        source: 'germany',
+                        'source-layer': 'transportation',
+                        filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary']]],
+                        paint: { 'line-color': '#ffcc80', 'line-width': 3 }
+                    },
+                    {
+                        id: 'boundary',
+                        type: 'line',
+                        source: 'germany',
+                        'source-layer': 'boundary',
+                        paint: { 'line-color': '#808080', 'line-width': 1, 'line-dasharray': [2, 2] }
+                    }
+                ]
+            },
+            center: [12.37, 51.34], // Leipzig
+            zoom: 12
+        });
+
+        map.on('load', () => log('✅ Map loaded!'));
+        map.on('error', (e) => log('❌ Error: ' + JSON.stringify(e.error)));
+        map.on('sourcedata', (e) => {
+            if (e.isSourceLoaded) log('📦 Source loaded: ' + e.sourceId);
+        });
+        map.on('data', (e) => {
+            if (e.dataType === 'source' && e.sourceId === 'germany') {
+                log('🗺️ Tile data received');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -863,6 +863,7 @@ function updateAISKeyVisibility() {
 function updateRoutingProviderVisibility() {
     const provider = document.getElementById('setting-routing-provider')?.value || 'osrm';
     const osrmField = document.getElementById('osrm-url-field');
+    const osrmRegionField = document.getElementById('osrm-region-field');
     const graphhopperField = document.getElementById('graphhopper-api-key-field');
     const osrmInfoBox = document.getElementById('osrm-info-box');
     const graphhopperInfoBox = document.getElementById('graphhopper-info-box');
@@ -871,6 +872,9 @@ function updateRoutingProviderVisibility() {
     // Show/hide input fields
     if (osrmField) {
         osrmField.style.display = (provider === 'osrm') ? 'block' : 'none';
+    }
+    if (osrmRegionField) {
+        osrmRegionField.style.display = (provider === 'osrm') ? 'block' : 'none';
     }
     if (graphhopperField) {
         graphhopperField.style.display = (provider === 'graphhopper') ? 'block' : 'none';

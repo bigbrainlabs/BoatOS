@@ -158,7 +158,7 @@ async function performSearch() {
     }
 }
 
-// Jump to location on map
+// Jump to location on map (MapLibre version)
 function jumpToLocation(lat, lon, name) {
     if (typeof map === 'undefined' || !map) {
         console.error('Map not initialized');
@@ -167,24 +167,29 @@ function jumpToLocation(lat, lon, name) {
 
     // Remove previous search marker if exists
     if (searchMarker) {
-        map.removeLayer(searchMarker);
+        searchMarker.remove();
     }
 
-    // Create marker at location
-    const icon = L.divIcon({
-        html: '📍',
-        className: 'search-marker',
-        iconSize: [30, 30],
-        iconAnchor: [15, 30]
-    });
+    // Create HTML element for marker
+    const el = document.createElement('div');
+    el.className = 'search-marker';
+    el.innerHTML = '📍';
+    el.style.fontSize = '24px';
+    el.style.cursor = 'pointer';
 
-    searchMarker = L.marker([lat, lon], { icon: icon }).addTo(map);
-    searchMarker.bindPopup(`<b>🔍 Suchergebnis</b><br>${name}`).openPopup();
+    // Create MapLibre marker
+    searchMarker = new maplibregl.Marker({ element: el })
+        .setLngLat([lon, lat])
+        .setPopup(new maplibregl.Popup().setHTML(`<b>🔍 Suchergebnis</b><br>${name}`))
+        .addTo(map);
+
+    searchMarker.togglePopup();
 
     // Fly to location
-    map.flyTo([lat, lon], 14, {
-        duration: 1.5,
-        easeLinearity: 0.25
+    map.flyTo({
+        center: [lon, lat],
+        zoom: 14,
+        duration: 1500
     });
 
     console.log(`📍 Jumped to: ${name} (${lat.toFixed(6)}, ${lon.toFixed(6)})`);

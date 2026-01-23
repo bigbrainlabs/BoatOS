@@ -2,6 +2,12 @@
  * BoatOS Charts Management
  */
 
+// TEMPORARY: Check for Leaflet (MapLibre migration)
+const LEAFLET_AVAILABLE = typeof L !== 'undefined';
+if (!LEAFLET_AVAILABLE) {
+    console.log('⚠️ charts.js: Leaflet not available, chart overlays disabled');
+}
+
 let chartLayers = [];
 let chartOverlays = {};
 
@@ -21,6 +27,9 @@ async function loadCharts() {
 }
 
 function loadChartOverlays() {
+    // Skip if Leaflet not available
+    if (!LEAFLET_AVAILABLE) return;
+
     // Remove existing overlays
     Object.values(chartOverlays).forEach(layer => map.removeLayer(layer));
     chartOverlays = {};
@@ -363,6 +372,9 @@ function closeChartsModal() {
 
 // Add Layer Control to Map
 function addLayerControl() {
+    // Skip if Leaflet not available
+    if (!LEAFLET_AVAILABLE) return;
+
     const layerControl = L.control({ position: 'topleft' });
 
     layerControl.onAdd = function() {

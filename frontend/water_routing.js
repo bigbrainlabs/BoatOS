@@ -1,4 +1,15 @@
+// TEMPORARY: Skip if Leaflet not available (MapLibre migration)
+if (typeof L === 'undefined') {
+    console.log('⚠️ water_routing.js: Leaflet not available, using MapLibre route functions');
+    // These functions are now in app.js with MapLibre support
+}
+
 async function updateRoute() {
+    // Skip if no Leaflet
+    if (typeof L === 'undefined' || typeof routeLayer === 'undefined') {
+        console.log('⚠️ updateRoute skipped - using MapLibre');
+        return;
+    }
     // Alte Route löschen
     routeLayer.eachLayer(layer => {
         if (layer instanceof L.Polyline || layer._icon) {

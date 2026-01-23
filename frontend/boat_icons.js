@@ -319,12 +319,18 @@ function getBoatIcon(type = 'motorboat_small') {
 }
 
 /**
- * Create a Leaflet DivIcon with the selected boat icon
+ * Create a Leaflet DivIcon with the selected boat icon (DEPRECATED - use MapLibre markers)
  * @param {string} type - Boat type
  * @param {number} rotation - Rotation angle in degrees (0 = North)
- * @returns {L.DivIcon} Leaflet icon
+ * @returns {L.DivIcon|null} Leaflet icon or null if Leaflet not available
  */
 function createBoatMarkerIcon(type = 'motorboat_small', rotation = 0) {
+    // Skip if Leaflet not available (MapLibre migration)
+    if (typeof L === 'undefined') {
+        console.log('⚠️ createBoatMarkerIcon: Leaflet not available');
+        return null;
+    }
+
     const iconHtml = getBoatIcon(type);
 
     return L.divIcon({

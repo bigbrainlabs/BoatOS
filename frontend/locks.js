@@ -1,32 +1,30 @@
 /**
- * Locks Module
+ * Locks Module - MapLibre GL Version
  * Displays locks (Schleusen) on the map
  */
 
-let locksLayer = null;
+let locksMarkers = []; // Array of MapLibre markers
 let locksData = [];
 let locksVisible = true;
 
 /**
  * Initialize locks layer
  */
-function initLocksLayer(map) {
-    locksLayer = L.layerGroup().addTo(map);
-
+function initLocksLayer(mapInstance) {
     // Load locks on map move
-    map.on('moveend', updateLocksOnMap);
+    mapInstance.on('moveend', updateLocksOnMap);
 
     // Initial load
     updateLocksOnMap();
 
-    console.log('✅ Locks layer initialized');
+    console.log('✅ Locks layer initialized (MapLibre)');
 }
 
 /**
  * Update locks displayed on map based on current view
  */
 async function updateLocksOnMap() {
-    if (!locksVisible || !locksLayer) return;
+    if (!locksVisible || !map) return;
 
     const bounds = map.getBounds();
     const bbox = {
@@ -50,7 +48,7 @@ async function updateLocksOnMap() {
         locksData = data.locks || [];
 
         // Clear existing markers
-        locksLayer.clearLayers();
+        clearLocksMarkers();
 
         // Add lock markers
         locksData.forEach(lock => {
@@ -65,39 +63,53 @@ async function updateLocksOnMap() {
 }
 
 /**
+ * Clear all lock markers
+ */
+function clearLocksMarkers() {
+    locksMarkers.forEach(marker => marker.remove());
+    locksMarkers = [];
+}
+
+/**
  * Add a single lock marker to the map
  */
 function addLockMarker(lock) {
-    // Custom lock icon
-    const lockIcon = L.divIcon({
-        className: 'lock-marker',
-        html: `<div class="lock-icon">
+    // Create HTML element for marker
+    const el = document.createElement('div');
+    el.className = 'lock-marker';
+    el.innerHTML = `
+        <div class="lock-icon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="6" y="10" width="12" height="10" rx="1" fill="#FF8C00" stroke="white" stroke-width="2"/>
                 <path d="M8 10V7C8 4.79 9.79 3 12 3C14.21 3 16 4.79 16 7V10" stroke="white" stroke-width="2" stroke-linecap="round"/>
                 <circle cx="12" cy="15" r="1.5" fill="white"/>
             </svg>
-        </div>`,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16],
-        popupAnchor: [0, -16]
-    });
+        </div>
+    `;
+    el.style.cursor = 'pointer';
+    el.style.width = '32px';
+    el.style.height = '32px';
 
-    const marker = L.marker([lock.lat, lock.lon], { icon: lockIcon });
+    // Create MapLibre marker
+    const marker = new maplibregl.Marker({ element: el })
+        .setLngLat([lock.lon, lock.lat])
+        .addTo(map);
 
-    // Create popup content
-    const popupContent = createLockPopup(lock);
-    marker.bindPopup(popupContent, {
-        maxWidth: 350,
+    // Create popup
+    const popup = new maplibregl.Popup({
+        offset: 25,
+        maxWidth: '350px',
         className: 'lock-popup'
-    });
+    }).setHTML(createLockPopup(lock));
 
-    // Add click handler for details
-    marker.on('click', () => {
+    marker.setPopup(popup);
+
+    // Click handler
+    el.addEventListener('click', () => {
         showLockDetails(lock);
     });
 
-    marker.addTo(locksLayer);
+    locksMarkers.push(marker);
 }
 
 /**
@@ -116,7 +128,6 @@ function createLockPopup(lock) {
     const techInfo = technicalData.length > 0 ?
         `<div class="lock-tech">${technicalData.join(' • ')}</div>` : '';
 
-    // Build contact info with all available methods
     const contactLines = [];
     if (lock.vhf_channel) contactLines.push(`📻 ${lock.vhf_channel}`);
     if (lock.phone) contactLines.push(`📞 <a href="tel:${lock.phone}" style="color: #64ffda; text-decoration: none;">${lock.phone}</a>`);
@@ -157,7 +168,6 @@ function createLockPopup(lock) {
         </div>
     `;
 
-    // Check lock status asynchronously
     if (lock.opening_hours && lock.id) {
         setTimeout(() => checkLockStatus(lock.id), 100);
     }
@@ -214,9 +224,7 @@ function getFacilityIcon(facility) {
 async function showLockDetails(lockIdOrLock) {
     let lock;
 
-    // Check if we received an ID or a lock object
     if (typeof lockIdOrLock === 'number') {
-        // Fetch full lock data
         try {
             const response = await fetch(`${API_URL}/api/locks/${lockIdOrLock}`);
             if (!response.ok) return;
@@ -229,11 +237,9 @@ async function showLockDetails(lockIdOrLock) {
         lock = lockIdOrLock;
     }
 
-    // Remove existing panel
     const oldPanel = document.getElementById('lock-details-panel');
     if (oldPanel) oldPanel.remove();
 
-    // Create details panel
     const panel = document.createElement('div');
     panel.id = 'lock-details-panel';
     panel.className = 'info-panel';
@@ -253,7 +259,6 @@ async function showLockDetails(lockIdOrLock) {
         color: white;
     `;
 
-    // Opening hours table
     let hoursTable = '';
     if (lock.opening_hours) {
         const days = { mo: 'Mo', tu: 'Di', we: 'Mi', th: 'Do', fr: 'Fr', sa: 'Sa', su: 'So' };
@@ -338,11 +343,13 @@ function closeLockDetails() {
  */
 function addLockToRoute(lockId, lat, lon, name) {
     if (typeof addWaypoint === 'function') {
-        // Create a click event at the lock position
-        const fakeEvent = {
-            latlng: L.latLng(lat, lon)
+        // Create waypoint object for MapLibre
+        const waypoint = {
+            lat: lat,
+            lon: lon,
+            name: name
         };
-        addWaypoint(fakeEvent);
+        addWaypoint(waypoint);
         showNotification(`🔒 ${name} zu Route hinzugefügt`);
         closeLockDetails();
     } else {
@@ -359,7 +366,7 @@ async function notifyLock(lockId) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                eta: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() // +2 hours
+                eta: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
             })
         });
 
@@ -370,7 +377,6 @@ async function notifyLock(lockId) {
 
         const data = await response.json();
 
-        // Open email client with pre-filled data
         if (data.email && data.email.to) {
             const mailtoLink = `mailto:${data.email.to}?subject=${encodeURIComponent(data.email.subject)}&body=${encodeURIComponent(data.email.body)}`;
             window.location.href = mailtoLink;
@@ -392,10 +398,9 @@ function toggleLocksLayer() {
     locksVisible = !locksVisible;
 
     if (locksVisible) {
-        locksLayer.addTo(map);
         updateLocksOnMap();
     } else {
-        locksLayer.clearLayers();
+        clearLocksMarkers();
     }
 
     return locksVisible;
@@ -403,20 +408,14 @@ function toggleLocksLayer() {
 
 /**
  * Check if a lock from OSRM data is already in our database
- * Uses proximity check (within 500m) and optional name matching
- *
- * @param {Object} osrmLock - Lock object from OSRM routing with {lat, lon, name}
- * @returns {boolean} - True if lock is already in our database
  */
 function isLockInDatabase(osrmLock) {
     if (!osrmLock || !osrmLock.lat || !osrmLock.lon) return false;
 
-    const PROXIMITY_THRESHOLD = 500; // meters
+    const PROXIMITY_THRESHOLD = 500;
 
-    // Check against all locks in current view
     for (const lock of locksData) {
-        // Calculate distance using Haversine
-        const R = 6371000; // Earth radius in meters
+        const R = 6371000;
         const dLat = (lock.lat - osrmLock.lat) * Math.PI / 180;
         const dLon = (lock.lon - osrmLock.lon) * Math.PI / 180;
         const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -426,19 +425,16 @@ function isLockInDatabase(osrmLock) {
         const distance = R * c;
 
         if (distance < PROXIMITY_THRESHOLD) {
-            // Optional: Also check name similarity if both have names
             if (osrmLock.name && lock.name) {
                 const osrmName = osrmLock.name.toLowerCase().replace(/[^a-zäöü]/g, '');
                 const dbName = lock.name.toLowerCase().replace(/[^a-zäöü]/g, '');
 
-                // If names are similar, it's definitely the same lock
                 if (osrmName.includes(dbName) || dbName.includes(osrmName)) {
                     console.log(`🔍 Lock duplicate found: "${osrmLock.name}" matches database lock "${lock.name}" (${distance.toFixed(0)}m away)`);
                     return true;
                 }
             }
 
-            // Even without name match, if within 500m it's likely the same lock
             console.log(`🔍 Lock duplicate found by proximity: ${distance.toFixed(0)}m from database lock "${lock.name}"`);
             return true;
         }
