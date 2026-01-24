@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>BoatOS - Navigation</title>
+
+    <!-- MapLibre GL JS (lokal) -->
+    <link rel="stylesheet" href="lib/maplibre-gl.css" />
+    <script src="lib/maplibre-gl.js"></script>
+
+    <!-- BoatOS Styles -->
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+    <!-- ============================================
+         TOP BAR
+         ============================================ -->
+    <div class="top-bar">
+        <div class="top-bar-section">
+            <div class="gps-indicator no-fix" id="gpsIndicator" onclick="BoatOS.ui.toggleGpsPopup()">
+                <div class="gps-dot"></div>
+                <span id="gps-sats">-- Sats</span>
+            </div>
+        </div>
+
+        <div class="nav-values">
+            <div class="nav-value">
+                <div class="value" id="sog-value">0.0</div>
+                <div class="label" id="sog-label">SOG kn</div>
+            </div>
+            <div class="nav-value">
+                <div class="value" id="cog-value">---°</div>
+                <div class="label">COG</div>
+            </div>
+            <div class="nav-value">
+                <div class="value" id="dist-value">--</div>
+                <div class="label" id="dist-label">NM</div>
+            </div>
+            <div class="nav-value">
+                <div class="value" id="eta-value">--:--</div>
+                <div class="label">ETA</div>
+            </div>
+        </div>
+
+        <div class="top-bar-right">
+            <button class="icon-btn" id="trackBtn" onclick="BoatOS.sensors.toggleTrack()" title="Track">⏺️</button>
+            <button class="icon-btn" id="themeToggle" onclick="BoatOS.theme.toggleTheme()" title="Dark Mode">🌙</button>
+            <button class="icon-btn" id="modeToggle" onclick="BoatOS.ui.toggleMode()" title="Karte">🗺️</button>
+            <button class="icon-btn" onclick="BoatOS.ui.toggleSidebar()" title="Einstellungen">⚙️</button>
+        </div>
+    </div>
+
+    <!-- GPS Popup -->
+    <div class="gps-popup" id="gpsPopup">
+        <h4>📍 GPS Details</h4>
+        <div class="gps-detail-row">
+            <span class="gps-detail-label">Satelliten</span>
+            <span class="gps-detail-value" id="gps-satellites">-- / --</span>
+        </div>
+        <div class="gps-detail-row">
+            <span class="gps-detail-label">Fix</span>
+            <span class="gps-detail-value" id="gps-fix-status">Kein Fix</span>
+        </div>
+        <div class="gps-detail-row">
+            <span class="gps-detail-label">Position</span>
+            <span class="gps-detail-value" id="gps-position">--</span>
+        </div>
+        <div class="gps-detail-row">
+            <span class="gps-detail-label">Höhe</span>
+            <span class="gps-detail-value" id="gps-altitude">-- m</span>
+        </div>
+        <div class="gps-detail-row">
+            <span class="gps-detail-label">HDOP</span>
+            <span class="gps-detail-value" id="gps-hdop">--</span>
+        </div>
+    </div>
+
+    <!-- ============================================
+         MAP / DASHBOARD
+         ============================================ -->
+    <div class="map-container hidden" id="mapContainer">
+        <div id="map"></div>
+    </div>
+
+    <div class="dashboard-container active" id="dashboardContainer">
+        <div class="dashboard-grid">
+            <div class="dashboard-card">
+                <h3>🧭 Navigation</h3>
+                <div class="sensor-grid">
+                    <div class="sensor-item">
+                        <div class="value" id="dash-sog">--</div>
+                        <div class="label" id="dash-sog-label">SOG (kn)</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value" id="dash-cog">--°</div>
+                        <div class="label">COG</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value" id="dash-dist">--</div>
+                        <div class="label" id="dash-dist-label">Distanz (NM)</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value" id="dash-eta">--:--</div>
+                        <div class="label">ETA</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-card">
+                <h3>🌡️ Wetter</h3>
+                <div class="sensor-grid">
+                    <div class="sensor-item">
+                        <div class="value" id="dash-temp">--°</div>
+                        <div class="label">Temperatur</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value" id="dash-humidity">--%</div>
+                        <div class="label">Luftfeuchte</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value" id="dash-pressure">--</div>
+                        <div class="label">Druck (hPa)</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value" id="dash-wind">-- kn</div>
+                        <div class="label">Wind</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-card">
+                <h3>📍 GPS</h3>
+                <div class="sensor-grid">
+                    <div class="sensor-item">
+                        <div class="value" id="dash-sats">--</div>
+                        <div class="label">Satelliten</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value" id="dash-hdop">--</div>
+                        <div class="label">HDOP</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value" id="dash-lat">--</div>
+                        <div class="label">Latitude</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value" id="dash-lon">--</div>
+                        <div class="label">Longitude</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-card">
+                <h3>📊 Trip</h3>
+                <div class="sensor-grid">
+                    <div class="sensor-item">
+                        <div class="value" id="dash-trip-dist">--</div>
+                        <div class="label" id="dash-trip-label">NM heute</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value" id="dash-trip-time">--:--</div>
+                        <div class="label">Fahrzeit</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value" id="dash-avg-sog">--</div>
+                        <div class="label" id="dash-avg-label">Ø kn</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value" id="dash-max-sog">--</div>
+                        <div class="label">Max SOG</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         FLOATING ACTION BUTTONS
+         ============================================ -->
+    <div class="fab-container" id="fabContainer">
+        <button class="fab" onclick="BoatOS.map.centerOnBoat()" title="Zentrieren">🎯</button>
+        <button class="fab" onclick="BoatOS.map.zoomIn()" title="Zoom +">+</button>
+        <button class="fab" onclick="BoatOS.map.zoomOut()" title="Zoom -">−</button>
+        <button class="fab" onclick="BoatOS.ui.toggleLayers()" title="Layer">🗂️</button>
+        <button class="fab danger" onclick="BoatOS.core.manOverBoard()" title="MOB">🆘</button>
+    </div>
+
+    <!-- ============================================
+         BOTTOM SHEET
+         ============================================ -->
+    <div class="bottom-sheet peek" id="bottomSheet">
+        <div class="sheet-handle" onclick="BoatOS.ui.cycleSheet()">
+            <div class="sheet-handle-bar"></div>
+        </div>
+
+        <div class="quick-actions">
+            <div class="quick-action" onclick="BoatOS.navigation.startRoutePlanning()">
+                <span class="icon">🧭</span>
+                <span class="label">Route</span>
+            </div>
+            <div class="quick-action" onclick="BoatOS.ui.openSearch()">
+                <span class="icon">🔍</span>
+                <span class="label">Suche</span>
+            </div>
+            <div class="quick-action" onclick="BoatOS.ui.showFavorites()">
+                <span class="icon">⭐</span>
+                <span class="label">Favoriten</span>
+            </div>
+            <div class="quick-action" onclick="BoatOS.ui.addLogEntry()">
+                <span class="icon">✏️</span>
+                <span class="label">Eintrag</span>
+            </div>
+            <div class="quick-action" onclick="BoatOS.ais.showAISPanel()">
+                <span class="icon">🚢</span>
+                <span class="label">AIS</span>
+            </div>
+            <div class="quick-action" onclick="BoatOS.ais.showLocks()">
+                <span class="icon">🚧</span>
+                <span class="label">Schleusen</span>
+            </div>
+        </div>
+
+        <div class="sheet-tabs">
+            <div class="sheet-tab active" onclick="BoatOS.ui.showSection('route', this)">Route</div>
+            <div class="sheet-tab" onclick="BoatOS.ui.showSection('weather', this)">Wetter</div>
+            <div class="sheet-tab" onclick="BoatOS.ui.showSection('logbook', this)">Logbuch</div>
+            <div class="sheet-tab" onclick="BoatOS.ui.showSection('ais', this)">AIS</div>
+            <div class="sheet-tab" onclick="BoatOS.ui.showSection('locks', this)">Schleusen</div>
+        </div>
+
+        <div class="sheet-content">
+            <!-- ROUTE SECTION -->
+            <div id="section-route">
+                <div class="route-header">
+                    <span style="font-size: 16px; font-weight: 600;">Aktuelle Route</span>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="icon-btn" id="btn-start-nav" style="width: 36px; height: 36px; font-size: 18px; background: var(--success); color: white;" onclick="BoatOS.toggleNavigation()" title="Navigation starten">▶️</button>
+                        <button class="icon-btn" style="width: 32px; height: 32px; font-size: 14px;" onclick="BoatOS.editRoute()" title="Route bearbeiten">✏️</button>
+                        <button class="icon-btn" style="width: 32px; height: 32px; font-size: 14px;" onclick="BoatOS.clearRoute()" title="Route löschen">🗑️</button>
+                    </div>
+                </div>
+
+                <div class="route-summary">
+                    <div class="route-stat">
+                        <div class="value" id="route-distance">--</div>
+                        <div class="label">NM</div>
+                    </div>
+                    <div class="route-stat">
+                        <div class="value" id="route-time">--:--</div>
+                        <div class="label">Zeit</div>
+                    </div>
+                    <div class="route-stat">
+                        <div class="value" id="route-locks">0</div>
+                        <div class="label">Schleusen</div>
+                    </div>
+                    <div class="route-stat">
+                        <div class="value" id="route-eta">--:--</div>
+                        <div class="label">ETA</div>
+                    </div>
+                </div>
+
+                <div class="waypoint-list" id="waypointList">
+                    <div style="text-align: center; padding: 20px; color: var(--text-dim);">
+                        Keine Route geplant.<br>
+                        <small>Klicke auf die Karte um Wegpunkte hinzuzufügen.</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WEATHER SECTION -->
+            <div id="section-weather" class="section-hidden">
+                <div class="weather-current">
+                    <div class="weather-icon" id="weather-icon">🌤️</div>
+                    <div class="weather-main">
+                        <div class="weather-temp" id="weather-temp">--°C</div>
+                        <div class="weather-desc" id="weather-desc">Laden...</div>
+                        <div class="weather-location" id="weather-location">📍 --</div>
+                    </div>
+                </div>
+
+                <div class="weather-details">
+                    <div class="weather-detail">
+                        <div class="icon">💨</div>
+                        <div class="value" id="weather-wind">--</div>
+                        <div class="label" id="weather-wind-label">Wind (kn)</div>
+                    </div>
+                    <div class="weather-detail">
+                        <div class="icon">🧭</div>
+                        <div class="value" id="weather-wind-dir">--</div>
+                        <div class="label">Richtung</div>
+                    </div>
+                    <div class="weather-detail">
+                        <div class="icon">💧</div>
+                        <div class="value" id="weather-humidity">--%</div>
+                        <div class="label">Feuchte</div>
+                    </div>
+                    <div class="weather-detail">
+                        <div class="icon">📊</div>
+                        <div class="value" id="weather-pressure">--</div>
+                        <div class="label">hPa</div>
+                    </div>
+                </div>
+
+                <div class="forecast-title">Vorhersage</div>
+                <div class="forecast-list" id="forecast-list">
+                    <!-- Forecast items loaded dynamically -->
+                </div>
+            </div>
+
+            <!-- LOGBOOK SECTION -->
+            <div id="section-logbook" class="section-hidden">
+                <div class="logbook-tabs">
+                    <div class="logbook-tab active" onclick="BoatOS.showLogbookTab('current', this)">Aktuelle Fahrt</div>
+                    <div class="logbook-tab" onclick="BoatOS.showLogbookTab('archive', this)">Archiv</div>
+                </div>
+
+                <!-- AKTUELLE FAHRT TAB -->
+                <div class="logbook-tab-content active" id="logbook-tab-current">
+                    <div class="current-trip" id="currentTrip">
+                        <!-- Recording Indicator -->
+                        <div id="recording-indicator-new" style="display: none; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger); border-radius: 12px; padding: 10px; margin-bottom: 12px; display: none; align-items: center; gap: 10px;">
+                            <div style="width: 12px; height: 12px; background: var(--danger); border-radius: 50%; animation: pulse 1.5s infinite;"></div>
+                            <span style="color: var(--danger); font-weight: 600;">Aufzeichnung läuft</span>
+                            <span id="trip-duration" style="margin-left: auto; font-variant-numeric: tabular-nums;">00:00:00</span>
+                        </div>
+
+                        <div class="trip-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <div>
+                                <div class="trip-title" id="trip-title" style="font-size: 16px; font-weight: 600;">Keine aktive Fahrt</div>
+                                <div class="trip-status" id="trip-status" style="font-size: 12px; color: var(--text-dim);">Bereit zum Starten</div>
+                            </div>
+                            <div id="trip-paused-badge" style="display: none; background: var(--warning); color: white; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;">
+                                ⏸️ PAUSIERT
+                            </div>
+                        </div>
+
+                        <!-- Track Stats -->
+                        <div class="trip-stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px;">
+                            <div class="trip-stat" style="background: var(--bg-card); padding: 12px; border-radius: 12px; text-align: center;">
+                                <div class="value" id="trip-points" style="font-size: 20px; font-weight: 700; color: var(--accent);">0</div>
+                                <div class="label" style="font-size: 10px; color: var(--text-dim);">Punkte</div>
+                            </div>
+                            <div class="trip-stat" style="background: var(--bg-card); padding: 12px; border-radius: 12px; text-align: center;">
+                                <div class="value" id="trip-distance" style="font-size: 20px; font-weight: 700; color: var(--accent);">--</div>
+                                <div class="label" id="trip-dist-label" style="font-size: 10px; color: var(--text-dim);">NM</div>
+                            </div>
+                            <div class="trip-stat" style="background: var(--bg-card); padding: 12px; border-radius: 12px; text-align: center;">
+                                <div class="value" id="trip-time" style="font-size: 20px; font-weight: 700; color: var(--accent);">--:--</div>
+                                <div class="label" style="font-size: 10px; color: var(--text-dim);">Dauer</div>
+                            </div>
+                            <div class="trip-stat" style="background: var(--bg-card); padding: 12px; border-radius: 12px; text-align: center;">
+                                <div class="value" id="trip-avg-speed" style="font-size: 20px; font-weight: 700; color: var(--accent);">--</div>
+                                <div class="label" id="trip-speed-label" style="font-size: 10px; color: var(--text-dim);">Ø kn</div>
+                            </div>
+                        </div>
+
+                        <!-- Control Buttons -->
+                        <div class="trip-controls" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <!-- Start Button (shown when not recording) -->
+                            <button id="btn-start-trip" onclick="BoatOS.startTrip()" style="flex: 1; min-width: 120px; padding: 14px; border: none; border-radius: 12px; background: var(--success); color: white; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                🚢 Fahrt starten
+                            </button>
+
+                            <!-- Stop Button (shown when recording) -->
+                            <button id="btn-stop-trip" onclick="BoatOS.stopTrip()" style="flex: 1; min-width: 120px; padding: 14px; border: none; border-radius: 12px; background: var(--danger); color: white; font-size: 14px; font-weight: 600; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 8px;">
+                                ⚓ Beenden
+                            </button>
+
+                            <!-- Pause Button (shown when recording and not paused) -->
+                            <button id="btn-pause-trip" onclick="BoatOS.pauseTrip()" style="padding: 14px 18px; border: none; border-radius: 12px; background: var(--warning); color: white; font-size: 14px; font-weight: 600; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 6px;" title="Pause / Ankern">
+                                ⏸️ Pause
+                            </button>
+
+                            <!-- Resume Button (shown when paused) -->
+                            <button id="btn-resume-trip" onclick="BoatOS.resumeTrip()" style="padding: 14px 18px; border: none; border-radius: 12px; background: var(--success); color: white; font-size: 14px; font-weight: 600; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 6px;" title="Weiterfahren">
+                                ▶️ Weiter
+                            </button>
+
+                            <!-- Add Entry Button (always visible) -->
+                            <button id="btn-add-entry" onclick="BoatOS.addLogEntry()" style="padding: 14px 18px; border: none; border-radius: 12px; background: var(--bg-card); color: var(--accent); font-size: 14px; cursor: pointer; border: 1px solid var(--border);" title="Notiz hinzufügen">
+                                📝
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Recent Log Entries -->
+                    <div style="margin-top: 15px;">
+                        <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text);">Letzte Einträge</div>
+                        <div class="log-entries" id="logEntries" style="max-height: 300px; overflow-y: auto;">
+                            <div style="text-align: center; padding: 20px; color: var(--text-dim);">
+                                Noch keine Einträge
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ARCHIV TAB -->
+                <div class="logbook-tab-content" id="logbook-tab-archive" style="display: none;">
+                    <div id="trips-list" style="display: flex; flex-direction: column; gap: 12px;">
+                        <div style="text-align: center; padding: 20px; color: var(--text-dim);">
+                            Lade archivierte Fahrten...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AIS SECTION -->
+            <div id="section-ais" class="section-hidden">
+                <div class="ais-list" id="aisList">
+                    <div style="text-align: center; padding: 20px; color: var(--text-dim);">
+                        Keine AIS-Ziele in Reichweite.
+                    </div>
+                </div>
+            </div>
+
+            <!-- LOCKS SECTION -->
+            <div id="section-locks" class="section-hidden">
+                <div class="lock-list" id="lockList">
+                    <div style="text-align: center; padding: 20px; color: var(--text-dim);">
+                        Schleusen werden geladen...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         MANUAL ENTRY MODAL
+         ============================================ -->
+    <div class="modal-overlay" id="manual-entry-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 3000; align-items: center; justify-content: center;" onclick="BoatOS.closeManualEntryModal()">
+        <div class="modal-content" style="background: var(--bg-panel); border-radius: 20px; width: 90%; max-width: 400px; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);" onclick="event.stopPropagation()">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="font-size: 18px; color: var(--accent);">📝 Logbuch-Eintrag</h3>
+                <button onclick="BoatOS.closeManualEntryModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-dim);">✕</button>
+            </div>
+            <form id="manual-entry-form" onsubmit="event.preventDefault(); BoatOS.submitManualEntry();">
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 6px;">Notizen</label>
+                    <textarea id="manual-entry-notes" placeholder="Was ist passiert? Beobachtungen, Ereignisse..." style="width: 100%; height: 120px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); color: var(--text); font-size: 14px; resize: none;"></textarea>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <input type="checkbox" id="manual-entry-weather" checked style="width: 20px; height: 20px; accent-color: var(--accent);">
+                        <span style="font-size: 14px;">🌤️ Aktuelle Wetterdaten anhängen</span>
+                    </label>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" onclick="BoatOS.closeManualEntryModal()" style="flex: 1; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); color: var(--text); font-size: 14px; cursor: pointer;">
+                        Abbrechen
+                    </button>
+                    <button type="submit" style="flex: 1; padding: 14px; border: none; border-radius: 12px; background: var(--accent); color: white; font-size: 14px; font-weight: 600; cursor: pointer;">
+                        Speichern
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================
+         CREW SELECTION MODAL
+         ============================================ -->
+    <div class="modal-overlay" id="crew-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 3000; align-items: center; justify-content: center;" onclick="BoatOS.closeCrewModal()">
+        <div class="modal-content" style="background: var(--bg-panel); border-radius: 20px; width: 90%; max-width: 400px; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);" onclick="event.stopPropagation()">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="font-size: 18px; color: var(--accent);">👥 Crew auswählen</h3>
+                <button onclick="BoatOS.closeCrewModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-dim);">✕</button>
+            </div>
+            <p style="color: var(--text-dim); margin-bottom: 15px; font-size: 14px;">Wer ist bei dieser Fahrt dabei?</p>
+            <div id="crew-list" style="max-height: 250px; overflow-y: auto; margin-bottom: 20px;">
+                <!-- Crew members loaded dynamically -->
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button type="button" onclick="BoatOS.closeCrewModal()" style="flex: 1; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); color: var(--text); font-size: 14px; cursor: pointer;">
+                    Abbrechen
+                </button>
+                <button type="button" onclick="BoatOS.confirmStartTrip()" style="flex: 1; padding: 14px; border: none; border-radius: 12px; background: var(--success); color: white; font-size: 14px; font-weight: 600; cursor: pointer;">
+                    🚢 Fahrt starten
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         SEARCH OVERLAY
+         ============================================ -->
+    <div class="search-overlay" id="searchOverlay" onclick="BoatOS.ui.closeSearch(event)">
+        <div class="search-container" onclick="event.stopPropagation()">
+            <div class="search-input-wrapper">
+                <span style="font-size: 20px;">🔍</span>
+                <input type="text" class="search-input" id="searchInput" placeholder="Hafen, Marina, Schleuse..." oninput="BoatOS.ui.handleSearch(this.value)">
+                <button class="icon-btn" style="width: 32px; height: 32px;" onclick="BoatOS.ui.closeSearch()">✕</button>
+            </div>
+            <div class="search-results" id="searchResults">
+                <!-- Search results loaded dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         SETTINGS SIDEBAR
+         ============================================ -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="BoatOS.ui.toggleSidebar()"></div>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h3>⚙️ Einstellungen</h3>
+            <button class="icon-btn" style="width: 36px; height: 36px;" onclick="BoatOS.ui.toggleSidebar()">✕</button>
+        </div>
+
+        <div class="sidebar-tabs">
+            <div class="sidebar-tab active" onclick="BoatOS.ui.showSettingsTab('general', this)">Allgemein</div>
+            <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('boat', this)">Boot</div>
+            <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('map', this)">Karte</div>
+            <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('nav', this)">Navigation</div>
+            <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('ais', this)">AIS</div>
+        </div>
+
+        <div class="sidebar-content">
+            <!-- General Settings -->
+            <div id="settings-general">
+                <div class="setting-group">
+                    <h4>Anzeige</h4>
+                    <div class="setting-item">
+                        <span>Dark Mode</span>
+                        <div class="toggle" id="toggle-darkmode" onclick="BoatOS.ui.toggleSettingToggle(this, 'darkMode')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Sprache</span>
+                        <select class="setting-select" id="setting-language">
+                            <option value="de">Deutsch</option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <span>Einheiten</span>
+                        <select class="setting-select" id="setting-units">
+                            <option value="nautical">Nautisch (NM, kn)</option>
+                            <option value="metric">Metrisch (km, km/h)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Töne</h4>
+                    <div class="setting-item">
+                        <span>Alarme</span>
+                        <div class="toggle active" id="toggle-alarms" onclick="BoatOS.ui.toggleSettingToggle(this, 'alarms')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Benachrichtigungen</span>
+                        <div class="toggle active" id="toggle-notifications" onclick="BoatOS.ui.toggleSettingToggle(this, 'notifications')"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Boat Settings -->
+            <div id="settings-boat" class="section-hidden">
+                <div class="setting-group">
+                    <h4>Bootsdaten</h4>
+                    <div class="setting-item">
+                        <span>Name</span>
+                        <input type="text" class="setting-input" id="setting-boat-name" value="Arielle" style="width: 120px;">
+                    </div>
+                    <div class="setting-item">
+                        <span>Länge (m)</span>
+                        <input type="number" class="setting-input" id="setting-boat-length" value="12.5" step="0.1">
+                    </div>
+                    <div class="setting-item">
+                        <span>Breite (m)</span>
+                        <input type="number" class="setting-input" id="setting-boat-beam" value="3.8" step="0.1">
+                    </div>
+                    <div class="setting-item">
+                        <span>Tiefgang (m)</span>
+                        <input type="number" class="setting-input" id="setting-boat-draft" value="1.2" step="0.1">
+                    </div>
+                    <div class="setting-item">
+                        <span>Höhe (m)</span>
+                        <input type="number" class="setting-input" id="setting-boat-height" value="4.5" step="0.1">
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Boot-Symbol</h4>
+                    <div class="boat-icons" id="boatIcons">
+                        <div class="boat-icon-option active" data-icon="motorboat" onclick="BoatOS.ui.selectBoatIcon(this)">🚤</div>
+                        <div class="boat-icon-option" data-icon="sailboat" onclick="BoatOS.ui.selectBoatIcon(this)">⛵</div>
+                        <div class="boat-icon-option" data-icon="yacht" onclick="BoatOS.ui.selectBoatIcon(this)">🛥️</div>
+                        <div class="boat-icon-option" data-icon="ship" onclick="BoatOS.ui.selectBoatIcon(this)">🚢</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Map Settings -->
+            <div id="settings-map" class="section-hidden">
+                <div class="setting-group">
+                    <h4>Kartenlayer</h4>
+                    <div class="setting-item">
+                        <span>OpenSeaMap</span>
+                        <div class="toggle active" id="toggle-openseamap" onclick="BoatOS.ui.toggleSettingToggle(this, 'openSeaMap')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Schleusen anzeigen</span>
+                        <div class="toggle active" id="toggle-locks" onclick="BoatOS.ui.toggleSettingToggle(this, 'showLocks')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Track anzeigen</span>
+                        <div class="toggle active" id="toggle-track" onclick="BoatOS.ui.toggleSettingToggle(this, 'showTrack')"></div>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Verhalten</h4>
+                    <div class="setting-item">
+                        <span>Auto-Zentrierung</span>
+                        <div class="toggle active" id="toggle-autocenter" onclick="BoatOS.ui.toggleSettingToggle(this, 'autoCenter')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Heading Up</span>
+                        <div class="toggle" id="toggle-headingup" onclick="BoatOS.ui.toggleSettingToggle(this, 'headingUp')"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Settings -->
+            <div id="settings-nav" class="section-hidden">
+                <div class="setting-group">
+                    <h4>Routing</h4>
+                    <div class="setting-item">
+                        <span>Wasserwege bevorzugen</span>
+                        <div class="toggle active" id="toggle-waterways" onclick="BoatOS.ui.toggleSettingToggle(this, 'preferWaterways')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Standard-Geschwindigkeit</span>
+                        <input type="number" class="setting-input" id="setting-default-speed" value="6" step="0.5"> <span id="setting-speed-unit" class="unit-speed">kn</span>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Alarme</h4>
+                    <div class="setting-item">
+                        <span>Ankunftsalarm</span>
+                        <div class="toggle active" id="toggle-arrival-alarm" onclick="BoatOS.ui.toggleSettingToggle(this, 'arrivalAlarm')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Alarm-Distanz</span>
+                        <input type="number" class="setting-input" id="setting-alarm-distance" value="0.1" step="0.05"> <span id="setting-alarm-dist-unit" class="unit-distance">NM</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AIS Settings -->
+            <div id="settings-ais" class="section-hidden">
+                <div class="setting-group">
+                    <h4>AIS Empfang</h4>
+                    <div class="setting-item">
+                        <span>AIS aktiviert</span>
+                        <div class="toggle" id="toggle-ais" onclick="BoatOS.ui.toggleSettingToggle(this, 'aisEnabled')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Anbieter</span>
+                        <select class="setting-input" id="setting-ais-provider">
+                            <option value="aisstream">AISstream</option>
+                            <option value="aishub">AISHub</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <span>API-Key</span>
+                        <input type="text" class="setting-input" id="setting-ais-apikey" placeholder="API-Key eingeben">
+                    </div>
+                    <div class="setting-item">
+                        <span>Reichweite</span>
+                        <input type="number" class="setting-input" id="setting-ais-range" value="20"> <span id="setting-ais-range-unit" class="unit-distance">NM</span>
+                    </div>
+                    <div class="setting-item">
+                        <span>Update-Intervall (Sek.)</span>
+                        <input type="number" class="setting-input" id="setting-ais-interval" value="60" min="10" max="300" step="10">
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Anzeige</h4>
+                    <div class="setting-item">
+                        <span>Schiffsnamen anzeigen</span>
+                        <div class="toggle active" id="toggle-ais-labels" onclick="BoatOS.ui.toggleSettingToggle(this, 'aisLabels')"></div>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Kollisionswarnung</h4>
+                    <div class="setting-item">
+                        <span>CPA Alarm</span>
+                        <div class="toggle active" id="toggle-cpa" onclick="BoatOS.ui.toggleSettingToggle(this, 'cpaAlarm')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Min. CPA</span>
+                        <input type="number" class="setting-input" id="setting-min-cpa" value="0.5" step="0.1"> <span id="setting-cpa-unit" class="unit-distance">NM</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-footer">
+            <button class="sidebar-btn secondary" onclick="BoatOS.ui.toggleSidebar()">Abbrechen</button>
+            <button class="sidebar-btn primary" onclick="BoatOS.saveAllSettings()">Speichern</button>
+        </div>
+    </div>
+
+    <!-- ============================================
+         JAVASCRIPT MODULES
+         ============================================ -->
+    <script type="module" src="js/main.js"></script>
+
+    <!-- LEGACY SUPPORT: Old inline code removed, now in js/main.js, js/logbook.js, js/settings.js
+         TODO: Remove this comment block after testing
+
+         Previous inline script moved to:
+         - js/main.js - Main entry point, initialization, unit system
+         - js/logbook.js - Trip management, log entries, archive
+         - js/settings.js - Settings save/load functions
+    -->
+
+</body>
+</html>

@@ -1,0 +1,579 @@
+/**
+ * BoatOS Components - UI Komponenten
+ * Buttons, Cards, Inputs, Listen, etc.
+ */
+
+/* ============================================
+   SETTINGS PANEL
+   ============================================ */
+.setting-group { margin-bottom: 20px; }
+
+.setting-group h4 {
+    color: var(--text-dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+}
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+}
+
+.setting-item:last-child { border-bottom: none; }
+
+.setting-input {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: var(--text);
+    width: 80px;
+    text-align: right;
+}
+
+.setting-select {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: var(--text);
+}
+
+/* Boat Icons Selection */
+.boat-icons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.boat-icon-option {
+    width: 60px;
+    height: 60px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.boat-icon-option:hover { border-color: var(--accent); }
+.boat-icon-option.active { border-color: var(--accent); background: var(--accent-dim); }
+
+/* ============================================
+   ROUTE SECTION
+   ============================================ */
+.route-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.route-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.route-stat {
+    background: var(--bg-card);
+    padding: 12px 8px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.route-stat .value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.route-stat .label {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 2px;
+}
+
+/* Waypoint List */
+.waypoint-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.waypoint-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg-card);
+    border-radius: 10px;
+    border-left: 4px solid var(--accent);
+}
+
+.waypoint-item.completed { opacity: 0.5; border-left-color: var(--text-dim); }
+.waypoint-item.current { background: var(--accent-dim); border-left-color: var(--warning); }
+.waypoint-item.lock { border-left-color: var(--warning); }
+
+.waypoint-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.waypoint-item.lock .waypoint-icon { background: var(--warning); }
+
+.waypoint-info { flex: 1; }
+.waypoint-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+.waypoint-details { font-size: 11px; color: var(--text-dim); }
+
+.waypoint-actions { display: flex; gap: 5px; }
+
+.wp-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: none;
+    background: var(--border);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.wp-btn:hover { background: var(--accent); color: white; }
+
+/* ============================================
+   WEATHER SECTION
+   ============================================ */
+.weather-current {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    background: var(--bg-card);
+    border-radius: 12px;
+    margin-bottom: 15px;
+}
+
+.weather-icon { font-size: 50px; }
+.weather-main { flex: 1; }
+.weather-temp { font-size: 36px; font-weight: 700; color: var(--accent); }
+.weather-desc { color: var(--text-dim); font-size: 14px; text-transform: capitalize; }
+.weather-location { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+
+.weather-details {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.weather-detail {
+    text-align: center;
+    padding: 12px 8px;
+    background: var(--bg-card);
+    border-radius: 10px;
+}
+
+.weather-detail .icon { font-size: 20px; margin-bottom: 4px; }
+.weather-detail .value { font-size: 16px; font-weight: 600; color: var(--accent); }
+.weather-detail .label { font-size: 10px; color: var(--text-dim); }
+
+.forecast-title { font-size: 14px; color: var(--text-dim); margin-bottom: 10px; }
+
+.forecast-list {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+}
+
+.forecast-list::-webkit-scrollbar { display: none; }
+
+.forecast-item {
+    min-width: 70px;
+    text-align: center;
+    padding: 10px;
+    background: var(--bg-card);
+    border-radius: 10px;
+}
+
+.forecast-item .time { font-size: 11px; color: var(--text-dim); }
+.forecast-item .icon { font-size: 24px; margin: 5px 0; }
+.forecast-item .temp { font-size: 14px; font-weight: 600; color: var(--accent); }
+
+/* ============================================
+   LOGBOOK SECTION
+   ============================================ */
+.logbook-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.logbook-tab {
+    padding: 8px 16px;
+    background: var(--bg-card);
+    border: 2px solid var(--border);
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.logbook-tab.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+
+.current-trip {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.trip-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.trip-title { font-size: 16px; font-weight: 600; }
+
+.trip-status {
+    padding: 4px 10px;
+    background: rgba(74, 222, 128, 0.2);
+    color: var(--success);
+    border-radius: 12px;
+    font-size: 11px;
+}
+
+.trip-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.trip-stat { text-align: center; }
+.trip-stat .value { font-size: 20px; font-weight: 700; color: var(--accent); }
+.trip-stat .label { font-size: 10px; color: var(--text-dim); }
+
+.log-entries { display: flex; flex-direction: column; gap: 8px; }
+
+.log-entry {
+    display: flex;
+    gap: 12px;
+    padding: 10px;
+    background: var(--bg-card);
+    border-radius: 8px;
+    align-items: center;
+}
+
+.log-time { font-size: 12px; color: var(--text-dim); min-width: 50px; }
+.log-text { flex: 1; font-size: 13px; }
+.log-icon { font-size: 18px; }
+
+/* ============================================
+   CREW SECTION
+   ============================================ */
+.crew-list { display: flex; flex-direction: column; gap: 10px; }
+
+.crew-member {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg-card);
+    border-radius: 10px;
+}
+
+.crew-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.crew-info { flex: 1; }
+.crew-name { font-weight: 600; font-size: 14px; }
+.crew-role { font-size: 12px; color: var(--text-dim); }
+
+.crew-status {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+}
+
+.crew-status.aboard { background: rgba(74, 222, 128, 0.2); color: var(--success); }
+.crew-status.ashore { background: rgba(255, 217, 61, 0.2); color: var(--warning); }
+
+.add-crew-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    background: var(--accent-dim);
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.add-crew-btn:hover {
+    background: var(--accent);
+    color: white;
+    border-style: solid;
+}
+
+/* ============================================
+   TANK / FUEL SECTION
+   ============================================ */
+.tank-overview {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.tank-card {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 15px;
+}
+
+.tank-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.tank-name { font-size: 14px; font-weight: 600; }
+.tank-percent { font-size: 20px; font-weight: 700; color: var(--accent); }
+
+.tank-bar {
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.tank-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    transition: width 0.3s;
+}
+
+.tank-fill.low { background: var(--danger); }
+.tank-fill.warning { background: var(--warning); }
+
+.tank-details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+.fuel-log-title { font-size: 14px; margin-bottom: 10px; color: var(--text-dim); }
+
+.fuel-entries { display: flex; flex-direction: column; gap: 8px; }
+
+.fuel-entry {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px;
+    background: var(--bg-card);
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+/* ============================================
+   AIS LIST
+   ============================================ */
+.ais-list { display: flex; flex-direction: column; gap: 8px; }
+
+.ais-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg-card);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ais-item:hover {
+    background: var(--accent-dim);
+    transform: translateX(4px);
+}
+
+.ais-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: var(--accent);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.ais-info { flex: 1; }
+.ais-name { font-weight: 600; font-size: 14px; }
+.ais-details { font-size: 11px; color: var(--text-dim); }
+
+.ais-distance {
+    text-align: right;
+}
+
+.ais-distance .value { font-size: 16px; font-weight: 700; color: var(--accent); }
+.ais-distance .label { font-size: 10px; color: var(--text-dim); }
+
+/* ============================================
+   LOCK LIST
+   ============================================ */
+.lock-list { display: flex; flex-direction: column; gap: 8px; }
+
+.lock-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg-card);
+    border-radius: 10px;
+    border-left: 4px solid var(--warning);
+}
+
+.lock-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: var(--warning);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.lock-info { flex: 1; }
+.lock-name { font-weight: 600; font-size: 14px; }
+.lock-details { font-size: 11px; color: var(--text-dim); }
+
+.lock-status {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+}
+
+.lock-status.open { background: rgba(74, 222, 128, 0.2); color: var(--success); }
+.lock-status.closed { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+
+/* ============================================
+   MAP MARKER STYLES
+   ============================================ */
+.boat-marker {
+    width: 32px;
+    height: 32px;
+    background: var(--accent);
+    border: 3px solid white;
+    border-radius: 50%;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transform-origin: center center;
+}
+
+.waypoint-marker {
+    width: 28px;
+    height: 28px;
+    background: var(--accent);
+    border: 2px solid white;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.waypoint-marker.destination {
+    background: var(--success);
+    width: 32px;
+    height: 32px;
+}
+
+.lock-marker {
+    width: 30px;
+    height: 30px;
+    background: var(--warning);
+    border: 2px solid white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+
+.ais-marker {
+    width: 24px;
+    height: 24px;
+    background: #6366f1;
+    border: 2px solid white;
+    border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transform-origin: center center;
+}
+
+/* ============================================
+   RESPONSIVE ADJUSTMENTS
+   ============================================ */
+@media (max-width: 500px) {
+    .route-summary { grid-template-columns: repeat(2, 1fr); }
+    .weather-details { grid-template-columns: repeat(2, 1fr); }
+    .tank-overview { grid-template-columns: 1fr; }
+    .trip-stats { grid-template-columns: repeat(3, 1fr); }
+}

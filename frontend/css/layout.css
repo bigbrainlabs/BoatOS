@@ -1,0 +1,540 @@
+/**
+ * BoatOS Layout - Strukturelles CSS
+ * Grid, Flexbox, Responsive Design
+ */
+
+/* ============================================
+   TOP BAR
+   ============================================ */
+.top-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    z-index: 1000;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    box-shadow: 0 2px 15px var(--shadow);
+}
+
+.top-bar-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.top-bar-right {
+    display: flex;
+    gap: 8px;
+}
+
+/* GPS Indicator */
+.gps-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 2px 8px var(--shadow);
+    transition: all 0.2s;
+}
+
+.gps-indicator.no-fix {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--danger);
+}
+
+.gps-indicator.has-fix {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: var(--success);
+}
+
+.gps-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--warning);
+    animation: pulse 2s infinite;
+}
+
+.gps-indicator.has-fix .gps-dot { background: var(--success); }
+.gps-indicator.no-fix .gps-dot { background: var(--danger); }
+
+/* Navigation Values */
+.nav-values {
+    display: flex;
+    gap: 15px;
+}
+
+.nav-value {
+    text-align: center;
+    min-width: 55px;
+}
+
+.nav-value .value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+
+.nav-value .label {
+    font-size: 9px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ============================================
+   MAP CONTAINER
+   ============================================ */
+.map-container {
+    position: fixed;
+    top: 56px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-main);
+}
+
+.map-container.hidden { display: none; }
+
+#map {
+    width: 100%;
+    height: 100%;
+}
+
+/* ============================================
+   DASHBOARD CONTAINER
+   ============================================ */
+.dashboard-container {
+    position: fixed;
+    top: 56px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-main);
+    display: none;
+    padding: 15px;
+    overflow-y: auto;
+}
+
+.dashboard-container.active { display: block; }
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 15px;
+}
+
+.dashboard-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 4px 20px var(--shadow);
+    backdrop-filter: blur(10px);
+}
+
+.dashboard-card h3 {
+    color: var(--accent);
+    font-size: 14px;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sensor-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.sensor-item {
+    background: var(--bg-card);
+    padding: 12px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.sensor-item .value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.sensor-item .label {
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+/* ============================================
+   FLOATING ACTION BUTTONS
+   ============================================ */
+.fab-container {
+    position: fixed;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 999;
+}
+
+.fab {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 15px var(--shadow);
+}
+
+.fab:hover {
+    background: var(--accent);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px var(--shadow-strong);
+}
+
+.fab.danger { border-color: var(--danger); color: var(--danger); }
+.fab.danger:hover { background: var(--danger); color: white; }
+
+/* ============================================
+   BOTTOM SHEET
+   ============================================ */
+.bottom-sheet {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    z-index: 1001;
+    transition: transform 0.3s ease-out, bottom 0.3s ease-out, border-radius 0.3s;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    max-height: calc(100vh - 80px);
+    box-shadow: 0 -4px 30px var(--shadow-strong);
+}
+
+.bottom-sheet.peek { transform: translateY(calc(100% - 130px)); }
+.bottom-sheet.full { transform: translateY(0); bottom: 0; left: 0; right: 0; border-radius: 24px 24px 0 0; }
+.bottom-sheet.hidden { transform: translateY(100%); }
+
+.sheet-handle {
+    width: 100%;
+    padding: 10px;
+    display: flex;
+    justify-content: center;
+    cursor: grab;
+}
+
+.sheet-handle-bar {
+    width: 40px;
+    height: 4px;
+    background: var(--text-dim);
+    border-radius: 2px;
+}
+
+/* Quick Actions */
+.quick-actions {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.quick-actions::-webkit-scrollbar { display: none; }
+
+.quick-action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 70px;
+    box-shadow: 0 2px 8px var(--shadow);
+}
+
+.quick-action:hover,
+.quick-action.active {
+    background: var(--accent);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px var(--shadow-strong);
+}
+
+.quick-action .icon { font-size: 22px; }
+.quick-action .label { font-size: 10px; font-weight: 600; white-space: nowrap; }
+
+.quick-action.recording {
+    background: rgba(255, 107, 107, 0.2);
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+/* Sheet Tabs */
+.sheet-tabs {
+    display: flex;
+    border-bottom: 2px solid var(--border);
+    padding: 0 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.sheet-tabs::-webkit-scrollbar { display: none; }
+
+.sheet-tab {
+    padding: 10px 16px;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    white-space: nowrap;
+    transition: all 0.2s;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.sheet-tab:hover { color: var(--text); }
+.sheet-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.sheet-content {
+    padding: 15px;
+    overflow-y: auto;
+    max-height: calc(100vh - 250px);
+}
+
+/* ============================================
+   SIDEBAR (Settings)
+   ============================================ */
+.sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 2000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s;
+}
+
+.sidebar-overlay.active { opacity: 1; visibility: visible; }
+
+.sidebar {
+    position: fixed;
+    top: 0;
+    right: -350px;
+    width: 350px;
+    height: 100%;
+    background: var(--bg-panel);
+    border-left: 2px solid var(--border);
+    z-index: 2001;
+    transition: right 0.3s ease-out;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar.open { right: 0; }
+
+.sidebar-header {
+    padding: 15px 20px;
+    border-bottom: 2px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sidebar-header h3 { color: var(--accent); font-size: 18px; }
+
+.sidebar-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 10px;
+    border-bottom: 2px solid var(--border);
+}
+
+.sidebar-tab {
+    padding: 6px 12px;
+    background: var(--bg-card);
+    border-radius: 15px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sidebar-tab:hover { background: var(--border); }
+.sidebar-tab.active { background: var(--accent); color: white; }
+
+.sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+}
+
+.sidebar-footer {
+    padding: 15px;
+    border-top: 2px solid var(--border);
+    display: flex;
+    gap: 10px;
+}
+
+.sidebar-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sidebar-btn.primary { background: var(--accent); color: white; }
+.sidebar-btn.secondary { background: var(--bg-card); color: var(--text); border: 2px solid var(--border); }
+
+/* ============================================
+   SEARCH OVERLAY
+   ============================================ */
+.search-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 2000;
+    display: none;
+    padding-top: 56px;
+}
+
+.search-overlay.active { display: block; }
+
+.search-container {
+    background: var(--bg-panel);
+    max-width: 500px;
+    margin: 0 auto;
+    border-radius: 0 0 15px 15px;
+    overflow: hidden;
+}
+
+.search-input-wrapper {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    border-bottom: 2px solid var(--border);
+    gap: 10px;
+}
+
+.search-input {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 16px;
+    outline: none;
+}
+
+.search-input::placeholder { color: var(--text-dim); }
+
+.search-results {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.search-result {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 15px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.search-result:hover { background: var(--bg-card); }
+.search-result-icon { font-size: 24px; }
+.search-result-info { flex: 1; }
+.search-result-name { font-size: 14px; font-weight: 500; }
+.search-result-type { font-size: 12px; color: var(--text-dim); }
+
+/* ============================================
+   GPS DETAIL POPUP
+   ============================================ */
+.gps-popup {
+    position: fixed;
+    top: 60px;
+    left: 12px;
+    background: var(--bg-panel);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 15px;
+    min-width: 220px;
+    z-index: 1500;
+    display: none;
+    backdrop-filter: blur(15px);
+    box-shadow: 0 4px 20px var(--shadow-strong);
+}
+
+.gps-popup.active { display: block; }
+
+.gps-popup h4 {
+    color: var(--accent);
+    margin-bottom: 12px;
+    font-size: 14px;
+}
+
+.gps-detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+}
+
+.gps-detail-row:last-child { border-bottom: none; }
+.gps-detail-label { color: var(--text-dim); }
+.gps-detail-value { color: var(--accent); font-weight: 600; }
+
+/* ============================================
+   RESPONSIVE DESIGN
+   ============================================ */
+@media (max-width: 500px) {
+    .nav-values { gap: 10px; }
+    .nav-value { min-width: 45px; }
+    .nav-value .value { font-size: 16px; }
+    .sidebar { width: 100%; right: -100%; }
+}
+
+@media (max-width: 768px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
