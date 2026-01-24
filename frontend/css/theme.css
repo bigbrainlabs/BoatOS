@@ -1,0 +1,358 @@
+/**
+ * BoatOS Theme - Ocean Soft
+ * Light/Dark Mode Theme mit CSS Custom Properties
+ */
+
+/* ============================================
+   LIGHT THEME (Default) - Ocean Soft
+   ============================================ */
+:root {
+    /* Hintergründe */
+    --bg-main: #f0f4f8;
+    --bg-panel: rgba(255, 255, 255, 0.92);
+    --bg-card: rgba(224, 236, 248, 0.6);
+
+    /* Akzentfarben */
+    --accent: #0891b2;
+    --accent-light: #22d3ee;
+    --accent-dim: rgba(8, 145, 178, 0.12);
+
+    /* Rahmen & Schatten */
+    --border: rgba(148, 180, 210, 0.4);
+    --shadow: rgba(0, 40, 80, 0.08);
+    --shadow-strong: rgba(0, 40, 80, 0.15);
+
+    /* Text */
+    --text: #1e3a5f;
+    --text-dim: #64748b;
+
+    /* Status-Farben */
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --success: #10b981;
+
+    /* Spezielle Farben */
+    --water: #80b0d0;
+    --track: #22d3ee;
+    --route: #0891b2;
+}
+
+/* ============================================
+   DARK THEME
+   ============================================ */
+[data-theme="dark"] {
+    /* Hintergründe */
+    --bg-main: #0c1929;
+    --bg-panel: rgba(15, 30, 50, 0.92);
+    --bg-card: rgba(30, 58, 95, 0.4);
+
+    /* Akzentfarben */
+    --accent: #22d3ee;
+    --accent-light: #67e8f9;
+    --accent-dim: rgba(34, 211, 238, 0.15);
+
+    /* Rahmen & Schatten */
+    --border: rgba(56, 97, 140, 0.5);
+    --shadow: rgba(0, 0, 0, 0.3);
+    --shadow-strong: rgba(0, 0, 0, 0.5);
+
+    /* Text */
+    --text: #e2e8f0;
+    --text-dim: #94a3b8;
+
+    /* Status-Farben */
+    --danger: #f87171;
+    --warning: #fbbf24;
+    --success: #34d399;
+
+    /* Spezielle Farben */
+    --water: #1e4976;
+    --track: #67e8f9;
+    --route: #22d3ee;
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-main);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    transition: background 0.3s, color 0.3s;
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.9); }
+}
+
+@keyframes record-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(255, 107, 107, 0); }
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ============================================
+   TYPOGRAPHY
+   ============================================ */
+.text-dim { color: var(--text-dim); }
+.text-accent { color: var(--accent); }
+.text-danger { color: var(--danger); }
+.text-warning { color: var(--warning); }
+.text-success { color: var(--success); }
+
+.font-mono {
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ============================================
+   COMMON UI ELEMENTS
+   ============================================ */
+
+/* Buttons */
+.btn {
+    padding: 10px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+
+.btn-primary:hover {
+    background: var(--accent-light);
+    border-color: var(--accent-light);
+}
+
+.btn-danger {
+    background: var(--danger);
+    color: white;
+    border-color: var(--danger);
+}
+
+/* Icon Buttons */
+.icon-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
+    color: var(--accent);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 2px 8px var(--shadow);
+}
+
+.icon-btn:hover,
+.icon-btn.active {
+    background: var(--accent);
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--shadow-strong);
+}
+
+.icon-btn.recording {
+    background: rgba(255, 107, 107, 0.3);
+    border-color: var(--danger);
+    animation: record-pulse 1.5s infinite;
+}
+
+/* Toggle Switch */
+.toggle {
+    width: 46px;
+    height: 26px;
+    background: var(--border);
+    border-radius: 13px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.toggle.active { background: var(--accent); }
+
+.toggle::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    transition: left 0.2s;
+}
+
+.toggle.active::after { left: 23px; }
+
+/* Inputs */
+.input {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.input:focus {
+    border-color: var(--accent);
+}
+
+.input::placeholder {
+    color: var(--text-dim);
+}
+
+/* Cards */
+.card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 4px 20px var(--shadow);
+    backdrop-filter: blur(10px);
+}
+
+.card-title {
+    color: var(--accent);
+    font-size: 14px;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Status Badges */
+.badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.badge-success {
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--success);
+}
+
+.badge-warning {
+    background: rgba(245, 158, 11, 0.2);
+    color: var(--warning);
+}
+
+.badge-danger {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--danger);
+}
+
+/* Progress Bars */
+.progress-bar {
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    transition: width 0.3s;
+}
+
+.progress-fill.low { background: var(--danger); }
+.progress-fill.warning { background: var(--warning); }
+
+/* ============================================
+   GLASSMORPHISM EFFECTS
+   ============================================ */
+.glass {
+    background: var(--bg-panel);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid var(--border);
+}
+
+.glass-strong {
+    background: var(--bg-panel);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 30px var(--shadow-strong);
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+.hidden { display: none !important; }
+.section-hidden { display: none; }
+.invisible { visibility: hidden; }
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+.p-1 { padding: 4px; }
+.p-2 { padding: 8px; }
+.p-3 { padding: 12px; }
+.p-4 { padding: 16px; }
+.m-1 { margin: 4px; }
+.m-2 { margin: 8px; }
+.m-3 { margin: 12px; }
+.m-4 { margin: 16px; }
+.rounded { border-radius: 8px; }
+.rounded-lg { border-radius: 12px; }
+.rounded-xl { border-radius: 16px; }
+.rounded-full { border-radius: 9999px; }
+.shadow { box-shadow: 0 2px 8px var(--shadow); }
+.shadow-lg { box-shadow: 0 4px 20px var(--shadow-strong); }
+.overflow-hidden { overflow: hidden; }
+.overflow-auto { overflow: auto; }
+.text-center { text-align: center; }
+.text-sm { font-size: 12px; }
+.text-lg { font-size: 18px; }
+.text-xl { font-size: 24px; }
+.font-bold { font-weight: 700; }
+.font-medium { font-weight: 500; }
+.uppercase { text-transform: uppercase; }
+.tracking-wide { letter-spacing: 0.5px; }

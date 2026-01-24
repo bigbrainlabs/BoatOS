@@ -1707,9 +1707,9 @@ async def fetch_weather_once(lang: str = "de"):
     try:
         lat = sensor_data["gps"]["lat"]
         lon = sensor_data["gps"]["lon"]
-        # Use fallback location if GPS not available (Albertkanal area)
+        # Use fallback location if GPS not available (Aken/Elbe)
         if lat == 0 or lon == 0 or lat is None or lon is None:
-            lat, lon = 50.833, 5.663
+            lat, lon = 51.855, 12.046
 
         async with aiohttp.ClientSession() as session:
             current_url = f"{OPENWEATHER_BASE_URL}/weather?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang={lang}"
@@ -1771,9 +1771,9 @@ async def get_weather_alerts():
         lat = sensor_data["gps"]["lat"]
         lon = sensor_data["gps"]["lon"]
 
-        # Use fallback location if GPS not available (Albertkanal area)
+        # Use fallback location if GPS not available (Aken/Elbe)
         if lat == 0 or lon == 0 or lat is None or lon is None:
-            lat, lon = 50.833, 5.663
+            lat, lon = 51.855, 12.046
 
         alerts_data = await weather_alerts.fetch_weather_alerts(lat, lon)
 
@@ -1824,7 +1824,7 @@ async def fetch_weather_alerts_periodic():
 
             # Use fallback location if GPS not available
             if lat == 0 or lon == 0 or lat is None or lon is None:
-                lat, lon = 50.833, 5.663
+                lat, lon = 51.855, 12.046
 
             await weather_alerts.fetch_weather_alerts(lat, lon)
         except Exception as e:
@@ -1931,8 +1931,11 @@ async def start_track_recording(request: Dict[str, Any] = None):
 @app.post("/api/track/stop")
 async def stop_track_recording():
     global track_recording
+    was_recording = track_recording
     track_recording = False
-    if len(current_track) > 0:
+
+    # Speichere Trip nur wenn Aufzeichnung aktiv war
+    if was_recording and len(current_session_entries) > 0:
         # Create trip_end entry with weather and statistics
         entry = {
             "id": len(current_session_entries) + 1,
@@ -2083,14 +2086,35 @@ def calculate_track_distance():
     return round(distance, 2)
 
 def calculate_track_duration():
-    if len(current_track) < 2:
-        return "0:00"
-    start = datetime.fromisoformat(current_track[0]["timestamp"])
-    end = datetime.fromisoformat(current_track[-1]["timestamp"])
-    duration = end - start
-    hours = duration.seconds // 3600
-    minutes = (duration.seconds % 3600) // 60
-    return f"{hours}:{minutes:02d}"
+    # Versuche zuerst aus Session-Einträgen (trip_start bis jetzt)
+    if current_session_entries:
+        for entry in current_session_entries:
+            if entry.get("type") == "trip_start":
+                try:
+                    start = datetime.fromisoformat(entry["timestamp"])
+                    end = datetime.now()
+                    duration = end - start
+                    total_seconds = int(duration.total_seconds())
+                    hours = total_seconds // 3600
+                    minutes = (total_seconds % 3600) // 60
+                    return f"{hours}:{minutes:02d}"
+                except:
+                    pass
+
+    # Fallback: aus Track-Punkten
+    if len(current_track) >= 2:
+        try:
+            start = datetime.fromisoformat(current_track[0]["timestamp"])
+            end = datetime.fromisoformat(current_track[-1]["timestamp"])
+            duration = end - start
+            total_seconds = int(duration.total_seconds())
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) // 60
+            return f"{hours}:{minutes:02d}"
+        except:
+            pass
+
+    return "0:00"
 
 def generate_gpx(track_data, timestamp):
     gpx = f"""<?xml version="1.0" encoding="UTF-8"?>
