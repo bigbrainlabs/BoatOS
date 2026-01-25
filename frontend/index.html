@@ -2,2075 +2,702 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BoatOS</title>
-    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"/>
-    <link rel="stylesheet" href="logbook.css?v=2.1"/>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: sans-serif;
-            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%);
-            color: #fff;
-            overflow: hidden;
-            user-select: none;
-            position: relative;
-        }
-
-        /* Hide cursor on touch devices only */
-        @media (hover: none) and (pointer: coarse) {
-            * { cursor: none !important; }
-        }
-
-        /* Desktop Wallpaper - BootOS Style Background */
-        body::before {
-            content: '⚓';
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 600px;
-            opacity: 0.03;
-            z-index: 0;
-            pointer-events: none;
-        }
-
-        body::after {
-            content: 'BoatOS';
-            position: fixed;
-            top: 20%;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 72px;
-            font-weight: 300;
-            letter-spacing: 16px;
-            color: rgba(100, 255, 218, 0.08);
-            z-index: 0;
-            pointer-events: none;
-        }
-        #app {
-            display: grid;
-            grid-template-rows: auto 1fr auto;
-            height: 100vh;
-            position: relative;
-            z-index: 1;
-        }
-
-        /* Header - Simple, no charts button */
-        #header { background: linear-gradient(135deg, #1e3c72, #2a5298); padding: 15px 20px; display: flex; justify-content: flex-start; align-items: center; gap: 15px; }
-        #header h1 { font-size: 28px; margin: 0; }
-
-        /* Search Box */
-        #search-container { position: relative; flex: 1; max-width: 400px; }
-        #search-input { width: 100%; padding: 10px 40px 10px 15px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); border-radius: 25px; color: #fff; font-size: 14px; transition: all 0.3s; }
-        #search-input:focus { outline: none; border-color: #64ffda; background: rgba(255,255,255,0.15); }
-        #search-input::placeholder { color: rgba(255,255,255,0.5); }
-        #search-btn { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); background: rgba(100, 255, 218, 0.2); border: none; color: #64ffda; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; font-size: 18px; transition: all 0.3s; display: flex; align-items: center; justify-content: center; }
-        #search-btn:hover { background: rgba(100, 255, 218, 0.3); }
-        #search-results { position: absolute; top: 100%; left: 0; right: 0; margin-top: 5px; background: rgba(10, 14, 39, 0.98); border: 2px solid rgba(42, 82, 152, 0.6); border-radius: 12px; max-height: 400px; overflow-y: auto; z-index: 10001; display: none; backdrop-filter: blur(10px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
-        .search-result-item { padding: 12px 15px; cursor: pointer; border-bottom: 1px solid rgba(42, 82, 152, 0.3); transition: all 0.2s; }
-        .search-result-item:last-child { border-bottom: none; }
-        .search-result-item:hover { background: rgba(42, 82, 152, 0.3); }
-        .search-result-name { color: #64ffda; font-weight: 600; margin-bottom: 3px; }
-        .search-result-details { color: #8892b0; font-size: 12px; }
-        .search-no-results { padding: 20px; text-align: center; color: #8892b0; }
-
-        #status { display: flex; gap: 15px; font-size: 14px; }
-        .status-item { background: rgba(255,255,255,0.1); padding: 5px 12px; border-radius: 20px; cursor: pointer; transition: all 0.3s; }
-        .status-item:active { transform: scale(0.95); }
-        .status-item.connected { background: rgba(46, 213, 115, 0.3); }
-
-        /* Map Container */
-        #map-container { position: relative; flex: 1; }
-        #map { width: 100%; height: 100%; }
-
-        /* Charts Icon Button - Top Left on MAP */
-        .map-control-btn {
-            background: rgba(10, 14, 39, 0.92);
-            backdrop-filter: blur(10px);
-            border: 2px solid rgba(42, 82, 152, 0.6);
-            color: white;
-            font-size: 24px;
-            width: 50px;
-            height: 50px;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .map-control-btn:hover { border-color: #64ffda; }
-
-        #charts-btn { position: absolute; top: 20px; left: 20px; z-index: 1000; }
-        #center-btn { position: absolute; bottom: 130px; left: 20px; z-index: 1000; }
-
-        /* Sensor Tiles */
-        #sensor-tiles { position: absolute; top: 20px; right: 20px; display: grid; grid-template-columns: repeat(2, 140px); gap: 12px; z-index: 1000; transition: opacity 0.3s, transform 0.3s; }
-        #sensor-tiles.hidden { opacity: 0; transform: translateX(100px); pointer-events: none; }
-        .tile { background: rgba(10, 14, 39, 0.92); backdrop-filter: blur(10px); border: 2px solid rgba(42, 82, 152, 0.6); border-radius: 12px; padding: 15px; text-align: center; transition: all 0.3s; cursor: pointer; }
-        .tile:active { transform: scale(0.95); }
-        .weather-tile { grid-column: span 2; }
-        .weather-tile-content { display: flex; align-items: center; justify-content: space-between; }
-        .weather-icon { width: 50px; height: 50px; }
-        .weather-temp { font-size: 28px; font-weight: 700; color: #64ffda; }
-        .weather-desc { font-size: 12px; color: #8892b0; text-transform: capitalize; }
-        .tile-label { font-size: 12px; color: #8892b0; text-transform: uppercase; margin-bottom: 8px; }
-        .tile-value { font-size: 32px; font-weight: 700; color: #64ffda; }
-        .tile-unit { font-size: 16px; color: #8892b0; margin-left: 4px; }
-
-        /* Weather Alerts */
-        #weather-alerts { position: absolute; top: 20px; right: 20px; width: 300px; z-index: 1001; display: none; }
-        .alert-box { background: rgba(139, 0, 0, 0.95); backdrop-filter: blur(10px); border: 2px solid #FF4500; border-radius: 12px; padding: 15px; margin-bottom: 10px; animation: pulse 2s ease-in-out infinite; }
-        .alert-box.warning { background: rgba(255, 140, 0, 0.95); border-color: #FF8C00; }
-        .alert-box.minor { background: rgba(255, 215, 0, 0.95); border-color: #FFD700; color: #000; }
-        @keyframes pulse { 0%, 100% { box-shadow: 0 0 10px rgba(255, 69, 0, 0.5); } 50% { box-shadow: 0 0 20px rgba(255, 69, 0, 0.8); } }
-        .alert-title { font-size: 14px; font-weight: 700; margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
-        .alert-severity { font-size: 12px; padding: 2px 8px; border-radius: 4px; background: rgba(255,255,255,0.2); }
-        .alert-event { font-size: 13px; margin-bottom: 5px; font-weight: 600; }
-        .alert-desc { font-size: 11px; line-height: 1.4; opacity: 0.9; }
-
-        /* Controls */
-        #controls { background: rgba(10, 14, 39, 0.95); padding: 15px 20px; display: flex; gap: 10px; border-top: 2px solid rgba(42, 82, 152, 0.6); }
-        .control-btn { flex: 1; background: linear-gradient(135deg, #2a5298, #1e3c72); border: none; color: white; padding: 18px; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s; text-transform: uppercase; }
-        .control-btn:active { transform: scale(0.95); }
-        .control-btn.active { background: linear-gradient(135deg, #2ecc71, #27ae60); }
-
-        /* Boat Marker */
-        .boat-marker { width: 40px; height: 40px; background: transparent; display: flex; align-items: center; justify-content: center; font-size: 32px; text-shadow: 0 0 8px rgba(0,0,0,0.8), 0 2px 4px rgba(0,0,0,0.6); transform-origin: center; transition: transform 0.3s; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
-
-        /* Lock Marker */
-        .lock-marker { background: transparent !important; border: none !important; }
-        .lock-icon { width: 32px; height: 32px; background: rgba(255, 140, 0, 0.95); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.4); border: 2px solid white; cursor: pointer; transition: all 0.3s; }
-        .lock-icon:hover { transform: scale(1.15); box-shadow: 0 4px 12px rgba(255, 140, 0, 0.6); }
-
-        /* Lock Popup */
-        .lock-popup .leaflet-popup-content-wrapper { background: rgba(10, 14, 39, 0.98); backdrop-filter: blur(10px); border: 2px solid rgba(255, 140, 0, 0.4); border-radius: 12px; color: white; padding: 0; }
-        .lock-popup .leaflet-popup-content { margin: 0; max-width: 350px; }
-        .lock-popup .leaflet-popup-tip { background: rgba(10, 14, 39, 0.98); }
-        .lock-popup-content { padding: 15px; }
-        .lock-popup-content h3 { margin: 0 0 10px 0; color: #FF8C00; font-size: 18px; }
-        .lock-waterway { font-size: 12px; color: #8892b0; margin-bottom: 10px; }
-        .lock-tech { font-size: 11px; color: #64ffda; background: rgba(42, 82, 152, 0.2); padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; }
-        .lock-duration { font-size: 12px; color: #8892b0; margin-bottom: 8px; }
-        .lock-contact { font-size: 12px; color: #8892b0; margin-bottom: 8px; background: rgba(42, 82, 152, 0.15); padding: 8px 10px; border-radius: 6px; line-height: 1.6; }
-        .lock-contact a { color: #64ffda; text-decoration: none; }
-        .lock-contact a:hover { text-decoration: underline; color: #80ffdb; }
-        .lock-facilities { font-size: 16px; margin-bottom: 10px; }
-        .lock-notes { font-size: 11px; background: rgba(255, 165, 0, 0.1); padding: 8px; border-radius: 6px; margin-bottom: 10px; color: #ffa500; }
-        .lock-actions { display: flex; gap: 8px; margin-top: 12px; }
-        .lock-actions .btn-primary, .lock-actions .btn-secondary { flex: 1; padding: 8px 12px; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
-        .lock-actions .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-        .lock-actions .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(100, 255, 218, 0.3); }
-        .lock-actions .btn-secondary { background: rgba(42, 82, 152, 0.5); color: white; }
-        .lock-actions .btn-secondary:hover { background: rgba(42, 82, 152, 0.7); }
-        .lock-hours table { width: 100%; font-size: 12px; }
-        .lock-hours table td { padding: 4px; color: #ccd6f6; }
-
-        /* Panel Styles */
-        .info-panel { display: none; position: absolute; top: 20px; left: 20px; background: rgba(10, 14, 39, 0.95); backdrop-filter: blur(10px); border: 2px solid rgba(42, 82, 152, 0.6); border-radius: 12px; padding: 20px; max-width: 400px; z-index: 1001; }
-        .info-panel h3 { margin-bottom: 15px; color: #64ffda; }
-        .info-details { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; font-size: 14px; }
-        .info-item { background: rgba(42, 82, 152, 0.2); padding: 10px; border-radius: 8px; }
-        .info-label { font-size: 11px; color: #8892b0; text-transform: uppercase; margin-bottom: 5px; }
-        .info-value { font-size: 18px; font-weight: 600; color: #64ffda; }
-        .panel-close { position: absolute; top: 15px; right: 15px; background: none; border: none; color: #8892b0; font-size: 24px; cursor: pointer; }
-        .panel-close:hover { color: #64ffda; }
-
-        /* GPS Panel Specific */
-        #gps-panel .satellite-indicator { display: flex; align-items: center; gap: 10px; background: rgba(42, 82, 152, 0.2); padding: 15px; border-radius: 8px; margin-bottom: 15px; }
-        #gps-panel .satellite-count { font-size: 48px; font-weight: 700; color: #64ffda; }
-        #gps-panel .satellite-label { font-size: 14px; color: #8892b0; }
-        #gps-panel .position-display { background: rgba(42, 82, 152, 0.2); padding: 15px; border-radius: 8px; font-family: monospace; font-size: 14px; color: #64ffda; word-break: break-all; }
-
-        /* Weather Panel */
-        .forecast-container { display: flex; gap: 10px; overflow-x: auto; }
-        .forecast-item { background: rgba(42, 82, 152, 0.3); border-radius: 8px; padding: 10px; text-align: center; min-width: 100px; }
-        .forecast-date { font-size: 12px; color: #8892b0; margin-bottom: 5px; }
-        .forecast-temp { font-size: 16px; font-weight: 600; color: #64ffda; }
-        .forecast-wind { font-size: 12px; color: #8892b0; margin-top: 5px; }
-
-        /* Modal Base Styles */
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; backdrop-filter: blur(5px); }
-        .modal.active { display: flex; justify-content: center; align-items: center; }
-        .modal-content { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); border-radius: 20px; width: 95%; max-width: 1200px; max-height: 90vh; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
-        .modal-header { padding: 20px 30px; border-bottom: 2px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; }
-        .modal-header h2 { font-size: 28px; margin: 0; }
-        .modal-close { background: rgba(255,255,255,0.1); border: none; color: white; font-size: 32px; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; transition: all 0.3s; }
-        .modal-close:hover { background: rgba(255,255,255,0.2); transform: rotate(90deg); }
-        .modal-body { padding: 20px 30px; overflow-y: auto; flex: 1; }
-
-        /* Charts Modal Specific */
-
-        /* Progress Modal */
-        #chart-progress-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 20000; justify-content: center; align-items: center; }
-        #chart-progress-modal.active { display: flex; }
-        .progress-content { background: linear-gradient(135deg, #1e3c72, #2a5298); padding: 40px; border-radius: 16px; max-width: 600px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
-        .progress-bar-container { background: rgba(255,255,255,0.1); height: 30px; border-radius: 15px; overflow: hidden; margin-bottom: 15px; }
-        #progress-bar { background: linear-gradient(90deg, #2ecc71, #27ae60); height: 100%; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 12px; }
-        #progress-details { font-family: monospace; font-size: 12px; color: #64ffda; max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; white-space: pre-wrap; }
-
-        /* Settings Screen (Fullscreen like Dashboard) */
-        #settings-modal {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%);
-            z-index: 9999;
-            overflow-y: auto;
-        }
-        #settings-modal.show {
-            display: flex !important;
-            justify-content: center;
-            align-items: flex-start;
-            padding: 20px 0;
-        }
-        .settings-tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 30px;
-            flex-wrap: wrap;
-            padding: 0;
-        }
-
-        .settings-tab {
-            background: rgba(30, 60, 114, 0.4);
-            backdrop-filter: blur(10px);
-            border: 2px solid rgba(100, 255, 218, 0.1);
-            color: #8892b0;
-            padding: 14px 24px;
-            cursor: pointer;
-            transition: all 0.3s;
-            border-radius: 12px;
-            font-size: 15px;
-            font-weight: 500;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        .settings-tab:hover {
-            background: rgba(30, 60, 114, 0.6);
-            border-color: rgba(100, 255, 218, 0.3);
-            color: #ccd6f6;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-
-        .settings-tab.active {
-            background: linear-gradient(135deg, rgba(100, 255, 218, 0.25), rgba(52, 152, 219, 0.25));
-            border-color: #64ffda;
-            color: #64ffda;
-            box-shadow: 0 4px 16px rgba(100, 255, 218, 0.3);
-        }
-
-        .settings-content {
-            min-height: 400px;
-            position: relative;
-            z-index: 10;
-        }
-
-        .settings-tab-content {
-            display: none;
-            animation: fadeIn 0.3s;
-        }
-
-        .settings-tab-content.active {
-            display: block;
-        }
-
-        .settings-tab-content h3 {
-            color: #64ffda;
-            font-size: 20px;
-            font-weight: 600;
-            margin-bottom: 25px;
-            margin-top: 0;
-            padding-bottom: 10px;
-            border-bottom: 2px solid rgba(100, 255, 218, 0.2);
-        }
-
-        .setting-item {
-            margin-bottom: 20px;
-            padding: 20px;
-            background: linear-gradient(135deg, rgba(30, 60, 114, 0.3), rgba(42, 82, 152, 0.2));
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(100, 255, 218, 0.15);
-            border-radius: 12px;
-            transition: all 0.3s;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        .setting-item:hover {
-            border-color: rgba(100, 255, 218, 0.3);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            transform: translateY(-1px);
-        }
-
-        .setting-item label {
-            display: block;
-            color: #ccd6f6;
-            font-weight: 600;
-            margin-bottom: 10px;
-            font-size: 15px;
-        }
-
-        .setting-item input[type="text"],
-        .setting-item input[type="number"],
-        .setting-item input[type="password"],
-        .setting-item select {
-            width: 100%;
-            padding: 12px 16px;
-            background: rgba(10, 14, 39, 0.6);
-            border: 2px solid rgba(100, 255, 218, 0.2);
-            border-radius: 8px;
-            color: #fff;
-            font-size: 15px;
-            transition: all 0.3s;
-        }
-
-        .setting-item input[type="text"]:focus,
-        .setting-item input[type="number"]:focus,
-        .setting-item input[type="password"]:focus,
-        .setting-item select:focus {
-            outline: none;
-            border-color: #64ffda;
-            box-shadow: 0 0 0 3px rgba(100, 255, 218, 0.1);
-            background: rgba(10, 14, 39, 0.8);
-        }
-
-        .setting-item select option {
-            background: #1a1a2e;
-            color: #fff;
-            padding: 10px;
-        }
-
-        .setting-item input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            margin-right: 10px;
-            cursor: pointer;
-        }
-
-        .checkbox-label {
-            color: #8892b0;
-            font-size: 14px;
-            vertical-align: middle;
-        }
-
-        .setting-item small {
-            display: block;
-            color: #8892b0;
-            font-size: 12px;
-            margin-top: 5px;
-        }
-
-        .setting-item small a {
-            color: #64ffda;
-            text-decoration: none;
-        }
-
-        .settings-actions {
-            display: flex;
-            gap: 15px;
-            justify-content: flex-end;
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 2px solid rgba(100, 255, 218, 0.2);
-        }
-
-        .save-btn, .cancel-btn, .data-btn {
-            padding: 12px 30px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-
-        .save-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .save-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(100, 255, 218, 0.3);
-        }
-
-        .cancel-btn {
-            background: rgba(255, 255, 255, 0.1);
-            color: #ccd6f6;
-        }
-
-        .cancel-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .data-btn {
-            background: linear-gradient(135deg, rgba(100, 255, 218, 0.2), rgba(52, 152, 219, 0.2));
-            backdrop-filter: blur(10px);
-            color: #64ffda;
-            border: 2px solid #64ffda;
-            width: 100%;
-            padding: 16px 24px;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        }
-
-        .data-btn:hover {
-            background: linear-gradient(135deg, rgba(100, 255, 218, 0.3), rgba(52, 152, 219, 0.3));
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(100, 255, 218, 0.3);
-        }
-
-        .data-btn.danger {
-            background: linear-gradient(135deg, rgba(231, 76, 60, 0.2), rgba(192, 57, 43, 0.2));
-            color: #e74c3c;
-            border: 2px solid #e74c3c;
-        }
-
-        .data-btn.danger:hover {
-            background: linear-gradient(135deg, rgba(231, 76, 60, 0.3), rgba(192, 57, 43, 0.3));
-            box-shadow: 0 6px 16px rgba(231, 76, 60, 0.3);
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Leaflet Layer Control Styling */
-        .leaflet-control-layers {
-            background: rgba(10, 14, 39, 0.95) !important;
-            backdrop-filter: blur(10px);
-            border: 2px solid rgba(42, 82, 152, 0.6) !important;
-            border-radius: 12px !important;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
-        }
-        .leaflet-control-layers-toggle {
-            background-color: rgba(10, 14, 39, 0.95) !important;
-            background-image: none !important;
-            width: 44px !important;
-            height: 44px !important;
-            border-radius: 12px !important;
-            border: 2px solid rgba(42, 82, 152, 0.6) !important;
-        }
-        .leaflet-control-layers-toggle:before {
-            content: "🗺️";
-            font-size: 24px;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-        .leaflet-control-layers-expanded {
-            padding: 15px !important;
-            color: #fff !important;
-        }
-        .leaflet-control-layers-base label,
-        .leaflet-control-layers-overlays label {
-            color: #fff !important;
-            font-size: 14px !important;
-            padding: 8px 5px !important;
-            margin-bottom: 5px !important;
-            display: flex !important;
-            align-items: center !important;
-            cursor: pointer !important;
-            transition: all 0.2s !important;
-            border-radius: 6px !important;
-        }
-        .leaflet-control-layers-base label:hover,
-        .leaflet-control-layers-overlays label:hover {
-            background: rgba(42, 82, 152, 0.3) !important;
-        }
-        .leaflet-control-layers-separator {
-            border-top: 1px solid rgba(42, 82, 152, 0.4) !important;
-            margin: 10px 0 !important;
-        }
-        .leaflet-control-layers input[type="radio"],
-        .leaflet-control-layers input[type="checkbox"] {
-            margin-right: 8px !important;
-            width: 18px !important;
-            height: 18px !important;
-            cursor: pointer !important;
-        }
-
-        /* AIS Ship Icons */
-        .ais-ship-icon {
-            background: transparent !important;
-            border: none !important;
-        }
-
-        .ais-popup h4 {
-            margin: 0 0 10px 0;
-            color: #3498db;
-        }
-
-        .ais-popup p {
-            margin: 5px 0;
-            font-size: 13px;
-        }
-
-        /* Boat Icon Selector */
-        .boat-icon-option:hover {
-            background: rgba(42, 82, 152, 0.3) !important;
-            border-color: rgba(100, 255, 218, 0.5) !important;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        }
-
-        .boat-icon-option.selected {
-            border-color: #64ffda !important;
-            background: rgba(100, 255, 218, 0.2) !important;
-            box-shadow: 0 0 15px rgba(100, 255, 218, 0.4);
-        }
-
-        /* Visual Editor - Sortable Drag & Drop */
-        .sortable-ghost {
-            opacity: 0.4;
-            background: rgba(100, 255, 218, 0.1) !important;
-            border: 2px dashed rgba(100, 255, 218, 0.5) !important;
-        }
-
-        .canvas-widget:hover {
-            border-color: rgba(100, 255, 218, 0.5) !important;
-            box-shadow: 0 0 10px rgba(100, 255, 218, 0.3);
-        }
-
-        /* Touch-specific optimizations */
-        @media (hover: none) and (pointer: coarse) {
-            .canvas-widget {
-                min-height: 80px; /* Larger touch targets */
-            }
-
-            .canvas-widget:active {
-                transform: scale(0.98);
-                background: rgba(100, 255, 218, 0.15) !important;
-            }
-
-            /* Larger buttons on touch */
-            .palette-widget {
-                min-height: 60px;
-                padding: 16px !important;
-            }
-        }
-
-        /* Active state for touch */
-        .canvas-widget:active,
-        .palette-widget:active {
-            opacity: 0.8;
-        }
-
-        /* ========== VIRTUAL KEYBOARD ========== */
-        .virtual-keyboard {
-            position: fixed;
-            bottom: -350px;
-            left: 0;
-            right: 0;
-            background: linear-gradient(135deg, rgba(26, 31, 58, 0.98) 0%, rgba(10, 14, 39, 0.98) 100%);
-            backdrop-filter: blur(20px);
-            box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.5);
-            border-top: 2px solid rgba(100, 255, 218, 0.3);
-            padding: 15px;
-            transition: bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 10000;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .virtual-keyboard.visible {
-            bottom: 0;
-        }
-
-        .keyboard-row {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .key {
-            background: linear-gradient(135deg, rgba(100, 255, 218, 0.15) 0%, rgba(100, 255, 218, 0.05) 100%);
-            border: 2px solid rgba(100, 255, 218, 0.3);
-            border-radius: 8px;
-            color: #64ffda;
-            font-size: 18px;
-            font-weight: 600;
-            padding: 15px 20px;
-            min-width: 60px;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        .key:active {
-            transform: scale(0.95);
-            background: linear-gradient(135deg, rgba(100, 255, 218, 0.3) 0%, rgba(100, 255, 218, 0.15) 100%);
-            border-color: #64ffda;
-        }
-
-        .key-special {
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-            border-color: rgba(255, 255, 255, 0.2);
-            color: #fff;
-        }
-
-        .key-special:active {
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%);
-        }
-
-        .key-space {
-            flex: 1;
-            max-width: 400px;
-        }
-
-        .key-enter {
-            min-width: 80px;
-        }
-
-        .key-caps.active {
-            background: linear-gradient(135deg, #64ffda 0%, #00b894 100%);
-            color: #0a0e27;
-            border-color: #64ffda;
-        }
-
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>BoatOS - Navigation</title>
+
+    <!-- MapLibre GL JS (lokal) -->
+    <link rel="stylesheet" href="lib/maplibre-gl.css" />
+    <script src="lib/maplibre-gl.js"></script>
+
+    <!-- BoatOS Styles -->
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components.css">
 </head>
 <body>
-    <!-- Boot Screen - Shown immediately on load -->
-    <div id="boot-screen" style="
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 99999;
-        opacity: 1;
-        transition: opacity 0.8s ease-out;
-    ">
-        <div style="text-align: center; color: white;">
-            <div style="font-size: 120px; margin-bottom: 20px; animation: boot-pulse 2s ease-in-out infinite;">⚓</div>
-            <h1 style="font-size: 48px; font-weight: 300; margin: 0 0 10px 0; letter-spacing: 8px; color: #64ffda;">BoatOS</h1>
-            <div style="font-size: 18px; color: #8892b0; margin-bottom: 50px; letter-spacing: 2px;">Marine Navigation System</div>
-            <div style="
-                width: 60px;
-                height: 60px;
-                border: 4px solid rgba(100, 255, 218, 0.2);
-                border-top-color: #64ffda;
-                border-radius: 50%;
-                margin: 0 auto 30px;
-                animation: boot-spin 1s linear infinite;
-            "></div>
-            <div id="boot-status" style="font-size: 16px; color: #64ffda; min-height: 24px;">Initializing System...</div>
+    <!-- ============================================
+         TOP BAR
+         ============================================ -->
+    <div class="top-bar">
+        <div class="top-bar-section">
+            <div class="gps-indicator no-fix" id="gpsIndicator" onclick="BoatOS.ui.toggleGpsPopup()">
+                <div class="gps-dot"></div>
+                <span id="gps-sats">-- Sats</span>
+            </div>
+        </div>
+
+        <div class="nav-values">
+            <div class="nav-value">
+                <div class="value" id="sog-value">0.0</div>
+                <div class="label" id="sog-label">SOG kn</div>
+            </div>
+            <div class="nav-value">
+                <div class="value" id="cog-value">---°</div>
+                <div class="label">COG</div>
+            </div>
+            <div class="nav-value">
+                <div class="value" id="dist-value">--</div>
+                <div class="label" id="dist-label">NM</div>
+            </div>
+            <div class="nav-value">
+                <div class="value" id="eta-value">--:--</div>
+                <div class="label">ETA</div>
+            </div>
+        </div>
+
+        <div class="top-bar-right">
+            <button class="icon-btn" id="trackBtn" onclick="BoatOS.sensors.toggleTrack()" title="Track">⏺️</button>
+            <button class="icon-btn" id="themeToggle" onclick="BoatOS.theme.toggleTheme()" title="Dark Mode">🌙</button>
+            <button class="icon-btn" id="modeToggle" onclick="BoatOS.ui.toggleMode()" title="Karte">🗺️</button>
+            <button class="icon-btn" id="dashboardEditBtn" onclick="BoatOS.openDashboardEditor()" title="Dashboard bearbeiten">✏️</button>
+            <button class="icon-btn" onclick="BoatOS.ui.toggleSidebar()" title="Einstellungen">⚙️</button>
         </div>
     </div>
 
-    <style>
-        @keyframes boot-spin {
-            to { transform: rotate(360deg); }
-        }
-        @keyframes boot-pulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.05); opacity: 0.8; }
-        }
-        #boot-screen.fade-out {
-            opacity: 0;
-            pointer-events: none;
-        }
-    </style>
-
-    <!-- Debug Console Overlay (hidden by default, set display:block to enable) -->
-    <div id="debug-console" style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.95); color: #0f0; font-family: monospace; font-size: 10px; padding: 8px; width: 450px; max-height: 350px; overflow-y: auto; z-index: 10000; border: 2px solid #0f0; display: none; white-space: pre-wrap; word-wrap: break-word;"></div>
-
-    <div id="app">
-        <!-- Header - Simple -->
-        <div id="header">
-            <button onclick="openSettingsModal('map')" style="background: rgba(100, 255, 218, 0.2); border: 2px solid #64ffda; color: #64ffda; font-size: 24px; width: 50px; height: 50px; border-radius: 12px; cursor: pointer; transition: all 0.3s;" title="Einstellungen">⚙️</button>
-            <h1>⚓ BoatOS</h1>
-
-            <!-- Search Box -->
-            <div id="search-container">
-                <input type="text" id="search-input" placeholder="Ort, PLZ oder Koordinaten suchen..." />
-                <button id="search-btn" onclick="performSearch()">🔍</button>
-                <div id="search-results"></div>
-            </div>
-
-            <div id="status">
-                <div class="status-item" onclick="showDashboardPanel()">📊 Statistik</div>
-                <div class="status-item" onclick="showCrewPanel()">👥 Crew</div>
-                <div class="status-item" onclick="showFuelPanel()">⛽ Treibstoff</div>
-                <div class="status-item" id="signalk-status">SignalK</div>
-                <div class="status-item" id="gps-status" onclick="toggleGpsPanel()">GPS</div>
-            </div>
+    <!-- GPS Popup -->
+    <div class="gps-popup" id="gpsPopup">
+        <h4>📍 GPS Details</h4>
+        <div class="gps-detail-row">
+            <span class="gps-detail-label">Satelliten</span>
+            <span class="gps-detail-value" id="gps-satellites">-- / --</span>
         </div>
-
-        <!-- Map Container -->
-        <div id="map-container">
-            <div id="map"></div>
-
-
-            <!-- GPS Details Panel -->
-            <div id="gps-panel" class="info-panel">
-                <button class="panel-close" onclick="toggleGpsPanel()">×</button>
-                <h3 data-i18n="gps_title">📡 GPS Details</h3>
-
-                <div class="satellite-indicator">
-                    <div class="satellite-count" id="gps-satellites">0</div>
-                    <div class="satellite-label"><span data-i18n="gps_satellites">Satellites</span><br><span data-i18n="gps_in_view">in View</span></div>
-                </div>
-
-                <div class="info-details">
-                    <div class="info-item">
-                        <div class="info-label" data-i18n="gps_altitude">Altitude</div>
-                        <div class="info-value" id="gps-altitude">-- m</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label" data-i18n="gps_speed">Speed</div>
-                        <div class="info-value" id="gps-speed">-- kn</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label" data-i18n="gps_heading">Heading</div>
-                        <div class="info-value" id="gps-heading">--°</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label" data-i18n="gps_fix_status">Fix Status</div>
-                        <div class="info-value" id="gps-fix-status">No Fix</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label" data-i18n="gps_hdop">HDOP</div>
-                        <div class="info-value" id="gps-hdop">--</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label" data-i18n="gps_vdop">VDOP</div>
-                        <div class="info-value" id="gps-vdop">--</div>
-                    </div>
-                    <div class="info-item" style="grid-column: span 2;">
-                        <div class="info-label" data-i18n="gps_last_update">Last Update</div>
-                        <div class="info-value" id="gps-timestamp" style="font-size: 14px;">--</div>
-                    </div>
-                </div>
-
-                <div class="info-label" style="margin-bottom: 8px;" data-i18n="gps_position">Position</div>
-                <div class="position-display" id="gps-position">--.------, --.------</div>
-            </div>
-
-            <!-- Weather Details Panel -->
-            <div id="weather-panel" class="info-panel">
-                <button class="panel-close" onclick="toggleWeatherPanel()">×</button>
-                <h3 data-i18n="weather_details">🌦️ Weather Details</h3>
-                <div class="info-details">
-                    <div class="info-item">
-                        <div class="info-label" data-i18n="weather_temperature">Temperature</div>
-                        <div class="info-value" id="weather-panel-temp">--</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label" data-i18n="weather_feels_like">Feels Like</div>
-                        <div class="info-value" id="weather-panel-feels">--</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label" data-i18n="weather_description">Description</div>
-                        <div class="info-value" id="weather-panel-desc" style="font-size: 14px;">--</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label" data-i18n="weather_wind">Wind</div>
-                        <div class="info-value" id="weather-panel-wind">--</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label" data-i18n="weather_pressure">Pressure</div>
-                        <div class="info-value" id="weather-panel-pressure">--</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label" data-i18n="weather_humidity">Humidity</div>
-                        <div class="info-value" id="weather-panel-humidity">--</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label" data-i18n="weather_visibility">Visibility</div>
-                        <div class="info-value" id="weather-panel-visibility">--</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label" data-i18n="weather_clouds">Clouds</div>
-                        <div class="info-value" id="weather-panel-clouds">--</div>
-                    </div>
-                </div>
-                <h4 style="margin-bottom: 10px; color: #8892b0;" data-i18n="weather_forecast_3day">3-Day Forecast</h4>
-                <div class="forecast-container" id="weather-forecast"></div>
-            </div>
-
-            <!-- Weather Alerts (DWD) -->
-            <div id="weather-alerts"></div>
-
-            <!-- Sensor Tiles -->
-            <div id="sensor-tiles">
-                <div class="tile weather-tile" onclick="toggleWeatherPanel()">
-                    <div class="weather-tile-content">
-                        <div>
-                            <div class="weather-temp" id="weather-temp">--</div>
-                            <div class="weather-desc" id="weather-desc" data-i18n="weather_loading">Loading...</div>
-                        </div>
-                        <img id="weather-icon" class="weather-icon" src="" alt="Weather">
-                    </div>
-                </div>
-                <div class="tile"><div class="tile-label" data-i18n="sensor_speed">Geschw.</div><div class="tile-value" id="speed">0.0<span class="tile-unit">kn</span></div></div>
-                <div class="tile"><div class="tile-label" data-i18n="sensor_heading">Kurs</div><div class="tile-value" id="heading">---<span class="tile-unit">°</span></div></div>
-                <div class="tile"><div class="tile-label" data-i18n="sensor_depth">Tiefe</div><div class="tile-value" id="depth">--<span class="tile-unit">m</span></div></div>
-                <div class="tile"><div class="tile-label" data-i18n="sensor_wind">Wind</div><div class="tile-value" id="wind">0<span class="tile-unit">kn</span></div></div>
-            </div>
+        <div class="gps-detail-row">
+            <span class="gps-detail-label">Fix</span>
+            <span class="gps-detail-value" id="gps-fix-status">Kein Fix</span>
         </div>
-
-        <!-- Infrastructure Details Panel: Removed (user found it annoying) -->
-
-        <!-- AIS Details Panel -->
-        <div id="ais-details-panel" class="info-panel">
-            <button class="panel-close" onclick="closeAISDetails()">×</button>
-            <h3 data-i18n="ais_vessel_details">🚢 AIS Vessel Details</h3>
-            <div class="info-details">
-                <div class="info-item">
-                    <div class="info-label" data-i18n="ais_name">Name</div>
-                    <div class="info-value" id="ais-name">--</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label" data-i18n="ais_mmsi">MMSI</div>
-                    <div class="info-value" id="ais-mmsi">--</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label" data-i18n="ais_callsign">Callsign</div>
-                    <div class="info-value" id="ais-callsign">--</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label" data-i18n="ais_type">Type</div>
-                    <div class="info-value" id="ais-type">--</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label" data-i18n="ais_speed">Speed</div>
-                    <div class="info-value" id="ais-speed">--</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label" data-i18n="ais_course">Course (COG)</div>
-                    <div class="info-value" id="ais-course">--</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label" data-i18n="ais_heading">Heading</div>
-                    <div class="info-value" id="ais-heading">--</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label" data-i18n="ais_status">Status</div>
-                    <div class="info-value" id="ais-navstat">--</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label" data-i18n="ais_destination">Destination</div>
-                    <div class="info-value" id="ais-destination">--</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label" data-i18n="ais_eta">ETA</div>
-                    <div class="info-value" id="ais-eta">--</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label" data-i18n="ais_length">Length</div>
-                    <div class="info-value" id="ais-length">--</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label" data-i18n="ais_width">Width</div>
-                    <div class="info-value" id="ais-width">--</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label" data-i18n="ais_draught">Draught</div>
-                    <div class="info-value" id="ais-draught">--</div>
-                </div>
-            </div>
+        <div class="gps-detail-row">
+            <span class="gps-detail-label">Position</span>
+            <span class="gps-detail-value" id="gps-position">--</span>
         </div>
-
-        <!-- Bottom Controls -->
-        <div id="controls">
-            <button class="control-btn" id="btn-waypoint" data-i18n="btn_waypoint">📍 Wegpunkt</button>
-            <button class="control-btn" id="btn-route" data-i18n="btn_route">🛤️ Route</button>
-            <button class="control-btn" id="btn-logbook" data-i18n="btn_logbook">📓 Logbuch</button>
-            <button class="control-btn" id="btn-sensors" data-i18n="btn_sensors">📊 Sensoren</button>
+        <div class="gps-detail-row">
+            <span class="gps-detail-label">Höhe</span>
+            <span class="gps-detail-value" id="gps-altitude">-- m</span>
+        </div>
+        <div class="gps-detail-row">
+            <span class="gps-detail-label">HDOP</span>
+            <span class="gps-detail-value" id="gps-hdop">--</span>
         </div>
     </div>
 
-    <!-- Logbook Modal -->
-    <div id="logbook-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>📓 <span data-i18n="logbook_title">Logbuch</span></h2>
-                <button class="modal-close" onclick="closeLogbook()">×</button>
-            </div>
-            
-            <!-- Tabs -->
-            <div class="logbook-tabs">
-                <button class="logbook-tab active" onclick="switchLogbookTab('current')" data-i18n="logbook_current_trip">Aktuelle Fahrt</button>
-                <button class="logbook-tab" onclick="switchLogbookTab('archive')" data-i18n="logbook_archive">Vergangene Fahrten</button>
-            </div>
-            
-            <div class="modal-body">
-                <!-- Current Trip Tab -->
-                <div id="logbook-tab-current" class="logbook-tab-content active">
-                    <div class="track-controls">
-                        <div class="track-status">
-                            <div class="track-info">
-                                <div class="track-stat">
-                                    <div class="track-stat-label" data-i18n="track_points">Points</div>
-                                    <div class="track-stat-value" id="track-points">0</div>
-                                </div>
-                                <div class="track-stat">
-                                    <div class="track-stat-label" data-i18n="track_distance">Distance</div>
-                                    <div class="track-stat-value" id="track-distance">0 <span style="font-size:16px">NM</span></div>
-                                </div>
-                            </div>
-                            <div id="recording-indicator" style="display:none">
-                                <div class="recording-indicator"></div>
-                            </div>
-                        </div>
-                        <div class="track-buttons">
-                            <button class="track-btn start" id="btn-track-start" onclick="startTrackRecording()" data-i18n="track_start">▶️ Start</button>
-                            <button class="track-btn pause" id="btn-track-pause" onclick="pauseTrackRecording()" disabled data-i18n="track_pause">⏸️ Pause</button>
-                            <button class="track-btn resume" id="btn-track-resume" onclick="resumeTrackRecording()" disabled data-i18n="track_resume">▶️ Resume</button>
-                            <button class="track-btn stop" id="btn-track-stop" onclick="stopTrackRecording()" disabled data-i18n="track_stop">⏹️ Stop</button>
-                        </div>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h3 style="margin: 0; color: #8892b0;" data-i18n="logbook_entries">Logbuch-Einträge</h3>
-                        <button class="track-btn" onclick="openManualEntryModal()" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); padding: 10px 20px;" data-i18n="logbook_new_entry">📝 Neuer Eintrag</button>
-                    </div>
-                    <div class="logbook-entries" id="logbook-entries">
-                        <div class="empty-logbook" data-i18n="logbook_no_entries">Noch keine Logbuch-Einträge</div>
-                    </div>
-                </div>
-                
-                <!-- Archive Tab -->
-                <div id="logbook-tab-archive" class="logbook-tab-content">
-                    <div id="trips-list"></div>
-                </div>
-            </div>
-        </div>
+    <!-- ============================================
+         MAP / DASHBOARD
+         ============================================ -->
+    <div class="map-container hidden" id="mapContainer">
+        <div id="map"></div>
     </div>
-    <div id="manual-entry-modal" class="modal">
-        <div class="modal-content" style="max-width: 500px;">
-            <div class="modal-header">
-                <h2>📝 Neuer Logbuch-Eintrag</h2>
-                <button class="modal-close" onclick="closeManualEntryModal()">×</button>
-            </div>
-            <div class="modal-body">
-                <form id="manual-entry-form" onsubmit="event.preventDefault(); submitManualEntry();">
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 8px; color: #8892b0; font-size: 14px;" data-i18n="logbook_entry_notes">Notizen</label>
-                        <textarea id="manual-entry-notes" rows="6" style="width: 100%; padding: 12px; background: rgba(42, 82, 152, 0.2); border: 2px solid rgba(42, 82, 152, 0.4); border-radius: 8px; color: white; font-family: sans-serif; font-size: 14px; resize: vertical;" data-i18n-placeholder="logbook_entry_placeholder" placeholder="Was möchtest du festhalten?"></textarea>
-                    </div>
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: flex; align-items: center; gap: 10px; color: #8892b0; cursor: pointer;">
-                            <input type="checkbox" id="manual-entry-weather" checked style="width: 20px; height: 20px; cursor: pointer;">
-                            <span data-i18n="logbook_save_weather">🌡️ Aktuelles Wetter speichern</span>
-                        </label>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button type="submit" class="track-btn start" style="flex: 1;" data-i18n="btn_save">✅ Speichern</button>
-                        <button type="button" class="track-btn stop" onclick="closeManualEntryModal()" style="flex: 1;" data-i18n="btn_cancel">❌ Abbrechen</button>
-                    </div>
-                </form>
+
+    <div class="dashboard-container active" id="dashboardContainer">
+        <!-- Dynamic dashboard rendered from saved configuration -->
+        <div id="sensor-dashboard" style="padding: 10px;">
+            <!-- Loading indicator -->
+            <div style="text-align: center; padding: 40px; color: var(--text-dim);">
+                <div style="font-size: 32px; margin-bottom: 10px;">📊</div>
+                Dashboard wird geladen...
             </div>
         </div>
     </div>
 
-    <!-- Trip Details Modal -->
-    <div id="trip-details-modal" class="modal">
-        <div class="modal-content" style="max-width: 900px;">
-            <div class="modal-header">
-                <h2>🚢 <span id="trip-details-title" data-i18n="trip_details">Trip Details</span></h2>
-                <button class="modal-close" onclick="closeTripDetails()">×</button>
-            </div>
-            <div class="modal-body">
-                <!-- Trip Summary Stats -->
-                <div class="trip-details-summary">
-                    <div class="trip-detail-stat">
-                        <div class="trip-detail-icon">📏</div>
-                        <div class="trip-detail-value" id="trip-detail-distance">--</div>
-                        <div class="trip-detail-label" data-i18n="trip_distance">Distanz</div>
-                    </div>
-                    <div class="trip-detail-stat">
-                        <div class="trip-detail-icon">⏱️</div>
-                        <div class="trip-detail-value" id="trip-detail-duration">--</div>
-                        <div class="trip-detail-label" data-i18n="trip_duration">Dauer</div>
-                    </div>
-                    <div class="trip-detail-stat">
-                        <div class="trip-detail-icon">📊</div>
-                        <div class="trip-detail-value" id="trip-detail-points">--</div>
-                        <div class="trip-detail-label" data-i18n="trip_track_points">Track-Punkte</div>
-                    </div>
-                    <div class="trip-detail-stat">
-                        <div class="trip-detail-icon">📝</div>
-                        <div class="trip-detail-value" id="trip-detail-entries">--</div>
-                        <div class="trip-detail-label" data-i18n="trip_entries">Einträge</div>
-                    </div>
-                </div>
-
-                <!-- Trip Timeline -->
-                <h3 style="margin: 20px 0 15px 0; color: #8892b0;" data-i18n="trip_timeline">Timeline</h3>
-                <div class="trip-details-timeline" id="trip-details-timeline">
-                    <!-- Timeline entries will be inserted here -->
-                </div>
-            </div>
-        </div>
+    <!-- ============================================
+         FLOATING ACTION BUTTONS
+         ============================================ -->
+    <div class="fab-container" id="fabContainer">
+        <button class="fab" onclick="BoatOS.map.centerOnBoat()" title="Zentrieren">🎯</button>
+        <button class="fab" onclick="BoatOS.map.zoomIn()" title="Zoom +">+</button>
+        <button class="fab" onclick="BoatOS.map.zoomOut()" title="Zoom -">−</button>
+        <button class="fab" onclick="BoatOS.ui.toggleLayers()" title="Layer">🗂️</button>
+        <button class="fab danger" onclick="BoatOS.core.manOverBoard()" title="MOB">🆘</button>
     </div>
 
-    <!-- Charts Modal -->
-
-    <!-- Chart Progress Modal -->
-    <div id="chart-progress-modal">
-        <div class="progress-content">
-            <h2 style="margin-bottom: 20px; color: #64ffda; text-align: center;" id="progress-title" data-i18n="charts_processing">📊 Verarbeite Karten...</h2>
-            <div style="background: rgba(10, 14, 39, 0.6); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-                <div id="progress-status" style="color: #8892b0; margin-bottom: 15px; font-size: 14px; min-height: 20px;" data-i18n="charts_initializing">Initialisiere...</div>
-                <div class="progress-bar-container">
-                    <div id="progress-bar">0%</div>
-                </div>
-                <div id="progress-details"></div>
-            </div>
-            <button id="progress-close-btn" onclick="closeProgressModal()" style="display: none; width: 100%; background: linear-gradient(135deg, #2ecc71, #27ae60); border: none; color: white; padding: 12px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer;" data-i18n="btn_done">✅ Fertig</button>
+    <!-- ============================================
+         BOTTOM SHEET
+         ============================================ -->
+    <div class="bottom-sheet peek" id="bottomSheet">
+        <div class="sheet-handle" onclick="BoatOS.ui.cycleSheet()">
+            <div class="sheet-handle-bar"></div>
         </div>
-    </div>
 
-    <!-- JavaScript Includes -->
-    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="i18n.js?v=1760348000"></script>
-    <script src="boat_icons.js?v=1760348000"></script>
-    <script src="settings.js?v=1760970000"></script>
-    <script src="settings_screen.js?v=1.1"></script>
-    <script src="settings_renderer.js?v=3.0"></script>
-    <script src="dashboard_renderer.js?v=1.0"></script>
-    <!-- SortableJS for Drag & Drop -->
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="dashboard_visual_editor.js?v=1.0"></script>
-    <script src="logbook.js?v=1760346500"></script>
-    <script src="charts.js?v=1760345500"></script>
-    <script src="units.js?v=1760345500"></script>
-    <script src="water_routing.js?v=1760348000"></script>
-    <script src="search.js?v=1760348000"></script>
-    <script src="weather_alerts.js?v=1.0"></script>
-    <script src="locks.js?v=1.0"></script>
-    <script src="osrm_regions.js?v=1.0"></script>
-    <script src="app.js?v=1760356000"></script>
-
-    <!-- Include Units Modal -->
-    <script>
-        fetch("units_modal.html").then(r => r.text()).then(html => {
-            document.body.insertAdjacentHTML("beforeend", html);
-        });
-
-        // Initialize weather alerts on DOM load
-        document.addEventListener('DOMContentLoaded', function() {
-            initWeatherAlerts();
-        });
-    </script>
-
-    <!-- Settings Screen (Dashboard-Style) -->
-    <div id="settings-modal" class="modal">
-        <!-- Animated Background -->
-        <div class="animated-bg"></div>
-
-        <div class="settings-screen-container" style="
-            max-width: 1200px;
-            width: 100%;
-            margin: 0 auto;
-            position: relative;
-            z-index: 10;
-        ">
-            <!-- Settings Header (Dashboard-Style) -->
-            <div style="
-                background: linear-gradient(135deg, #1e3c72, #2a5298);
-                padding: 20px 30px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                border-radius: 16px 16px 0 0;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            ">
-                <h1 style="font-size: 32px; margin: 0; display: flex; align-items: center; gap: 15px;">
-                    <span>⚙️</span>
-                    <span data-i18n="settings_title">Einstellungen</span>
-                </h1>
-                <button onclick="closeSettingsModal()" style="
-                    background: rgba(255, 255, 255, 0.1);
-                    border: 2px solid rgba(255, 255, 255, 0.3);
-                    color: white;
-                    font-size: 32px;
-                    width: 50px;
-                    height: 50px;
-                    border-radius: 12px;
-                    cursor: pointer;
-                    transition: all 0.3s;
-                    line-height: 1;
-                " onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">×</button>
+        <div class="quick-actions">
+            <div class="quick-action" onclick="BoatOS.navigation.startRoutePlanning()">
+                <span class="icon">🧭</span>
+                <span class="label">Route</span>
             </div>
+            <div class="quick-action" onclick="BoatOS.ui.openSearch()">
+                <span class="icon">🔍</span>
+                <span class="label">Suche</span>
+            </div>
+            <div class="quick-action" onclick="BoatOS.ui.showFavorites()">
+                <span class="icon">⭐</span>
+                <span class="label">Favoriten</span>
+            </div>
+            <div class="quick-action" onclick="BoatOS.ui.addLogEntry()">
+                <span class="icon">✏️</span>
+                <span class="label">Eintrag</span>
+            </div>
+            <div class="quick-action" onclick="BoatOS.ais.showAISPanel()">
+                <span class="icon">🚢</span>
+                <span class="label">AIS</span>
+            </div>
+            <div class="quick-action" onclick="BoatOS.ais.showLocks()">
+                <span class="icon">🚧</span>
+                <span class="label">Schleusen</span>
+            </div>
+        </div>
 
-            <!-- Settings Body (Dashboard-Style) -->
-            <div style="
-                background: transparent;
-                padding: 30px;
-                position: relative;
-            ">
-                <!-- Background Icon (like dashboard) -->
-                <div style="
-                    position: absolute;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    font-size: 800px;
-                    opacity: 0.05;
-                    z-index: 1;
-                    pointer-events: none;
-                ">⚙️</div>
+        <div class="sheet-tabs">
+            <div class="sheet-tab active" onclick="BoatOS.ui.showSection('route', this)">Route</div>
+            <div class="sheet-tab" onclick="BoatOS.ui.showSection('weather', this)">Wetter</div>
+            <div class="sheet-tab" onclick="BoatOS.ui.showSection('logbook', this)">Logbuch</div>
+            <div class="sheet-tab" onclick="BoatOS.ui.showSection('ais', this)">AIS</div>
+            <div class="sheet-tab" onclick="BoatOS.ui.showSection('locks', this)">Schleusen</div>
+        </div>
 
-                <!-- Settings Tabs (Floating over content) -->
-                <div class="settings-tabs" style="margin-bottom: 30px; position: relative; z-index: 10;">
-                    <button class="settings-tab active" onclick="switchSettingsTab('general')" data-i18n="settings_general">Allgemein</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('boat')" data-i18n="settings_boat">Boot</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('charts')" data-i18n="settings_charts">Karten</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('navigation')" data-i18n="settings_navigation">Navigation</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('gps')" data-i18n="settings_gps">GPS</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('weather')" data-i18n="settings_weather">Wetter</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('sensors')" data-i18n="settings_sensors">Sensoren</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('dashboard')">📊 Dashboard</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('ais')" data-i18n="settings_ais">AIS</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('routing')" data-i18n="settings_routing">Routing</button>
-                    <button class="settings-tab" onclick="switchSettingsTab('data')" data-i18n="settings_data">Daten</button>
+        <div class="sheet-content">
+            <!-- ROUTE SECTION -->
+            <div id="section-route">
+                <div class="route-header">
+                    <span style="font-size: 16px; font-weight: 600;">Aktuelle Route</span>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="icon-btn" id="btn-start-nav" style="width: 36px; height: 36px; font-size: 18px; background: var(--success); color: white;" onclick="BoatOS.toggleNavigation()" title="Navigation starten">▶️</button>
+                        <button class="icon-btn" style="width: 32px; height: 32px; font-size: 14px;" onclick="BoatOS.editRoute()" title="Route bearbeiten">✏️</button>
+                        <button class="icon-btn" style="width: 32px; height: 32px; font-size: 14px;" onclick="BoatOS.clearRoute()" title="Route löschen">🗑️</button>
+                    </div>
                 </div>
 
-                <!-- Tab Content -->
-                <div class="settings-content">
-                    
-                    <!-- General Tab -->
-                    <div id="settings-general" class="settings-tab-content active">
-                        <h3 data-i18n="general_settings">Allgemeine Einstellungen</h3>
-
-                        <div class="setting-item">
-                            <label data-i18n="setting_language">Sprache / Language</label>
-                            <select id="setting-language">
-                                <option value="de">🇩🇪 Deutsch</option>
-                                <option value="en">🇬🇧 English</option>
-                            </select>
-                        </div>
-
-                        <div class="setting-item">
-                            <label data-i18n="setting_theme">Theme</label>
-                            <select id="setting-theme">
-                                <option value="auto" data-i18n="theme_auto">Automatisch (System)</option>
-                                <option value="light" data-i18n="theme_light">Hell</option>
-                                <option value="dark" data-i18n="theme_dark">Dunkel</option>
-                                <option value="night" data-i18n="theme_night">Nacht (Rot)</option>
-                            </select>
-                        </div>
-
-                        <h3 style="margin-top: 25px; margin-bottom: 15px; color: #8892b0;" data-i18n="units_title">📏 Einheiten</h3>
-
-                        <div class="setting-item">
-                            <label data-i18n="unit_speed">Geschwindigkeit</label>
-                            <select id="setting-speed-unit">
-                                <option value="kn">Knoten (kn)</option>
-                                <option value="kmh">km/h</option>
-                                <option value="mph">mph</option>
-                                <option value="ms">m/s</option>
-                            </select>
-                        </div>
-
-                        <div class="setting-item">
-                            <label data-i18n="unit_distance">Distanz / Entfernung</label>
-                            <select id="setting-distance-unit">
-                                <option value="nm">Nautische Meilen (NM)</option>
-                                <option value="km">Kilometer (km)</option>
-                                <option value="mi">Meilen (mi)</option>
-                                <option value="m">Meter (m)</option>
-                            </select>
-                        </div>
-
-                        <div class="setting-item">
-                            <label data-i18n="unit_depth">Tiefe</label>
-                            <select id="setting-depth-unit">
-                                <option value="m">Meter (m)</option>
-                                <option value="ft">Fuß (ft)</option>
-                                <option value="fathom">Faden (fathom)</option>
-                            </select>
-                        </div>
-
-                        <div class="setting-item">
-                            <label data-i18n="unit_temperature">Temperatur</label>
-                            <select id="setting-temperature-unit">
-                                <option value="c">Celsius (°C)</option>
-                                <option value="f">Fahrenheit (°F)</option>
-                            </select>
-                        </div>
-
-                        <div class="setting-item">
-                            <label data-i18n="unit_pressure">Luftdruck</label>
-                            <select id="setting-pressure-unit">
-                                <option value="hpa">Hektopascal (hPa)</option>
-                                <option value="mbar">Millibar (mbar)</option>
-                                <option value="inhg">Inches Mercury (inHg)</option>
-                            </select>
-                        </div>
-
-                        <h3 style="margin-top: 25px; margin-bottom: 15px; color: #8892b0;" data-i18n="formats_title">🌍 Formate</h3>
-
-                        <div class="setting-item">
-                            <label data-i18n="format_coordinates">Koordinaten-Format</label>
-                            <select id="setting-coordinate-format">
-                                <option value="decimal">Dezimalgrad (51.616202, 12.487243)</option>
-                                <option value="dm">Grad/Minuten (51° 36.972', 12° 29.234')</option>
-                                <option value="dms">Grad/Minuten/Sekunden (51° 36' 58.3", 12° 29' 14.0")</option>
-                            </select>
-                        </div>
-
-                        <div class="setting-item">
-                            <label data-i18n="format_date">Datumsformat</label>
-                            <select id="setting-date-format">
-                                <option value="dd.mm.yyyy">DD.MM.YYYY (31.12.2025)</option>
-                                <option value="mm/dd/yyyy">MM/DD/YYYY (12/31/2025)</option>
-                                <option value="yyyy-mm-dd">YYYY-MM-DD (2025-12-31)</option>
-                                <option value="iso">ISO 8601 (2025-12-31T23:59:59)</option>
-                            </select>
-                        </div>
+                <div class="route-summary">
+                    <div class="route-stat">
+                        <div class="value" id="route-distance">--</div>
+                        <div class="label">NM</div>
                     </div>
-
-                    <!-- Boat Tab -->
-                    <div id="settings-boat" class="settings-tab-content">
-                        <h3 data-i18n="boat_settings">🚤 Boot-Einstellungen</h3>
-
-                        <div class="setting-item" style="background: rgba(100, 255, 218, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                            <h4 style="margin-top: 0;" data-i18n="boat_specs_title">Boot-Spezifikationen</h4>
-                            <small data-i18n="boat_specs_desc">Diese Daten werden für Routenplanung und Verbrauchsberechnung verwendet</small>
-                        </div>
-
-                        <div class="setting-item">
-                            <label data-i18n="boat_name">Bootsname</label>
-                            <input type="text" id="setting-boat-name" placeholder="z.B. Meine Yacht">
-                            <small data-i18n="boat_name_desc">Name Ihres Bootes (optional)</small>
-                        </div>
-
-                        <div class="setting-item">
-                            <label data-i18n="boat_icon">Bootsicon für Positionsmarker</label>
-                            <div id="boat-icon-selector" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 10px;">
-                                <div class="boat-icon-option" data-icon="motorboat_small" onclick="selectBoatIcon('motorboat_small')" style="cursor: pointer; padding: 10px; border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; text-align: center; transition: all 0.3s; background: rgba(42, 82, 152, 0.1);">
-                                    <div id="icon-preview-motorboat_small" style="display: flex; justify-content: center; align-items: center; height: 48px;"></div>
-                                    <small style="display: block; margin-top: 5px; color: #8892b0; font-size: 11px;">Kleines Motorboot</small>
-                                </div>
-                                <div class="boat-icon-option" data-icon="motorboat_large" onclick="selectBoatIcon('motorboat_large')" style="cursor: pointer; padding: 10px; border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; text-align: center; transition: all 0.3s; background: rgba(42, 82, 152, 0.1);">
-                                    <div id="icon-preview-motorboat_large" style="display: flex; justify-content: center; align-items: center; height: 48px;"></div>
-                                    <small style="display: block; margin-top: 5px; color: #8892b0; font-size: 11px;">Großes Motorboot</small>
-                                </div>
-                                <div class="boat-icon-option" data-icon="yacht" onclick="selectBoatIcon('yacht')" style="cursor: pointer; padding: 10px; border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; text-align: center; transition: all 0.3s; background: rgba(42, 82, 152, 0.1);">
-                                    <div id="icon-preview-yacht" style="display: flex; justify-content: center; align-items: center; height: 48px;"></div>
-                                    <small style="display: block; margin-top: 5px; color: #8892b0; font-size: 11px;">Yacht</small>
-                                </div>
-                                <div class="boat-icon-option" data-icon="yacht_luxury" onclick="selectBoatIcon('yacht_luxury')" style="cursor: pointer; padding: 10px; border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; text-align: center; transition: all 0.3s; background: rgba(42, 82, 152, 0.1);">
-                                    <div id="icon-preview-yacht_luxury" style="display: flex; justify-content: center; align-items: center; height: 48px;"></div>
-                                    <small style="display: block; margin-top: 5px; color: #8892b0; font-size: 11px;">Luxusyacht</small>
-                                </div>
-                                <div class="boat-icon-option" data-icon="sailboat" onclick="selectBoatIcon('sailboat')" style="cursor: pointer; padding: 10px; border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; text-align: center; transition: all 0.3s; background: rgba(42, 82, 152, 0.1);">
-                                    <div id="icon-preview-sailboat" style="display: flex; justify-content: center; align-items: center; height: 48px;"></div>
-                                    <small style="display: block; margin-top: 5px; color: #8892b0; font-size: 11px;">Segelboot</small>
-                                </div>
-                            </div>
-                            <small data-i18n="boat_icon_desc">Wähle das Icon für deinen Positionsmarker auf der Karte</small>
-                        </div>
-
-                        <div class="setting-item">
-                            <label data-i18n="boat_type">Bootstyp</label>
-                            <select id="setting-boat-type">
-                                <option value="motorboat" data-i18n="boat_type_motorboat">Motorboot</option>
-                                <option value="sailboat" data-i18n="boat_type_sailboat">Segelboot</option>
-                                <option value="yacht" data-i18n="boat_type_yacht">Yacht</option>
-                                <option value="cabin_cruiser" data-i18n="boat_type_cabin_cruiser">Kabinenkreuzer</option>
-                                <option value="other" data-i18n="boat_type_other">Sonstiges</option>
-                            </select>
-                        </div>
-
-                        <div class="setting-item">
-                            <label data-i18n="boat_length">Bootslänge</label>
-                            <input type="number" id="setting-boat-length" placeholder="10.5" step="0.1" min="0">
-                            <small data-i18n="boat_length_desc">Gesamtlänge des Bootes (Meter)</small>
-                        </div>
-
-                        <div class="setting-item">
-                            <label data-i18n="boat_beam">Bootsbreite (Beam)</label>
-                            <input type="number" id="setting-boat-beam" placeholder="3.2" step="0.1" min="0">
-                            <small data-i18n="boat_beam_desc">Maximale Breite des Bootes (Meter)</small>
-                        </div>
-
-                        <div class="setting-item">
-                            <label data-i18n="boat_draft">Tiefgang</label>
-                            <input type="number" id="setting-boat-draft" placeholder="0.8" step="0.1" min="0">
-                            <small data-i18n="boat_draft_desc">Tiefe des Bootes unter der Wasserlinie (Meter)</small>
-                        </div>
-
-                        <div class="setting-item">
-                            <label data-i18n="boat_height">Höhe über Wasserlinie</label>
-                            <input type="number" id="setting-boat-height" placeholder="2.5" step="0.1" min="0">
-                            <small data-i18n="boat_height_desc">Maximale Höhe über der Wasserlinie (Meter) - wichtig für Brücken</small>
-                        </div>
-
-                        <div class="setting-item">
-                            <label data-i18n="boat_fuel_consumption">Kraftstoffverbrauch</label>
-                            <input type="number" id="setting-boat-fuel-consumption" placeholder="8.5" step="0.1" min="0">
-                            <small data-i18n="boat_fuel_consumption_desc">Durchschnittlicher Verbrauch bei Reisegeschwindigkeit (Liter/Stunde)</small>
-                        </div>
-
-                        <div class="setting-item">
-                            <label data-i18n="boat_fuel_capacity">Tankinhalt</label>
-                            <input type="number" id="setting-boat-fuel-capacity" placeholder="200" step="1" min="0">
-                            <small data-i18n="boat_fuel_capacity_desc">Gesamtkapazität des Kraftstofftanks (Liter)</small>
-                        </div>
-
-                        <div class="setting-item">
-                            <label data-i18n="boat_cruise_speed">Reisegeschwindigkeit</label>
-                            <input type="number" id="setting-boat-cruise-speed" placeholder="15" step="0.5" min="0">
-                            <small data-i18n="boat_cruise_speed_desc">Typische Geschwindigkeit für Routenplanung (km/h)</small>
-                        </div>
-
-                        <div class="setting-item" style="margin-top: 20px; padding: 15px; background: rgba(52, 152, 219, 0.1); border-radius: 8px;">
-                            <h4 style="margin-top: 0;" data-i18n="boat_routing_info_title">ℹ️ Routing-Optimierung</h4>
-                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7;">
-                                <span data-i18n="boat_routing_info_desc">Ihre Boot-Spezifikationen werden für die Routenplanung verwendet:</span>
-                            </p>
-                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px; white-space: pre-line;" data-i18n="boat_routing_info_features">• Tiefgang → Vermeidung flacher Gewässer
-• Höhe → Vermeidung niedriger Brücken
-• Breite → Vermeidung enger Kanäle
-• Verbrauch → Reichweiten-Berechnung</p>
-                        </div>
+                    <div class="route-stat">
+                        <div class="value" id="route-time">--:--</div>
+                        <div class="label">Zeit</div>
                     </div>
-
-                    <!-- Charts Tab -->
-                    <div id="settings-charts" class="settings-tab-content">
-                        <h3 data-i18n="charts_manager">📊 Karten-Manager</h3>
-
-                        <!-- Charts List -->
-                        <div id="charts-list" style="margin-bottom: 20px; max-height: 300px; overflow-y: auto; background: rgba(42, 82, 152, 0.1); padding: 15px; border-radius: 8px;"></div>
-
-                        <!-- ENC Download Section -->
-                        <div class="upload-section" style="background: rgba(42, 82, 152, 0.2); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                            <h3 style="margin-bottom: 15px; color: #8892b0; font-size: 16px;" data-i18n="elwis_enc_download">ELWIS ENC herunterladen</h3>
-                            <div class="enc-buttons" style="display: flex; gap: 10px; margin-bottom: 15px;">
-                                <button onclick="loadENCCatalog()" style="padding: 10px 15px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: #fff; cursor: pointer; background: rgba(100, 255, 218, 0.2); border-color: #64ffda; color: #64ffda; transition: all 0.3s;" data-i18n="load_catalog">Katalog laden</button>
-                                <button onclick="selectAllENC()" style="padding: 10px 15px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: #fff; cursor: pointer; background: rgba(255, 255, 255, 0.1); transition: all 0.3s;" data-i18n="select_all">Alle</button>
-                                <button onclick="deselectAllENC()" style="padding: 10px 15px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: #fff; cursor: pointer; background: rgba(255, 255, 255, 0.1); transition: all 0.3s;" data-i18n="select_none">Keine</button>
-                            </div>
-                            <div id="enc-catalog-list" style="max-height: 400px; overflow-y: auto; margin-bottom: 15px; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 6px;">
-                                <div style="color: #8892b0; text-align: center; padding: 20px;" data-i18n="click_load_catalog">Klicke "Katalog laden" um verfügbare Gewässer zu sehen</div>
-                            </div>
-                            <button class="upload-btn" onclick="downloadSelectedENC()" id="download-enc-btn" disabled style="width: 100%; padding: 12px; background: linear-gradient(135deg, #2ecc71, #27ae60); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; transition: all 0.3s;" data-i18n="download_selected">Ausgewählte herunterladen</button>
-                            <div id="enc-download-status" style="margin-top: 10px; font-size: 12px; color: #64ffda;"></div>
-                        </div>
-
-                        <!-- Upload Section -->
-                        <div class="upload-section" style="background: rgba(42, 82, 152, 0.2); padding: 20px; border-radius: 8px;">
-                            <h3 style="margin-bottom: 15px; color: #8892b0; font-size: 16px;" data-i18n="upload_chart">Karte hochladen</h3>
-                            <input type="file" id="chart-file-input" accept=".kap,.zip,.mbtiles,.tif,.tiff,.000" multiple style="display: none;" onchange="updateFileInfo()">
-                            <input type="file" id="chart-folder-input" accept=".kap,.zip,.mbtiles,.tif,.tiff,.000" webkitdirectory directory multiple style="display: none;" onchange="updateFileInfo()">
-                            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                                <button onclick="document.getElementById('chart-file-input').click()" style="flex: 1; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: #fff; cursor: pointer;" data-i18n="select_files">📄 Dateien wählen</button>
-                                <button onclick="document.getElementById('chart-folder-input').click()" style="flex: 1; padding: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: #fff; cursor: pointer;" data-i18n="select_folder">📁 Ordner wählen</button>
-                            </div>
-                            <div id="selected-files-info" style="margin-bottom: 10px; font-size: 12px; color: #8892b0;"></div>
-                            <input type="text" id="chart-name-input" placeholder="Karten-Name (optional)" data-i18n-placeholder="chart_name_optional" style="width: 100%; padding: 10px; margin-bottom: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff;">
-                            <button class="upload-btn" onclick="uploadChart()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #2ecc71, #27ae60); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; transition: all 0.3s;" data-i18n="upload">📤 Hochladen</button>
-                            <div style="margin-top: 10px; font-size: 12px; color: #8892b0;" data-i18n="supported_formats">Unterstützt: KAP, ENC (.000), ZIP (Tiles), MBTiles, GeoTIFF</div>
-                        </div>
+                    <div class="route-stat">
+                        <div class="value" id="route-locks">0</div>
+                        <div class="label">Schleusen</div>
                     </div>
-                    <!-- Navigation Tab -->
-                    <div id="settings-navigation" class="settings-tab-content">
-                        <h3>Navigations-Einstellungen</h3>
+                    <div class="route-stat">
+                        <div class="value" id="route-eta">--:--</div>
+                        <div class="label">ETA</div>
+                    </div>
+                </div>
 
-                        <div class="setting-item">
-                            <label>Karten-Ausrichtung</label>
-                            <select id="setting-map-orientation">
-                                <option value="north-up">North-Up (Norden oben)</option>
-                                <option value="course-up">Course-Up (Kurs oben)</option>
-                            </select>
+                <div class="waypoint-list" id="waypointList">
+                    <div style="text-align: center; padding: 20px; color: var(--text-dim);">
+                        Keine Route geplant.<br>
+                        <small>Klicke auf die Karte um Wegpunkte hinzuzufügen.</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WEATHER SECTION -->
+            <div id="section-weather" class="section-hidden">
+                <div class="weather-current">
+                    <div class="weather-icon" id="weather-icon">🌤️</div>
+                    <div class="weather-main">
+                        <div class="weather-temp" id="weather-temp">--°C</div>
+                        <div class="weather-desc" id="weather-desc">Laden...</div>
+                        <div class="weather-location" id="weather-location">📍 --</div>
+                    </div>
+                </div>
+
+                <div class="weather-details">
+                    <div class="weather-detail">
+                        <div class="icon">💨</div>
+                        <div class="value" id="weather-wind">--</div>
+                        <div class="label" id="weather-wind-label">Wind (kn)</div>
+                    </div>
+                    <div class="weather-detail">
+                        <div class="icon">🧭</div>
+                        <div class="value" id="weather-wind-dir">--</div>
+                        <div class="label">Richtung</div>
+                    </div>
+                    <div class="weather-detail">
+                        <div class="icon">💧</div>
+                        <div class="value" id="weather-humidity">--%</div>
+                        <div class="label">Feuchte</div>
+                    </div>
+                    <div class="weather-detail">
+                        <div class="icon">📊</div>
+                        <div class="value" id="weather-pressure">--</div>
+                        <div class="label">hPa</div>
+                    </div>
+                </div>
+
+                <div class="forecast-title">Vorhersage</div>
+                <div class="forecast-list" id="forecast-list">
+                    <!-- Forecast items loaded dynamically -->
+                </div>
+            </div>
+
+            <!-- LOGBOOK SECTION -->
+            <div id="section-logbook" class="section-hidden">
+                <div class="logbook-tabs">
+                    <div class="logbook-tab active" onclick="BoatOS.showLogbookTab('current', this)">Aktuelle Fahrt</div>
+                    <div class="logbook-tab" onclick="BoatOS.showLogbookTab('archive', this)">Archiv</div>
+                </div>
+
+                <!-- AKTUELLE FAHRT TAB -->
+                <div class="logbook-tab-content active" id="logbook-tab-current">
+                    <div class="current-trip" id="currentTrip">
+                        <!-- Recording Indicator -->
+                        <div id="recording-indicator-new" style="display: none; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger); border-radius: 12px; padding: 10px; margin-bottom: 12px; display: none; align-items: center; gap: 10px;">
+                            <div style="width: 12px; height: 12px; background: var(--danger); border-radius: 50%; animation: pulse 1.5s infinite;"></div>
+                            <span style="color: var(--danger); font-weight: 600;">Aufzeichnung läuft</span>
+                            <span id="trip-duration" style="margin-left: auto; font-variant-numeric: tabular-nums;">00:00:00</span>
                         </div>
 
-                        <div class="setting-item">
-                            <label>GPS-Track-Historie anzeigen</label>
-                            <select id="setting-show-track-history">
-                                <option value="true">An</option>
-                                <option value="false">Aus</option>
-                            </select>
-                        </div>
-
-                        <div class="setting-item">
-                            <button onclick="clearTrackHistory()" style="padding: 10px 20px; background: rgba(231, 76, 60, 0.8); border: none; border-radius: 6px; color: white; cursor: pointer;">
-                                🗑️ Track-Historie löschen
-                            </button>
-                        </div>
-
-                        <div class="setting-item">
-                            <label>Kompass-Rose anzeigen</label>
-                            <select id="setting-show-compass-rose">
-                                <option value="true">An</option>
-                                <option value="false">Aus</option>
-                            </select>
-                        </div>
-
-                        <h3 style="margin-top: 30px; margin-bottom: 15px;">🏗️ Infrastruktur-Layer</h3>
-
-                        <div class="setting-item">
-                            <label>
-                                <input type="checkbox" id="setting-infrastructure-enabled">
-                                Infrastruktur auf Karte anzeigen
-                            </label>
-                            <small>Zeigt Schleusen, Brücken, Häfen und andere Wasserstraßen-Infrastruktur aus OpenStreetMap</small>
-                        </div>
-
-                        <div class="setting-item">
-                            <label>Anzeigen:</label>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
-                                <label style="display: flex; align-items: center; gap: 8px;">
-                                    <input type="checkbox" id="setting-infrastructure-locks" checked>
-                                    <span>🔒 Schleusen</span>
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 8px;">
-                                    <input type="checkbox" id="setting-infrastructure-bridges" checked>
-                                    <span>🌉 Brücken</span>
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 8px;">
-                                    <input type="checkbox" id="setting-infrastructure-harbors" checked>
-                                    <span>⚓ Häfen/Marinas</span>
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 8px;">
-                                    <input type="checkbox" id="setting-infrastructure-weirs">
-                                    <span>〰️ Wehre</span>
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 8px;">
-                                    <input type="checkbox" id="setting-infrastructure-dams">
-                                    <span>🏗️ Dämme</span>
-                                </label>
+                        <div class="trip-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <div>
+                                <div class="trip-title" id="trip-title" style="font-size: 16px; font-weight: 600;">Keine aktive Fahrt</div>
+                                <div class="trip-status" id="trip-status" style="font-size: 12px; color: var(--text-dim);">Bereit zum Starten</div>
+                            </div>
+                            <div id="trip-paused-badge" style="display: none; background: var(--warning); color: white; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;">
+                                ⏸️ PAUSIERT
                             </div>
                         </div>
 
-                        <h3 style="margin-top: 30px; margin-bottom: 15px;">📊 Wasserstands-Pegel</h3>
-
-                        <div class="setting-item">
-                            <label>
-                                <input type="checkbox" id="setting-waterLevel-enabled">
-                                Wasserstands-Pegel auf Karte anzeigen
-                            </label>
-                            <small>Zeigt aktuelle Wasserstände von PEGELONLINE (Deutsche Wasserstraßen) - Update alle 15 Minuten</small>
-                        </div>
-                    </div>
-
-                    <!-- GPS Tab -->
-                    <div id="settings-gps" class="settings-tab-content">
-                        <h3>GPS-Einstellungen</h3>
-
-                        <div class="setting-item">
-                            <label>SignalK Server URL</label>
-                            <input type="text" id="setting-signalk-url" value="http://localhost:3000">
-                        </div>
-
-                        <div class="setting-item">
-                            <label>GPS-Status Wartezeit bei wenig Satelliten (Sekunden)</label>
-                            <input type="number" id="setting-low-satellite-threshold" min="5" max="60" value="15" step="5">
-                            <small>Zeit, die weniger als 4 Satelliten empfangen werden müssen, bevor der GPS-Status auf "nicht verbunden" wechselt (verhindert Blinken)</small>
-                        </div>
-                    </div>
-
-                    <!-- Weather Tab -->
-                    <div id="settings-weather" class="settings-tab-content">
-                        <h3>Wetter-Einstellungen</h3>
-                        
-                        <div class="setting-item">
-                            <label>Wetter Update-Intervall (Minuten)</label>
-                            <input type="number" id="setting-weather-interval" min="5" max="120" value="30">
-                        </div>
-                    </div>
-
-                    <!-- Sensors Tab -->
-                    <div id="settings-sensors" class="settings-tab-content">
-                        <!-- Sensor cards and MQTT connection card will be rendered here by settings_renderer.js -->
-                    </div>
-
-                    <!-- Dashboard Tab -->
-                    <div id="settings-dashboard" class="settings-tab-content">
-                        <!-- Dashboard layout editor will be rendered here by settings_renderer.js -->
-                    </div>
-
-                    <!-- AIS Tab -->
-                    <div id="settings-ais" class="settings-tab-content">
-                        <h3>🚢 AIS-Einstellungen</h3>
-
-                        <div class="setting-item">
-                            <label>
-                                <input type="checkbox" id="setting-ais-enabled">
-                                AIS-Integration aktivieren
-                            </label>
-                        </div>
-
-                        <div class="setting-item">
-                            <label>AIS-Datenquelle</label>
-                            <select id="setting-ais-provider" onchange="updateAISKeyVisibility()" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white;">
-                                <option value="aisstream">AISStream (kostenlos, API-Key erforderlich)</option>
-                                <option value="aishub">AISHub (API-Key erforderlich)</option>
-                            </select>
-                            <small style="color: #7f8c8d; display: block; margin-top: 5px;">
-                                ℹ️ AISStream: Kostenlos bei <a href="https://aisstream.io" target="_blank" style="color: #3498db;">aisstream.io</a> registrieren
-                            </small>
-                        </div>
-
-                        <div class="setting-item" id="ais-api-key-field">
-                            <label>API-Key</label>
-                            <input type="text" id="setting-ais-api-key" placeholder="API-Key hier eingeben">
-                            <small style="color: #7f8c8d; display: block; margin-top: 5px;">
-                                📌 Erforderlich für beide Provider
-                            </small>
-                        </div>
-
-                        <div class="setting-item" style="margin-top: 20px; padding: 15px; background: rgba(52, 152, 219, 0.1); border-radius: 8px;">
-                            <h4 style="margin-top: 0;">ℹ️ AIS-Integration</h4>
-                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7;">
-                                <strong>Was ist AIS?</strong><br>
-                                AIS (Automatic Identification System) zeigt Positionen und Details anderer Schiffe in Echtzeit auf der Karte.
-                            </p>
-                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px;">
-                                <strong>Funktionen:</strong><br>
-                                • Schiffspositionen als Icons auf der Karte<br>
-                                • Schiffsdetails (Name, MMSI, Kurs, Geschwindigkeit)<br>
-                                • Navigationsstatus (unterwegs, vor Anker, etc.)<br>
-                                • Auto-Update alle 60 Sekunden
-                            </p>
-                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px;">
-                                <strong>🔵 AISStream:</strong> Kostenlos, WebSocket-basiert, weltweite Abdeckung<br>
-                                <strong>🟡 AISHub:</strong> Benötigt API-Key (Registrierung erforderlich)
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- Routing Tab -->
-                    <div id="settings-routing" class="settings-tab-content">
-                        <h3>🛤️ Routing-Einstellungen</h3>
-
-                        <div class="setting-item">
-                            <label>Routing-Methode</label>
-                            <select id="setting-routing-provider" onchange="updateRoutingProviderVisibility()">
-                                <option value="osrm">OSRM (Lokal, Offline)</option>
-                                <option value="graphhopper">GraphHopper (Cloud API)</option>
-                                <option value="direct">Direkte Linie (Rhumbline)</option>
-                            </select>
-                            <small style="color: #7f8c8d; display: block; margin-top: 5px;">
-                                Wähle die Methode zur Routenberechnung
-                            </small>
-                        </div>
-
-                        <!-- OSRM Settings -->
-                        <div id="osrm-url-field" class="setting-item">
-                            <label>OSRM Server-URL</label>
-                            <input type="text" id="setting-osrm-url" placeholder="http://localhost:5000">
-                            <small style="color: #7f8c8d; display: block; margin-top: 5px;">
-                                URL des lokalen OSRM-Servers
-                            </small>
-                        </div>
-
-                        <!-- OSRM Region Switching -->
-                        <div id="osrm-region-field" class="setting-item" style="background: rgba(100, 255, 218, 0.1); padding: 15px; border-radius: 8px;">
-                            <h4 style="margin-top: 0; color: #64ffda;">🗺️ OSRM Region</h4>
-                            <small style="color: #8892b0; display: block; margin-bottom: 15px;">
-                                Wähle die geladene Karten-Region für OSRM-Routing
-                            </small>
-
-                            <div style="margin-bottom: 15px;">
-                                <label style="font-size: 13px; color: #8892b0; margin-bottom: 5px; display: block;">Aktuelle Region:</label>
-                                <div id="current-region-display" style="
-                                    padding: 10px 15px;
-                                    background: rgba(42, 82, 152, 0.3);
-                                    border: 2px solid rgba(100, 255, 218, 0.3);
-                                    border-radius: 6px;
-                                    color: #64ffda;
-                                    font-weight: 600;
-                                    font-size: 14px;
-                                ">
-                                    <span id="current-region-name">Lade...</span>
-                                    <span id="region-status" style="margin-left: 10px; font-size: 12px; opacity: 0.8;"></span>
-                                </div>
+                        <!-- Track Stats -->
+                        <div class="trip-stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px;">
+                            <div class="trip-stat" style="background: var(--bg-card); padding: 12px; border-radius: 12px; text-align: center;">
+                                <div class="value" id="trip-points" style="font-size: 20px; font-weight: 700; color: var(--accent);">0</div>
+                                <div class="label" style="font-size: 10px; color: var(--text-dim);">Punkte</div>
                             </div>
-
-                            <div style="margin-bottom: 10px;">
-                                <label style="font-size: 13px; color: #8892b0; margin-bottom: 5px; display: block;">Verfügbare Regionen:</label>
-                                <select id="region-selector" style="
-                                    width: 100%;
-                                    padding: 10px;
-                                    background: rgba(42, 82, 152, 0.2);
-                                    border: 2px solid rgba(42, 82, 152, 0.4);
-                                    border-radius: 6px;
-                                    color: white;
-                                    font-size: 14px;
-                                ">
-                                    <option value="">Lade Regionen...</option>
-                                </select>
+                            <div class="trip-stat" style="background: var(--bg-card); padding: 12px; border-radius: 12px; text-align: center;">
+                                <div class="value" id="trip-distance" style="font-size: 20px; font-weight: 700; color: var(--accent);">--</div>
+                                <div class="label" id="trip-dist-label" style="font-size: 10px; color: var(--text-dim);">NM</div>
                             </div>
+                            <div class="trip-stat" style="background: var(--bg-card); padding: 12px; border-radius: 12px; text-align: center;">
+                                <div class="value" id="trip-time" style="font-size: 20px; font-weight: 700; color: var(--accent);">--:--</div>
+                                <div class="label" style="font-size: 10px; color: var(--text-dim);">Dauer</div>
+                            </div>
+                            <div class="trip-stat" style="background: var(--bg-card); padding: 12px; border-radius: 12px; text-align: center;">
+                                <div class="value" id="trip-avg-speed" style="font-size: 20px; font-weight: 700; color: var(--accent);">--</div>
+                                <div class="label" id="trip-speed-label" style="font-size: 10px; color: var(--text-dim);">Ø kn</div>
+                            </div>
+                        </div>
 
-                            <button id="switch-region-btn" onclick="switchOSRMRegion()" style="
-                                width: 100%;
-                                padding: 12px;
-                                background: linear-gradient(135deg, #667eea, #764ba2);
-                                border: none;
-                                border-radius: 6px;
-                                color: white;
-                                font-size: 14px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                transition: all 0.3s;
-                            " onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                                🔄 Region wechseln
+                        <!-- Control Buttons -->
+                        <div class="trip-controls" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <!-- Start Button (shown when not recording) -->
+                            <button id="btn-start-trip" onclick="BoatOS.startTrip()" style="flex: 1; min-width: 120px; padding: 14px; border: none; border-radius: 12px; background: var(--success); color: white; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                🚢 Fahrt starten
                             </button>
 
-                            <div id="region-switch-status" style="
-                                margin-top: 10px;
-                                padding: 10px;
-                                border-radius: 6px;
-                                font-size: 13px;
-                                display: none;
-                            "></div>
-                        </div>
+                            <!-- Stop Button (shown when recording) -->
+                            <button id="btn-stop-trip" onclick="BoatOS.stopTrip()" style="flex: 1; min-width: 120px; padding: 14px; border: none; border-radius: 12px; background: var(--danger); color: white; font-size: 14px; font-weight: 600; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 8px;">
+                                ⚓ Beenden
+                            </button>
 
-                        <!-- GraphHopper Settings -->
-                        <div id="graphhopper-api-key-field" class="setting-item">
-                            <label>GraphHopper API-Key</label>
-                            <input type="text" id="setting-graphhopper-api-key" placeholder="Kostenlos auf graphhopper.com">
-                            <small style="color: #7f8c8d; display: block; margin-top: 5px;">
-                                🌊 Für Cloud-basierte Routen (500 Anfragen/Tag kostenlos)<br>
-                                🔗 API-Key bei <a href="https://graphhopper.com/" target="_blank" style="color: #64ffda;">graphhopper.com</a> registrieren
-                            </small>
-                        </div>
+                            <!-- Pause Button (shown when recording and not paused) -->
+                            <button id="btn-pause-trip" onclick="BoatOS.pauseTrip()" style="padding: 14px 18px; border: none; border-radius: 12px; background: var(--warning); color: white; font-size: 14px; font-weight: 600; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 6px;" title="Pause / Ankern">
+                                ⏸️ Pause
+                            </button>
 
-                        <!-- OSRM Info Box -->
-                        <div id="osrm-info-box" class="setting-item" style="margin-top: 20px; padding: 15px; background: rgba(46, 204, 113, 0.1); border-radius: 8px;">
-                            <h4 style="margin-top: 0;">🚀 OSRM Routing (Empfohlen)</h4>
-                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7;">
-                                <strong>Was ist OSRM?</strong><br>
-                                Open Source Routing Machine - Lokaler Routing-Server auf dem Raspberry Pi, der speziell für Wasserwege konfiguriert ist.
-                            </p>
-                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px;">
-                                <strong>Vorteile:</strong><br>
-                                ⚡ Blitzschnell (< 100ms)<br>
-                                🌊 Folgt echten Wasserwegen (Flüsse, Kanäle, Fairways)<br>
-                                📡 Komplett offline<br>
-                                ♾️ Unbegrenzte Anfragen<br>
-                                🆓 Kostenlos
-                            </p>
-                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px;">
-                                <strong>Installation:</strong><br>
-                                OSRM kann auf dem Raspberry Pi installiert werden. Nach der Installation wird es automatisch beim Booten gestartet.
-                            </p>
-                        </div>
+                            <!-- Resume Button (shown when paused) -->
+                            <button id="btn-resume-trip" onclick="BoatOS.resumeTrip()" style="padding: 14px 18px; border: none; border-radius: 12px; background: var(--success); color: white; font-size: 14px; font-weight: 600; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 6px;" title="Weiterfahren">
+                                ▶️ Weiter
+                            </button>
 
-                        <!-- GraphHopper Info Box -->
-                        <div id="graphhopper-info-box" class="setting-item" style="margin-top: 20px; padding: 15px; background: rgba(52, 152, 219, 0.1); border-radius: 8px;">
-                            <h4 style="margin-top: 0;">☁️ GraphHopper Routing</h4>
-                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7;">
-                                <strong>Was ist GraphHopper?</strong><br>
-                                Cloud-basierter Routing-Service über API.
-                            </p>
-                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px;">
-                                <strong>Hinweis:</strong><br>
-                                ⚠️ Kostenlose Version routet über Land, nicht über Wasserwege<br>
-                                📶 Benötigt Internetverbindung<br>
-                                🔢 Begrenzt auf 500 Anfragen/Tag
-                            </p>
-                        </div>
-
-                        <!-- Direct Line Info Box -->
-                        <div id="direct-info-box" class="setting-item" style="margin-top: 20px; padding: 15px; background: rgba(155, 89, 182, 0.1); border-radius: 8px;">
-                            <h4 style="margin-top: 0;">📏 Direkte Linie (Rhumbline)</h4>
-                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7;">
-                                <strong>Einfachste Methode:</strong><br>
-                                Berechnet direkte Linien zwischen Wegpunkten ohne Wasserwege zu berücksichtigen.
-                            </p>
-                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px;">
-                                ✅ Funktioniert immer<br>
-                                📡 Offline<br>
-                                ⚠️ Ignoriert Wasserwege und Hindernisse
-                            </p>
-                        </div>
-
-                        <!-- Water Current Settings -->
-                        <h3 style="margin-top: 30px; margin-bottom: 15px;">🌊 Fließgeschwindigkeiten</h3>
-
-                        <div class="setting-item">
-                            <label>
-                                <input type="checkbox" id="setting-water-current-enabled">
-                                Strömung bei Routenberechnung berücksichtigen
-                            </label>
-                            <small>Berücksichtigt Fließgeschwindigkeiten von Flüssen und Gewässern für genauere ETA-Berechnungen</small>
-                        </div>
-
-                        <div class="setting-item" style="background: rgba(52, 152, 219, 0.1); padding: 15px; border-radius: 8px;">
-                            <h4 style="margin-top: 0; color: #64ffda;">Gewässer-spezifische Fließgeschwindigkeiten (km/h)</h4>
-                            <small style="color: #8892b0; display: block; margin-bottom: 15px;">Typische Fließgeschwindigkeiten für Hauptgewässer</small>
-
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                                <div>
-                                    <label style="font-size: 13px; color: #8892b0; margin-bottom: 5px; display: block;">Rhein</label>
-                                    <input type="number" id="setting-current-rhein" placeholder="6.0" step="0.5" min="0" value="6.0" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff;">
-                                </div>
-                                <div>
-                                    <label style="font-size: 13px; color: #8892b0; margin-bottom: 5px; display: block;">Mosel</label>
-                                    <input type="number" id="setting-current-mosel" placeholder="3.0" step="0.5" min="0" value="3.0" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff;">
-                                </div>
-                                <div>
-                                    <label style="font-size: 13px; color: #8892b0; margin-bottom: 5px; display: block;">Main</label>
-                                    <input type="number" id="setting-current-main" placeholder="2.5" step="0.5" min="0" value="2.5" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff;">
-                                </div>
-                                <div>
-                                    <label style="font-size: 13px; color: #8892b0; margin-bottom: 5px; display: block;">Elbe</label>
-                                    <input type="number" id="setting-current-elbe" placeholder="4.0" step="0.5" min="0" value="4.0" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff;">
-                                </div>
-                                <div>
-                                    <label style="font-size: 13px; color: #8892b0; margin-bottom: 5px; display: block;">Saale</label>
-                                    <input type="number" id="setting-current-saale" placeholder="2.0" step="0.5" min="0" value="2.0" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff;">
-                                </div>
-                                <div>
-                                    <label style="font-size: 13px; color: #8892b0; margin-bottom: 5px; display: block;">Donau</label>
-                                    <input type="number" id="setting-current-donau" placeholder="5.0" step="0.5" min="0" value="5.0" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff;">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="setting-item" style="background: rgba(100, 255, 218, 0.1); padding: 15px; border-radius: 8px;">
-                            <h4 style="margin-top: 0; color: #64ffda;">Standard-Werte nach Gewässertyp (km/h)</h4>
-                            <small style="color: #8892b0; display: block; margin-bottom: 15px;">Fallback-Werte wenn Gewässer nicht explizit definiert ist</small>
-
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                                <div>
-                                    <label style="font-size: 13px; color: #8892b0; margin-bottom: 5px; display: block;">Fluss (river)</label>
-                                    <input type="number" id="setting-current-type-river" placeholder="2.0" step="0.5" min="0" value="2.0" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff;">
-                                </div>
-                                <div>
-                                    <label style="font-size: 13px; color: #8892b0; margin-bottom: 5px; display: block;">Kanal (canal)</label>
-                                    <input type="number" id="setting-current-type-canal" placeholder="0.0" step="0.5" min="0" value="0.0" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff;">
-                                </div>
-                                <div>
-                                    <label style="font-size: 13px; color: #8892b0; margin-bottom: 5px; display: block;">Bach (stream)</label>
-                                    <input type="number" id="setting-current-type-stream" placeholder="1.0" step="0.5" min="0" value="1.0" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff;">
-                                </div>
-                                <div>
-                                    <label style="font-size: 13px; color: #8892b0; margin-bottom: 5px; display: block;">See (lake)</label>
-                                    <input type="number" id="setting-current-type-lake" placeholder="0.0" step="0.5" min="0" value="0.0" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: #fff;">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="setting-item" style="margin-top: 10px; padding: 15px; background: rgba(46, 204, 113, 0.1); border-radius: 8px;">
-                            <h4 style="margin-top: 0;">ℹ️ Wie funktioniert das?</h4>
-                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7;">
-                                <strong>Strömungsberücksichtigung:</strong><br>
-                                Die Fließgeschwindigkeit wird bei der ETA-Berechnung berücksichtigt:
-                            </p>
-                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px;">
-                                • <strong>Stromabwärts:</strong> Effektive Geschwindigkeit = Bootsgeschwindigkeit + Strömung<br>
-                                • <strong>Stromaufwärts:</strong> Effektive Geschwindigkeit = Bootsgeschwindigkeit - Strömung<br>
-                                • <strong>Querströmung:</strong> Teilweise Berücksichtigung basierend auf Winkel
-                            </p>
-                            <p style="font-size: 13px; line-height: 1.6; color: #bdc3c7; margin-top: 10px;">
-                                <strong>Datenquellen:</strong><br>
-                                1. Live-Daten von PEGELONLINE (falls verfügbar)<br>
-                                2. Statische Werte aus dieser Tabelle (Fallback)
-                            </p>
+                            <!-- Add Entry Button (always visible) -->
+                            <button id="btn-add-entry" onclick="BoatOS.addLogEntry()" style="padding: 14px 18px; border: none; border-radius: 12px; background: var(--bg-card); color: var(--accent); font-size: 14px; cursor: pointer; border: 1px solid var(--border);" title="Notiz hinzufügen">
+                                📝
+                            </button>
                         </div>
                     </div>
 
-                    <!-- Data Tab -->
-                    <div id="settings-data" class="settings-tab-content">
-                        <h3>Daten-Verwaltung</h3>
-
-                        <div class="setting-item">
-                            <button onclick="exportSettings()" class="data-btn">📥 Einstellungen exportieren</button>
-                        </div>
-
-                        <div class="setting-item">
-                            <button onclick="importSettings()" class="data-btn">📤 Einstellungen importieren</button>
-                        </div>
-
-                        <div class="setting-item">
-                            <button onclick="resetSettings()" class="data-btn">🔄 Auf Standardwerte zurücksetzen</button>
-                        </div>
-
-                        <hr style="margin: 30px 0; border: none; border-top: 2px solid rgba(100, 255, 218, 0.2);">
-
-                        <h3>🗄️ Schleusen-Datenbank</h3>
-                        <p style="font-size: 13px; color: #8892b0; margin-bottom: 20px;">
-                            Verwalte die Schleusen-Datenbank: OSM-Import, Datenanreicherung und Qualitätsprüfung.
-                        </p>
-
-                        <div class="setting-item">
-                            <button onclick="importLocksFromOSM()" class="data-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                                🌍 Schleusen von OSM importieren
-                            </button>
-                            <p style="font-size: 12px; color: #8892b0; margin-top: 8px;">
-                                Lädt neue Schleusen aus OpenStreetMap in die Datenbank
-                            </p>
-                        </div>
-
-                        <div class="setting-item">
-                            <button onclick="enrichLocksData()" class="data-btn" style="background: linear-gradient(135deg, #43cea2 0%, #185a9d 100%);">
-                                ✨ Daten anreichern
-                            </button>
-                            <p style="font-size: 12px; color: #8892b0; margin-top: 8px;">
-                                Ergänzt VHF-Kanäle, Kontaktdaten und weitere Infos (102 Einträge verfügbar)
-                            </p>
-                        </div>
-
-                        <div class="setting-item">
-                            <button onclick="checkLocksQuality()" class="data-btn" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
-                                📊 Qualitätsbericht anzeigen
-                            </button>
-                            <p style="font-size: 12px; color: #8892b0; margin-top: 8px;">
-                                Zeigt Statistiken zur Datenqualität (VHF-Abdeckung, Kontakte, etc.)
-                            </p>
-                        </div>
-
-                        <div class="setting-item">
-                            <button onclick="verifyLocksPositions()" class="data-btn" style="background: linear-gradient(135deg, #f5576c 0%, #fc6c85 100%);">
-                                📍 Positionen überprüfen & korrigieren
-                            </button>
-                            <p style="font-size: 12px; color: #8892b0; margin-top: 8px;">
-                                Prüft alle Schleusen-Positionen gegen OpenStreetMap und korrigiert Fehler (>500m Abweichung)
-                            </p>
-                        </div>
-
-                        <div id="locks-quality-report" style="display: none; margin-top: 20px; padding: 20px; background: rgba(10, 14, 39, 0.6); border-radius: 12px; border: 2px solid rgba(100, 255, 218, 0.3);">
-                            <h4 style="margin: 0 0 15px 0; color: #64ffda;">📊 Datenqualität</h4>
-                            <pre id="locks-quality-content" style="color: #8892b0; font-size: 12px; line-height: 1.8; overflow-x: auto; white-space: pre-wrap;"></pre>
+                    <!-- Recent Log Entries -->
+                    <div style="margin-top: 15px;">
+                        <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text);">Letzte Einträge</div>
+                        <div class="log-entries" id="logEntries" style="max-height: 300px; overflow-y: auto;">
+                            <div style="text-align: center; padding: 20px; color: var(--text-dim);">
+                                Noch keine Einträge
+                            </div>
                         </div>
                     </div>
-
                 </div>
 
-                <!-- Save/Cancel Buttons -->
-                <div class="settings-actions">
-                    <button onclick="saveSettings()" class="save-btn" style="
-                        background: linear-gradient(135deg, #64ffda, #2ecc71);
-                        border: none;
-                        color: #0a0e27;
-                        padding: 15px 40px;
-                        border-radius: 12px;
-                        font-size: 18px;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: all 0.3s;
-                        box-shadow: 0 4px 15px rgba(100, 255, 218, 0.3);
-                    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(100, 255, 218, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(100, 255, 218, 0.3)'">💾 Speichern</button>
-                    <button onclick="closeSettingsModal()" class="cancel-btn" style="
-                        background: rgba(255, 255, 255, 0.1);
-                        border: 2px solid rgba(255, 255, 255, 0.2);
-                        color: white;
-                        padding: 15px 40px;
-                        border-radius: 12px;
-                        font-size: 18px;
-                        cursor: pointer;
-                        transition: all 0.3s;
-                    " onmouseover="this.style.background='rgba(255, 255, 255, 0.15)'" onmouseout="this.style.background='rgba(255, 255, 255, 0.1)'">Abbrechen</button>
+                <!-- ARCHIV TAB -->
+                <div class="logbook-tab-content" id="logbook-tab-archive" style="display: none;">
+                    <div id="trips-list" style="display: flex; flex-direction: column; gap: 12px;">
+                        <div style="text-align: center; padding: 20px; color: var(--text-dim);">
+                            Lade archivierte Fahrten...
+                        </div>
+                    </div>
                 </div>
-            </div> <!-- End Settings Body -->
-        </div> <!-- End Settings Container -->
-    </div> <!-- End Settings Modal -->
+            </div>
 
-    <!-- ==================== CREW MANAGEMENT PANEL ==================== -->
-    <div id="crew-panel" class="management-panel">
-        <div class="panel-header">
-            <h2 class="panel-title">👥 Crew-Verwaltung</h2>
-            <button class="panel-add-btn" onclick="showCrewModal()">+ Crew-Mitglied</button>
-            <button class="panel-close" onclick="hideCrewPanel()">×</button>
-        </div>
-        <div id="crew-list"></div>
-    </div>
-
-    <!-- ==================== FUEL TRACKING PANEL ==================== -->
-    <div id="fuel-panel" class="management-panel">
-        <div class="panel-header">
-            <h2 class="panel-title">⛽ Treibstoff-Tracking</h2>
-            <button class="panel-add-btn" onclick="showFuelModal()">+ Tankung</button>
-            <button class="panel-close" onclick="hideFuelPanel()">×</button>
-        </div>
-        <div id="fuel-stats"></div>
-        <div id="fuel-chart-container" style="margin: 20px 0; padding: 20px; background: rgba(10, 14, 39, 0.6); border-radius: 12px; border: 2px solid rgba(42, 82, 152, 0.3);">
-            <h4 style="margin: 0 0 15px 0; color: #64ffda;">📈 Verbrauchstrend (6 Monate)</h4>
-            <canvas id="fuel-trend-chart"></canvas>
-        </div>
-        <div id="fuel-list"></div>
-    </div>
-
-    <!-- ==================== STATISTICS DASHBOARD PANEL ==================== -->
-    <div id="dashboard-panel" class="management-panel">
-        <div class="panel-header">
-            <h2 class="panel-title">📊 Statistik-Dashboard</h2>
-            <button class="panel-close" onclick="hideDashboardPanel()">×</button>
-        </div>
-        <div id="dashboard-trips"></div>
-        <div id="dashboard-fuel"></div>
-        <div id="dashboard-crew"></div>
-        <div id="dashboard-charts" style="margin: 20px 0;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                <div style="padding: 20px; background: rgba(10, 14, 39, 0.6); border-radius: 12px; border: 2px solid rgba(42, 82, 152, 0.3);">
-                    <h4 style="margin: 0 0 15px 0; color: #64ffda;">📈 Monatliche Distanz</h4>
-                    <canvas id="dashboard-distance-chart"></canvas>
+            <!-- AIS SECTION -->
+            <div id="section-ais" class="section-hidden">
+                <div class="ais-list" id="aisList">
+                    <div style="text-align: center; padding: 20px; color: var(--text-dim);">
+                        Keine AIS-Ziele in Reichweite.
+                    </div>
                 </div>
-                <div style="padding: 20px; background: rgba(10, 14, 39, 0.6); border-radius: 12px; border: 2px solid rgba(42, 82, 152, 0.3);">
-                    <h4 style="margin: 0 0 15px 0; color: #64ffda;">⛽ Monatlicher Verbrauch</h4>
-                    <canvas id="dashboard-fuel-chart"></canvas>
+            </div>
+
+            <!-- LOCKS SECTION -->
+            <div id="section-locks" class="section-hidden">
+                <div class="lock-list" id="lockList">
+                    <div style="text-align: center; padding: 20px; color: var(--text-dim);">
+                        Schleusen werden geladen...
+                    </div>
                 </div>
             </div>
         </div>
-        <div id="dashboard-monthly"></div>
+    </div>
 
-        <!-- Import/Export Section -->
-        <div style="margin: 30px 0; padding: 20px; background: rgba(10, 14, 39, 0.6); border-radius: 12px; border: 2px solid rgba(42, 82, 152, 0.3);">
-            <h3 style="margin: 0 0 15px 0; color: #64ffda; font-size: 1.2em;">💾 Daten-Sicherung</h3>
-            <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
-                <button onclick="exportAllData()" style="
-                    padding: 12px 24px;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    font-weight: 500;
-                    font-size: 1em;
-                    transition: all 0.3s ease;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
-                    📥 Daten exportieren
+    <!-- ============================================
+         MANUAL ENTRY MODAL
+         ============================================ -->
+    <div class="modal-overlay" id="manual-entry-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 3000; align-items: center; justify-content: center;" onclick="BoatOS.closeManualEntryModal()">
+        <div class="modal-content" style="background: var(--bg-panel); border-radius: 20px; width: 90%; max-width: 400px; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);" onclick="event.stopPropagation()">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="font-size: 18px; color: var(--accent);">📝 Logbuch-Eintrag</h3>
+                <button onclick="BoatOS.closeManualEntryModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-dim);">✕</button>
+            </div>
+            <form id="manual-entry-form" onsubmit="event.preventDefault(); BoatOS.submitManualEntry();">
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 6px;">Notizen</label>
+                    <textarea id="manual-entry-notes" placeholder="Was ist passiert? Beobachtungen, Ereignisse..." style="width: 100%; height: 120px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); color: var(--text); font-size: 14px; resize: none;"></textarea>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <input type="checkbox" id="manual-entry-weather" checked style="width: 20px; height: 20px; accent-color: var(--accent);">
+                        <span style="font-size: 14px;">🌤️ Aktuelle Wetterdaten anhängen</span>
+                    </label>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" onclick="BoatOS.closeManualEntryModal()" style="flex: 1; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); color: var(--text); font-size: 14px; cursor: pointer;">
+                        Abbrechen
+                    </button>
+                    <button type="submit" style="flex: 1; padding: 14px; border: none; border-radius: 12px; background: var(--accent); color: white; font-size: 14px; font-weight: 600; cursor: pointer;">
+                        Speichern
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================
+         CREW SELECTION MODAL
+         ============================================ -->
+    <div class="modal-overlay" id="crew-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 3000; align-items: center; justify-content: center;" onclick="BoatOS.closeCrewModal()">
+        <div class="modal-content" style="background: var(--bg-panel); border-radius: 20px; width: 90%; max-width: 400px; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);" onclick="event.stopPropagation()">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="font-size: 18px; color: var(--accent);">👥 Crew auswählen</h3>
+                <button onclick="BoatOS.closeCrewModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-dim);">✕</button>
+            </div>
+            <p style="color: var(--text-dim); margin-bottom: 15px; font-size: 14px;">Wer ist bei dieser Fahrt dabei?</p>
+            <div id="crew-list" style="max-height: 250px; overflow-y: auto; margin-bottom: 20px;">
+                <!-- Crew members loaded dynamically -->
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button type="button" onclick="BoatOS.closeCrewModal()" style="flex: 1; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); color: var(--text); font-size: 14px; cursor: pointer;">
+                    Abbrechen
                 </button>
+                <button type="button" onclick="BoatOS.confirmStartTrip()" style="flex: 1; padding: 14px; border: none; border-radius: 12px; background: var(--success); color: white; font-size: 14px; font-weight: 600; cursor: pointer;">
+                    🚢 Fahrt starten
+                </button>
+            </div>
+        </div>
+    </div>
 
-                <label style="
-                    padding: 12px 24px;
-                    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    <!-- ============================================
+         SEARCH OVERLAY
+         ============================================ -->
+    <div class="search-overlay" id="searchOverlay" onclick="BoatOS.ui.closeSearch(event)">
+        <div class="search-container" onclick="event.stopPropagation()">
+            <div class="search-input-wrapper">
+                <span style="font-size: 20px;">🔍</span>
+                <input type="text" class="search-input" id="searchInput" placeholder="Hafen, Marina, Schleuse..." oninput="BoatOS.ui.handleSearch(this.value)">
+                <button class="icon-btn" style="width: 32px; height: 32px;" onclick="BoatOS.ui.closeSearch()">✕</button>
+            </div>
+            <div class="search-results" id="searchResults">
+                <!-- Search results loaded dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         SETTINGS SIDEBAR
+         ============================================ -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="BoatOS.ui.toggleSidebar()"></div>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h3>⚙️ Einstellungen</h3>
+            <button class="icon-btn" style="width: 36px; height: 36px;" onclick="BoatOS.ui.toggleSidebar()">✕</button>
+        </div>
+
+        <div class="sidebar-tabs">
+            <div class="sidebar-tab active" onclick="BoatOS.ui.showSettingsTab('general', this)">Allgemein</div>
+            <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('boat', this)">Boot</div>
+            <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('map', this)">Karte</div>
+            <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('nav', this)">Navigation</div>
+            <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('ais', this)">AIS</div>
+        </div>
+
+        <div class="sidebar-content">
+            <!-- General Settings -->
+            <div id="settings-general">
+                <div class="setting-group">
+                    <h4>Anzeige</h4>
+                    <div class="setting-item">
+                        <span>Dark Mode</span>
+                        <div class="toggle" id="toggle-darkmode" onclick="BoatOS.ui.toggleSettingToggle(this, 'darkMode')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Sprache</span>
+                        <select class="setting-select" id="setting-language">
+                            <option value="de">Deutsch</option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <span>Einheiten</span>
+                        <select class="setting-select" id="setting-units">
+                            <option value="nautical">Nautisch (NM, kn)</option>
+                            <option value="metric">Metrisch (km, km/h)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Töne</h4>
+                    <div class="setting-item">
+                        <span>Alarme</span>
+                        <div class="toggle active" id="toggle-alarms" onclick="BoatOS.ui.toggleSettingToggle(this, 'alarms')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Benachrichtigungen</span>
+                        <div class="toggle active" id="toggle-notifications" onclick="BoatOS.ui.toggleSettingToggle(this, 'notifications')"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Boat Settings -->
+            <div id="settings-boat" class="section-hidden">
+                <div class="setting-group">
+                    <h4>Bootsdaten</h4>
+                    <div class="setting-item">
+                        <span>Name</span>
+                        <input type="text" class="setting-input" id="setting-boat-name" value="Arielle" style="width: 120px;">
+                    </div>
+                    <div class="setting-item">
+                        <span>Länge (m)</span>
+                        <input type="number" class="setting-input" id="setting-boat-length" value="12.5" step="0.1">
+                    </div>
+                    <div class="setting-item">
+                        <span>Breite (m)</span>
+                        <input type="number" class="setting-input" id="setting-boat-beam" value="3.8" step="0.1">
+                    </div>
+                    <div class="setting-item">
+                        <span>Tiefgang (m)</span>
+                        <input type="number" class="setting-input" id="setting-boat-draft" value="1.2" step="0.1">
+                    </div>
+                    <div class="setting-item">
+                        <span>Höhe (m)</span>
+                        <input type="number" class="setting-input" id="setting-boat-height" value="4.5" step="0.1">
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Boot-Symbol</h4>
+                    <div class="boat-icons" id="boatIcons">
+                        <div class="boat-icon-option active" data-icon="motorboat" onclick="BoatOS.ui.selectBoatIcon(this)">🚤</div>
+                        <div class="boat-icon-option" data-icon="sailboat" onclick="BoatOS.ui.selectBoatIcon(this)">⛵</div>
+                        <div class="boat-icon-option" data-icon="yacht" onclick="BoatOS.ui.selectBoatIcon(this)">🛥️</div>
+                        <div class="boat-icon-option" data-icon="ship" onclick="BoatOS.ui.selectBoatIcon(this)">🚢</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Map Settings -->
+            <div id="settings-map" class="section-hidden">
+                <div class="setting-group">
+                    <h4>Kartenlayer</h4>
+                    <div class="setting-item">
+                        <span>OpenSeaMap</span>
+                        <div class="toggle active" id="toggle-openseamap" onclick="BoatOS.ui.toggleSettingToggle(this, 'openSeaMap')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Schleusen anzeigen</span>
+                        <div class="toggle active" id="toggle-locks" onclick="BoatOS.ui.toggleSettingToggle(this, 'showLocks')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Track anzeigen</span>
+                        <div class="toggle active" id="toggle-track" onclick="BoatOS.ui.toggleSettingToggle(this, 'showTrack')"></div>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Verhalten</h4>
+                    <div class="setting-item">
+                        <span>Auto-Zentrierung</span>
+                        <div class="toggle active" id="toggle-autocenter" onclick="BoatOS.ui.toggleSettingToggle(this, 'autoCenter')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Heading Up</span>
+                        <div class="toggle" id="toggle-headingup" onclick="BoatOS.ui.toggleSettingToggle(this, 'headingUp')"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Settings -->
+            <div id="settings-nav" class="section-hidden">
+                <div class="setting-group">
+                    <h4>Routing</h4>
+                    <div class="setting-item">
+                        <span>Wasserwege bevorzugen</span>
+                        <div class="toggle active" id="toggle-waterways" onclick="BoatOS.ui.toggleSettingToggle(this, 'preferWaterways')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Standard-Geschwindigkeit</span>
+                        <input type="number" class="setting-input" id="setting-default-speed" value="6" step="0.5"> <span id="setting-speed-unit" class="unit-speed">kn</span>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Alarme</h4>
+                    <div class="setting-item">
+                        <span>Ankunftsalarm</span>
+                        <div class="toggle active" id="toggle-arrival-alarm" onclick="BoatOS.ui.toggleSettingToggle(this, 'arrivalAlarm')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Alarm-Distanz</span>
+                        <input type="number" class="setting-input" id="setting-alarm-distance" value="0.1" step="0.05"> <span id="setting-alarm-dist-unit" class="unit-distance">NM</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AIS Settings -->
+            <div id="settings-ais" class="section-hidden">
+                <div class="setting-group">
+                    <h4>AIS Empfang</h4>
+                    <div class="setting-item">
+                        <span>AIS aktiviert</span>
+                        <div class="toggle" id="toggle-ais" onclick="BoatOS.ui.toggleSettingToggle(this, 'aisEnabled')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Anbieter</span>
+                        <select class="setting-input" id="setting-ais-provider">
+                            <option value="aisstream">AISstream</option>
+                            <option value="aishub">AISHub</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <span>API-Key</span>
+                        <input type="text" class="setting-input" id="setting-ais-apikey" placeholder="API-Key eingeben">
+                    </div>
+                    <div class="setting-item">
+                        <span>Reichweite</span>
+                        <input type="number" class="setting-input" id="setting-ais-range" value="20"> <span id="setting-ais-range-unit" class="unit-distance">NM</span>
+                    </div>
+                    <div class="setting-item">
+                        <span>Update-Intervall (Sek.)</span>
+                        <input type="number" class="setting-input" id="setting-ais-interval" value="60" min="10" max="300" step="10">
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Anzeige</h4>
+                    <div class="setting-item">
+                        <span>Schiffsnamen anzeigen</span>
+                        <div class="toggle active" id="toggle-ais-labels" onclick="BoatOS.ui.toggleSettingToggle(this, 'aisLabels')"></div>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Kollisionswarnung</h4>
+                    <div class="setting-item">
+                        <span>CPA Alarm</span>
+                        <div class="toggle active" id="toggle-cpa" onclick="BoatOS.ui.toggleSettingToggle(this, 'cpaAlarm')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Min. CPA</span>
+                        <input type="number" class="setting-input" id="setting-min-cpa" value="0.5" step="0.1"> <span id="setting-cpa-unit" class="unit-distance">NM</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-footer">
+            <button class="sidebar-btn secondary" onclick="BoatOS.ui.toggleSidebar()">Abbrechen</button>
+            <button class="sidebar-btn primary" onclick="BoatOS.saveAllSettings()">Speichern</button>
+        </div>
+    </div>
+
+    <!-- ============================================
+         DASHBOARD EDITOR (Fullscreen)
+         ============================================ -->
+    <div class="dashboard-editor-overlay" id="dashboardEditorOverlay" style="
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: var(--bg-main);
+        z-index: 5000;
+        flex-direction: column;
+    ">
+        <!-- Editor Header -->
+        <div style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border);
+        ">
+            <h2 style="margin: 0; font-size: 20px; color: var(--accent);">
+                ✏️ Dashboard Editor
+            </h2>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="BoatOS.saveDashboardLayout()" style="
+                    padding: 10px 20px;
+                    background: var(--success);
                     color: white;
                     border: none;
-                    border-radius: 8px;
+                    border-radius: 10px;
+                    font-size: 14px;
+                    font-weight: 600;
                     cursor: pointer;
-                    font-weight: 500;
-                    font-size: 1em;
-                    transition: all 0.3s ease;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(245, 87, 108, 0.4)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
-                    📤 Daten importieren
-                    <input type="file" accept=".json" onchange="handleImportFileSelect(event)" style="display: none;">
-                </label>
-
-                <div style="flex: 1; min-width: 200px; font-size: 0.85em; color: #8892b0; line-height: 1.5;">
-                    <div>• Export: Alle Daten als JSON-Datei sichern</div>
-                    <div>• Import: Gesicherte Daten wiederherstellen</div>
-                </div>
+                ">💾 Speichern</button>
+                <button onclick="BoatOS.closeDashboardEditor()" style="
+                    padding: 10px 20px;
+                    background: var(--bg-card);
+                    color: var(--text);
+                    border: 1px solid var(--border);
+                    border-radius: 10px;
+                    font-size: 14px;
+                    cursor: pointer;
+                ">✕ Schließen</button>
             </div>
-            <div id="import-export-status" style="margin-top: 15px;"></div>
+        </div>
+
+        <!-- Editor Content -->
+        <div id="dashboardEditorContent" style="
+            flex: 1;
+            overflow: hidden;
+            padding: 20px;
+        ">
+            <!-- Visual Editor will be rendered here -->
         </div>
     </div>
 
-    <!-- ==================== CREW MODAL ==================== -->
-    <div id="crew-modal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title" id="crew-modal-title">Neues Crew-Mitglied</h3>
-                <button class="panel-close" onclick="hideCrewModal()">×</button>
-            </div>
-            <form id="crew-form">
-                <div class="form-group">
-                    <label class="form-label" for="crew-name">Name *</label>
-                    <input type="text" id="crew-name" class="form-input" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="crew-role">Rolle</label>
-                    <select id="crew-role" class="form-select">
-                        <option value="Captain">Captain</option>
-                        <option value="Crew" selected>Crew</option>
-                        <option value="Guest">Guest</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="crew-email">E-Mail</label>
-                    <input type="email" id="crew-email" class="form-input">
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="crew-phone">Telefon</label>
-                    <input type="tel" id="crew-phone" class="form-input">
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="form-submit">Speichern</button>
-                    <button type="button" class="form-cancel" onclick="hideCrewModal()">Abbrechen</button>
-                </div>
-            </form>
-        </div>
-    </div>
+    <!-- ============================================
+         JAVASCRIPT MODULES
+         ============================================ -->
+    <script src="dashboard_renderer.js"></script>
+    <script src="js/dashboard-editor.js"></script>
+    <script type="module" src="js/main.js"></script>
 
-    <!-- ==================== FUEL MODAL ==================== -->
-    <div id="fuel-modal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title" id="fuel-modal-title">Neue Tankung</h3>
-                <button class="panel-close" onclick="hideFuelModal()">×</button>
-            </div>
-            <form id="fuel-form">
-                <div class="form-group">
-                    <label class="form-label" for="fuel-liters">Liter *</label>
-                    <input type="number" id="fuel-liters" class="form-input" step="0.1" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="fuel-price">Preis pro Liter (€) *</label>
-                    <input type="number" id="fuel-price" class="form-input" step="0.001" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="fuel-location">Ort</label>
-                    <input type="text" id="fuel-location" class="form-input">
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="fuel-odometer">Zählerstand (NM)</label>
-                    <input type="number" id="fuel-odometer" class="form-input" step="0.1">
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="fuel-notes">Notizen</label>
-                    <textarea id="fuel-notes" class="form-textarea"></textarea>
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="form-submit">Speichern</button>
-                    <button type="button" class="form-cancel" onclick="hideFuelModal()">Abbrechen</button>
-                </div>
-            </form>
-        </div>
-    </div>
+    <!-- LEGACY SUPPORT: Old inline code removed, now in js/main.js, js/logbook.js, js/settings.js
+         TODO: Remove this comment block after testing
 
-    <!-- Load Management Scripts -->
-    <link rel="stylesheet" href="management.css?v=1.2">
-    <script src="crew.js?v=1.2"></script>
-    <script src="fuel.js?v=1.2"></script>
-    <script src="dashboard.js?v=1.2"></script>
-    <script src="sensors_dashboard.js?v=1.5"></script>
-
-    <script>
-        // Toggle between Navigation and Dashboard
-        function toggleView() {
-            // Switch to Dashboard (fullscreen)
-            window.SensorsDashboard.show();
-        }
-
-        // Start with Dashboard view by default - NO DELAY
-        window.addEventListener('DOMContentLoaded', function() {
-            // Show dashboard immediately - no delay, no flicker
-            window.SensorsDashboard.show();
-        });
-    </script>
-
-    <!-- Virtual Keyboard for Kiosk Mode -->
-    <script src="virtual-keyboard.js"></script>
+         Previous inline script moved to:
+         - js/main.js - Main entry point, initialization, unit system
+         - js/logbook.js - Trip management, log entries, archive
+         - js/settings.js - Settings save/load functions
+    -->
 
 </body>
 </html>

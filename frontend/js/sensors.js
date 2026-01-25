@@ -57,12 +57,18 @@ let autoFollow = true;
  * @param {Object} data - Sensordaten vom Backend
  * @param {Object} data.gps - GPS-Daten mit lat, lon, satellites, etc.
  */
-export function handleGPSUpdate(data) {
+export function handleGPSUpdate(gps) {
+    // gps ist direkt das GPS-Objekt (nicht data.gps!)
     // Sensordaten fuer GPS-Panel cachen
-    window.lastSensorData = data;
+    window.lastSensorData = { gps };
+
+    // Satelliten und GPS-Status IMMER aktualisieren (auch ohne Fix)
+    if (gps) {
+        updateGpsStatus(gps);
+    }
 
     // Backend GPS hat Prioritaet - immer verwenden wenn gueltig
-    if (data.gps && data.gps.lat !== 0 && data.gps.lon !== 0) {
+    if (gps && gps.lat !== 0 && gps.lon !== 0) {
         lastBackendGpsTime = Date.now();
         backendGpsUnavailableStartTime = null; // Timer zuruecksetzen
 
@@ -76,15 +82,18 @@ export function handleGPSUpdate(data) {
         if (!firstGpsPositionReceived && map) {
             firstGpsPositionReceived = true;
             console.log('GPS: Erste Position empfangen - zentriere Karte auf: ' +
-                data.gps.lat.toFixed(6) + ', ' + data.gps.lon.toFixed(6));
+                gps.lat.toFixed(6) + ', ' + gps.lon.toFixed(6));
             map.flyTo({
-                center: [data.gps.lon, data.gps.lat],
+                center: [gps.lon, gps.lat],
                 zoom: 14,
                 duration: 1500
             });
         }
 
-        updateBoatPosition(data.gps);
+        updateBoatPosition(gps);
+
+        // Navigation Header mit gültigen Werten aktualisieren
+        updateNavigationHeader(gps);
     } else {
         // Backend GPS ungueltig oder fehlt
         if (backendGpsUnavailableStartTime === null) {
@@ -97,6 +106,86 @@ export function handleGPSUpdate(data) {
             gpsSource = null;
             updateGpsSourceIndicator();
         }
+    }
+}
+
+/**
+ * Aktualisiert GPS-Status (Satelliten, Fix) - wird IMMER aufgerufen
+ * @param {Object} gps - GPS-Daten
+ */
+export function updateGpsStatus(gps) {
+    // Satelliten im GPS-Indikator - IMMER anzeigen
+    const satsEl = document.getElementById('gps-sats');
+    if (satsEl && gps.satellites !== undefined) {
+        satsEl.textContent = gps.satellites + ' Sats';
+    }
+
+    // GPS-Indikator Status (Farbe basierend auf Fix/Satellitenanzahl)
+    const gpsIndicator = document.getElementById('gpsIndicator');
+    if (gpsIndicator) {
+        const hasFix = gps.fix || (gps.lat && gps.lon && gps.lat !== 0 && gps.lon !== 0);
+        if (hasFix) {
+            gpsIndicator.classList.remove('no-fix');
+            gpsIndicator.classList.add('has-fix');
+        } else {
+            gpsIndicator.classList.remove('has-fix');
+            gpsIndicator.classList.add('no-fix');
+        }
+    }
+
+    // GPS Popup - Satelliten Detail
+    const satsDetailEl = document.getElementById('gps-satellites');
+    if (satsDetailEl && gps.satellites !== undefined) {
+        satsDetailEl.textContent = gps.satellites + ' / --';
+    }
+
+    // Fix-Status im Popup
+    const fixEl = document.getElementById('gps-fix-status');
+    if (fixEl) {
+        const hasFix = gps.fix || (gps.lat && gps.lon && gps.lat !== 0 && gps.lon !== 0);
+        if (hasFix) {
+            fixEl.textContent = 'GPS Fix';
+        } else if (gps.satellites >= 1) {
+            fixEl.textContent = 'Suche... (' + gps.satellites + ' Sat)';
+        } else {
+            fixEl.textContent = 'Kein Signal';
+        }
+    }
+
+    // HDOP im Popup (auch ohne Fix verfügbar)
+    const hdopEl = document.getElementById('gps-hdop');
+    if (hdopEl) {
+        hdopEl.textContent = gps.hdop ? gps.hdop.toFixed(1) : '--';
+    }
+}
+
+/**
+ * Aktualisiert die Navigationsdaten im Header (SOG, COG) - nur bei gültigem Fix
+ * @param {Object} gps - GPS-Daten
+ */
+export function updateNavigationHeader(gps) {
+    // SOG (Speed Over Ground)
+    const sogEl = document.getElementById('sog-value');
+    if (sogEl && gps.speed !== undefined) {
+        sogEl.textContent = gps.speed.toFixed(1);
+    }
+
+    // COG (Course Over Ground)
+    const cogEl = document.getElementById('cog-value');
+    if (cogEl && gps.heading !== undefined) {
+        cogEl.textContent = Math.round(gps.heading) + '°';
+    }
+
+    // GPS Popup - Position (nur bei gültigem Fix)
+    const posEl = document.getElementById('gps-position');
+    if (posEl && gps.lat && gps.lon) {
+        posEl.textContent = gps.lat.toFixed(6) + ', ' + gps.lon.toFixed(6);
+    }
+
+    // Höhe
+    const altEl = document.getElementById('gps-altitude');
+    if (altEl && gps.altitude !== undefined) {
+        altEl.textContent = (gps.altitude || 0).toFixed(1) + ' m';
     }
 }
 
@@ -777,6 +866,8 @@ if (typeof window !== 'undefined') {
     window.toggleTrackHistory = toggleTrackHistory;
     window.updateGPSStatus = updateGPSStatus;
     window.updateGpsInfo = updateGpsInfo;
+    window.updateGpsStatus = updateGpsStatus;
+    window.updateNavigationHeader = updateNavigationHeader;
     window.updateSatelliteInfo = updateSatelliteInfo;
     window.updateGpsSourceIndicator = updateGpsSourceIndicator;
     window.createCompassRose = createCompassRose;

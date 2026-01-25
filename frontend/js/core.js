@@ -353,29 +353,32 @@ export function connectWebSocket() {
                 onSensorDataCallback(data);
             }
 
-            // GPS-Daten verarbeiten
-            if (data.gps && data.gps.lat !== 0 && data.gps.lon !== 0) {
-                lastBackendGpsTime = Date.now();
-                backendGpsUnavailableStartTime = null;
-
-                if (gpsSource !== "backend") {
-                    gpsSource = "backend";
-                }
-
-                // GPS-Update Callback
+            // GPS-Daten verarbeiten - IMMER Callback aufrufen für Satelliteninfo
+            if (data.gps) {
+                // GPS-Update Callback IMMER aufrufen (auch ohne Fix für Satellitenanzahl)
                 if (onGpsUpdateCallback) {
                     onGpsUpdateCallback(data.gps, 'backend');
                 }
-            } else {
-                // Backend GPS ungültig oder nicht verfügbar
-                if (backendGpsUnavailableStartTime === null) {
-                    backendGpsUnavailableStartTime = Date.now();
-                }
 
-                // GPS-Quelle zurücksetzen nach 5 Sekunden ohne gültige Daten
-                if (gpsSource === "backend" && lastBackendGpsTime &&
-                    (Date.now() - lastBackendGpsTime) > 5000) {
-                    gpsSource = null;
+                // Gültiger Fix?
+                if (data.gps.lat !== 0 && data.gps.lon !== 0) {
+                    lastBackendGpsTime = Date.now();
+                    backendGpsUnavailableStartTime = null;
+
+                    if (gpsSource !== "backend") {
+                        gpsSource = "backend";
+                    }
+                } else {
+                    // Backend GPS ungültig oder nicht verfügbar
+                    if (backendGpsUnavailableStartTime === null) {
+                        backendGpsUnavailableStartTime = Date.now();
+                    }
+
+                    // GPS-Quelle zurücksetzen nach 5 Sekunden ohne gültige Daten
+                    if (gpsSource === "backend" && lastBackendGpsTime &&
+                        (Date.now() - lastBackendGpsTime) > 5000) {
+                        gpsSource = null;
+                    }
                 }
             }
         } catch (e) {
