@@ -13,24 +13,43 @@ sys.path.append(str(Path(__file__).parent / "app"))
 import locks_storage
 
 def get_osm_position(lock_name, waterway=None):
-    """Query OpenStreetMap for the correct position of a lock"""
-    # Build search query
-    query = lock_name
-
-    # Add waterway context if available
-    if waterway:
-        query += f" {waterway}"
-
-    query += " Germany"
-
+    """Query OpenStreetMap for the correct position of a lock using Overpass API"""
     try:
-        url = f"https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1"
-        response = requests.get(url, headers={'User-Agent': 'BoatOS/1.0'})
+        # Clean lock name for regex search
+        name_escaped = lock_name.replace('"', '\\"')
+
+        # Build Overpass query to find locks by name
+        # Search for nodes, ways, or relations tagged as waterway=lock with matching name
+        overpass_query = f"""
+        [out:json][timeout:25];
+        (
+          nwr["waterway"="lock"]["name"~"^{name_escaped}$",i];
+        );
+        out center;
+        """
+
+        url = "https://overpass-api.de/api/interpreter"
+        response = requests.post(url, data={'data': overpass_query}, headers={'User-Agent': 'BoatOS/1.0'}, timeout=30)
 
         if response.status_code == 200:
             data = response.json()
-            if data:
-                return float(data[0]['lat']), float(data[0]['lon']), data[0]['display_name']
+            if data.get('elements'):
+                # Get first result
+                element = data['elements'][0]
+
+                # Extract coordinates based on element type
+                if element['type'] == 'node':
+                    lat, lon = element['lat'], element['lon']
+                elif 'center' in element:
+                    # For ways/relations, use computed center
+                    lat, lon = element['center']['lat'], element['center']['lon']
+                else:
+                    return None, None, None
+
+                osm_name = element.get('tags', {}).get('name', lock_name)
+                osm_id = f"{element['type']}/{element['id']}"
+
+                return float(lat), float(lon), f"{osm_name} ({osm_id})"
 
         return None, None, None
     except Exception as e:

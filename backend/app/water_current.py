@@ -68,10 +68,10 @@ class WaterCurrentService:
         if not self.enabled:
             return None
 
-        # Strategy 1: Try to get live data from nearby Pegelonline station
-        live_current = self._get_live_current_nearby(lat, lon)
-        if live_current is not None:
-            return live_current
+        # Strategy 1: DISABLED - Live data from Pegelonline was causing routing timeouts
+        # live_current = self._get_live_current_nearby(lat, lon)
+        # if live_current is not None:
+        #     return live_current
 
         # Strategy 2: Lookup by waterway name
         if waterway_name:

@@ -1,0 +1,26 @@
+{
+  "options": {
+    "paths": {
+      "root": "/home/arielle/BoatOS/data",
+      "fonts": "fonts",
+      "sprites": "sprites",
+      "styles": "styles",
+      "mbtiles": "/home/arielle/BoatOS/data"
+    },
+    "serveAllFonts": false
+  },
+  "styles": {
+    "basic": {
+      "style": "basic.json",
+      "tilejson": {
+        "type": "overlay",
+        "bounds": [-25, 35, 45, 72]
+      }
+    }
+  },
+  "data": {
+    "germany": {
+      "mbtiles": "germany.mbtiles"
+    }
+  }
+}

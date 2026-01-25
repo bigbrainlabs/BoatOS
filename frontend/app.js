@@ -23,7 +23,7 @@ let waypoints = [];
 let waypointMarkers = []; // Array of MapLibre marker objects
 let trackHistory = []; // Array of {lat, lon, timestamp}
 let maxTrackPoints = 500; // Maximum track points to keep
-let currentPosition = { lat: 51.34, lon: 12.37 }; // Default: Leipzig
+let currentPosition = { lat: 51.855, lon: 12.046 }; // Default: Aken/Elbe
 
 // Favorites
 let favorites = [];

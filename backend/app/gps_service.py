@@ -65,23 +65,25 @@ async def read_gps_from_signalk(signalk_url='http://localhost:3000'):
                         if cog is not None:
                             gps_data['heading'] = (cog * 180 / 3.14159265) % 360
 
-                        # GNSS info
+                        # GNSS info - SignalK uses 'satellitesInView' with nested structure
                         gnss = nav.get('gnss', {})
-                        gps_data['satellites'] = gnss.get('satellites', {}).get('value', 0)
+                        satellites_in_view = gnss.get('satellitesInView', {}).get('value', {})
+                        if isinstance(satellites_in_view, dict):
+                            gps_data['satellites'] = satellites_in_view.get('count', 0)
+                        else:
+                            gps_data['satellites'] = 0
 
                         # HDOP and VDOP
                         gps_data['hdop'] = gnss.get('horizontalDilution', {}).get('value')
                         gps_data['vdop'] = gnss.get('verticalDilution', {}).get('value')
 
-                        # Check if we have a valid fix
-                        quality = gnss.get('methodQuality', {}).get('value', '')
-                        gps_data['fix'] = 'Fix' in quality and gps_data['lat'] is not None
+                        # Check if we have a valid fix (valid position with latitude)
+                        gps_data['fix'] = gps_data['lat'] is not None and gps_data['lon'] is not None
 
                         gps_data['timestamp'] = datetime.utcnow().isoformat()
 
-                        # Broadcast to WebSocket clients if we have a fix
-                        if gps_data['fix']:
-                            await broadcast_gps_data()
+                        # Always broadcast GPS data (even without fix, for satellite count)
+                        await broadcast_gps_data()
 
             except httpx.TimeoutException:
                 error_count += 1
@@ -104,9 +106,6 @@ async def read_gps_from_signalk(signalk_url='http://localhost:3000'):
 async def broadcast_gps_data():
     """Broadcast GPS data to all connected WebSocket clients"""
     if not websocket_clients:
-        return
-    # Only broadcast if we have a GPS fix
-    if not gps_data["fix"] or gps_data["lat"] is None:
         return
 
     data = {
