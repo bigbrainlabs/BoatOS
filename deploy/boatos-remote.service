@@ -1,0 +1,26 @@
+[Unit]
+Description=BoatOS Remote Control Server
+After=network.target
+
+[Service]
+Type=simple
+User=arielle
+Group=input
+WorkingDirectory=/home/arielle/BoatOS/backend
+Environment="WAYLAND_DISPLAY=wayland-0"
+Environment="XDG_RUNTIME_DIR=/run/user/1000"
+ExecStart=/usr/bin/python3 /home/arielle/BoatOS/backend/remote_control_server.py
+Restart=always
+RestartSec=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=boatos-remote
+
+# Security
+NoNewPrivileges=true
+#PrivateTmp=true  # Disabled - causes issues with scrot screenshot capture
+
+[Install]
+WantedBy=multi-user.target

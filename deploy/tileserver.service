@@ -1,0 +1,22 @@
+[Unit]
+Description=Martin Tile Server for BoatOS
+After=network.target
+
+[Service]
+Type=simple
+User=arielle
+WorkingDirectory=/home/arielle/BoatOS/data
+ExecStart=/usr/local/bin/martin --listen-addresses 0.0.0.0:8081 /home/arielle/BoatOS/data/germany.mbtiles
+Restart=always
+RestartSec=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tileserver
+
+# Security
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

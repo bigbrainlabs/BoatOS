@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>BoatOS Remote Control</title>
+    <link rel="stylesheet" href="remote.css?v=4">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <h1 class="title">BoatOS Remote</h1>
+                <div class="connection-status" id="connectionStatus">
+                    <span class="status-indicator" id="statusIndicator"></span>
+                    <span class="status-text" id="statusText">Connecting...</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="mode-toggle" id="modeToggle">
+                    <span class="mode-icon">📱</span>
+                    <span class="mode-text" id="modeText">Remote</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Remote Mode -->
+        <div class="remote-mode" id="remoteMode">
+            <!-- Touchpad Area -->
+            <div class="touchpad-container">
+                <div class="touchpad" id="touchpad">
+                    <div class="touchpad-overlay">
+                        <div class="crosshair" id="crosshair"></div>
+                        <div class="touch-indicator" id="touchIndicator"></div>
+                    </div>
+                    <div class="touchpad-instructions">
+                        Touch & Drag to Control
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="quick-actions">
+                <button class="action-btn" id="zoomIn" title="Zoom In">
+                    <span class="icon">➕</span>
+                    <span class="label">Zoom+</span>
+                </button>
+                <button class="action-btn" id="zoomOut" title="Zoom Out">
+                    <span class="icon">➖</span>
+                    <span class="label">Zoom-</span>
+                </button>
+                <button class="action-btn" id="centerMap" title="Center Map">
+                    <span class="icon">🎯</span>
+                    <span class="label">Center</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Helm Mode -->
+        <div class="helm-mode hidden" id="helmMode">
+            <iframe id="helmFrame" src="/"></iframe>
+        </div>
+
+        <!-- Debug Info (can be toggled) -->
+        <div class="debug-info hidden" id="debugInfo">
+            <div class="debug-line">Mode: <span id="debugMode">-</span></div>
+            <div class="debug-line">WS: <span id="debugWS">-</span></div>
+            <div class="debug-line">Touch: <span id="debugTouch">-</span></div>
+            <div class="debug-line">Latency: <span id="debugLatency">-</span></div>
+        </div>
+    </div>
+
+    <script src="remote.js?v=4"></script>
+</body>
+</html>

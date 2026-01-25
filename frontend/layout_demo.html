@@ -1,0 +1,2073 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>BoatOS Layout Demo - Vollständig</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        /* Light Theme (Default) - Ocean Soft */
+        :root {
+            --bg-main: #f0f4f8;
+            --bg-panel: rgba(255, 255, 255, 0.92);
+            --bg-card: rgba(224, 236, 248, 0.6);
+            --accent: #0891b2;
+            --accent-light: #22d3ee;
+            --accent-dim: rgba(8, 145, 178, 0.12);
+            --border: rgba(148, 180, 210, 0.4);
+            --text: #1e3a5f;
+            --text-dim: #64748b;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #10b981;
+            --shadow: rgba(0, 40, 80, 0.08);
+            --shadow-strong: rgba(0, 40, 80, 0.15);
+        }
+
+        /* Dark Theme */
+        [data-theme="dark"] {
+            --bg-main: #0c1929;
+            --bg-panel: rgba(15, 30, 50, 0.92);
+            --bg-card: rgba(30, 58, 95, 0.4);
+            --accent: #22d3ee;
+            --accent-light: #67e8f9;
+            --accent-dim: rgba(34, 211, 238, 0.15);
+            --border: rgba(56, 97, 140, 0.5);
+            --text: #e2e8f0;
+            --text-dim: #94a3b8;
+            --danger: #f87171;
+            --warning: #fbbf24;
+            --success: #34d399;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --shadow-strong: rgba(0, 0, 0, 0.5);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-main);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        /* ============================================
+           TOP BAR
+           ============================================ */
+        .top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 56px;
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            z-index: 1000;
+            backdrop-filter: blur(15px);
+            box-shadow: 0 2px 15px var(--shadow);
+        }
+
+        .top-bar-section {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .gps-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .gps-indicator.no-fix { background: rgba(239, 68, 68, 0.1); border-color: var(--danger); }
+        .gps-indicator.has-fix { background: rgba(16, 185, 129, 0.1); border-color: var(--success); }
+
+        .gps-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--warning);
+            animation: pulse 2s infinite;
+        }
+
+        .gps-indicator.has-fix .gps-dot { background: var(--success); }
+        .gps-indicator.no-fix .gps-dot { background: var(--danger); }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(0.9); }
+        }
+
+        .nav-values {
+            display: flex;
+            gap: 15px;
+        }
+
+        .nav-value {
+            text-align: center;
+            min-width: 55px;
+        }
+
+        .nav-value .value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--accent);
+            font-variant-numeric: tabular-nums;
+            line-height: 1.1;
+        }
+
+        .nav-value .label {
+            font-size: 9px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .top-bar-right {
+            display: flex;
+            gap: 8px;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: var(--bg-panel);
+            color: var(--accent);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .icon-btn:hover, .icon-btn.active {
+            background: var(--accent);
+            color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px var(--shadow-strong);
+        }
+
+        .icon-btn.recording {
+            background: rgba(255, 107, 107, 0.3);
+            border-color: var(--danger);
+            animation: record-pulse 1.5s infinite;
+        }
+
+        @keyframes record-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(255, 107, 107, 0); }
+        }
+
+        /* ============================================
+           MAP CONTAINER
+           ============================================ */
+        .map-container {
+            position: fixed;
+            top: 56px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg-main);
+        }
+
+        .map-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-dim);
+            font-size: 20px;
+            gap: 10px;
+        }
+
+        /* Dashboard Mode */
+        .dashboard-container {
+            position: fixed;
+            top: 56px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg-main);
+            display: none;
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .dashboard-container.active { display: block; }
+        .map-container.hidden { display: none; }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+        }
+
+        .dashboard-card {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 20px var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+
+        .dashboard-card h3 {
+            color: var(--accent);
+            font-size: 14px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sensor-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .sensor-item {
+            background: var(--bg-card);
+            padding: 12px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .sensor-item .value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .sensor-item .label {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        /* ============================================
+           FLOATING ACTION BUTTONS
+           ============================================ */
+        .fab-container {
+            position: fixed;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 999;
+        }
+
+        .fab {
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            color: var(--accent);
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 15px var(--shadow);
+        }
+
+        .fab:hover {
+            background: var(--accent);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px var(--shadow-strong);
+        }
+
+        .fab.danger { border-color: var(--danger); color: var(--danger); }
+        .fab.danger:hover { background: var(--danger); color: white; }
+
+        /* ============================================
+           BOTTOM SHEET
+           ============================================ */
+        .bottom-sheet {
+            position: fixed;
+            left: 10px;
+            right: 10px;
+            bottom: 10px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            z-index: 1001;
+            transition: transform 0.3s ease-out, bottom 0.3s ease-out, border-radius 0.3s;
+            backdrop-filter: blur(20px);
+            max-height: calc(100vh - 80px);
+            box-shadow: 0 -4px 30px var(--shadow-strong);
+        }
+
+        .bottom-sheet.peek { transform: translateY(calc(100% - 130px)); }
+        .bottom-sheet.full { transform: translateY(0); bottom: 0; left: 0; right: 0; border-radius: 24px 24px 0 0; }
+        .bottom-sheet.hidden { transform: translateY(100%); }
+
+        .sheet-handle {
+            width: 100%;
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+            cursor: grab;
+        }
+
+        .sheet-handle-bar {
+            width: 40px;
+            height: 4px;
+            background: var(--text-dim);
+            border-radius: 2px;
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: flex;
+            gap: 8px;
+            padding: 8px 12px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .quick-action {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 10px 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            color: var(--accent);
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 70px;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .quick-action:hover, .quick-action.active {
+            background: var(--accent);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px var(--shadow-strong);
+        }
+
+        .quick-action .icon { font-size: 22px; }
+        .quick-action .label { font-size: 10px; font-weight: 600; white-space: nowrap; }
+
+        .quick-action.recording {
+            background: rgba(255, 107, 107, 0.2);
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        /* Sheet Tabs */
+        .sheet-tabs {
+            display: flex;
+            border-bottom: 2px solid var(--border);
+            padding: 0 8px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .sheet-tab {
+            padding: 10px 16px;
+            color: var(--text-dim);
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            white-space: nowrap;
+            transition: all 0.2s;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .sheet-tab:hover { color: var(--text); }
+        .sheet-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+        .sheet-content {
+            padding: 15px;
+            overflow-y: auto;
+            max-height: calc(100vh - 250px);
+        }
+
+        .section-hidden { display: none; }
+
+        /* ============================================
+           ROUTE SECTION
+           ============================================ */
+        .route-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .route-summary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .route-stat {
+            background: var(--bg-card);
+            padding: 12px 8px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .route-stat .value {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .route-stat .label {
+            font-size: 10px;
+            color: var(--text-dim);
+            margin-top: 2px;
+        }
+
+        .waypoint-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .waypoint-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            background: var(--bg-card);
+            border-radius: 10px;
+            border-left: 4px solid var(--accent);
+        }
+
+        .waypoint-item.completed { opacity: 0.5; border-left-color: var(--text-dim); }
+        .waypoint-item.current { background: var(--accent-dim); border-left-color: var(--warning); }
+        .waypoint-item.lock { border-left-color: var(--warning); }
+
+        .waypoint-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: var(--bg-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .waypoint-item.lock .waypoint-icon { background: var(--warning); }
+
+        .waypoint-info { flex: 1; }
+        .waypoint-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+        .waypoint-details { font-size: 11px; color: var(--text-dim); }
+
+        .waypoint-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .wp-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            border: none;
+            background: var(--border);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .wp-btn:hover { background: var(--accent); color: var(--bg-dark); }
+
+        /* ============================================
+           WEATHER SECTION
+           ============================================ */
+        .weather-current {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: var(--bg-card);
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+
+        .weather-icon { font-size: 50px; }
+        .weather-main { flex: 1; }
+        .weather-temp { font-size: 36px; font-weight: 700; color: var(--accent); }
+        .weather-desc { color: var(--text-dim); font-size: 14px; text-transform: capitalize; }
+        .weather-location { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+
+        .weather-details {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .weather-detail {
+            text-align: center;
+            padding: 12px 8px;
+            background: var(--bg-card);
+            border-radius: 10px;
+        }
+
+        .weather-detail .icon { font-size: 20px; margin-bottom: 4px; }
+        .weather-detail .value { font-size: 16px; font-weight: 600; color: var(--accent); }
+        .weather-detail .label { font-size: 10px; color: var(--text-dim); }
+
+        .forecast-title { font-size: 14px; color: var(--text-dim); margin-bottom: 10px; }
+
+        .forecast-list {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding-bottom: 5px;
+        }
+
+        .forecast-item {
+            min-width: 70px;
+            text-align: center;
+            padding: 10px;
+            background: var(--bg-card);
+            border-radius: 10px;
+        }
+
+        .forecast-item .time { font-size: 11px; color: var(--text-dim); }
+        .forecast-item .icon { font-size: 24px; margin: 5px 0; }
+        .forecast-item .temp { font-size: 14px; font-weight: 600; color: var(--accent); }
+
+        /* ============================================
+           LOGBOOK SECTION
+           ============================================ */
+        .logbook-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .logbook-tab {
+            padding: 8px 16px;
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .logbook-tab.active {
+            background: var(--accent);
+            color: var(--bg-dark);
+            border-color: var(--accent);
+        }
+
+        .current-trip {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .trip-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .trip-title { font-size: 16px; font-weight: 600; }
+        .trip-status {
+            padding: 4px 10px;
+            background: rgba(74, 222, 128, 0.2);
+            color: var(--success);
+            border-radius: 12px;
+            font-size: 11px;
+        }
+
+        .trip-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .trip-stat { text-align: center; }
+        .trip-stat .value { font-size: 20px; font-weight: 700; color: var(--accent); }
+        .trip-stat .label { font-size: 10px; color: var(--text-dim); }
+
+        .log-entries { display: flex; flex-direction: column; gap: 8px; }
+
+        .log-entry {
+            display: flex;
+            gap: 12px;
+            padding: 10px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            align-items: center;
+        }
+
+        .log-time { font-size: 12px; color: var(--text-dim); min-width: 50px; }
+        .log-text { flex: 1; font-size: 13px; }
+        .log-icon { font-size: 18px; }
+
+        /* ============================================
+           CREW SECTION
+           ============================================ */
+        .crew-list { display: flex; flex-direction: column; gap: 10px; }
+
+        .crew-member {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--bg-card);
+            border-radius: 10px;
+        }
+
+        .crew-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: var(--bg-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .crew-info { flex: 1; }
+        .crew-name { font-weight: 600; font-size: 14px; }
+        .crew-role { font-size: 12px; color: var(--text-dim); }
+
+        .crew-status {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+
+        .crew-status.aboard { background: rgba(74, 222, 128, 0.2); color: var(--success); }
+        .crew-status.ashore { background: rgba(255, 217, 61, 0.2); color: var(--warning); }
+
+        .add-crew-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px;
+            background: var(--accent-dim);
+            border: 2px dashed var(--border);
+            border-radius: 10px;
+            color: var(--accent);
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        /* ============================================
+           FUEL/TANK SECTION
+           ============================================ */
+        .tank-overview {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+
+        .tank-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 15px;
+        }
+
+        .tank-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .tank-name { font-size: 14px; font-weight: 600; }
+        .tank-percent { font-size: 20px; font-weight: 700; color: var(--accent); }
+
+        .tank-bar {
+            height: 8px;
+            background: var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .tank-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+
+        .tank-fill.low { background: var(--danger); }
+        .tank-fill.warning { background: var(--warning); }
+
+        .tank-details {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .fuel-log-title { font-size: 14px; margin-bottom: 10px; color: var(--text-dim); }
+
+        .fuel-entries { display: flex; flex-direction: column; gap: 8px; }
+
+        .fuel-entry {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        /* ============================================
+           SEARCH OVERLAY
+           ============================================ */
+        .search-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 2000;
+            display: none;
+            padding-top: 56px;
+        }
+
+        .search-overlay.active { display: block; }
+
+        .search-container {
+            background: var(--bg-panel);
+            max-width: 500px;
+            margin: 0 auto;
+            border-radius: 0 0 15px 15px;
+            overflow: hidden;
+        }
+
+        .search-input-wrapper {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 2px solid var(--border);
+            gap: 10px;
+        }
+
+        .search-input {
+            flex: 1;
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 16px;
+            outline: none;
+        }
+
+        .search-input::placeholder { color: var(--text-dim); }
+
+        .search-results {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .search-result {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 15px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .search-result:hover { background: var(--bg-card); }
+        .search-result-icon { font-size: 24px; }
+        .search-result-info { flex: 1; }
+        .search-result-name { font-size: 14px; font-weight: 500; }
+        .search-result-type { font-size: 12px; color: var(--text-dim); }
+
+        /* ============================================
+           SIDEBAR (Settings)
+           ============================================ */
+        .sidebar-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+        }
+
+        .sidebar-overlay.active { opacity: 1; visibility: visible; }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            right: -350px;
+            width: 350px;
+            height: 100%;
+            background: var(--bg-panel);
+            border-left: 2px solid var(--border);
+            z-index: 2001;
+            transition: right 0.3s ease-out;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar.active { right: 0; }
+
+        .sidebar-header {
+            padding: 15px 20px;
+            border-bottom: 2px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sidebar-header h3 { color: var(--accent); font-size: 18px; }
+
+        .sidebar-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            padding: 10px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .sidebar-tab {
+            padding: 6px 12px;
+            background: var(--bg-card);
+            border-radius: 15px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .sidebar-tab:hover { background: var(--border); }
+        .sidebar-tab.active { background: var(--accent); color: var(--bg-dark); }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .setting-group { margin-bottom: 20px; }
+
+        .setting-group h4 {
+            color: var(--text-dim);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+        }
+
+        .setting-item:last-child { border-bottom: none; }
+
+        .toggle {
+            width: 46px;
+            height: 26px;
+            background: var(--border);
+            border-radius: 13px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .toggle.active { background: var(--accent); }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: left 0.2s;
+        }
+
+        .toggle.active::after { left: 23px; }
+
+        .setting-input {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 10px;
+            color: var(--text);
+            width: 80px;
+            text-align: right;
+        }
+
+        .setting-select {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 10px;
+            color: var(--text);
+        }
+
+        /* Boat Icons in Settings */
+        .boat-icons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .boat-icon-option {
+            width: 60px;
+            height: 60px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .boat-icon-option:hover { border-color: var(--accent); }
+        .boat-icon-option.active { border-color: var(--accent); background: var(--accent-dim); }
+
+        .sidebar-footer {
+            padding: 15px;
+            border-top: 2px solid var(--border);
+            display: flex;
+            gap: 10px;
+        }
+
+        .sidebar-btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 10px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .sidebar-btn.primary {
+            background: var(--accent);
+            color: var(--bg-dark);
+        }
+
+        .sidebar-btn.secondary {
+            background: var(--bg-card);
+            color: var(--text);
+            border: 2px solid var(--border);
+        }
+
+        /* ============================================
+           GPS DETAIL POPUP
+           ============================================ */
+        .gps-popup {
+            position: fixed;
+            top: 60px;
+            left: 12px;
+            background: var(--bg-panel);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 15px;
+            min-width: 220px;
+            z-index: 1500;
+            display: none;
+        }
+
+        .gps-popup.active { display: block; }
+
+        .gps-popup h4 {
+            color: var(--accent);
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .gps-detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .gps-detail-row:last-child { border-bottom: none; }
+        .gps-detail-label { color: var(--text-dim); }
+        .gps-detail-value { color: var(--accent); font-weight: 600; }
+
+        /* ============================================
+           RESPONSIVE
+           ============================================ */
+        @media (max-width: 500px) {
+            .nav-values { gap: 10px; }
+            .nav-value { min-width: 45px; }
+            .nav-value .value { font-size: 16px; }
+            .route-summary { grid-template-columns: repeat(2, 1fr); }
+            .weather-details { grid-template-columns: repeat(2, 1fr); }
+            .tank-overview { grid-template-columns: 1fr; }
+            .sidebar { width: 100%; right: -100%; }
+        }
+    </style>
+</head>
+<body>
+    <!-- ============================================
+         TOP BAR
+         ============================================ -->
+    <div class="top-bar">
+        <div class="top-bar-section">
+            <div class="gps-indicator no-fix" onclick="toggleGpsPopup()">
+                <div class="gps-dot"></div>
+                <span id="gps-sats">3 Sats</span>
+            </div>
+        </div>
+
+        <div class="nav-values">
+            <div class="nav-value">
+                <div class="value" id="sog-value">0.0</div>
+                <div class="label">SOG kn</div>
+            </div>
+            <div class="nav-value">
+                <div class="value" id="cog-value">---°</div>
+                <div class="label">COG</div>
+            </div>
+            <div class="nav-value">
+                <div class="value" id="dist-value">--</div>
+                <div class="label">NM</div>
+            </div>
+            <div class="nav-value">
+                <div class="value" id="eta-value">--:--</div>
+                <div class="label">ETA</div>
+            </div>
+        </div>
+
+        <div class="top-bar-right">
+            <button class="icon-btn" id="trackBtn" onclick="toggleTrack()" title="Track">⏺️</button>
+            <button class="icon-btn" id="themeToggle" onclick="toggleTheme()" title="Theme">🌙</button>
+            <button class="icon-btn" id="modeToggle" onclick="toggleMode()" title="Dashboard">📊</button>
+            <button class="icon-btn" onclick="toggleSidebar()" title="Einstellungen">⚙️</button>
+        </div>
+    </div>
+
+    <!-- GPS Popup -->
+    <div class="gps-popup" id="gpsPopup">
+        <h4>📍 GPS Details</h4>
+        <div class="gps-detail-row">
+            <span class="gps-detail-label">Satelliten</span>
+            <span class="gps-detail-value">3 / 8</span>
+        </div>
+        <div class="gps-detail-row">
+            <span class="gps-detail-label">Fix</span>
+            <span class="gps-detail-value" style="color: var(--warning)">Kein Fix</span>
+        </div>
+        <div class="gps-detail-row">
+            <span class="gps-detail-label">Position</span>
+            <span class="gps-detail-value">--</span>
+        </div>
+        <div class="gps-detail-row">
+            <span class="gps-detail-label">Höhe</span>
+            <span class="gps-detail-value">-- m</span>
+        </div>
+        <div class="gps-detail-row">
+            <span class="gps-detail-label">HDOP</span>
+            <span class="gps-detail-value">--</span>
+        </div>
+    </div>
+
+    <!-- ============================================
+         MAP / DASHBOARD
+         ============================================ -->
+    <div class="map-container" id="mapContainer">
+        <div class="map-placeholder">
+            <span style="font-size: 48px;">🗺️</span>
+            <span>Karte (Navigation)</span>
+        </div>
+    </div>
+
+    <div class="dashboard-container" id="dashboardContainer">
+        <div class="dashboard-grid">
+            <div class="dashboard-card">
+                <h3>🧭 Navigation</h3>
+                <div class="sensor-grid">
+                    <div class="sensor-item">
+                        <div class="value">5.2</div>
+                        <div class="label">SOG (kn)</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">127°</div>
+                        <div class="label">COG</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">2.4</div>
+                        <div class="label">Distanz (NM)</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">14:32</div>
+                        <div class="label">ETA</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-card">
+                <h3>🌡️ Umgebung</h3>
+                <div class="sensor-grid">
+                    <div class="sensor-item">
+                        <div class="value">-3°</div>
+                        <div class="label">Temperatur</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">78%</div>
+                        <div class="label">Luftfeuchte</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">1013</div>
+                        <div class="label">Druck (hPa)</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">12 kn</div>
+                        <div class="label">Wind</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-card">
+                <h3>⚡ Bordnetz</h3>
+                <div class="sensor-grid">
+                    <div class="sensor-item">
+                        <div class="value">12.8V</div>
+                        <div class="label">Batterie</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">2.4A</div>
+                        <div class="label">Verbrauch</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">85%</div>
+                        <div class="label">Ladung</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">OK</div>
+                        <div class="label">Status</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-card">
+                <h3>⛽ Tanks</h3>
+                <div class="sensor-grid">
+                    <div class="sensor-item">
+                        <div class="value">67%</div>
+                        <div class="label">Diesel</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">45%</div>
+                        <div class="label">Wasser</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">23%</div>
+                        <div class="label">Abwasser</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">--</div>
+                        <div class="label">Reserve</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-card">
+                <h3>🔧 Motor</h3>
+                <div class="sensor-grid">
+                    <div class="sensor-item">
+                        <div class="value">1850</div>
+                        <div class="label">RPM</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">78°</div>
+                        <div class="label">Temperatur</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">3.2</div>
+                        <div class="label">Öldruck</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">142h</div>
+                        <div class="label">Betriebsst.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-card">
+                <h3>📊 Trip</h3>
+                <div class="sensor-grid">
+                    <div class="sensor-item">
+                        <div class="value">24.3</div>
+                        <div class="label">NM heute</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">4:32</div>
+                        <div class="label">Fahrzeit</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">5.4</div>
+                        <div class="label">Ø SOG</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="value">12.1L</div>
+                        <div class="label">Verbrauch</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         FLOATING ACTION BUTTONS
+         ============================================ -->
+    <div class="fab-container" id="fabContainer">
+        <button class="fab" onclick="centerMap()" title="Zentrieren">🎯</button>
+        <button class="fab" onclick="zoomIn()" title="Zoom +">+</button>
+        <button class="fab" onclick="zoomOut()" title="Zoom -">−</button>
+        <button class="fab" onclick="toggleLayers()" title="Layer">🗂️</button>
+        <button class="fab danger" onclick="manOverBoard()" title="MOB">🆘</button>
+    </div>
+
+    <!-- ============================================
+         BOTTOM SHEET
+         ============================================ -->
+    <div class="bottom-sheet peek" id="bottomSheet">
+        <div class="sheet-handle" onclick="cycleSheet()">
+            <div class="sheet-handle-bar"></div>
+        </div>
+
+        <div class="quick-actions">
+            <div class="quick-action" onclick="startRoutePlanning()">
+                <span class="icon">🧭</span>
+                <span class="label">Route</span>
+            </div>
+            <div class="quick-action" onclick="openSearch()">
+                <span class="icon">🔍</span>
+                <span class="label">Suche</span>
+            </div>
+            <div class="quick-action" onclick="showFavorites()">
+                <span class="icon">⭐</span>
+                <span class="label">Favoriten</span>
+            </div>
+            <div class="quick-action" onclick="addLogEntry()">
+                <span class="icon">✏️</span>
+                <span class="label">Eintrag</span>
+            </div>
+            <div class="quick-action" onclick="showAIS()">
+                <span class="icon">🚢</span>
+                <span class="label">AIS</span>
+            </div>
+            <div class="quick-action" onclick="showLocks()">
+                <span class="icon">🚧</span>
+                <span class="label">Schleusen</span>
+            </div>
+        </div>
+
+        <div class="sheet-tabs">
+            <div class="sheet-tab active" onclick="showSection('route', this)">Route</div>
+            <div class="sheet-tab" onclick="showSection('weather', this)">Wetter</div>
+            <div class="sheet-tab" onclick="showSection('logbook', this)">Logbuch</div>
+            <div class="sheet-tab" onclick="showSection('crew', this)">Crew</div>
+            <div class="sheet-tab" onclick="showSection('fuel', this)">Tank</div>
+        </div>
+
+        <div class="sheet-content">
+            <!-- ROUTE -->
+            <div id="section-route">
+                <div class="route-header">
+                    <span style="font-size: 16px; font-weight: 600;">Aktuelle Route</span>
+                    <button class="icon-btn" style="width: 32px; height: 32px; font-size: 14px;" onclick="editRoute()">✏️</button>
+                </div>
+
+                <div class="route-summary">
+                    <div class="route-stat">
+                        <div class="value">12.4</div>
+                        <div class="label">NM</div>
+                    </div>
+                    <div class="route-stat">
+                        <div class="value">2:15</div>
+                        <div class="label">Zeit</div>
+                    </div>
+                    <div class="route-stat">
+                        <div class="value">2</div>
+                        <div class="label">Schleusen</div>
+                    </div>
+                    <div class="route-stat">
+                        <div class="value">14:32</div>
+                        <div class="label">ETA</div>
+                    </div>
+                </div>
+
+                <div class="waypoint-list">
+                    <div class="waypoint-item completed">
+                        <div class="waypoint-icon">1</div>
+                        <div class="waypoint-info">
+                            <div class="waypoint-name">Aken Hafen</div>
+                            <div class="waypoint-details">Start • 10:15 abgefahren</div>
+                        </div>
+                    </div>
+                    <div class="waypoint-item lock current">
+                        <div class="waypoint-icon">🔒</div>
+                        <div class="waypoint-info">
+                            <div class="waypoint-name">Schleuse Calbe</div>
+                            <div class="waypoint-details">4.2 NM • ~45 min • VHF 20</div>
+                        </div>
+                        <div class="waypoint-actions">
+                            <button class="wp-btn" title="Anrufen">📞</button>
+                            <button class="wp-btn" title="Info">ℹ️</button>
+                        </div>
+                    </div>
+                    <div class="waypoint-item">
+                        <div class="waypoint-icon">2</div>
+                        <div class="waypoint-info">
+                            <div class="waypoint-name">Barby Marina</div>
+                            <div class="waypoint-details">6.8 NM • ~1:05</div>
+                        </div>
+                        <div class="waypoint-actions">
+                            <button class="wp-btn" title="Löschen">🗑️</button>
+                        </div>
+                    </div>
+                    <div class="waypoint-item">
+                        <div class="waypoint-icon">3</div>
+                        <div class="waypoint-info">
+                            <div class="waypoint-name">Magdeburg Hafen</div>
+                            <div class="waypoint-details">12.4 NM • ~2:15 • Ziel</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WEATHER -->
+            <div id="section-weather" class="section-hidden">
+                <div class="weather-current">
+                    <div class="weather-icon">☁️</div>
+                    <div class="weather-main">
+                        <div class="weather-temp">-3°C</div>
+                        <div class="weather-desc">Bedeckt</div>
+                        <div class="weather-location">📍 Aken/Elbe</div>
+                    </div>
+                </div>
+
+                <div class="weather-details">
+                    <div class="weather-detail">
+                        <div class="icon">💨</div>
+                        <div class="value">12 kn</div>
+                        <div class="label">Wind</div>
+                    </div>
+                    <div class="weather-detail">
+                        <div class="icon">🧭</div>
+                        <div class="value">SW</div>
+                        <div class="label">Richtung</div>
+                    </div>
+                    <div class="weather-detail">
+                        <div class="icon">💧</div>
+                        <div class="value">78%</div>
+                        <div class="label">Feuchte</div>
+                    </div>
+                    <div class="weather-detail">
+                        <div class="icon">📊</div>
+                        <div class="value">1013</div>
+                        <div class="label">hPa</div>
+                    </div>
+                </div>
+
+                <div class="forecast-title">Vorhersage</div>
+                <div class="forecast-list">
+                    <div class="forecast-item">
+                        <div class="time">12:00</div>
+                        <div class="icon">☁️</div>
+                        <div class="temp">-2°</div>
+                    </div>
+                    <div class="forecast-item">
+                        <div class="time">15:00</div>
+                        <div class="icon">🌥️</div>
+                        <div class="temp">-1°</div>
+                    </div>
+                    <div class="forecast-item">
+                        <div class="time">18:00</div>
+                        <div class="icon">☁️</div>
+                        <div class="temp">-3°</div>
+                    </div>
+                    <div class="forecast-item">
+                        <div class="time">21:00</div>
+                        <div class="icon">🌙</div>
+                        <div class="temp">-5°</div>
+                    </div>
+                    <div class="forecast-item">
+                        <div class="time">Sa</div>
+                        <div class="icon">🌤️</div>
+                        <div class="temp">1°</div>
+                    </div>
+                    <div class="forecast-item">
+                        <div class="time">So</div>
+                        <div class="icon">☀️</div>
+                        <div class="temp">3°</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LOGBOOK -->
+            <div id="section-logbook" class="section-hidden">
+                <div class="logbook-tabs">
+                    <div class="logbook-tab active">Aktuelle Fahrt</div>
+                    <div class="logbook-tab">Archiv</div>
+                </div>
+
+                <div class="current-trip">
+                    <div class="trip-header">
+                        <div class="trip-title">Aken → Magdeburg</div>
+                        <div class="trip-status">Aktiv</div>
+                    </div>
+                    <div class="trip-stats">
+                        <div class="trip-stat">
+                            <div class="value">4.2</div>
+                            <div class="label">NM</div>
+                        </div>
+                        <div class="trip-stat">
+                            <div class="value">0:47</div>
+                            <div class="label">Zeit</div>
+                        </div>
+                        <div class="trip-stat">
+                            <div class="value">5.4</div>
+                            <div class="label">Ø kn</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="log-entries">
+                    <div class="log-entry">
+                        <div class="log-time">10:15</div>
+                        <div class="log-icon">🚀</div>
+                        <div class="log-text">Abfahrt Aken Hafen</div>
+                    </div>
+                    <div class="log-entry">
+                        <div class="log-time">10:32</div>
+                        <div class="log-icon">⛽</div>
+                        <div class="log-text">Tank: 67% (80L)</div>
+                    </div>
+                    <div class="log-entry">
+                        <div class="log-time">10:45</div>
+                        <div class="log-icon">👥</div>
+                        <div class="log-text">Crew: 2 Personen an Bord</div>
+                    </div>
+                    <div class="log-entry">
+                        <div class="log-time">11:02</div>
+                        <div class="log-icon">📍</div>
+                        <div class="log-text">Passage Elbkilometer 283</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CREW -->
+            <div id="section-crew" class="section-hidden">
+                <div class="crew-list">
+                    <div class="crew-member">
+                        <div class="crew-avatar">SK</div>
+                        <div class="crew-info">
+                            <div class="crew-name">Stefan Koch</div>
+                            <div class="crew-role">Skipper</div>
+                        </div>
+                        <div class="crew-status aboard">An Bord</div>
+                    </div>
+                    <div class="crew-member">
+                        <div class="crew-avatar">LM</div>
+                        <div class="crew-info">
+                            <div class="crew-name">Lisa Müller</div>
+                            <div class="crew-role">Co-Skipper</div>
+                        </div>
+                        <div class="crew-status aboard">An Bord</div>
+                    </div>
+                    <div class="crew-member">
+                        <div class="crew-avatar">TK</div>
+                        <div class="crew-info">
+                            <div class="crew-name">Tom Koch</div>
+                            <div class="crew-role">Crew</div>
+                        </div>
+                        <div class="crew-status ashore">An Land</div>
+                    </div>
+                    <div class="add-crew-btn" onclick="addCrew()">
+                        <span>➕</span>
+                        <span>Crew hinzufügen</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FUEL/TANK -->
+            <div id="section-fuel" class="section-hidden">
+                <div class="tank-overview">
+                    <div class="tank-card">
+                        <div class="tank-header">
+                            <span class="tank-name">⛽ Diesel</span>
+                            <span class="tank-percent">67%</span>
+                        </div>
+                        <div class="tank-bar">
+                            <div class="tank-fill" style="width: 67%"></div>
+                        </div>
+                        <div class="tank-details">
+                            <span>80 / 120 L</span>
+                            <span>~180 NM</span>
+                        </div>
+                    </div>
+                    <div class="tank-card">
+                        <div class="tank-header">
+                            <span class="tank-name">💧 Frischwasser</span>
+                            <span class="tank-percent">45%</span>
+                        </div>
+                        <div class="tank-bar">
+                            <div class="tank-fill warning" style="width: 45%"></div>
+                        </div>
+                        <div class="tank-details">
+                            <span>90 / 200 L</span>
+                            <span>~3 Tage</span>
+                        </div>
+                    </div>
+                    <div class="tank-card">
+                        <div class="tank-header">
+                            <span class="tank-name">🚽 Abwasser</span>
+                            <span class="tank-percent">23%</span>
+                        </div>
+                        <div class="tank-bar">
+                            <div class="tank-fill" style="width: 23%"></div>
+                        </div>
+                        <div class="tank-details">
+                            <span>23 / 100 L</span>
+                            <span></span>
+                        </div>
+                    </div>
+                    <div class="tank-card">
+                        <div class="tank-header">
+                            <span class="tank-name">🔋 Batterie</span>
+                            <span class="tank-percent">85%</span>
+                        </div>
+                        <div class="tank-bar">
+                            <div class="tank-fill" style="width: 85%"></div>
+                        </div>
+                        <div class="tank-details">
+                            <span>12.8V</span>
+                            <span>2.4A Verbr.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fuel-log-title">Letzte Tankungen</div>
+                <div class="fuel-entries">
+                    <div class="fuel-entry">
+                        <span>23.01.2026 • Aken</span>
+                        <span style="color: var(--accent)">+45 L Diesel</span>
+                    </div>
+                    <div class="fuel-entry">
+                        <span>20.01.2026 • Dessau</span>
+                        <span style="color: var(--accent)">+80 L Diesel</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         SEARCH OVERLAY
+         ============================================ -->
+    <div class="search-overlay" id="searchOverlay" onclick="closeSearch(event)">
+        <div class="search-container" onclick="event.stopPropagation()">
+            <div class="search-input-wrapper">
+                <span style="font-size: 20px;">🔍</span>
+                <input type="text" class="search-input" placeholder="Hafen, Marina, Schleuse..." autofocus>
+                <button class="icon-btn" style="width: 32px; height: 32px;" onclick="closeSearch()">✕</button>
+            </div>
+            <div class="search-results">
+                <div class="search-result">
+                    <div class="search-result-icon">⚓</div>
+                    <div class="search-result-info">
+                        <div class="search-result-name">Magdeburg Stadthafen</div>
+                        <div class="search-result-type">Hafen • 8.2 NM</div>
+                    </div>
+                </div>
+                <div class="search-result">
+                    <div class="search-result-icon">🔒</div>
+                    <div class="search-result-info">
+                        <div class="search-result-name">Schleuse Magdeburg</div>
+                        <div class="search-result-type">Schleuse • 7.8 NM</div>
+                    </div>
+                </div>
+                <div class="search-result">
+                    <div class="search-result-icon">⛽</div>
+                    <div class="search-result-info">
+                        <div class="search-result-name">Tankstelle Barby</div>
+                        <div class="search-result-type">Tankstelle • 5.1 NM</div>
+                    </div>
+                </div>
+                <div class="search-result">
+                    <div class="search-result-icon">🏠</div>
+                    <div class="search-result-info">
+                        <div class="search-result-name">Marina Schönebeck</div>
+                        <div class="search-result-type">Marina • 3.4 NM</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         SETTINGS SIDEBAR
+         ============================================ -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h3>⚙️ Einstellungen</h3>
+            <button class="icon-btn" style="width: 36px; height: 36px;" onclick="toggleSidebar()">✕</button>
+        </div>
+
+        <div class="sidebar-tabs">
+            <div class="sidebar-tab active" onclick="showSettingsTab('general', this)">Allgemein</div>
+            <div class="sidebar-tab" onclick="showSettingsTab('boat', this)">Boot</div>
+            <div class="sidebar-tab" onclick="showSettingsTab('map', this)">Karte</div>
+            <div class="sidebar-tab" onclick="showSettingsTab('nav', this)">Navigation</div>
+            <div class="sidebar-tab" onclick="showSettingsTab('sensors', this)">Sensoren</div>
+            <div class="sidebar-tab" onclick="showSettingsTab('ais', this)">AIS</div>
+            <div class="sidebar-tab" onclick="showSettingsTab('data', this)">Daten</div>
+        </div>
+
+        <div class="sidebar-content">
+            <!-- General Settings -->
+            <div id="settings-general">
+                <div class="setting-group">
+                    <h4>Anzeige</h4>
+                    <div class="setting-item">
+                        <span>Nachtmodus</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Sprache</span>
+                        <select class="setting-select">
+                            <option>Deutsch</option>
+                            <option>English</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <span>Einheiten</span>
+                        <select class="setting-select">
+                            <option>Nautisch (NM, kn)</option>
+                            <option>Metrisch (km, km/h)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Töne</h4>
+                    <div class="setting-item">
+                        <span>Alarme</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Benachrichtigungen</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Boat Settings -->
+            <div id="settings-boat" class="section-hidden">
+                <div class="setting-group">
+                    <h4>Bootsdaten</h4>
+                    <div class="setting-item">
+                        <span>Name</span>
+                        <input type="text" class="setting-input" value="Arielle" style="width: 120px;">
+                    </div>
+                    <div class="setting-item">
+                        <span>Länge (m)</span>
+                        <input type="number" class="setting-input" value="12.5">
+                    </div>
+                    <div class="setting-item">
+                        <span>Breite (m)</span>
+                        <input type="number" class="setting-input" value="3.8">
+                    </div>
+                    <div class="setting-item">
+                        <span>Tiefgang (m)</span>
+                        <input type="number" class="setting-input" value="1.2">
+                    </div>
+                    <div class="setting-item">
+                        <span>Höhe (m)</span>
+                        <input type="number" class="setting-input" value="4.5">
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Boot-Symbol</h4>
+                    <div class="boat-icons">
+                        <div class="boat-icon-option active">🚤</div>
+                        <div class="boat-icon-option">⛵</div>
+                        <div class="boat-icon-option">🛥️</div>
+                        <div class="boat-icon-option">🚢</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Map Settings -->
+            <div id="settings-map" class="section-hidden">
+                <div class="setting-group">
+                    <h4>Kartenlayer</h4>
+                    <div class="setting-item">
+                        <span>OpenSeaMap</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Tiefenlinien</span>
+                        <div class="toggle" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Schleusen anzeigen</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Track anzeigen</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Verhalten</h4>
+                    <div class="setting-item">
+                        <span>Auto-Zentrierung</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Heading Up</span>
+                        <div class="toggle" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Settings -->
+            <div id="settings-nav" class="section-hidden">
+                <div class="setting-group">
+                    <h4>Routing</h4>
+                    <div class="setting-item">
+                        <span>Wasserwege bevorzugen</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Schleusen vermeiden</span>
+                        <div class="toggle" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Standard-Geschwindigkeit</span>
+                        <input type="number" class="setting-input" value="6"> kn
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Alarme</h4>
+                    <div class="setting-item">
+                        <span>Ankunftsalarm</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Alarm-Distanz</span>
+                        <input type="number" class="setting-input" value="0.1"> NM
+                    </div>
+                    <div class="setting-item">
+                        <span>Anker-Alarm</span>
+                        <div class="toggle" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sensor Settings -->
+            <div id="settings-sensors" class="section-hidden">
+                <div class="setting-group">
+                    <h4>GPS</h4>
+                    <div class="setting-item">
+                        <span>Quelle</span>
+                        <select class="setting-select">
+                            <option>SignalK (USB)</option>
+                            <option>Browser GPS</option>
+                            <option>Manuell</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Sensoren</h4>
+                    <div class="setting-item">
+                        <span>Temperatur</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Tiefe</span>
+                        <div class="toggle" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Wind</span>
+                        <div class="toggle" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AIS Settings -->
+            <div id="settings-ais" class="section-hidden">
+                <div class="setting-group">
+                    <h4>AIS Empfang</h4>
+                    <div class="setting-item">
+                        <span>AIS aktiviert</span>
+                        <div class="toggle" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Reichweite</span>
+                        <input type="number" class="setting-input" value="20"> NM
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Kollisionswarnung</h4>
+                    <div class="setting-item">
+                        <span>CPA Alarm</span>
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Min. CPA</span>
+                        <input type="number" class="setting-input" value="0.5"> NM
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Settings -->
+            <div id="settings-data" class="section-hidden">
+                <div class="setting-group">
+                    <h4>Export</h4>
+                    <div class="setting-item">
+                        <span>Alle Daten exportieren</span>
+                        <button class="icon-btn" style="width: 60px; border-radius: 8px; font-size: 12px;">📤 Export</button>
+                    </div>
+                    <div class="setting-item">
+                        <span>Track als GPX</span>
+                        <button class="icon-btn" style="width: 60px; border-radius: 8px; font-size: 12px;">📤 GPX</button>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Import</h4>
+                    <div class="setting-item">
+                        <span>Daten importieren</span>
+                        <button class="icon-btn" style="width: 60px; border-radius: 8px; font-size: 12px;">📥 Import</button>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Speicher</h4>
+                    <div class="setting-item">
+                        <span>Cache leeren</span>
+                        <button class="icon-btn" style="width: 60px; border-radius: 8px; font-size: 12px;">🗑️</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-footer">
+            <button class="sidebar-btn secondary" onclick="toggleSidebar()">Abbrechen</button>
+            <button class="sidebar-btn primary" onclick="saveSettings()">Speichern</button>
+        </div>
+    </div>
+
+    <!-- ============================================
+         JAVASCRIPT
+         ============================================ -->
+    <script>
+        // Bottom Sheet - nur peek und full (kein Zwischenschritt)
+        const sheet = document.getElementById('bottomSheet');
+        const states = ['peek', 'full'];
+        let currentState = 0;
+
+        function cycleSheet() {
+            sheet.classList.remove(states[currentState]);
+            currentState = (currentState + 1) % states.length;
+            sheet.classList.add(states[currentState]);
+        }
+
+        // Tab switching
+        function showSection(name, tab) {
+            document.querySelectorAll('[id^="section-"]').forEach(s => s.classList.add('section-hidden'));
+            document.getElementById('section-' + name).classList.remove('section-hidden');
+            document.querySelectorAll('.sheet-tab').forEach(t => t.classList.remove('active'));
+            if (tab) tab.classList.add('active');
+        }
+
+        // Sidebar
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('active');
+            document.getElementById('sidebarOverlay').classList.toggle('active');
+        }
+
+        function showSettingsTab(name, tab) {
+            document.querySelectorAll('[id^="settings-"]').forEach(s => s.classList.add('section-hidden'));
+            document.getElementById('settings-' + name).classList.remove('section-hidden');
+            document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+            if (tab) tab.classList.add('active');
+        }
+
+        // Mode toggle
+        let isNaviMode = true;
+        function toggleMode() {
+            isNaviMode = !isNaviMode;
+            const btn = document.getElementById('modeToggle');
+            const map = document.getElementById('mapContainer');
+            const dashboard = document.getElementById('dashboardContainer');
+            const sheet = document.getElementById('bottomSheet');
+            const fabs = document.getElementById('fabContainer');
+
+            if (isNaviMode) {
+                btn.textContent = '📊';
+                btn.title = 'Dashboard';
+                map.classList.remove('hidden');
+                dashboard.classList.remove('active');
+                sheet.classList.remove('hidden');
+                fabs.style.display = 'flex';
+            } else {
+                btn.textContent = '🧭';
+                btn.title = 'Navigation';
+                map.classList.add('hidden');
+                dashboard.classList.add('active');
+                sheet.classList.add('hidden');
+                fabs.style.display = 'none';
+            }
+        }
+
+        // Theme Toggle
+        let isDarkMode = false;
+        function toggleTheme() {
+            isDarkMode = !isDarkMode;
+            const btn = document.getElementById('themeToggle');
+            if (isDarkMode) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                btn.textContent = '☀️';
+                btn.title = 'Light Mode';
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+                btn.textContent = '🌙';
+                btn.title = 'Dark Mode';
+            }
+        }
+
+        // GPS Popup
+        function toggleGpsPopup() {
+            document.getElementById('gpsPopup').classList.toggle('active');
+        }
+
+        // Track recording
+        let isRecording = false;
+        function toggleTrack() {
+            isRecording = !isRecording;
+            const btn = document.getElementById('trackBtn');
+            if (isRecording) {
+                btn.classList.add('recording');
+                btn.textContent = '⏹️';
+            } else {
+                btn.classList.remove('recording');
+                btn.textContent = '⏺️';
+            }
+        }
+
+        // Search
+        function openSearch() {
+            document.getElementById('searchOverlay').classList.add('active');
+            document.querySelector('.search-input').focus();
+        }
+
+        function closeSearch(e) {
+            if (!e || e.target === document.getElementById('searchOverlay')) {
+                document.getElementById('searchOverlay').classList.remove('active');
+            }
+        }
+
+        // Touch handling for bottom sheet
+        let startY = 0;
+        const handle = document.querySelector('.sheet-handle');
+
+        handle.addEventListener('touchstart', (e) => {
+            startY = e.touches[0].clientY;
+        });
+
+        handle.addEventListener('touchend', (e) => {
+            const endY = e.changedTouches[0].clientY;
+            const diff = startY - endY;
+
+            // Wischen nach oben = full, nach unten = peek
+            if (Math.abs(diff) > 50) {
+                sheet.classList.remove(states[currentState]);
+                if (diff > 0) {
+                    currentState = 1; // full
+                } else {
+                    currentState = 0; // peek
+                }
+                sheet.classList.add(states[currentState]);
+            }
+        });
+
+        // Placeholder functions
+        function centerMap() { console.log('Center map'); }
+        function zoomIn() { console.log('Zoom in'); }
+        function zoomOut() { console.log('Zoom out'); }
+        function toggleLayers() { console.log('Toggle layers'); }
+        function manOverBoard() { alert('🆘 MOB ALARM!'); }
+        function startRoutePlanning() { console.log('Route planning'); }
+        function showFavorites() { console.log('Favorites'); }
+        function addLogEntry() { console.log('Add log entry'); }
+        function showAIS() { console.log('Show AIS'); }
+        function showLocks() { console.log('Show locks'); }
+        function editRoute() { console.log('Edit route'); }
+        function addCrew() { console.log('Add crew'); }
+        function saveSettings() { toggleSidebar(); console.log('Settings saved'); }
+
+        // Close GPS popup when clicking elsewhere
+        document.addEventListener('click', (e) => {
+            const popup = document.getElementById('gpsPopup');
+            const indicator = document.querySelector('.gps-indicator');
+            if (!popup.contains(e.target) && !indicator.contains(e.target)) {
+                popup.classList.remove('active');
+            }
+        });
+    </script>
+</body>
+</html>

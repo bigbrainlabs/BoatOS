@@ -1,0 +1,328 @@
+/* BoatOS Remote Control Styles */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary-color: #0066cc;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --bg-color: #1a1a1a;
+    --surface-color: #2a2a2a;
+    --text-color: #ffffff;
+    --text-secondary: #999;
+    --border-color: #444;
+    --touch-color: #0066cc88;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: var(--bg-color);
+    color: var(--text-color);
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--surface-color);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.status-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--danger-color);
+    animation: pulse 2s infinite;
+}
+
+.status-indicator.connected {
+    background: var(--success-color);
+    animation: none;
+}
+
+.status-indicator.connecting {
+    background: var(--warning-color);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.status-text {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.header-right {
+    display: flex;
+    gap: 12px;
+}
+
+.mode-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--primary-color);
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.mode-toggle:active {
+    transform: scale(0.95);
+}
+
+.mode-icon {
+    font-size: 18px;
+}
+
+/* Remote Mode */
+.remote-mode {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.touchpad-container {
+    flex: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+}
+
+.touchpad {
+    flex: 1;
+    position: relative;
+    background: var(--surface-color);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    touch-action: none;
+    cursor: crosshair;
+}
+
+.touchpad-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.crosshair {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    border: 2px solid var(--primary-color);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+
+.crosshair::before,
+.crosshair::after {
+    content: '';
+    position: absolute;
+    background: var(--primary-color);
+}
+
+.crosshair::before {
+    width: 2px;
+    height: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.crosshair::after {
+    height: 2px;
+    width: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.crosshair.active {
+    opacity: 0.8;
+}
+
+.touch-indicator {
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: var(--touch-color);
+    transform: translate(-50%, -50%) scale(0);
+    pointer-events: none;
+    transition: transform 0.1s;
+}
+
+.touch-indicator.active {
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.touchpad-instructions {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 16px;
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.touchpad.active .touchpad-instructions {
+    opacity: 0;
+}
+
+/* Quick Actions */
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 12px;
+    padding: 16px;
+    background: var(--surface-color);
+    border-top: 1px solid var(--border-color);
+}
+
+.action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 16px 12px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.action-btn:active {
+    transform: scale(0.95);
+    background: var(--primary-color);
+}
+
+.action-btn .icon {
+    font-size: 24px;
+}
+
+.action-btn .label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Helm Mode */
+.helm-mode {
+    flex: 1;
+    position: relative;
+}
+
+.helm-mode iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+/* Hidden state */
+.hidden {
+    display: none !important;
+}
+
+/* Debug Info */
+.debug-info {
+    position: fixed;
+    top: 60px;
+    right: 16px;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-family: monospace;
+    z-index: 1000;
+}
+
+.debug-line {
+    margin-bottom: 4px;
+    color: var(--text-secondary);
+}
+
+.debug-line span {
+    color: var(--primary-color);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .title {
+        font-size: 16px;
+    }
+
+    .quick-actions {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Landscape mode */
+@media (orientation: landscape) {
+    .quick-actions {
+        padding: 12px 16px;
+    }
+
+    .action-btn {
+        padding: 12px 8px;
+    }
+}
+
+/* Prevent text selection on touch */
+.touchpad * {
+    -webkit-tap-highlight-color: transparent;
+}
