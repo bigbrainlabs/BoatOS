@@ -156,7 +156,14 @@ class DashboardDSLParser:
         return widget
 
     def _parse_gauge(self, line: str) -> Dict[str, Any]:
-        """Parse GAUGE command"""
+        """Parse GAUGE command
+
+        Supported styles:
+        - arc180: Half-circle gauge (default)
+        - arc270: Three-quarter circle gauge
+        - arc360: Full circle gauge
+        - bar: Linear progress bar
+        """
         widget = {
             "type": "gauge",
             "sensor": "",
@@ -164,7 +171,10 @@ class DashboardDSLParser:
             "max": 100,
             "unit": "",
             "color": "cyan",
-            "size": 1
+            "size": 1,
+            "style": "arc180",  # Default: half-circle
+            "label": None,      # Optional label
+            "decimals": 1       # Decimal places for value
         }
 
         # Extract sensor path
@@ -184,6 +194,16 @@ class DashboardDSLParser:
         max_match = re.search(r'MAX\s+(\d+)', line, re.IGNORECASE)
         if max_match:
             widget["max"] = int(max_match.group(1))
+
+        # Parse LABEL (in quotes)
+        label_match = re.search(r'LABEL\s+"([^"]+)"', line, re.IGNORECASE)
+        if label_match:
+            widget["label"] = label_match.group(1)
+
+        # Parse DECIMALS
+        decimals_match = re.search(r'DECIMALS\s+(\d+)', line, re.IGNORECASE)
+        if decimals_match:
+            widget["decimals"] = int(decimals_match.group(1))
 
         return widget
 
