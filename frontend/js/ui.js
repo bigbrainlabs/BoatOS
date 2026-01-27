@@ -18,6 +18,8 @@ const API_URL = window.location.hostname === 'localhost'
 // Favoriten State
 let favorites = [];
 let favoritesPanel = null;
+let favoriteMarkers = [];
+let favoritesVisible = false;
 
 // Panel IDs für hideAllPanels
 const PANEL_IDS = [
@@ -772,6 +774,7 @@ export const CATEGORY_ICONS = {
     'bridge': '🌉',
     'restaurant': '🍽️',
     'shop': '🏪',
+    'danger': '⚠️',
     'other': '📍'
 };
 
@@ -991,12 +994,336 @@ export function handleSearch(query) {
 // ===========================================
 
 /**
- * Zeigt das Favoriten-Panel
+ * Zeigt/versteckt Favoriten auf der Karte und öffnet das Favoriten-Panel
  */
-export function showFavorites() {
-    showNotification('Favoriten werden geladen...', 'info');
-    // TODO: Favoriten-Modal öffnen
+export async function showFavorites() {
+    const map = window.BoatOS?.map?.getMap?.() || window.map;
+
+    // Toggle: Wenn bereits sichtbar, alles ausblenden
+    if (favoritesVisible) {
+        hideFavoriteMarkers();
+        closeFavoritesPanel();
+        favoritesVisible = false;
+
+        // Button-Status aktualisieren
+        const favBtn = document.querySelector('.quick-action[onclick*="showFavorites"]');
+        if (favBtn) favBtn.classList.remove('active');
+
+        showToast('Favoriten ausgeblendet', 'info');
+        return;
+    }
+
+    // Favoriten laden
+    showToast('Favoriten werden geladen...', 'info');
+    await loadFavorites();
+
+    if (favorites.length === 0) {
+        showToast('Keine Favoriten vorhanden', 'warning');
+        return;
+    }
+
+    // Marker auf Karte anzeigen
+    if (map) {
+        showFavoriteMarkers(map);
+    }
+
+    // Panel anzeigen
+    openFavoritesPanel();
+
+    favoritesVisible = true;
+
+    // Button-Status aktualisieren
+    const favBtn = document.querySelector('.quick-action[onclick*="showFavorites"]');
+    if (favBtn) favBtn.classList.add('active');
+
+    showToast(`${favorites.length} Favoriten geladen`, 'success');
 }
+
+/**
+ * Zeigt Favoriten-Marker auf der Karte
+ * @param {object} map - MapLibre Map-Instanz
+ */
+function showFavoriteMarkers(map) {
+    // Alte Marker entfernen
+    hideFavoriteMarkers();
+
+    favorites.forEach(fav => {
+        const icon = getCategoryIcon(fav.category);
+
+        // Marker-Element erstellen
+        const el = document.createElement('div');
+        el.className = 'favorite-marker';
+        el.innerHTML = icon;
+        el.style.cssText = `
+            font-size: 28px;
+            cursor: pointer;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+            transition: transform 0.2s;
+        `;
+
+        // Hover-Effekt
+        el.addEventListener('mouseenter', () => {
+            el.style.transform = 'scale(1.3)';
+        });
+        el.addEventListener('mouseleave', () => {
+            el.style.transform = 'scale(1)';
+        });
+
+        // Click-Handler für Popup
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showFavoritePopup(map, fav);
+        });
+
+        // MapLibre Marker erstellen
+        const marker = new maplibregl.Marker({ element: el })
+            .setLngLat([fav.lon, fav.lat])
+            .addTo(map);
+
+        favoriteMarkers.push(marker);
+    });
+
+    console.log(`${favoriteMarkers.length} Favoriten-Marker angezeigt`);
+}
+
+/**
+ * Entfernt alle Favoriten-Marker von der Karte
+ */
+function hideFavoriteMarkers() {
+    favoriteMarkers.forEach(marker => marker.remove());
+    favoriteMarkers = [];
+}
+
+/**
+ * Zeigt ein Popup für einen Favoriten
+ * @param {object} map - MapLibre Map-Instanz
+ * @param {object} fav - Favoriten-Objekt
+ */
+function showFavoritePopup(map, fav) {
+    const icon = getCategoryIcon(fav.category);
+    const popupContent = `
+        <div style="padding: 10px; min-width: 200px;">
+            <h3 style="margin: 0 0 8px 0; color: #0a192f; font-size: 16px;">
+                ${icon} ${escapeHTML(fav.name)}
+            </h3>
+            <p style="margin: 0 0 8px 0; color: #666; font-size: 12px;">
+                ${fav.lat.toFixed(5)}, ${fav.lon.toFixed(5)}
+            </p>
+            ${fav.notes ? `<p style="margin: 0 0 12px 0; color: #333; font-size: 13px;">${escapeHTML(fav.notes)}</p>` : ''}
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button onclick="window.navigateToFavorite('${fav.id}')" style="
+                    padding: 6px 12px; background: #64ffda; color: #0a192f;
+                    border: none; border-radius: 4px; cursor: pointer; font-size: 12px;
+                ">Als Ziel</button>
+                <button onclick="window.addFavoriteAsWaypoint('${fav.id}')" style="
+                    padding: 6px 12px; background: #2a5298; color: white;
+                    border: none; border-radius: 4px; cursor: pointer; font-size: 12px;
+                ">Wegpunkt</button>
+                <button onclick="window.confirmDeleteFavorite('${fav.id}')" style="
+                    padding: 6px 12px; background: #e74c3c; color: white;
+                    border: none; border-radius: 4px; cursor: pointer; font-size: 12px;
+                ">Löschen</button>
+            </div>
+        </div>
+    `;
+
+    new maplibregl.Popup({ closeButton: true, maxWidth: '300px' })
+        .setLngLat([fav.lon, fav.lat])
+        .setHTML(popupContent)
+        .addTo(map);
+}
+
+/**
+ * Öffnet das Favoriten-Panel
+ */
+function openFavoritesPanel() {
+    // Bestehendes Panel entfernen
+    closeFavoritesPanel();
+
+    const panel = document.createElement('div');
+    panel.id = 'favorites-panel';
+    panel.style.cssText = `
+        position: fixed;
+        right: 10px;
+        top: 70px;
+        width: 300px;
+        max-height: calc(100vh - 160px);
+        background: rgba(10, 25, 47, 0.95);
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        z-index: 1000;
+        overflow: hidden;
+        border: 1px solid rgba(100, 255, 218, 0.2);
+    `;
+
+    // Header
+    const header = document.createElement('div');
+    header.style.cssText = `
+        padding: 15px;
+        background: rgba(42, 82, 152, 0.3);
+        border-bottom: 1px solid rgba(100, 255, 218, 0.2);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    `;
+    header.innerHTML = `
+        <span style="color: #64ffda; font-weight: 600; font-size: 16px;">⭐ Favoriten (${favorites.length})</span>
+        <button onclick="window.closeFavoritesPanel()" style="
+            background: none; border: none; color: #ccd6f6;
+            font-size: 20px; cursor: pointer; padding: 0;
+        ">&times;</button>
+    `;
+    panel.appendChild(header);
+
+    // Liste
+    const list = document.createElement('div');
+    list.style.cssText = `
+        max-height: calc(100vh - 240px);
+        overflow-y: auto;
+        padding: 10px;
+    `;
+
+    favorites.forEach(fav => {
+        const icon = getCategoryIcon(fav.category);
+        const item = document.createElement('div');
+        item.className = 'favorite-item';
+        item.style.cssText = `
+            padding: 12px;
+            background: rgba(42, 82, 152, 0.2);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        `;
+        item.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 24px;">${icon}</span>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="color: #ccd6f6; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        ${escapeHTML(fav.name)}
+                    </div>
+                    <div style="color: #8892b0; font-size: 11px;">
+                        ${fav.lat.toFixed(4)}, ${fav.lon.toFixed(4)}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Hover-Effekt
+        item.addEventListener('mouseenter', () => {
+            item.style.background = 'rgba(42, 82, 152, 0.4)';
+        });
+        item.addEventListener('mouseleave', () => {
+            item.style.background = 'rgba(42, 82, 152, 0.2)';
+        });
+
+        // Click: Zur Position fliegen
+        item.addEventListener('click', () => {
+            panToFavorite(fav);
+        });
+
+        list.appendChild(item);
+    });
+
+    panel.appendChild(list);
+    document.body.appendChild(panel);
+    favoritesPanel = panel;
+}
+
+/**
+ * Schließt das Favoriten-Panel
+ */
+export function closeFavoritesPanel() {
+    if (favoritesPanel) {
+        favoritesPanel.remove();
+        favoritesPanel = null;
+    }
+    const existingPanel = document.getElementById('favorites-panel');
+    if (existingPanel) {
+        existingPanel.remove();
+    }
+}
+
+/**
+ * Fliegt zur Position eines Favoriten
+ * @param {object} fav - Favoriten-Objekt
+ */
+function panToFavorite(fav) {
+    const map = window.BoatOS?.map?.getMap?.() || window.map;
+    if (map) {
+        map.flyTo({
+            center: [fav.lon, fav.lat],
+            zoom: 15,
+            duration: 1000
+        });
+    }
+}
+
+/**
+ * Navigiert zu einem Favoriten (setzt ihn als Ziel)
+ * @param {string} favoriteId - ID des Favoriten
+ */
+window.navigateToFavorite = function(favoriteId) {
+    const fav = getFavoriteById(favoriteId);
+    if (!fav) return;
+
+    // Zur Navigation-Funktion weiterleiten
+    if (window.BoatOS?.navigation?.setDestination) {
+        window.BoatOS.navigation.setDestination(fav.lat, fav.lon, fav.name);
+        showToast(`Navigation zu ${fav.name} gestartet`, 'success');
+    } else {
+        // Fallback: Als ersten Wegpunkt setzen
+        window.addFavoriteAsWaypoint(favoriteId);
+    }
+};
+
+/**
+ * Fügt einen Favoriten als Wegpunkt hinzu
+ * @param {string} favoriteId - ID des Favoriten
+ */
+window.addFavoriteAsWaypoint = function(favoriteId) {
+    const fav = getFavoriteById(favoriteId);
+    if (!fav) return;
+
+    const context = window.BoatOS?.context;
+    if (context && window.BoatOS?.navigation?.addWaypoint) {
+        const waypoint = {
+            lat: fav.lat,
+            lon: fav.lon,
+            name: fav.name,
+            timestamp: new Date().toISOString()
+        };
+        window.BoatOS.navigation.addWaypoint(waypoint, context);
+        if (window.updateWaypointList) window.updateWaypointList();
+        showToast(`${fav.name} als Wegpunkt hinzugefügt`, 'success');
+    } else {
+        showToast('Wegpunkt konnte nicht hinzugefügt werden', 'error');
+    }
+};
+
+/**
+ * Bestätigt das Löschen eines Favoriten
+ * @param {string} favoriteId - ID des Favoriten
+ */
+window.confirmDeleteFavorite = async function(favoriteId) {
+    const fav = getFavoriteById(favoriteId);
+    if (!fav) return;
+
+    if (confirm(`Favorit "${fav.name}" wirklich löschen?`)) {
+        const success = await deleteFavorite(favoriteId);
+        if (success) {
+            // Marker aktualisieren
+            const map = window.BoatOS?.map?.getMap?.() || window.map;
+            if (map && favoritesVisible) {
+                showFavoriteMarkers(map);
+                openFavoritesPanel();
+            }
+        }
+    }
+};
+
+// Globale Funktion zum Schließen des Panels
+window.closeFavoritesPanel = closeFavoritesPanel;
 
 // ===========================================
 // Logbook Funktionen
@@ -1039,7 +1366,7 @@ export function showLogbookTab(tabId, tabElement) {
  */
 export function showSettingsTab(tabId, tabElement) {
     // Alle Settings-Sektionen verstecken
-    const sections = ['settings-general', 'settings-boat', 'settings-map', 'settings-nav', 'settings-ais'];
+    const sections = ['settings-general', 'settings-boat', 'settings-map', 'settings-nav', 'settings-ais', 'settings-charts', 'settings-gps', 'settings-data', 'settings-routing'];
     sections.forEach(id => {
         const section = document.getElementById(id);
         if (section) {
@@ -1076,6 +1403,16 @@ export function toggleSettingToggle(toggleElement, settingKey) {
     if (settingKey === 'darkMode' && window.BoatOS && window.BoatOS.theme) {
         window.BoatOS.theme.setDarkMode(isActive);
     }
+
+    // Schleusen-Layer umschalten
+    if (settingKey === 'showLocks') {
+        setLocksVisible(isActive);
+    }
+
+    // Pegelstände umschalten
+    if (settingKey === 'showPegel') {
+        setPegelVisible(isActive);
+    }
 }
 
 /**
@@ -1098,6 +1435,140 @@ export function selectBoatIcon(iconElement) {
     if (window.BoatOS && window.BoatOS.map && window.BoatOS.map.updateBoatMarkerIcon) {
         window.BoatOS.map.updateBoatMarkerIcon(iconType);
     }
+}
+
+// ===========================================
+// Schleusen & Pegel Toggle Funktionen
+// ===========================================
+
+// State für Sichtbarkeit
+let locksVisible = true;
+let pegelVisible = false;
+
+/**
+ * Setzt die Sichtbarkeit der Schleusen
+ * @param {boolean} visible - Sichtbar ja/nein
+ */
+function setLocksVisible(visible) {
+    locksVisible = visible;
+
+    // locks.js Funktion aufrufen (globale Funktion)
+    // Direkt über window.locksVisible Property setzen
+    if (typeof window.locksVisible !== 'undefined') {
+        window.locksVisible = visible;
+    }
+
+    if (visible) {
+        // Schleusen laden/anzeigen
+        if (typeof window.updateLocksOnMap === 'function') {
+            window.updateLocksOnMap();
+        }
+    } else {
+        // Schleusen verstecken
+        if (typeof window.clearLocksMarkers === 'function') {
+            window.clearLocksMarkers();
+        }
+    }
+
+    // Button-Status aktualisieren
+    const btn = document.getElementById('btn-locks');
+    if (btn) {
+        btn.classList.toggle('active', visible);
+    }
+
+    console.log(`Schleusen ${visible ? 'aktiviert' : 'deaktiviert'}`);
+}
+
+/**
+ * Setzt die Sichtbarkeit der Pegelstände
+ * @param {boolean} visible - Sichtbar ja/nein
+ */
+function setPegelVisible(visible) {
+    pegelVisible = visible;
+
+    // ais.js Funktion aufrufen
+    if (window.BoatOS?.ais?.updateWaterLevelSettings) {
+        window.BoatOS.ais.updateWaterLevelSettings({ enabled: visible });
+    }
+
+    // Button-Status aktualisieren
+    const btn = document.getElementById('btn-pegel');
+    if (btn) {
+        btn.classList.toggle('active', visible);
+    }
+
+    console.log(`Pegelstände ${visible ? 'aktiviert' : 'deaktiviert'}`);
+}
+
+/**
+ * Toggle-Funktion für Schleusen Quick-Action Button
+ */
+export function toggleLocks() {
+    locksVisible = !locksVisible;
+    setLocksVisible(locksVisible);
+
+    // Settings-Toggle synchronisieren
+    const settingsToggle = document.getElementById('toggle-locks');
+    if (settingsToggle) {
+        settingsToggle.classList.toggle('active', locksVisible);
+    }
+
+    showToast(locksVisible ? '🚧 Schleusen eingeblendet' : '🚧 Schleusen ausgeblendet', 'info');
+}
+
+/**
+ * Toggle-Funktion für Pegel Quick-Action Button
+ */
+export function togglePegel() {
+    pegelVisible = !pegelVisible;
+    setPegelVisible(pegelVisible);
+
+    // Settings-Toggle synchronisieren
+    const settingsToggle = document.getElementById('toggle-pegel');
+    if (settingsToggle) {
+        settingsToggle.classList.toggle('active', pegelVisible);
+    }
+
+    showToast(pegelVisible ? '📊 Pegelstände eingeblendet' : '📊 Pegelstände ausgeblendet', 'info');
+}
+
+/**
+ * Initialisiert die Layer basierend auf gespeicherten Einstellungen
+ */
+export function initLayerVisibility() {
+    // Gespeicherte Einstellungen laden
+    const settings = loadSettings();
+
+    // Schleusen standardmäßig aktiv
+    const locksEnabled = settings.infrastructure?.showLocks !== false;
+    locksVisible = locksEnabled;
+
+    // Pegel standardmäßig inaktiv
+    const pegelEnabled = settings.waterLevel?.enabled === true;
+    pegelVisible = pegelEnabled;
+
+    // UI synchronisieren
+    const locksToggle = document.getElementById('toggle-locks');
+    if (locksToggle) {
+        locksToggle.classList.toggle('active', locksEnabled);
+    }
+
+    const pegelToggle = document.getElementById('toggle-pegel');
+    if (pegelToggle) {
+        pegelToggle.classList.toggle('active', pegelEnabled);
+    }
+
+    const locksBtn = document.getElementById('btn-locks');
+    if (locksBtn) {
+        locksBtn.classList.toggle('active', locksEnabled);
+    }
+
+    const pegelBtn = document.getElementById('btn-pegel');
+    if (pegelBtn) {
+        pegelBtn.classList.toggle('active', pegelEnabled);
+    }
+
+    console.log(`Layer-Sichtbarkeit initialisiert: Schleusen=${locksEnabled}, Pegel=${pegelEnabled}`);
 }
 
 // ===========================================
@@ -1136,3 +1607,6 @@ window.showLogbookTab = showLogbookTab;
 window.showSettingsTab = showSettingsTab;
 window.toggleSettingToggle = toggleSettingToggle;
 window.selectBoatIcon = selectBoatIcon;
+window.toggleLocks = toggleLocks;
+window.togglePegel = togglePegel;
+window.initLayerVisibility = initLayerVisibility;

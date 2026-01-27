@@ -1,20 +1,23 @@
 /**
  * BoatOS Charts Management
+ * MapLibre GL JS Version
  */
 
-// TEMPORARY: Check for Leaflet (MapLibre migration)
-const LEAFLET_AVAILABLE = typeof L !== 'undefined';
-if (!LEAFLET_AVAILABLE) {
-    console.log('⚠️ charts.js: Leaflet not available, chart overlays disabled');
-}
+// API URL - wird dynamisch ermittelt (verwendet globale falls vorhanden)
+const CHARTS_API_URL = window.API_URL || (window.location.hostname === 'localhost'
+    ? 'http://localhost:8000'
+    : `${window.location.protocol}//${window.location.hostname}`);
+
+// Referenz auf die Map-Instanz (wird extern gesetzt)
+let chartsMap = null;
 
 let chartLayers = [];
-let chartOverlays = {};
+let chartOverlays = {}; // chartId -> { sourceId, layerId }
 
 // ==================== CHARTS LOADING ====================
 async function loadCharts() {
     try {
-        const response = await fetch(`${API_URL}/api/charts`);
+        const response = await fetch(`${CHARTS_API_URL}/api/charts`);
         if (response.ok) {
             chartLayers = await response.json();
             updateChartsUI();
@@ -27,46 +30,71 @@ async function loadCharts() {
 }
 
 function loadChartOverlays() {
-    // Skip if Leaflet not available
-    if (!LEAFLET_AVAILABLE) return;
+    // Get map reference
+    const map = chartsMap || window.map || window.BoatOS?.map?.getMap?.();
+    if (!map) {
+        console.warn('⚠️ charts.js: Map not available yet');
+        return;
+    }
 
     // Remove existing overlays
-    Object.values(chartOverlays).forEach(layer => map.removeLayer(layer));
+    Object.entries(chartOverlays).forEach(([chartId, overlay]) => {
+        try {
+            if (map.getLayer(overlay.layerId)) {
+                map.removeLayer(overlay.layerId);
+            }
+            if (map.getSource(overlay.sourceId)) {
+                map.removeSource(overlay.sourceId);
+            }
+        } catch (e) {
+            console.warn(`Could not remove chart layer ${chartId}:`, e);
+        }
+    });
     chartOverlays = {};
 
     // Add enabled charts
     chartLayers.filter(c => c.enabled).forEach(chart => {
         try {
-            let layer;
+            let tilesUrl;
 
             if (chart.type === 'tiles' || chart.type === 'kap' || chart.type === 'enc') {
                 // KAP and ENC charts are converted to tiles
-                const tilesUrl = (chart.type === 'kap' || chart.type === 'enc')
-                    ? `${API_URL}${chart.url}/tiles/{z}/{x}/{y}.png`
-                    : `${API_URL}${chart.url}/{z}/{x}/{y}.png`;
-
-                layer = L.tileLayer(tilesUrl, {
-                    maxZoom: 18,
-                    maxNativeZoom: 13,
-                    opacity: 0.7,
-                    errorTileUrl: ''
-                });
+                tilesUrl = (chart.type === 'kap' || chart.type === 'enc')
+                    ? `${CHARTS_API_URL}${chart.url}/tiles/{z}/{x}/{y}.png`
+                    : `${CHARTS_API_URL}${chart.url}/{z}/{x}/{y}.png`;
             } else if (chart.type === 'mbtiles') {
                 // MBTiles layer
-                layer = L.tileLayer(`${API_URL}/api/charts/${chart.id}/tiles/{z}/{x}/{y}`, {
-                    maxZoom: 18,
-                    opacity: 0.7
-                });
+                tilesUrl = `${CHARTS_API_URL}/api/charts/${chart.id}/tiles/{z}/{x}/{y}`;
             } else if (chart.type === 'image') {
                 // Single georeferenced image - would need bounds
-                // Simplified for now
                 console.warn(`Image overlays need implementation for ${chart.name}`);
                 return;
             }
 
-            if (layer) {
-                layer.addTo(map);
-                chartOverlays[chart.id] = layer;
+            if (tilesUrl) {
+                const sourceId = `chart-source-${chart.id}`;
+                const layerId = `chart-layer-${chart.id}`;
+
+                // Add raster source
+                map.addSource(sourceId, {
+                    type: 'raster',
+                    tiles: [tilesUrl],
+                    tileSize: 256,
+                    maxzoom: 18
+                });
+
+                // Add raster layer (before labels if possible)
+                const firstSymbolLayer = map.getStyle().layers.find(l => l.type === 'symbol');
+                map.addLayer({
+                    id: layerId,
+                    type: 'raster',
+                    source: sourceId,
+                    paint: {
+                        'raster-opacity': 0.7
+                    }
+                }, firstSymbolLayer?.id);
+
+                chartOverlays[chart.id] = { sourceId, layerId };
                 console.log(`📊 Added chart overlay: ${chart.name}`);
             }
         } catch (error) {
@@ -104,7 +132,7 @@ function updateChartsUI() {
 
 async function toggleChart(chartId, enabled) {
     try {
-        const response = await fetch(`${API_URL}/api/charts/${chartId}?enabled=${enabled}`, {
+        const response = await fetch(`${CHARTS_API_URL}/api/charts/${chartId}?enabled=${enabled}`, {
             method: 'PATCH'
         });
 
@@ -117,7 +145,7 @@ async function toggleChart(chartId, enabled) {
                 showProgressModal('📊 Konvertiere ENC-Karte...');
 
                 // Start conversion
-                const convertResponse = await fetch(`${API_URL}/api/charts/${chartId}/convert`, {
+                const convertResponse = await fetch(`${CHARTS_API_URL}/api/charts/${chartId}/convert`, {
                     method: 'POST'
                 });
 
@@ -154,7 +182,7 @@ async function pollConversionStatus(chartId) {
         updateProgress(Math.min(progress, 95), 'Konvertiere...', null);
 
         // Check if conversion is complete by reloading charts
-        const response = await fetch(`${API_URL}/api/charts`);
+        const response = await fetch(`${CHARTS_API_URL}/api/charts`);
         if (response.ok) {
             const charts = await response.json();
             const chart = charts.find(c => c.id === chartId);
@@ -164,7 +192,7 @@ async function pollConversionStatus(chartId) {
                 completeProgress('✅ Konvertierung abgeschlossen!');
 
                 // Enable the chart after conversion
-                const enableResponse = await fetch(`${API_URL}/api/charts/${chartId}?enabled=true`, {
+                const enableResponse = await fetch(`${CHARTS_API_URL}/api/charts/${chartId}?enabled=true`, {
                     method: 'PATCH'
                 });
 
@@ -193,7 +221,7 @@ async function deleteChart(chartId) {
     if (!confirm('Karte wirklich löschen?')) return;
 
     try {
-        const response = await fetch(`${API_URL}/api/charts/${chartId}`, {
+        const response = await fetch(`${CHARTS_API_URL}/api/charts/${chartId}`, {
             method: 'DELETE'
         });
 
@@ -259,7 +287,7 @@ async function uploadChart() {
                 updateProgress(10, 'Upload läuft...');
             }
 
-            const response = await fetch(`${API_URL}/api/charts/upload?name=${encodeURIComponent(chartName)}&layer_type=${layerType}`, {
+            const response = await fetch(`${CHARTS_API_URL}/api/charts/upload?name=${encodeURIComponent(chartName)}&layer_type=${layerType}`, {
                 method: 'POST',
                 body: formData
             });
@@ -309,7 +337,7 @@ async function waitForConversion(chartId, chartName) {
 
         try {
             // Check if tiles directory has files
-            const response = await fetch(`${API_URL}/api/charts`);
+            const response = await fetch(`${CHARTS_API_URL}/api/charts`);
             if (response.ok) {
                 const charts = await response.json();
                 const chart = charts.find(c => c.id === chartId);
@@ -370,24 +398,16 @@ function closeChartsModal() {
     // No longer needed - charts are in settings
 }
 
-// Add Layer Control to Map
+// Set map reference (called from main.js)
+function setChartsMap(mapInstance) {
+    chartsMap = mapInstance;
+    console.log('📊 Charts map reference set');
+}
+
+// Add Layer Control to Map (optional - charts are now in settings)
 function addLayerControl() {
-    // Skip if Leaflet not available
-    if (!LEAFLET_AVAILABLE) return;
-
-    const layerControl = L.control({ position: 'topleft' });
-
-    layerControl.onAdd = function() {
-        const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-        div.innerHTML = `
-            <button onclick="openChartsModal()" style="background: white; width: 34px; height: 34px; border: none; cursor: pointer; font-size: 18px; border-radius: 4px;" title="Karten verwalten">
-                📊
-            </button>
-        `;
-        return div;
-    };
-
-    layerControl.addTo(map);
+    // Layer control is now integrated into settings sidebar
+    console.log('📊 Charts accessible via Settings > Seekarten');
 }
 
 // ==================== ENC DOWNLOAD ====================
@@ -396,7 +416,7 @@ let selectedENC = [];
 
 async function loadENCCatalog() {
     try {
-        const response = await fetch(`${API_URL}/api/enc/catalog`);
+        const response = await fetch(`${CHARTS_API_URL}/api/enc/catalog`);
         if (response.ok) {
             encCatalog = await response.json();
             updateENCCatalogUI();
@@ -507,7 +527,7 @@ async function downloadSelectedENC() {
     }).filter(w => w !== null);
 
     try {
-        const response = await fetch(`${API_URL}/api/enc/download`, {
+        const response = await fetch(`${CHARTS_API_URL}/api/enc/download`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(waterways)
@@ -570,4 +590,40 @@ function closeProgressModal() {
     loadENCCatalog();
 }
 
-// Charts initialized from app.js
+// ==================== GLOBAL EXPORTS ====================
+// Make functions globally available for onclick handlers
+
+window.setChartsMap = setChartsMap;
+window.loadCharts = loadCharts;
+window.loadChartOverlays = loadChartOverlays;
+window.updateChartsUI = updateChartsUI;
+window.toggleChart = toggleChart;
+window.deleteChart = deleteChart;
+window.uploadChart = uploadChart;
+window.updateFileInfo = updateFileInfo;
+window.openChartsModal = openChartsModal;
+
+// ENC functions
+window.loadENCCatalog = loadENCCatalog;
+window.selectAllENC = selectAllENC;
+window.deselectAllENC = deselectAllENC;
+window.downloadSelectedENC = downloadSelectedENC;
+
+// Progress modal
+window.showProgressModal = showProgressModal;
+window.updateProgress = updateProgress;
+window.completeProgress = completeProgress;
+window.closeProgressModal = closeProgressModal;
+
+// showMsg helper (uses BoatOS.ui.showToast if available)
+function showMsg(message) {
+    if (window.BoatOS?.ui?.showToast) {
+        window.BoatOS.ui.showToast(message, 'info');
+    } else if (window.showToast) {
+        window.showToast(message, 'info');
+    } else {
+        console.log(message);
+    }
+}
+
+console.log('📊 Charts module loaded (MapLibre version)');

@@ -2756,11 +2756,14 @@ def init_waterway_router():
         print(f"⚠️ OSRM router initialization failed: {e}")
         osrm_router = None
 
-    # Try to initialize PyRouteLib as fallback
+    # Try to initialize PyRouteLib as fallback (only with local OSM file - no Overpass API)
     try:
         from pyroutelib_routing import PyRouteLibRouter
         pyroutelib_router = PyRouteLibRouter(osm_file=osm_file if osm_file and Path(osm_file).exists() else None)
-        print(f"✅ PyRouteLib router initialized (fallback)")
+        if pyroutelib_router.enabled:
+            print(f"✅ PyRouteLib router initialized (fallback)")
+        else:
+            print(f"ℹ️ PyRouteLib fallback not available (no local OSM file)")
     except Exception as e:
         print(f"⚠️ PyRouteLib router initialization failed: {e}")
         pyroutelib_router = None

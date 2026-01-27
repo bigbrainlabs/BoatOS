@@ -1,6 +1,6 @@
 /**
  * Dashboard Renderer
- * Renders dashboard from parsed DSL layout
+ * Renders dashboard from parsed DSL layout with smooth real-time updates
  */
 
 class DashboardRenderer {
@@ -8,6 +8,44 @@ class DashboardRenderer {
         this.sensors = {};
         this.layout = null;
         this.updateInterval = null;
+        this.widgetCounter = 0;
+        this.isInitialized = false;
+        this.injectStyles();
+    }
+
+    /**
+     * Inject CSS styles for smooth transitions
+     */
+    injectStyles() {
+        if (document.getElementById('dashboard-renderer-styles')) return;
+
+        const style = document.createElement('style');
+        style.id = 'dashboard-renderer-styles';
+        style.textContent = `
+            .sensor-value {
+                transition: opacity 0.15s ease-out;
+            }
+            .sensor-value.updating {
+                opacity: 0.7;
+            }
+            .gauge-needle {
+                transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            .gauge-arc-value {
+                transition: stroke-dashoffset 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            .gauge-bar-fill {
+                transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    /**
+     * Generate unique ID for widget elements
+     */
+    generateId(prefix) {
+        return `${prefix}-${++this.widgetCounter}`;
     }
 
     /**
@@ -98,11 +136,17 @@ class DashboardRenderer {
             // Load current sensors
             await this.updateSensors();
 
-            // Render
-            this.render();
+            // Reset widget counter for consistent IDs
+            this.widgetCounter = 0;
 
-            // Start auto-update
+            // Render full dashboard (only once)
+            this.render();
+            this.isInitialized = true;
+
+            // Start auto-update with partial updates
             this.startAutoUpdate();
+
+            console.log('Dashboard initialized with smooth updates');
         } catch (error) {
             console.error('Error loading dashboard:', error);
             this.renderError();
@@ -129,7 +173,95 @@ class DashboardRenderer {
     }
 
     /**
-     * Start auto-update interval
+     * Update only the values in the DOM (no full re-render)
+     */
+    updateValues() {
+        // Update all sensor value elements
+        document.querySelectorAll('[data-sensor-path]').forEach(el => {
+            const path = el.dataset.sensorPath;
+            const format = el.dataset.format || 'auto';
+            const decimals = parseInt(el.dataset.decimals || '2');
+            const unit = el.dataset.unit || '';
+
+            let value = this.getSensorValue(path);
+            let displayValue;
+
+            if (format === 'number' || !isNaN(parseFloat(value))) {
+                const numValue = parseFloat(value) || 0;
+                displayValue = numValue.toFixed(decimals);
+                if (unit) displayValue += ` ${unit}`;
+            } else {
+                displayValue = value;
+            }
+
+            // Only update if value changed
+            if (el.textContent !== displayValue) {
+                el.textContent = displayValue;
+            }
+        });
+
+        // Update gauge elements
+        document.querySelectorAll('[data-gauge-path]').forEach(gauge => {
+            const path = gauge.dataset.gaugePath;
+            const min = parseFloat(gauge.dataset.min || '0');
+            const max = parseFloat(gauge.dataset.max || '100');
+            const style = gauge.dataset.style || 'arc180';
+
+            const value = parseFloat(this.getSensorValue(path)) || 0;
+            const percentage = Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
+
+            // Update value display
+            const valueEl = gauge.querySelector('.gauge-value');
+            if (valueEl) {
+                const decimals = parseInt(gauge.dataset.decimals || '1');
+                const unit = gauge.dataset.unit || '';
+                valueEl.textContent = value.toFixed(decimals) + (unit ? ` ${unit}` : '');
+            }
+
+            // Update bar gauge
+            const barFill = gauge.querySelector('.gauge-bar-fill');
+            if (barFill) {
+                barFill.style.width = `${percentage}%`;
+            }
+
+            // Update arc gauge needle
+            const needle = gauge.querySelector('.gauge-needle');
+            if (needle) {
+                const startAngle = parseFloat(gauge.dataset.startAngle || '-180');
+                const totalAngle = parseFloat(gauge.dataset.totalAngle || '180');
+                const needleAngle = startAngle + (percentage / 100) * totalAngle;
+                needle.style.transform = `rotate(${needleAngle}deg)`;
+            }
+
+            // Update arc value path
+            const arcValue = gauge.querySelector('.gauge-arc-value');
+            if (arcValue) {
+                const circumference = parseFloat(arcValue.dataset.circumference || '502');
+                const totalAngle = parseFloat(gauge.dataset.totalAngle || '180');
+                const arcLength = (circumference * totalAngle) / 360;
+                const offset = arcLength - (arcLength * percentage / 100);
+                arcValue.style.strokeDashoffset = offset;
+            }
+        });
+
+        // Update status indicators
+        document.querySelectorAll('[data-sensor-status]').forEach(el => {
+            const baseName = el.dataset.sensorStatus;
+            const sensor = this.sensors[baseName];
+            if (sensor) {
+                const statusColors = {
+                    online: '#2ecc71',
+                    offline: '#e74c3c',
+                    standby: '#f39c12'
+                };
+                el.style.background = statusColors[sensor.status] || statusColors.offline;
+                el.textContent = sensor.status;
+            }
+        });
+    }
+
+    /**
+     * Start auto-update interval with partial DOM updates
      */
     startAutoUpdate() {
         // Clear existing interval
@@ -137,11 +269,11 @@ class DashboardRenderer {
             clearInterval(this.updateInterval);
         }
 
-        // Update every 2 seconds
+        // Update values every 1 second (smooth, no flicker)
         this.updateInterval = setInterval(async () => {
             await this.updateSensors();
-            this.render();
-        }, 2000);
+            this.updateValues();
+        }, 1000);
     }
 
     /**
@@ -178,7 +310,7 @@ class DashboardRenderer {
                     border-radius: 10px;
                     font-size: 14px;
                     cursor: pointer;
-                ">🔄 Erneut versuchen</button>
+                ">Erneut versuchen</button>
             </div>
         `;
     }
@@ -193,6 +325,7 @@ class DashboardRenderer {
             return;
         }
 
+        this.widgetCounter = 0;
         container.innerHTML = this.renderToHTML();
     }
 
@@ -248,7 +381,7 @@ class DashboardRenderer {
     }
 
     /**
-     * Render sensor widget
+     * Render sensor widget with data attributes for partial updates
      */
     renderSensorWidget(widget, size) {
         // Try to find sensor - support both base_name and full path
@@ -276,6 +409,7 @@ class DashboardRenderer {
         const color = widget.color || 'cyan';
         const icon = widget.icon || sensor.icon;
         const name = widget.alias || (specificValue ? this.formatValueName(specificValue) : sensor.name);
+        const baseName = sensor.base_name;
 
         // Filter topics based on SHOW/HIDE or specific value
         let filteredValues;
@@ -321,6 +455,15 @@ class DashboardRenderer {
             standby: '#f39c12'
         };
 
+        // Helper to create value element with data attributes
+        const createValueElement = (key, value) => {
+            const sensorPath = specificValue
+                ? `${baseName}/${specificValue}`
+                : `${baseName}/${key}`;
+            const formattedValue = this.formatValueWithUnit(key, value, widget.units);
+            return `<span class="sensor-value" data-sensor-path="${sensorPath}" data-format="auto" data-decimals="2">${formattedValue}</span>`;
+        };
+
         // Hero style
         if (style === 'hero') {
             return `
@@ -345,7 +488,7 @@ class DashboardRenderer {
                             min-width: 70px;
                             text-align: center;
                         ">${icon}</div>
-                        <div style="
+                        <div data-sensor-status="${baseName}" style="
                             background: ${statusColors[sensor.status]};
                             color: white;
                             padding: 6px 14px;
@@ -370,7 +513,7 @@ class DashboardRenderer {
                                     ${key}
                                 </div>
                                 <div style="color: ${textColor}; font-size: 18px; font-weight: 700; font-family: monospace;">
-                                    ${this.formatValueWithUnit(key, value, widget.units)}
+                                    ${createValueElement(key, value)}
                                 </div>
                             </div>
                         `).join('')}
@@ -396,7 +539,7 @@ class DashboardRenderer {
                             <div style="font-size: 13px; color: white; font-weight: 600;">${name}</div>
                             <div style="font-size: 10px; color: #8892b0; text-transform: uppercase;">${sensor.type}</div>
                         </div>
-                        <div style="
+                        <div data-sensor-status="${baseName}" style="
                             width: 8px;
                             height: 8px;
                             border-radius: 50%;
@@ -417,7 +560,7 @@ class DashboardRenderer {
                                     ${key}
                                 </div>
                                 <div style="color: ${textColor}; font-size: 13px; font-weight: 700; font-family: monospace;">
-                                    ${this.formatValueWithUnit(key, value, widget.units)}
+                                    ${createValueElement(key, value)}
                                 </div>
                             </div>
                         `).join('')}
@@ -438,7 +581,7 @@ class DashboardRenderer {
                 box-shadow: 0 4px 16px rgba(0,0,0,0.2);
                 position: relative;
             ">
-                <div style="
+                <div data-sensor-status="${baseName}" style="
                     position: absolute;
                     top: 15px;
                     right: 15px;
@@ -475,7 +618,7 @@ class DashboardRenderer {
                         ">
                             <span style="color: #8892b0; font-size: 12px; font-weight: 500;">${key}</span>
                             <span style="color: ${textColor}; font-size: 14px; font-weight: 700; font-family: monospace;">
-                                ${this.formatValueWithUnit(key, value, widget.units)}
+                                ${createValueElement(key, value)}
                             </span>
                         </div>
                     `).join('')}
@@ -485,11 +628,9 @@ class DashboardRenderer {
     }
 
     /**
-     * Render gauge widget with SVG-based analog gauge
-     * Supports styles: arc180, arc270, arc360, bar
+     * Render gauge widget with data attributes for smooth updates
      */
     renderGaugeWidget(widget, size) {
-        // Get value using smart path lookup
         const value = this.getSensorValue(widget.sensor);
         const numValue = parseFloat(value) || 0;
 
@@ -523,11 +664,14 @@ class DashboardRenderer {
     }
 
     /**
-     * Render linear bar gauge
+     * Render linear bar gauge with data attributes
      */
     renderBarGauge(widget, size, value, min, max, unit, percentage, color, label, decimals) {
+        const gaugeId = this.generateId('gauge');
+
         return `
-            <div style="
+            <div id="${gaugeId}" data-gauge-path="${widget.sensor}" data-min="${min}" data-max="${max}"
+                 data-style="bar" data-decimals="${decimals}" data-unit="${unit}" style="
                 grid-column: span ${size};
                 background: linear-gradient(135deg, rgba(30, 60, 114, 0.6), rgba(42, 82, 152, 0.6));
                 backdrop-filter: blur(15px);
@@ -538,9 +682,8 @@ class DashboardRenderer {
                 text-align: center;
             ">
                 ${label ? `<div style="font-size: 12px; color: #8892b0; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;">${label}</div>` : ''}
-                <div style="font-size: 36px; font-weight: 700; color: ${color}; font-family: monospace; margin-bottom: 10px;">
-                    ${value.toFixed(decimals)}
-                    <span style="font-size: 16px; color: #8892b0;">${unit}</span>
+                <div class="gauge-value" style="font-size: 36px; font-weight: 700; color: ${color}; font-family: monospace; margin-bottom: 10px;">
+                    ${value.toFixed(decimals)}${unit ? ` ${unit}` : ''}
                 </div>
                 <div style="
                     width: 100%;
@@ -550,11 +693,10 @@ class DashboardRenderer {
                     overflow: hidden;
                     margin-bottom: 10px;
                 ">
-                    <div style="
+                    <div class="gauge-bar-fill" style="
                         width: ${percentage}%;
                         height: 100%;
                         background: ${color};
-                        transition: width 0.3s ease;
                         border-radius: 6px;
                     "></div>
                 </div>
@@ -567,10 +709,10 @@ class DashboardRenderer {
     }
 
     /**
-     * Render arc gauge with SVG needle
-     * @param {string} style - arc180, arc270, or arc360
+     * Render arc gauge with CSS-based needle rotation for smooth updates
      */
     renderArcGauge(widget, size, value, min, max, unit, percentage, color, label, decimals, style) {
+        const gaugeId = this.generateId('gauge');
         const svgSize = 200;
         const cx = svgSize / 2;
         const cy = svgSize / 2;
@@ -594,7 +736,7 @@ class DashboardRenderer {
             default:
                 startAngle = -180;
                 endAngle = 0;
-                needleOffset = 20; // Move center down for 180° gauge
+                needleOffset = 20;
                 break;
         }
 
@@ -603,19 +745,17 @@ class DashboardRenderer {
 
         // SVG arc path calculation
         const arcPath = this.describeArc(cx, cy + needleOffset, radius, startAngle, endAngle);
-        const valueArcPath = this.describeArc(cx, cy + needleOffset, radius, startAngle, startAngle + (percentage / 100) * totalAngle);
-
-        // Needle coordinates
-        const needleLength = radius - 15;
-        const needleRad = (needleAngle * Math.PI) / 180;
-        const needleX = cx + needleLength * Math.cos(needleRad);
-        const needleY = (cy + needleOffset) + needleLength * Math.sin(needleRad);
 
         // Tick marks
         const ticks = this.generateTicks(min, max, startAngle, totalAngle, cx, cy + needleOffset, radius + 8, 5);
 
+        // Calculate needle endpoint
+        const needleLength = radius - 15;
+
         return `
-            <div style="
+            <div id="${gaugeId}" data-gauge-path="${widget.sensor}" data-min="${min}" data-max="${max}"
+                 data-style="${style}" data-decimals="${decimals}" data-unit="${unit}"
+                 data-start-angle="${startAngle}" data-total-angle="${totalAngle}" style="
                 grid-column: span ${size};
                 background: linear-gradient(135deg, rgba(30, 60, 114, 0.6), rgba(42, 82, 152, 0.6));
                 backdrop-filter: blur(15px);
@@ -626,31 +766,37 @@ class DashboardRenderer {
                 text-align: center;
             ">
                 ${label ? `<div style="font-size: 11px; color: #8892b0; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 5px;">${label}</div>` : ''}
-                <svg width="${svgSize}" height="${style === 'arc180' ? svgSize * 0.6 : svgSize}" viewBox="0 0 ${svgSize} ${style === 'arc180' ? svgSize * 0.65 : svgSize}" style="display: block; margin: 0 auto;">
-                    <!-- Background arc -->
-                    <path d="${arcPath}" fill="none" stroke="rgba(100, 255, 218, 0.15)" stroke-width="${strokeWidth}" stroke-linecap="round"/>
+                <div style="position: relative; width: ${svgSize}px; height: ${style === 'arc180' ? svgSize * 0.6 : svgSize}px; margin: 0 auto;">
+                    <svg width="${svgSize}" height="${style === 'arc180' ? svgSize * 0.6 : svgSize}" viewBox="0 0 ${svgSize} ${style === 'arc180' ? svgSize * 0.65 : svgSize}" style="display: block;">
+                        <!-- Background arc -->
+                        <path d="${arcPath}" fill="none" stroke="rgba(100, 255, 218, 0.15)" stroke-width="${strokeWidth}" stroke-linecap="round"/>
 
-                    <!-- Value arc -->
-                    <path d="${valueArcPath}" fill="none" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" style="transition: all 0.3s ease;"/>
+                        <!-- Tick marks -->
+                        ${ticks}
 
-                    <!-- Tick marks -->
-                    ${ticks}
+                        <!-- Center circle -->
+                        <circle cx="${cx}" cy="${cy + needleOffset}" r="8" fill="rgba(30, 60, 114, 0.9)" stroke="${color}" stroke-width="2"/>
 
-                    <!-- Center circle -->
-                    <circle cx="${cx}" cy="${cy + needleOffset}" r="8" fill="rgba(30, 60, 114, 0.9)" stroke="${color}" stroke-width="2"/>
+                        <!-- Center dot -->
+                        <circle cx="${cx}" cy="${cy + needleOffset}" r="4" fill="${color}"/>
+                    </svg>
 
-                    <!-- Needle -->
-                    <line x1="${cx}" y1="${cy + needleOffset}" x2="${needleX}" y2="${needleY}"
-                          stroke="${color}" stroke-width="3" stroke-linecap="round"
-                          style="transition: all 0.3s ease; transform-origin: ${cx}px ${cy + needleOffset}px;"/>
+                    <!-- Needle as separate div for CSS transform -->
+                    <div class="gauge-needle" style="
+                        position: absolute;
+                        left: ${cx}px;
+                        top: ${cy + needleOffset}px;
+                        width: ${needleLength}px;
+                        height: 3px;
+                        background: ${color};
+                        border-radius: 2px;
+                        transform-origin: 0 50%;
+                        transform: rotate(${needleAngle}deg);
+                    "></div>
+                </div>
 
-                    <!-- Center dot -->
-                    <circle cx="${cx}" cy="${cy + needleOffset}" r="4" fill="${color}"/>
-                </svg>
-
-                <div style="font-size: 32px; font-weight: 700; color: ${color}; font-family: monospace; margin-top: ${style === 'arc180' ? '-15px' : '10px'};">
-                    ${value.toFixed(decimals)}
-                    <span style="font-size: 14px; color: #8892b0;">${unit}</span>
+                <div class="gauge-value" style="font-size: 32px; font-weight: 700; color: ${color}; font-family: monospace; margin-top: ${style === 'arc180' ? '-15px' : '10px'};">
+                    ${value.toFixed(decimals)}${unit ? ` ${unit}` : ''}
                 </div>
 
                 <div style="display: flex; justify-content: space-between; color: #8892b0; font-size: 10px; margin-top: 5px; padding: 0 10px;">
@@ -726,7 +872,7 @@ class DashboardRenderer {
                         Type: ${widget.chart_type} | Period: ${widget.period}min
                     </div>
                     <div style="color: #f39c12; font-size: 11px; margin-top: 10px;">
-                        ⚠️ Charts coming in Phase 2
+                        Charts coming soon
                     </div>
                 </div>
             </div>

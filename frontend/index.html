@@ -117,9 +117,13 @@
         </div>
 
         <div class="quick-actions">
-            <div class="quick-action" onclick="BoatOS.navigation.startRoutePlanning()">
+            <div class="quick-action" data-mode="route" onclick="BoatOS.navigation.startRoutePlanning()">
                 <span class="icon">🧭</span>
                 <span class="label">Route</span>
+            </div>
+            <div class="quick-action" data-mode="poi" onclick="BoatOS.navigation.startPoiPlacement()">
+                <span class="icon">📍</span>
+                <span class="label">POI</span>
             </div>
             <div class="quick-action" onclick="BoatOS.ui.openSearch()">
                 <span class="icon">🔍</span>
@@ -129,17 +133,17 @@
                 <span class="icon">⭐</span>
                 <span class="label">Favoriten</span>
             </div>
-            <div class="quick-action" onclick="BoatOS.ui.addLogEntry()">
-                <span class="icon">✏️</span>
-                <span class="label">Eintrag</span>
-            </div>
             <div class="quick-action" onclick="BoatOS.ais.showAISPanel()">
                 <span class="icon">🚢</span>
                 <span class="label">AIS</span>
             </div>
-            <div class="quick-action" onclick="BoatOS.ais.showLocks()">
+            <div class="quick-action" id="btn-locks" onclick="BoatOS.ui.toggleLocks()">
                 <span class="icon">🚧</span>
                 <span class="label">Schleusen</span>
+            </div>
+            <div class="quick-action" id="btn-pegel" onclick="BoatOS.ui.togglePegel()">
+                <span class="icon">📊</span>
+                <span class="label">Pegel</span>
             </div>
         </div>
 
@@ -435,6 +439,10 @@
             <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('map', this)">Karte</div>
             <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('nav', this)">Navigation</div>
             <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('ais', this)">AIS</div>
+            <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('charts', this)">Seekarten</div>
+            <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('gps', this)">GPS</div>
+            <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('data', this)">Daten</div>
+            <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('routing', this)">Routing</div>
         </div>
 
         <div class="sidebar-content">
@@ -453,11 +461,67 @@
                             <option value="en">English</option>
                         </select>
                     </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Einheiten</h4>
                     <div class="setting-item">
-                        <span>Einheiten</span>
-                        <select class="setting-select" id="setting-units">
-                            <option value="nautical">Nautisch (NM, kn)</option>
-                            <option value="metric">Metrisch (km, km/h)</option>
+                        <span>Geschwindigkeit</span>
+                        <select class="setting-select" id="setting-speed-unit">
+                            <option value="kn">Knoten (kn)</option>
+                            <option value="kmh">km/h</option>
+                            <option value="mph">mph</option>
+                            <option value="ms">m/s</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <span>Distanz</span>
+                        <select class="setting-select" id="setting-distance-unit">
+                            <option value="nm">Nautische Meilen (NM)</option>
+                            <option value="km">Kilometer (km)</option>
+                            <option value="mi">Meilen (mi)</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <span>Tiefe</span>
+                        <select class="setting-select" id="setting-depth-unit">
+                            <option value="m">Meter (m)</option>
+                            <option value="ft">Fuß (ft)</option>
+                            <option value="fathom">Faden</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <span>Temperatur</span>
+                        <select class="setting-select" id="setting-temperature-unit">
+                            <option value="c">Celsius (°C)</option>
+                            <option value="f">Fahrenheit (°F)</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <span>Luftdruck</span>
+                        <select class="setting-select" id="setting-pressure-unit">
+                            <option value="hpa">hPa</option>
+                            <option value="mbar">mbar</option>
+                            <option value="inhg">inHg</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <span>Volumen</span>
+                        <select class="setting-select" id="setting-volume-unit">
+                            <option value="l">Liter (L)</option>
+                            <option value="gal">Gallonen (gal)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Formate</h4>
+                    <div class="setting-item">
+                        <span>Koordinaten</span>
+                        <select class="setting-select" id="setting-coordinate-format">
+                            <option value="decimal">Dezimal (51.6162)</option>
+                            <option value="dm">Grad/Min (51° 36.97')</option>
+                            <option value="dms">Grad/Min/Sek (51° 36' 58")</option>
                         </select>
                     </div>
                 </div>
@@ -484,20 +548,51 @@
                         <input type="text" class="setting-input" id="setting-boat-name" value="Arielle" style="width: 120px;">
                     </div>
                     <div class="setting-item">
+                        <span>Bootstyp</span>
+                        <select class="setting-input" id="setting-boat-type" style="width: 140px;">
+                            <option value="motorboat">Motorboot</option>
+                            <option value="sailboat">Segelboot</option>
+                            <option value="yacht">Yacht</option>
+                            <option value="cabin_cruiser">Kabinenkreuzer</option>
+                            <option value="houseboat">Hausboot</option>
+                            <option value="other">Sonstiges</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Abmessungen</h4>
+                    <div class="setting-item">
                         <span>Länge (m)</span>
-                        <input type="number" class="setting-input" id="setting-boat-length" value="12.5" step="0.1">
+                        <input type="number" class="setting-input" id="setting-boat-length" value="12.5" step="0.1" min="0">
                     </div>
                     <div class="setting-item">
                         <span>Breite (m)</span>
-                        <input type="number" class="setting-input" id="setting-boat-beam" value="3.8" step="0.1">
+                        <input type="number" class="setting-input" id="setting-boat-beam" value="3.8" step="0.1" min="0">
                     </div>
                     <div class="setting-item">
                         <span>Tiefgang (m)</span>
-                        <input type="number" class="setting-input" id="setting-boat-draft" value="1.2" step="0.1">
+                        <input type="number" class="setting-input" id="setting-boat-draft" value="1.2" step="0.1" min="0">
                     </div>
                     <div class="setting-item">
                         <span>Höhe (m)</span>
-                        <input type="number" class="setting-input" id="setting-boat-height" value="4.5" step="0.1">
+                        <input type="number" class="setting-input" id="setting-boat-height" value="4.5" step="0.1" min="0">
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Tank & Verbrauch</h4>
+                    <div class="setting-item">
+                        <span>Tankinhalt (L)</span>
+                        <input type="number" class="setting-input" id="setting-boat-fuel-capacity" value="200" step="1" min="0">
+                    </div>
+                    <div class="setting-item">
+                        <span>Verbrauch (L/h)</span>
+                        <input type="number" class="setting-input" id="setting-boat-fuel-consumption" value="8.5" step="0.1" min="0">
+                    </div>
+                    <div class="setting-item">
+                        <span>Reisegeschw. (km/h)</span>
+                        <input type="number" class="setting-input" id="setting-boat-cruise-speed" value="15" step="0.5" min="0">
                     </div>
                 </div>
 
@@ -509,6 +604,13 @@
                         <div class="boat-icon-option" data-icon="yacht" onclick="BoatOS.ui.selectBoatIcon(this)">🛥️</div>
                         <div class="boat-icon-option" data-icon="ship" onclick="BoatOS.ui.selectBoatIcon(this)">🚢</div>
                     </div>
+                </div>
+
+                <div class="setting-group" style="background: rgba(52, 152, 219, 0.1); padding: 12px; border-radius: 8px;">
+                    <p style="font-size: 12px; color: var(--text-dim); margin: 0; line-height: 1.5;">
+                        <strong style="color: var(--accent);">Routing-Info:</strong><br>
+                        Tiefgang, Höhe und Breite werden für die Routenplanung verwendet um flache Gewässer, niedrige Brücken und enge Kanäle zu vermeiden.
+                    </p>
                 </div>
             </div>
 
@@ -523,6 +625,10 @@
                     <div class="setting-item">
                         <span>Schleusen anzeigen</span>
                         <div class="toggle active" id="toggle-locks" onclick="BoatOS.ui.toggleSettingToggle(this, 'showLocks')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Pegelstände anzeigen</span>
+                        <div class="toggle" id="toggle-pegel" onclick="BoatOS.ui.toggleSettingToggle(this, 'showPegel')"></div>
                     </div>
                     <div class="setting-item">
                         <span>Track anzeigen</span>
@@ -553,7 +659,7 @@
                     </div>
                     <div class="setting-item">
                         <span>Standard-Geschwindigkeit</span>
-                        <input type="number" class="setting-input" id="setting-default-speed" value="6" step="0.5"> <span id="setting-speed-unit" class="unit-speed">kn</span>
+                        <input type="number" class="setting-input" id="setting-default-speed" value="6" step="0.5"> <span class="unit-speed">kn</span>
                     </div>
                 </div>
 
@@ -616,6 +722,274 @@
                     <div class="setting-item">
                         <span>Min. CPA</span>
                         <input type="number" class="setting-input" id="setting-min-cpa" value="0.5" step="0.1"> <span id="setting-cpa-unit" class="unit-distance">NM</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts/Seekarten Settings -->
+            <div id="settings-charts" class="section-hidden">
+                <div class="setting-group">
+                    <h4>Installierte Seekarten</h4>
+                    <div id="charts-list" style="max-height: 250px; overflow-y: auto; background: rgba(42, 82, 152, 0.1); padding: 15px; border-radius: 8px;">
+                        <div style="color: #8892b0; text-align: center; padding: 20px;">Keine Karten installiert</div>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>ELWIS ENC herunterladen</h4>
+                    <p style="font-size: 12px; color: #8892b0; margin-bottom: 10px;">Offizielle Binnenschifffahrtskarten von ELWIS</p>
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                        <button onclick="loadENCCatalog()" class="btn-secondary" style="flex: 1; min-width: 100px;">Katalog laden</button>
+                        <button onclick="selectAllENC()" class="btn-secondary" style="flex: 0;">Alle</button>
+                        <button onclick="deselectAllENC()" class="btn-secondary" style="flex: 0;">Keine</button>
+                    </div>
+                    <div id="enc-catalog-list" style="max-height: 300px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <div style="color: #8892b0; text-align: center; padding: 20px;">Klicke "Katalog laden" um verfügbare ENC anzuzeigen</div>
+                    </div>
+                    <button onclick="downloadSelectedENC()" id="download-enc-btn" disabled class="btn-primary" style="width: 100%;">Ausgewählte herunterladen</button>
+                    <div id="enc-download-status" style="margin-top: 10px; font-size: 12px; color: #64ffda; text-align: center;"></div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Karte hochladen</h4>
+                    <p style="font-size: 12px; color: #8892b0; margin-bottom: 10px;">KAP, ENC (.000), ZIP, MBTiles, GeoTIFF</p>
+                    <input type="file" id="chart-file-input" accept=".kap,.zip,.mbtiles,.tif,.tiff,.000" multiple style="display: none;" onchange="updateFileInfo()">
+                    <input type="file" id="chart-folder-input" accept=".kap,.zip,.mbtiles,.tif,.tiff,.000" webkitdirectory directory multiple style="display: none;" onchange="updateFileInfo()">
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <button onclick="document.getElementById('chart-file-input').click()" class="btn-secondary" style="flex: 1;">Dateien</button>
+                        <button onclick="document.getElementById('chart-folder-input').click()" class="btn-secondary" style="flex: 1;">Ordner</button>
+                    </div>
+                    <div id="selected-files-info" style="font-size: 12px; color: #64ffda; margin-bottom: 10px; min-height: 18px;"></div>
+                    <input type="text" id="chart-name-input" placeholder="Karten-Name (optional)" class="setting-input" style="width: 100%; margin-bottom: 10px;">
+                    <button onclick="uploadChart()" class="btn-primary" style="width: 100%;">Hochladen</button>
+                </div>
+            </div>
+
+            <!-- GPS Settings -->
+            <div id="settings-gps" class="section-hidden">
+                <div class="setting-group">
+                    <h4>SignalK Server</h4>
+                    <div class="setting-item">
+                        <span>Server URL</span>
+                        <input type="text" class="setting-input" id="setting-signalk-url" value="http://localhost:3000" placeholder="http://localhost:3000" style="width: 100%;">
+                    </div>
+                    <small style="color: var(--text-dim); font-size: 11px; display: block; margin-top: 5px;">
+                        Adresse des SignalK-Servers für Sensordaten
+                    </small>
+                </div>
+
+                <div class="setting-group">
+                    <h4>GPS-Status Einstellungen</h4>
+                    <div class="setting-item">
+                        <span>Wartezeit bei wenig Satelliten</span>
+                        <input type="number" class="setting-input" id="setting-low-satellite-threshold" min="5" max="60" value="15" step="5"> Sek.
+                    </div>
+                    <small style="color: var(--text-dim); font-size: 11px; display: block; margin-top: 5px;">
+                        Zeit (in Sekunden), die weniger als 4 Satelliten empfangen werden müssen, bevor der Status auf "Wenig Satelliten" wechselt.
+                    </small>
+                </div>
+
+                <div class="setting-group">
+                    <h4>GPS-Quelle</h4>
+                    <div class="setting-item">
+                        <span>Datenquelle</span>
+                        <select class="setting-select" id="setting-gps-source">
+                            <option value="signalk">SignalK Server</option>
+                            <option value="gpsd">GPSD</option>
+                            <option value="browser">Browser GPS</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Management Settings -->
+            <div id="settings-data" class="section-hidden">
+                <div class="setting-group">
+                    <h4>Daten-Verwaltung</h4>
+                    <div class="setting-item">
+                        <button onclick="BoatOS.settings.exportSettings()" class="btn-secondary" style="width: 100%;">
+                            📥 Einstellungen exportieren
+                        </button>
+                    </div>
+                    <div class="setting-item">
+                        <button onclick="BoatOS.settings.importSettings()" class="btn-secondary" style="width: 100%;">
+                            📤 Einstellungen importieren
+                        </button>
+                    </div>
+                    <div class="setting-item">
+                        <button onclick="BoatOS.settings.resetSettings()" class="btn-secondary" style="width: 100%; background: var(--warning);">
+                            🔄 Auf Standardwerte zurücksetzen
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>🗄️ Schleusen-Datenbank</h4>
+                    <small style="color: var(--text-dim); display: block; margin-bottom: 15px;">
+                        Verwalte die Schleusen-Datenbank: OSM-Import, Datenanreicherung und Qualitätsprüfung.
+                    </small>
+
+                    <div class="setting-item">
+                        <button onclick="BoatOS.settings.importLocksFromOSM()" class="btn-primary" style="width: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            🌍 Schleusen von OSM importieren
+                        </button>
+                        <small style="color: var(--text-dim); display: block; margin-top: 5px;">
+                            Lädt neue Schleusen aus OpenStreetMap in die Datenbank
+                        </small>
+                    </div>
+
+                    <div class="setting-item">
+                        <button onclick="BoatOS.settings.enrichLocksData()" class="btn-primary" style="width: 100%; background: linear-gradient(135deg, #43cea2 0%, #185a9d 100%);">
+                            ✨ Daten anreichern
+                        </button>
+                        <small style="color: var(--text-dim); display: block; margin-top: 5px;">
+                            Ergänzt VHF-Kanäle, Kontaktdaten und weitere Infos
+                        </small>
+                    </div>
+
+                    <div class="setting-item">
+                        <button onclick="BoatOS.settings.checkLocksQuality()" class="btn-primary" style="width: 100%; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                            📊 Qualitätsbericht anzeigen
+                        </button>
+                        <small style="color: var(--text-dim); display: block; margin-top: 5px;">
+                            Zeigt Statistiken zur Datenqualität (VHF-Abdeckung, Kontakte, etc.)
+                        </small>
+                    </div>
+
+                    <div class="setting-item">
+                        <button onclick="BoatOS.settings.verifyLocksPositions()" class="btn-primary" style="width: 100%; background: linear-gradient(135deg, #f5576c 0%, #fc6c85 100%);">
+                            📍 Positionen überprüfen & korrigieren
+                        </button>
+                        <small style="color: var(--text-dim); display: block; margin-top: 5px;">
+                            Prüft alle Schleusen-Positionen gegen OpenStreetMap und korrigiert Fehler (>500m Abweichung)
+                        </small>
+                    </div>
+
+                    <div id="locks-quality-report" style="display: none; margin-top: 15px; padding: 15px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--accent);">
+                        <h4 style="margin: 0 0 10px 0; color: var(--accent);">📊 Datenqualität</h4>
+                        <pre id="locks-quality-content" style="color: var(--text-dim); font-size: 11px; line-height: 1.6; overflow-x: auto; white-space: pre-wrap; margin: 0;"></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Routing Settings -->
+            <div id="settings-routing" class="section-hidden">
+                <div class="setting-group">
+                    <h4>Routing-Methode</h4>
+                    <div class="setting-item">
+                        <span>Anbieter</span>
+                        <select class="setting-select" id="setting-routing-provider" onchange="BoatOS.settings.updateRoutingProviderVisibility()">
+                            <option value="osrm">OSRM (Lokal, Offline)</option>
+                            <option value="graphhopper">GraphHopper (Cloud API)</option>
+                            <option value="direct">Direkte Linie (Rhumbline)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="setting-group" id="osrm-settings">
+                    <h4>OSRM Server</h4>
+                    <div class="setting-item">
+                        <span>Server-URL</span>
+                        <input type="text" class="setting-input" id="setting-osrm-url" value="http://localhost:5000" placeholder="http://localhost:5000" style="width: 100%;">
+                    </div>
+                    <div class="setting-item">
+                        <span>Aktuelle Region</span>
+                        <div id="current-region-display" style="padding: 8px 12px; background: var(--bg-card); border-radius: 6px; color: var(--accent); font-weight: 600;">
+                            <span id="current-region-name">--</span>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Region wechseln</span>
+                        <select class="setting-select" id="region-selector">
+                            <option value="">Region wählen...</option>
+                        </select>
+                    </div>
+                    <button onclick="BoatOS.settings.switchOSRMRegion()" class="btn-primary" style="width: 100%; margin-top: 10px;">
+                        🔄 Region wechseln
+                    </button>
+                    <div id="region-switch-status" style="margin-top: 10px; padding: 10px; border-radius: 6px; font-size: 12px; display: none;"></div>
+                </div>
+
+                <div class="setting-group" id="graphhopper-settings" style="display: none;">
+                    <h4>GraphHopper</h4>
+                    <div class="setting-item">
+                        <span>API-Key</span>
+                        <input type="text" class="setting-input" id="setting-graphhopper-api-key" placeholder="Kostenlos auf graphhopper.com" style="width: 100%;">
+                    </div>
+                    <small style="color: var(--text-dim); font-size: 11px;">
+                        🔗 API-Key bei graphhopper.com registrieren (500 Anfragen/Tag kostenlos)
+                    </small>
+                </div>
+
+                <div class="setting-group">
+                    <h4>🌊 Fließgeschwindigkeiten</h4>
+                    <div class="setting-item">
+                        <span>Strömung berücksichtigen</span>
+                        <div class="toggle" id="toggle-water-current" onclick="BoatOS.ui.toggleSettingToggle(this, 'waterCurrentEnabled')"></div>
+                    </div>
+                    <small style="color: var(--text-dim); font-size: 11px; display: block; margin-bottom: 15px;">
+                        Berücksichtigt Fließgeschwindigkeiten für genauere ETA-Berechnungen
+                    </small>
+
+                    <div id="water-current-settings">
+                        <div style="background: var(--bg-card); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                            <h5 style="margin: 0 0 10px 0; color: var(--accent);">Gewässer-spezifisch (<span class="unit-speed">kn</span>)</h5>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Rhein</span>
+                                    <input type="number" class="setting-input" id="setting-current-rhein" value="3.2" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Mosel</span>
+                                    <input type="number" class="setting-input" id="setting-current-mosel" value="1.6" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Main</span>
+                                    <input type="number" class="setting-input" id="setting-current-main" value="1.3" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Elbe</span>
+                                    <input type="number" class="setting-input" id="setting-current-elbe" value="2.2" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Saale</span>
+                                    <input type="number" class="setting-input" id="setting-current-saale" value="1.1" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Donau</span>
+                                    <input type="number" class="setting-input" id="setting-current-donau" value="2.7" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="background: var(--bg-card); padding: 15px; border-radius: 8px;">
+                            <h5 style="margin: 0 0 10px 0; color: var(--accent);">Standard nach Typ (<span class="unit-speed">kn</span>)</h5>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Fluss</span>
+                                    <input type="number" class="setting-input" id="setting-current-type-river" value="1.1" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Kanal</span>
+                                    <input type="number" class="setting-input" id="setting-current-type-canal" value="0.0" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Bach</span>
+                                    <input type="number" class="setting-input" id="setting-current-type-stream" value="0.5" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">See</span>
+                                    <input type="number" class="setting-input" id="setting-current-type-lake" value="0.0" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 15px; padding: 12px; background: rgba(100, 200, 100, 0.1); border-radius: 8px; font-size: 11px; color: var(--text-dim);">
+                        <strong>ℹ️ Berechnung:</strong><br>
+                        • Stromabwärts: Geschwindigkeit + Strömung<br>
+                        • Stromaufwärts: Geschwindigkeit - Strömung<br>
+                        • Live-Daten von PEGELONLINE (falls verfügbar)
                     </div>
                 </div>
             </div>
@@ -688,6 +1062,8 @@
          ============================================ -->
     <script src="dashboard_renderer.js"></script>
     <script src="js/dashboard-editor.js"></script>
+    <script src="locks.js"></script>
+    <script src="charts.js"></script>
     <script type="module" src="js/main.js"></script>
 
     <!-- LEGACY SUPPORT: Old inline code removed, now in js/main.js, js/logbook.js, js/settings.js
@@ -698,6 +1074,19 @@
          - js/logbook.js - Trip management, log entries, archive
          - js/settings.js - Settings save/load functions
     -->
+
+    <!-- Chart Progress Modal -->
+    <div id="chart-progress-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 20000; justify-content: center; align-items: center;">
+        <div style="background: var(--bg-panel); padding: 30px; border-radius: 16px; max-width: 500px; width: 90%; border: 2px solid var(--accent);">
+            <h2 id="progress-title" style="margin-bottom: 20px; color: var(--accent); text-align: center;">Verarbeite Karten...</h2>
+            <div id="progress-status" style="color: var(--text-dim); margin-bottom: 15px; font-size: 14px; min-height: 20px; text-align: center;">Initialisiere...</div>
+            <div style="background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-bottom: 15px;">
+                <div id="progress-bar" style="background: linear-gradient(90deg, var(--accent), #2ecc71); height: 24px; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; color: #0a192f;">0%</div>
+            </div>
+            <pre id="progress-details" style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; font-size: 11px; color: var(--text-dim); display: none;"></pre>
+            <button id="progress-close-btn" onclick="closeProgressModal()" style="display: none; margin-top: 15px; width: 100%; padding: 12px; background: var(--accent); border: none; border-radius: 8px; color: #0a192f; font-weight: 600; cursor: pointer;">Schließen</button>
+        </div>
+    </div>
 
 </body>
 </html>
