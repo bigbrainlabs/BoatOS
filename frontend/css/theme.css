@@ -356,3 +356,482 @@ body {
 .font-medium { font-weight: 500; }
 .uppercase { text-transform: uppercase; }
 .tracking-wide { letter-spacing: 0.5px; }
+
+/* ============================================
+   LOCK POPUPS & CARDS
+   ============================================ */
+
+/* MapLibre Popup Override for Locks */
+.maplibregl-popup.lock-popup .maplibregl-popup-content {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0;
+    box-shadow: 0 4px 20px var(--shadow-strong);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+}
+
+.maplibregl-popup.lock-popup .maplibregl-popup-tip {
+    border-top-color: var(--bg-panel);
+}
+
+.lock-popup-content {
+    padding: 16px;
+    color: var(--text);
+    min-width: 280px;
+    max-width: 350px;
+}
+
+.lock-popup-content h3 {
+    margin: 0 0 8px 0;
+    color: var(--accent);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.lock-popup-content .lock-waterway {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+
+.lock-popup-content .lock-status {
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin: 10px 0;
+    font-size: 13px;
+    background: var(--bg-card);
+}
+
+.lock-popup-content .lock-status.open {
+    background: rgba(16, 185, 129, 0.15);
+}
+
+.lock-popup-content .lock-status.closed {
+    background: rgba(239, 68, 68, 0.15);
+}
+
+.lock-popup-content .lock-tech {
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 10px;
+    background: var(--bg-card);
+    border-radius: 8px;
+    margin: 10px 0;
+}
+
+.lock-popup-content .lock-duration {
+    font-size: 13px;
+    color: var(--text);
+    margin: 8px 0;
+}
+
+.lock-popup-content .lock-contact {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin: 10px 0;
+    padding: 10px;
+    background: var(--bg-card);
+    border-radius: 8px;
+}
+
+.lock-popup-content .lock-contact a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.lock-popup-content .lock-contact a:hover {
+    text-decoration: underline;
+}
+
+.lock-popup-content .lock-facilities {
+    font-size: 16px;
+    margin: 10px 0;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.lock-popup-content .lock-notes {
+    font-size: 12px;
+    color: #b45309;
+    padding: 10px;
+    background: rgba(245, 158, 11, 0.12);
+    border-radius: 8px;
+    margin: 10px 0;
+}
+
+[data-theme="dark"] .lock-popup-content .lock-notes {
+    color: var(--warning);
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.lock-popup-content .lock-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.lock-popup-content .lock-actions button {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: none;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.lock-popup-content .lock-actions .btn-primary {
+    background: var(--accent);
+    color: white;
+}
+
+.lock-popup-content .lock-actions .btn-primary:hover {
+    background: var(--accent-light);
+}
+
+.lock-popup-content .lock-actions .btn-secondary {
+    background: var(--bg-card);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.lock-popup-content .lock-actions .btn-secondary:hover {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+}
+
+/* Lock Details Panel */
+.lock-details-panel {
+    position: absolute;
+    top: 80px;
+    right: 20px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    z-index: 1002;
+    max-width: 400px;
+    max-height: 80vh;
+    overflow-y: auto;
+    color: var(--text);
+    box-shadow: 0 4px 30px var(--shadow-strong);
+}
+
+.lock-details-panel h2 {
+    margin: 0;
+    color: var(--accent);
+    font-size: 20px;
+}
+
+.lock-details-panel .lock-section {
+    background: var(--bg-card);
+    padding: 14px;
+    border-radius: 10px;
+    margin-bottom: 14px;
+}
+
+.lock-details-panel .lock-section-title {
+    font-size: 11px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.lock-details-panel .lock-section div {
+    margin: 6px 0;
+    font-size: 14px;
+}
+
+.lock-details-panel .lock-section strong {
+    color: var(--text);
+}
+
+.lock-details-panel .lock-section a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.lock-details-panel .lock-section a:hover {
+    text-decoration: underline;
+}
+
+.lock-details-panel .lock-hours table {
+    width: 100%;
+    margin-top: 8px;
+    border-collapse: collapse;
+}
+
+.lock-details-panel .lock-hours td {
+    padding: 4px 8px;
+    font-size: 13px;
+}
+
+.lock-details-panel .lock-hours tr:nth-child(odd) {
+    background: var(--accent-dim);
+    border-radius: 4px;
+}
+
+.lock-details-panel .lock-notes {
+    background: rgba(245, 158, 11, 0.12);
+    padding: 12px;
+    border-radius: 10px;
+    margin-bottom: 14px;
+    font-size: 13px;
+    color: #b45309;
+}
+
+[data-theme="dark"] .lock-details-panel .lock-notes {
+    color: var(--warning);
+    background: rgba(245, 158, 11, 0.1);
+}
+
+/* ============================================
+   MOB (MAN OVER BOARD) MARKER & PANEL
+   ============================================ */
+
+/* MOB Marker */
+.mob-marker {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mob-marker-pulse {
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.4);
+    animation: mob-pulse 1.5s ease-out infinite;
+}
+
+.mob-marker-icon {
+    position: relative;
+    z-index: 1;
+    font-size: 32px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+    animation: mob-bounce 1s ease-in-out infinite;
+}
+
+@keyframes mob-pulse {
+    0% {
+        transform: scale(0.5);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(2);
+        opacity: 0;
+    }
+}
+
+@keyframes mob-bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-5px);
+    }
+}
+
+/* MOB Panel */
+.mob-panel {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2000;
+    background: linear-gradient(135deg, rgba(220, 38, 38, 0.95) 0%, rgba(185, 28, 28, 0.95) 100%);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 2px solid #ef4444;
+    border-radius: 16px;
+    padding: 16px 20px;
+    min-width: 320px;
+    box-shadow: 0 8px 32px rgba(239, 68, 68, 0.4);
+    animation: mob-panel-appear 0.3s ease-out;
+}
+
+@keyframes mob-panel-appear {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+.mob-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.mob-panel-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: white;
+    animation: mob-title-blink 1s ease-in-out infinite;
+}
+
+@keyframes mob-title-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.mob-panel-time {
+    font-family: 'SF Mono', 'Monaco', monospace;
+    font-size: 16px;
+    font-weight: 600;
+    color: #fecaca;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 4px 10px;
+    border-radius: 6px;
+}
+
+.mob-panel-data {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 14px;
+}
+
+.mob-data-item {
+    flex: 1;
+    text-align: center;
+}
+
+.mob-data-label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #fecaca;
+    margin-bottom: 4px;
+}
+
+.mob-data-value {
+    display: block;
+    font-family: 'SF Mono', 'Monaco', monospace;
+    font-size: 24px;
+    font-weight: 700;
+    color: white;
+}
+
+.mob-panel-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.mob-btn {
+    flex: 1;
+    padding: 10px 16px;
+    border-radius: 10px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.mob-btn-nav {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.mob-btn-nav:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.mob-btn-clear {
+    background: rgba(0, 0, 0, 0.2);
+    color: #fecaca;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.mob-btn-clear:hover {
+    background: rgba(0, 0, 0, 0.4);
+    color: white;
+}
+
+/* Mobile-Anpassung für MOB-Panel */
+@media (max-width: 480px) {
+    .mob-panel {
+        left: 10px;
+        right: 10px;
+        transform: none;
+        min-width: auto;
+    }
+
+    .mob-data-value {
+        font-size: 20px;
+    }
+}
+
+.lock-details-panel .lock-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.lock-details-panel .lock-actions button {
+    flex: 1;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.lock-details-panel .lock-actions .btn-route {
+    background: var(--accent-dim);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.lock-details-panel .lock-actions .btn-route:hover {
+    background: var(--accent);
+    color: white;
+}
+
+.lock-details-panel .lock-actions .btn-notify {
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--success);
+    border: 1px solid var(--success);
+}
+
+.lock-details-panel .lock-actions .btn-notify:hover {
+    background: var(--success);
+    color: white;
+}
+
+.lock-details-panel .btn-close {
+    background: rgba(239, 68, 68, 0.2);
+    border: none;
+    color: var(--danger);
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.lock-details-panel .btn-close:hover {
+    background: var(--danger);
+    color: white;
+}

@@ -766,6 +766,9 @@ export function doStartup() {
     // Registrierte Callbacks ausfuehren
     runStartupCallbacks();
 
+    // MOB-Position wiederherstellen falls vorhanden
+    restoreMOB();
+
     console.log('BoatOS Frontend gestartet!');
 }
 
@@ -804,12 +807,25 @@ export function init() {
 
 // ==================== NOTFALL-FUNKTIONEN ====================
 
+// MOB-Zustand
+let mobMarker = null;
+let mobPosition = null;
+let mobUpdateInterval = null;
+
 /**
  * Man Over Board (MOB) Alarm
  * Setzt einen MOB-Marker an der aktuellen Position
  */
 export function manOverBoard() {
-    console.log('MOB ALARM!');
+    // Wenn bereits ein MOB aktiv ist, fragen ob überschrieben werden soll
+    if (mobPosition) {
+        if (!confirm('Es gibt bereits einen aktiven MOB-Marker.\nNeuen MOB setzen und alten überschreiben?')) {
+            return mobPosition;
+        }
+        clearMOB(true); // Leise löschen ohne Bestätigung
+    }
+
+    console.log('🆘 MOB ALARM!');
 
     const pos = currentPosition || { lat: 51.855, lon: 12.046 };
 
@@ -821,13 +837,13 @@ export function manOverBoard() {
         // Sound nicht verfügbar
     }
 
-    // Benachrichtigung anzeigen
-    if (window.BoatOS && window.BoatOS.ui && window.BoatOS.ui.showNotification) {
-        window.BoatOS.ui.showNotification('MOB ALARM! Position markiert!', 'error');
+    // Vibration (falls verfügbar auf Mobilgeräten)
+    if (navigator.vibrate) {
+        navigator.vibrate([200, 100, 200, 100, 200]);
     }
 
     // MOB-Position speichern
-    const mobPosition = {
+    mobPosition = {
         lat: pos.lat,
         lon: pos.lon,
         timestamp: new Date().toISOString()
@@ -835,14 +851,258 @@ export function manOverBoard() {
 
     localStorage.setItem('mob_position', JSON.stringify(mobPosition));
 
+    // MOB-Marker auf Karte setzen
+    createMOBMarker(mobPosition);
+
+    // MOB-Panel anzeigen
+    showMOBPanel();
+
+    // Update-Interval für Distanz/Peilung starten
+    mobUpdateInterval = setInterval(updateMOBPanel, 1000);
+
     // Zur MOB-Position fliegen
     if (window.BoatOS && window.BoatOS.map && window.BoatOS.map.flyTo) {
         window.BoatOS.map.flyTo(pos.lat, pos.lon, 16);
     }
 
-    // TODO: MOB-Marker auf Karte setzen
+    // Benachrichtigung anzeigen
+    if (window.BoatOS && window.BoatOS.ui && window.BoatOS.ui.showNotification) {
+        window.BoatOS.ui.showNotification('🆘 MOB ALARM! Position markiert!', 'error');
+    }
+
     console.log('MOB Position:', mobPosition);
 
+    return mobPosition;
+}
+
+/**
+ * MOB-Marker auf der Karte erstellen
+ */
+function createMOBMarker(pos) {
+    // Alten Marker entfernen falls vorhanden
+    if (mobMarker) {
+        mobMarker.remove();
+    }
+
+    // Prüfen ob Map verfügbar ist
+    const map = window.BoatOS?.map?.getMap?.();
+    if (!map) {
+        console.warn('Map nicht verfügbar für MOB-Marker');
+        return;
+    }
+
+    // MOB-Marker Element erstellen
+    const el = document.createElement('div');
+    el.className = 'mob-marker';
+    el.innerHTML = `
+        <div class="mob-marker-pulse"></div>
+        <div class="mob-marker-icon">🆘</div>
+    `;
+
+    // MapLibre Marker erstellen
+    mobMarker = new maplibregl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([pos.lon, pos.lat])
+        .addTo(map);
+
+    console.log('✅ MOB-Marker erstellt');
+}
+
+/**
+ * MOB-Panel anzeigen mit Distanz und Peilung
+ */
+function showMOBPanel() {
+    // Altes Panel entfernen
+    const oldPanel = document.getElementById('mob-panel');
+    if (oldPanel) oldPanel.remove();
+
+    const panel = document.createElement('div');
+    panel.id = 'mob-panel';
+    panel.className = 'mob-panel';
+    panel.innerHTML = `
+        <div class="mob-panel-header">
+            <span class="mob-panel-title">🆘 MOB AKTIV</span>
+            <span class="mob-panel-time" id="mob-time">--:--:--</span>
+        </div>
+        <div class="mob-panel-data">
+            <div class="mob-data-item">
+                <span class="mob-data-label">Distanz</span>
+                <span class="mob-data-value" id="mob-distance">-- m</span>
+            </div>
+            <div class="mob-data-item">
+                <span class="mob-data-label">Peilung</span>
+                <span class="mob-data-value" id="mob-bearing">---°</span>
+            </div>
+        </div>
+        <div class="mob-panel-actions">
+            <button onclick="BoatOS.core.navigateToMOB()" class="mob-btn mob-btn-nav">
+                🧭 Navigieren
+            </button>
+            <button onclick="BoatOS.core.clearMOB()" class="mob-btn mob-btn-clear">
+                ✕ Löschen
+            </button>
+        </div>
+    `;
+
+    document.body.appendChild(panel);
+    updateMOBPanel();
+}
+
+/**
+ * MOB-Panel aktualisieren (Distanz, Peilung, Zeit)
+ */
+function updateMOBPanel() {
+    if (!mobPosition) return;
+
+    const pos = currentPosition || { lat: 51.855, lon: 12.046 };
+
+    // Distanz berechnen
+    const distance = calculateDistance(pos.lat, pos.lon, mobPosition.lat, mobPosition.lon);
+
+    // Peilung berechnen
+    const bearing = calculateBearing(pos.lat, pos.lon, mobPosition.lat, mobPosition.lon);
+
+    // Vergangene Zeit berechnen
+    const elapsed = Date.now() - new Date(mobPosition.timestamp).getTime();
+    const minutes = Math.floor(elapsed / 60000);
+    const seconds = Math.floor((elapsed % 60000) / 1000);
+    const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+    // Panel aktualisieren
+    const distanceEl = document.getElementById('mob-distance');
+    const bearingEl = document.getElementById('mob-bearing');
+    const timeEl = document.getElementById('mob-time');
+
+    if (distanceEl) {
+        if (distance < 1000) {
+            distanceEl.textContent = `${Math.round(distance)} m`;
+        } else {
+            distanceEl.textContent = `${(distance / 1000).toFixed(2)} km`;
+        }
+    }
+
+    if (bearingEl) {
+        const cardinal = degreesToCardinal(bearing);
+        bearingEl.textContent = `${Math.round(bearing)}° ${cardinal}`;
+    }
+
+    if (timeEl) {
+        timeEl.textContent = timeStr;
+    }
+}
+
+/**
+ * Zur MOB-Position navigieren / hinzoomen
+ */
+export function navigateToMOB() {
+    if (!mobPosition) {
+        console.warn('Keine MOB-Position vorhanden');
+        return;
+    }
+
+    // Prüfen ob Dashboard aktiv ist und zur Karte wechseln
+    const dashboardContainer = document.getElementById('dashboardContainer');
+    if (dashboardContainer && dashboardContainer.classList.contains('active')) {
+        // toggleMode aufrufen um zur Karte zu wechseln
+        if (window.BoatOS && window.BoatOS.ui && window.BoatOS.ui.toggleMode) {
+            window.BoatOS.ui.toggleMode();
+        }
+    } else {
+        // Bottom Sheet minimieren (wenn schon auf Karte)
+        const sheet = document.getElementById('bottomSheet');
+        if (sheet && sheet.classList.contains('full')) {
+            sheet.classList.remove('full');
+            sheet.classList.add('peek');
+        }
+    }
+
+    // Kurze Verzögerung damit die Ansicht wechseln kann
+    setTimeout(() => {
+        // Zur MOB-Position fliegen
+        if (window.BoatOS && window.BoatOS.map && window.BoatOS.map.flyTo) {
+            window.BoatOS.map.flyTo(mobPosition.lat, mobPosition.lon, 17);
+        }
+
+        if (window.BoatOS && window.BoatOS.ui && window.BoatOS.ui.showNotification) {
+            window.BoatOS.ui.showNotification('🧭 Navigation zur MOB-Position', 'info');
+        }
+    }, 100);
+}
+
+/**
+ * MOB löschen und zurücksetzen
+ * @param {boolean} silent - Ohne Bestätigung löschen
+ */
+export function clearMOB(silent = false) {
+    if (!mobPosition && !silent) {
+        console.log('Kein aktiver MOB-Marker');
+        return;
+    }
+
+    if (!silent && !confirm('MOB-Marker wirklich löschen?')) {
+        return;
+    }
+
+    // Marker entfernen
+    if (mobMarker) {
+        mobMarker.remove();
+        mobMarker = null;
+    }
+
+    // Panel entfernen
+    const panel = document.getElementById('mob-panel');
+    if (panel) panel.remove();
+
+    // Update-Interval stoppen
+    if (mobUpdateInterval) {
+        clearInterval(mobUpdateInterval);
+        mobUpdateInterval = null;
+    }
+
+    // Position zurücksetzen
+    mobPosition = null;
+    localStorage.removeItem('mob_position');
+
+    if (!silent && window.BoatOS?.ui?.showNotification) {
+        window.BoatOS.ui.showNotification('MOB-Marker gelöscht', 'info');
+    }
+
+    console.log('✅ MOB gelöscht');
+}
+
+/**
+ * MOB beim Start wiederherstellen (falls vorhanden)
+ */
+export function restoreMOB() {
+    const saved = localStorage.getItem('mob_position');
+    if (saved) {
+        try {
+            mobPosition = JSON.parse(saved);
+            console.log('🆘 MOB-Position wiederhergestellt:', mobPosition);
+
+            // Warten bis Map bereit ist
+            setTimeout(() => {
+                createMOBMarker(mobPosition);
+                showMOBPanel();
+                mobUpdateInterval = setInterval(updateMOBPanel, 1000);
+            }, 2000);
+        } catch (e) {
+            console.error('Fehler beim Wiederherstellen der MOB-Position:', e);
+            localStorage.removeItem('mob_position');
+        }
+    }
+}
+
+/**
+ * Prüfen ob MOB aktiv ist
+ */
+export function isMOBActive() {
+    return mobPosition !== null;
+}
+
+/**
+ * MOB-Position abrufen
+ */
+export function getMOBPosition() {
     return mobPosition;
 }
 

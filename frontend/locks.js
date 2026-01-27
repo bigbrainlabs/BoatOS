@@ -138,14 +138,14 @@ function createLockPopup(lock) {
 
     const contactLines = [];
     if (lock.vhf_channel) contactLines.push(`📻 ${lock.vhf_channel}`);
-    if (lock.phone) contactLines.push(`📞 <a href="tel:${lock.phone}" style="color: #64ffda; text-decoration: none;">${lock.phone}</a>`);
-    if (lock.email) contactLines.push(`📧 <a href="mailto:${lock.email}" style="color: #64ffda; text-decoration: none;">${lock.email}</a>`);
+    if (lock.phone) contactLines.push(`📞 <a href="tel:${lock.phone}">${lock.phone}</a>`);
+    if (lock.email) contactLines.push(`📧 <a href="mailto:${lock.email}">${lock.email}</a>`);
     if (lock.website) {
         const websiteDisplay = lock.website.replace(/^https?:\/\/(www\.)?/, '').substring(0, 25);
-        contactLines.push(`🌐 <a href="${lock.website}" target="_blank" style="color: #64ffda; text-decoration: none;">${websiteDisplay}</a>`);
+        contactLines.push(`🌐 <a href="${lock.website}" target="_blank">${websiteDisplay}</a>`);
     }
     if (lock.registration_method) {
-        contactLines.push(`<div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(100, 255, 218, 0.2); font-size: 11px;"><strong>Anmeldung:</strong> ${lock.registration_method}</div>`);
+        contactLines.push(`<div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); font-size: 11px;"><strong>Anmeldung:</strong> ${lock.registration_method}</div>`);
     }
 
     const contact = contactLines.length > 0 ?
@@ -168,7 +168,7 @@ function createLockPopup(lock) {
             ${avgDuration}
             ${contact}
             ${facilities}
-            ${lock.notes ? `<div class="lock-notes">${lock.notes}</div>` : ''}
+            ${lock.notes ? `<div class="lock-notes">ℹ️ ${lock.notes}</div>` : ''}
             <div class="lock-actions">
                 <button onclick="showLockDetails(${lock.id})" class="btn-primary">Details</button>
                 <button onclick="addLockToRoute(${lock.id}, ${lock.lat}, ${lock.lon}, '${lock.name.replace(/'/g, "\\'")}')" class="btn-secondary">Zu Route</button>
@@ -196,15 +196,14 @@ async function checkLockStatus(lockId) {
 
         if (statusEl) {
             if (status.is_open) {
-                statusEl.innerHTML = `✅ <span style="color: #2ecc71;">Geöffnet</span>${status.closes_at ? ` bis ${status.closes_at}` : ''}`;
-                statusEl.style.background = 'rgba(46, 204, 113, 0.1)';
+                statusEl.innerHTML = `✅ <span class="text-success">Geöffnet</span>${status.closes_at ? ` bis ${status.closes_at}` : ''}`;
+                statusEl.classList.add('open');
+                statusEl.classList.remove('closed');
             } else {
-                statusEl.innerHTML = `🔴 <span style="color: #e74c3c;">Geschlossen</span>${status.opens_at ? ` bis ${status.opens_at}` : ''}`;
-                statusEl.style.background = 'rgba(231, 76, 60, 0.1)';
+                statusEl.innerHTML = `🔴 <span class="text-danger">Geschlossen</span>${status.opens_at ? ` bis ${status.opens_at}` : ''}`;
+                statusEl.classList.add('closed');
+                statusEl.classList.remove('open');
             }
-            statusEl.style.padding = '6px 10px';
-            statusEl.style.borderRadius = '6px';
-            statusEl.style.marginTop = '8px';
         }
     } catch (error) {
         console.warn('Could not check lock status:', error);
@@ -250,34 +249,19 @@ async function showLockDetails(lockIdOrLock) {
 
     const panel = document.createElement('div');
     panel.id = 'lock-details-panel';
-    panel.className = 'info-panel';
-    panel.style.cssText = `
-        position: absolute;
-        top: 80px;
-        right: 20px;
-        background: rgba(10, 14, 39, 0.95);
-        backdrop-filter: blur(10px);
-        border: 2px solid rgba(100, 255, 218, 0.3);
-        border-radius: 12px;
-        padding: 20px;
-        z-index: 1002;
-        max-width: 400px;
-        max-height: 80vh;
-        overflow-y: auto;
-        color: white;
-    `;
+    panel.className = 'lock-details-panel';
 
     let hoursTable = '';
     if (lock.opening_hours) {
         const days = { mo: 'Mo', tu: 'Di', we: 'Mi', th: 'Do', fr: 'Fr', sa: 'Sa', su: 'So' };
-        hoursTable = '<div class="lock-hours"><strong>Öffnungszeiten:</strong><table style="width: 100%; margin-top: 8px;">';
+        hoursTable = '<div class="lock-hours"><strong>Öffnungszeiten:</strong><table>';
         for (const [day, hours] of Object.entries(lock.opening_hours)) {
-            hoursTable += `<tr><td style="padding: 4px;">${days[day] || day}</td><td style="padding: 4px;">${hours}</td></tr>`;
+            hoursTable += `<tr><td>${days[day] || day}</td><td>${hours}</td></tr>`;
         }
         hoursTable += '</table></div>';
 
         if (lock.break_times && lock.break_times.length > 0) {
-            hoursTable += '<div style="margin-top: 8px; font-size: 12px; color: #ffa500;">⏸️ Pausenzeiten: ';
+            hoursTable += '<div style="margin-top: 8px; font-size: 12px; color: var(--warning);">⏸️ Pausenzeiten: ';
             hoursTable += lock.break_times.map(b => `${b.start}-${b.end}`).join(', ');
             hoursTable += '</div>';
         }
@@ -287,14 +271,14 @@ async function showLockDetails(lockIdOrLock) {
 
     panel.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px;">
-            <h2 style="margin: 0; color: #64ffda; font-size: 20px;">🔒 ${lock.name}</h2>
-            <button onclick="closeLockDetails()" style="background: rgba(231, 76, 60, 0.3); border: none; color: white; padding: 8px 12px; border-radius: 6px; cursor: pointer;">✕</button>
+            <h2>🔒 ${lock.name}</h2>
+            <button onclick="closeLockDetails()" class="btn-close">✕</button>
         </div>
 
-        <div class="lock-waterway" style="color: #8892b0; margin-bottom: 16px;">${lock.waterway}${lock.river_km ? ` • km ${lock.river_km}` : ''}</div>
+        <div class="lock-waterway" style="color: var(--text-dim); margin-bottom: 16px;">${lock.waterway}${lock.river_km ? ` • km ${lock.river_km}` : ''}</div>
 
-        <div style="background: rgba(42, 82, 152, 0.2); padding: 12px; border-radius: 8px; margin-bottom: 16px;">
-            <div style="font-size: 12px; color: #64ffda; margin-bottom: 8px;">TECHNISCHE DATEN</div>
+        <div class="lock-section">
+            <div class="lock-section-title">Technische Daten</div>
             ${lock.max_length ? `<div>Länge: <strong>${lock.max_length}m</strong></div>` : ''}
             ${lock.max_width ? `<div>Breite: <strong>${lock.max_width}m</strong></div>` : ''}
             ${lock.max_draft ? `<div>Tiefgang: <strong>${lock.max_draft}m</strong></div>` : ''}
@@ -302,34 +286,32 @@ async function showLockDetails(lockIdOrLock) {
             ${lock.avg_duration ? `<div>Schleusdauer: <strong>~${lock.avg_duration} min</strong></div>` : ''}
         </div>
 
-        <div style="background: rgba(42, 82, 152, 0.2); padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+        <div class="lock-section">
             ${hoursTable}
         </div>
 
         ${lock.phone || lock.vhf_channel || lock.email || lock.website || lock.registration_method ? `
-        <div style="background: rgba(42, 82, 152, 0.2); padding: 12px; border-radius: 8px; margin-bottom: 16px;">
-            <div style="font-size: 12px; color: #64ffda; margin-bottom: 8px;">KONTAKT</div>
-            ${lock.phone ? `<div>📞 <a href="tel:${lock.phone}" style="color: white;">${lock.phone}</a></div>` : ''}
+        <div class="lock-section">
+            <div class="lock-section-title">Kontakt</div>
+            ${lock.phone ? `<div>📞 <a href="tel:${lock.phone}">${lock.phone}</a></div>` : ''}
             ${lock.vhf_channel ? `<div>📻 ${lock.vhf_channel}</div>` : ''}
-            ${lock.email ? `<div>📧 <a href="mailto:${lock.email}" style="color: white;">${lock.email}</a></div>` : ''}
-            ${lock.website ? `<div>🌐 <a href="${lock.website}" target="_blank" style="color: white;">Website</a></div>` : ''}
-            ${lock.registration_method ? `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(100, 255, 218, 0.2);"><strong style="color: #64ffda;">Anmeldung möglich:</strong> ${lock.registration_method}</div>` : ''}
+            ${lock.email ? `<div>📧 <a href="mailto:${lock.email}">${lock.email}</a></div>` : ''}
+            ${lock.website ? `<div>🌐 <a href="${lock.website}" target="_blank">Website</a></div>` : ''}
+            ${lock.registration_method ? `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);"><strong style="color: var(--accent);">Anmeldung:</strong> ${lock.registration_method}</div>` : ''}
         </div>
         ` : ''}
 
         ${lock.notes ? `
-        <div style="background: rgba(255, 165, 0, 0.1); padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 13px;">
+        <div class="lock-notes">
             <strong>ℹ️ Hinweise:</strong><br>${lock.notes}
         </div>
         ` : ''}
 
-        <div style="display: flex; gap: 10px;">
-            <button onclick="addLockToRoute(${lock.id}, ${lock.lat}, ${lock.lon}, '${lock.name.replace(/'/g, "\\'")}')"
-                style="flex: 1; background: rgba(42, 82, 152, 0.5); border: none; color: white; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+        <div class="lock-actions">
+            <button onclick="addLockToRoute(${lock.id}, ${lock.lat}, ${lock.lon}, '${lock.name.replace(/'/g, "\\'")}')" class="btn-route">
                 ➕ Zu Route
             </button>
-            <button onclick="notifyLock(${lock.id})"
-                style="flex: 1; background: rgba(46, 204, 113, 0.5); border: none; color: white; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+            <button onclick="notifyLock(${lock.id})" class="btn-notify">
                 📧 Anmelden
             </button>
         </div>
