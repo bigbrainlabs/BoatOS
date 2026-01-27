@@ -38,7 +38,13 @@
       "Bash(powershell -Command \"Get-Content -Raw ''C:\\\\Users\\\\bigbr\\\\Documents\\\\ProjekteBoot\\\\BoatOS\\\\frontend\\\\css\\\\theme.css'' | & plink -batch -pw ''bigbrain#11'' arielle@192.168.2.222 ''cat > /home/arielle/boatos/frontend/css/theme.css''\")",
       "Bash(powershell -Command \"Get-Content -Raw ''C:\\\\Users\\\\bigbr\\\\Documents\\\\ProjekteBoot\\\\BoatOS\\\\frontend\\\\css\\\\layout.css'' | & plink -batch -pw ''bigbrain#11'' arielle@192.168.2.222 ''cat > /home/arielle/boatos/frontend/css/layout.css''\")",
       "Bash(powershell -Command \"Get-Content -Raw ''C:\\\\Users\\\\bigbr\\\\Documents\\\\ProjekteBoot\\\\BoatOS\\\\frontend\\\\css\\\\components.css'' | & plink -batch -pw ''bigbrain#11'' arielle@192.168.2.222 ''cat > /home/arielle/boatos/frontend/css/components.css''\")",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(dir /b \"%USERPROFILE%\\\\.ssh\\\\*boatos*\")",
+      "Bash(dir /b \"%USERPROFILE%\\\\.ssh\"\" 2>nul | findstr /i \"boat \")",
+      "Bash(ls:*)",
+      "Bash(sqlite3:*)",
+      "Bash(npx htmlhint:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []
