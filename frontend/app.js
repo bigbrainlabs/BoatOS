@@ -742,6 +742,10 @@ function hideAllPanels() {
 // Make hideAllPanels globally available for other modules
 window.hideAllPanels = hideAllPanels;
 
+// Make functions available for BoatOS.navigation module
+window.addWaypointFromClick = addWaypointFromClick;
+window.setRoutePlanningMode = setRoutePlanningMode;
+
 function toggleGpsPanel() {
     const panel = document.getElementById('gps-panel');
     const weatherPanel = document.getElementById('weather-panel');
@@ -838,18 +842,42 @@ function updateBoatPosition(gps) {
 }
 
 // ==================== WEGPUNKTE ====================
-function onMapClick(e) {
-    if (!routePlanningMode) return;
 
-    // MapLibre click event has lngLat property
+/**
+ * Map-Klick Handler - leitet an Navigation-Modul weiter
+ */
+function onMapClick(e) {
+    // An Navigation-Modul weiterleiten für Mode-basierte Behandlung
+    if (window.BoatOS && window.BoatOS.navigation && window.BoatOS.navigation.handleMapClick) {
+        window.BoatOS.navigation.handleMapClick(e.lngLat);
+    } else if (routePlanningMode) {
+        // Fallback: alte Logik wenn Navigation-Modul nicht verfügbar
+        addWaypointFromClick(e.lngLat.lat, e.lngLat.lng);
+    }
+}
+
+/**
+ * Fügt einen Wegpunkt per Klick hinzu (wird von Navigation-Modul aufgerufen)
+ * @param {number} lat - Breitengrad
+ * @param {number} lon - Längengrad
+ */
+function addWaypointFromClick(lat, lon) {
     const waypoint = {
-        lat: e.lngLat.lat,
-        lon: e.lngLat.lng,
+        lat: lat,
+        lon: lon,
         name: `WP${waypoints.length + 1}`,
         timestamp: new Date().toISOString()
     };
 
     addWaypoint(waypoint);
+}
+
+/**
+ * Setzt den Route-Planning-Mode (für Kompatibilität mit Navigation-Modul)
+ * @param {boolean} active - Ob Route-Planung aktiv sein soll
+ */
+function setRoutePlanningMode(active) {
+    routePlanningMode = active;
 }
 
 function addWaypoint(waypoint) {

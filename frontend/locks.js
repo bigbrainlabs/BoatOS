@@ -3,6 +3,14 @@
  * Displays locks (Schleusen) on the map
  */
 
+// API URL - wird dynamisch ermittelt (verwendet globale falls vorhanden)
+const LOCKS_API_URL = window.API_URL || (window.location.hostname === 'localhost'
+    ? 'http://localhost:8000'
+    : `${window.location.protocol}//${window.location.hostname}`);
+
+// Referenz auf die Map-Instanz (wird extern gesetzt)
+let map = null;
+
 let locksMarkers = []; // Array of MapLibre markers
 let locksData = [];
 let locksVisible = true;
@@ -36,7 +44,7 @@ async function updateLocksOnMap() {
 
     try {
         const response = await fetch(
-            `${API_URL}/api/locks/bounds?lat_min=${bbox.lat_min}&lon_min=${bbox.lon_min}&lat_max=${bbox.lat_max}&lon_max=${bbox.lon_max}`
+            `${LOCKS_API_URL}/api/locks/bounds?lat_min=${bbox.lat_min}&lon_min=${bbox.lon_min}&lat_max=${bbox.lat_max}&lon_max=${bbox.lon_max}`
         );
 
         if (!response.ok) {
@@ -180,7 +188,7 @@ function createLockPopup(lock) {
  */
 async function checkLockStatus(lockId) {
     try {
-        const response = await fetch(`${API_URL}/api/locks/${lockId}/status`);
+        const response = await fetch(`${LOCKS_API_URL}/api/locks/${lockId}/status`);
         if (!response.ok) return;
 
         const status = await response.json();
@@ -226,7 +234,7 @@ async function showLockDetails(lockIdOrLock) {
 
     if (typeof lockIdOrLock === 'number') {
         try {
-            const response = await fetch(`${API_URL}/api/locks/${lockIdOrLock}`);
+            const response = await fetch(`${LOCKS_API_URL}/api/locks/${lockIdOrLock}`);
             if (!response.ok) return;
             lock = await response.json();
         } catch (error) {
@@ -362,7 +370,7 @@ function addLockToRoute(lockId, lat, lon, name) {
  */
 async function notifyLock(lockId) {
     try {
-        const response = await fetch(`${API_URL}/api/locks/${lockId}/notify`, {
+        const response = await fetch(`${LOCKS_API_URL}/api/locks/${lockId}/notify`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -442,3 +450,28 @@ function isLockInDatabase(osrmLock) {
 
     return false;
 }
+
+// ===========================================
+// Globale Exports
+// ===========================================
+
+// Map-Instanz setzen (wird von main.js aufgerufen)
+function setLocksMap(mapInstance) {
+    map = mapInstance;
+    console.log('🔒 Locks map reference set');
+}
+
+// Globale Funktionen exportieren
+window.initLocksLayer = initLocksLayer;
+window.updateLocksOnMap = updateLocksOnMap;
+window.clearLocksMarkers = clearLocksMarkers;
+window.toggleLocksLayer = toggleLocksLayer;
+window.showLockDetails = showLockDetails;
+window.closeLockDetails = closeLockDetails;
+window.setLocksMap = setLocksMap;
+
+// locksVisible als Getter/Setter für externe Zugriffe
+Object.defineProperty(window, 'locksVisible', {
+    get: function() { return locksVisible; },
+    set: function(val) { locksVisible = val; }
+});

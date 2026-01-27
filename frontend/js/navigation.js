@@ -74,6 +74,386 @@ let turnByTurnDisplay = null;
 // XTE-Warnungsanzeige
 let xteWarningDisplay = null;
 
+// ==================== MAP INTERACTION MODES ====================
+
+// Verfügbare Modi: 'none', 'route', 'poi'
+let mapInteractionMode = 'none';
+
+// Referenz auf aktuell aktiven Quick-Action Button
+let activeQuickActionButton = null;
+
+/**
+ * Aktiviert/Deaktiviert den Routen-Planungs-Modus
+ * Im Route-Modus werden Klicks auf die Karte zu Wegpunkten
+ */
+export function startRoutePlanning() {
+    // Wenn Route-Modus bereits aktiv, deaktivieren
+    if (mapInteractionMode === 'route') {
+        setMapInteractionMode('none');
+        showNotificationSafe('🛤️ Routenplanung beendet');
+        return;
+    }
+
+    // Route-Modus aktivieren
+    setMapInteractionMode('route');
+    showNotificationSafe('🛤️ Routenplanung aktiv - Tippe auf Karte für Wegpunkte');
+}
+
+/**
+ * Aktiviert/Deaktiviert den POI-Platzierungs-Modus
+ * Im POI-Modus werden Klicks auf die Karte zu Favoriten/POIs
+ */
+export function startPoiPlacement() {
+    // Wenn POI-Modus bereits aktiv, deaktivieren
+    if (mapInteractionMode === 'poi') {
+        setMapInteractionMode('none');
+        showNotificationSafe('📍 POI-Modus beendet');
+        return;
+    }
+
+    // POI-Modus aktivieren
+    setMapInteractionMode('poi');
+    showNotificationSafe('📍 POI-Modus aktiv - Tippe auf Karte um Favorit zu setzen');
+}
+
+/**
+ * Setzt den Map-Interaktions-Modus und aktualisiert UI
+ * @param {string} mode - 'none', 'route', oder 'poi'
+ */
+export function setMapInteractionMode(mode) {
+    mapInteractionMode = mode;
+
+    // Quick-Action Buttons aktualisieren
+    updateQuickActionStates();
+
+    // Cursor aktualisieren
+    updateMapCursor();
+
+    // Event an app.js senden für routePlanningMode Kompatibilität
+    if (window.BoatOS && window.BoatOS.setRoutePlanningMode) {
+        window.BoatOS.setRoutePlanningMode(mode === 'route');
+    }
+
+    // Custom Event feuern für andere Module
+    window.dispatchEvent(new CustomEvent('mapInteractionModeChanged', {
+        detail: { mode }
+    }));
+}
+
+/**
+ * Gibt den aktuellen Interaktions-Modus zurück
+ */
+export function getMapInteractionMode() {
+    return mapInteractionMode;
+}
+
+/**
+ * Aktualisiert die Quick-Action Button Zustände
+ */
+function updateQuickActionStates() {
+    // Alle Quick-Actions zurücksetzen
+    document.querySelectorAll('.quick-action').forEach(el => {
+        el.classList.remove('active');
+    });
+
+    // Aktiven Modus markieren
+    if (mapInteractionMode === 'route') {
+        const routeAction = document.querySelector('.quick-action[data-mode="route"]');
+        if (routeAction) routeAction.classList.add('active');
+    } else if (mapInteractionMode === 'poi') {
+        const poiAction = document.querySelector('.quick-action[data-mode="poi"]');
+        if (poiAction) poiAction.classList.add('active');
+    }
+}
+
+/**
+ * Aktualisiert den Map-Cursor basierend auf Modus
+ */
+function updateMapCursor() {
+    const mapContainer = document.getElementById('map-container');
+    if (!mapContainer) return;
+
+    switch (mapInteractionMode) {
+        case 'route':
+            mapContainer.style.cursor = 'crosshair';
+            break;
+        case 'poi':
+            mapContainer.style.cursor = 'copy';
+            break;
+        default:
+            mapContainer.style.cursor = '';
+            break;
+    }
+}
+
+/**
+ * Behandelt Map-Klicks basierend auf aktuellem Modus
+ * Wird von main.js aufgerufen
+ * @param {Object} lngLat - {lng, lat} Koordinaten
+ */
+export function handleMapClick(lngLat) {
+    switch (mapInteractionMode) {
+        case 'route':
+            // Wegpunkt hinzufügen
+            addWaypointFromMapClick(lngLat.lat, lngLat.lng);
+            break;
+
+        case 'poi':
+            // POI-Dialog öffnen
+            openPoiDialog(lngLat.lat, lngLat.lng);
+            break;
+
+        default:
+            // Kein spezieller Modus - normales Verhalten (nichts tun)
+            break;
+    }
+}
+
+/**
+ * Fügt einen Wegpunkt per Map-Click hinzu
+ * @param {number} lat - Breitengrad
+ * @param {number} lng - Längengrad
+ */
+function addWaypointFromMapClick(lat, lng) {
+    // Context aus BoatOS holen
+    const context = window.BoatOS?.context;
+    if (!context) {
+        console.warn('BoatOS context nicht verfügbar');
+        return;
+    }
+
+    const waypointNumber = (context.waypoints?.length || 0) + 1;
+
+    const waypoint = {
+        lat: lat,
+        lon: lng,
+        name: `WP ${waypointNumber}`,
+        timestamp: new Date().toISOString()
+    };
+
+    // addWaypoint aus diesem Modul verwenden
+    addWaypoint(waypoint, context);
+
+    // Waypoint-Liste aktualisieren (falls Funktion verfügbar)
+    if (window.updateWaypointList) {
+        window.updateWaypointList(context);
+    }
+
+    showNotificationSafe(`📍 Wegpunkt ${waypointNumber} hinzugefügt`);
+}
+
+/**
+ * Öffnet den POI-Erstellungs-Dialog
+ * @param {number} lat - Breitengrad
+ * @param {number} lon - Längengrad
+ */
+function openPoiDialog(lat, lon) {
+    // Modal erstellen
+    const modal = document.createElement('div');
+    modal.id = 'poi-dialog';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+    `;
+
+    const categories = [
+        { id: 'marina', icon: '⚓', name: 'Marina' },
+        { id: 'anchorage', icon: '🔱', name: 'Ankerplatz' },
+        { id: 'fuel', icon: '⛽', name: 'Tankstelle' },
+        { id: 'lock', icon: '🚧', name: 'Schleuse' },
+        { id: 'bridge', icon: '🌉', name: 'Brücke' },
+        { id: 'restaurant', icon: '🍽️', name: 'Restaurant' },
+        { id: 'shop', icon: '🏪', name: 'Geschäft' },
+        { id: 'danger', icon: '⚠️', name: 'Gefahrenstelle' },
+        { id: 'other', icon: '📍', name: 'Sonstiges' }
+    ];
+
+    modal.innerHTML = `
+        <div style="
+            background: rgba(10, 14, 39, 0.98);
+            border: 2px solid #64ffda;
+            border-radius: 16px;
+            padding: 24px;
+            width: 90%;
+            max-width: 400px;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        ">
+            <h3 style="margin: 0 0 16px 0; color: #64ffda; font-size: 18px;">
+                📍 Neuer POI / Favorit
+            </h3>
+
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 12px; color: #8892b0; margin-bottom: 6px;">Name *</label>
+                <input type="text" id="poi-name" placeholder="z.B. Schöner Ankerplatz" style="
+                    width: 100%;
+                    padding: 12px;
+                    background: rgba(42, 82, 152, 0.3);
+                    border: 1px solid rgba(100, 255, 218, 0.3);
+                    border-radius: 8px;
+                    color: white;
+                    font-size: 14px;
+                    box-sizing: border-box;
+                ">
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 12px; color: #8892b0; margin-bottom: 6px;">Kategorie</label>
+                <div id="poi-categories" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                    ${categories.map((cat, index) => `
+                        <button type="button" class="poi-category-btn ${index === 0 ? 'active' : ''}" data-category="${cat.id}" style="
+                            padding: 10px;
+                            background: ${index === 0 ? 'rgba(100, 255, 218, 0.2)' : 'rgba(42, 82, 152, 0.3)'};
+                            border: 1px solid ${index === 0 ? '#64ffda' : 'rgba(100, 255, 218, 0.3)'};
+                            border-radius: 8px;
+                            color: white;
+                            cursor: pointer;
+                            font-size: 12px;
+                            text-align: center;
+                        ">
+                            <div style="font-size: 20px; margin-bottom: 4px;">${cat.icon}</div>
+                            ${cat.name}
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-size: 12px; color: #8892b0; margin-bottom: 6px;">Notizen</label>
+                <textarea id="poi-notes" placeholder="Optionale Beschreibung..." rows="3" style="
+                    width: 100%;
+                    padding: 12px;
+                    background: rgba(42, 82, 152, 0.3);
+                    border: 1px solid rgba(100, 255, 218, 0.3);
+                    border-radius: 8px;
+                    color: white;
+                    font-size: 14px;
+                    resize: vertical;
+                    box-sizing: border-box;
+                "></textarea>
+            </div>
+
+            <div style="font-size: 11px; color: #8892b0; margin-bottom: 16px;">
+                📍 Position: ${lat.toFixed(6)}, ${lon.toFixed(6)}
+            </div>
+
+            <div style="display: flex; gap: 12px;">
+                <button id="poi-cancel" style="
+                    flex: 1;
+                    padding: 12px;
+                    background: rgba(231, 76, 60, 0.3);
+                    border: 1px solid rgba(231, 76, 60, 0.5);
+                    border-radius: 8px;
+                    color: white;
+                    font-size: 14px;
+                    cursor: pointer;
+                ">Abbrechen</button>
+                <button id="poi-save" style="
+                    flex: 1;
+                    padding: 12px;
+                    background: #27ae60;
+                    border: none;
+                    border-radius: 8px;
+                    color: white;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                ">Speichern</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Focus auf Name-Input
+    setTimeout(() => document.getElementById('poi-name').focus(), 100);
+
+    // Kategorie-Button Handler
+    modal.querySelectorAll('.poi-category-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            modal.querySelectorAll('.poi-category-btn').forEach(b => {
+                b.classList.remove('active');
+                b.style.background = 'rgba(42, 82, 152, 0.3)';
+                b.style.borderColor = 'rgba(100, 255, 218, 0.3)';
+            });
+            btn.classList.add('active');
+            btn.style.background = 'rgba(100, 255, 218, 0.2)';
+            btn.style.borderColor = '#64ffda';
+        });
+    });
+
+    // Abbrechen Handler
+    document.getElementById('poi-cancel').addEventListener('click', () => {
+        modal.remove();
+    });
+
+    // Speichern Handler
+    document.getElementById('poi-save').addEventListener('click', async () => {
+        const name = document.getElementById('poi-name').value.trim();
+        if (!name) {
+            showNotificationSafe('Bitte einen Namen eingeben', 'warning');
+            document.getElementById('poi-name').focus();
+            return;
+        }
+
+        const activeCategory = modal.querySelector('.poi-category-btn.active');
+        const category = activeCategory ? activeCategory.dataset.category : 'other';
+        const notes = document.getElementById('poi-notes').value.trim();
+
+        // POI speichern
+        if (window.saveFavorite) {
+            const success = await window.saveFavorite(name, lat, lon, category, notes);
+            if (success) {
+                showNotificationSafe(`✅ POI "${name}" gespeichert`);
+                modal.remove();
+
+                // POI-Modus beenden
+                setMapInteractionMode('none');
+            }
+        } else {
+            console.error('saveFavorite function not found');
+            showNotificationSafe('Fehler beim Speichern', 'error');
+        }
+    });
+
+    // ESC zum Schließen
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            modal.remove();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    // Click außerhalb zum Schließen
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+}
+
+/**
+ * Sichere Notification-Funktion
+ */
+function showNotificationSafe(message, type = 'info') {
+    if (window.BoatOS && window.BoatOS.ui && window.BoatOS.ui.showNotification) {
+        window.BoatOS.ui.showNotification(message, type);
+    } else if (window.showNotification) {
+        window.showNotification(message, type);
+    } else {
+        console.log(`[${type}] ${message}`);
+    }
+}
+
 // ==================== HILFSFUNKTIONEN ====================
 
 /**
@@ -2192,22 +2572,7 @@ export function setNavigationStartButton(button) {
 }
 
 // ==================== ROUTEN-PLANUNG UI ====================
-
-/**
- * Startet den Routen-Planungs-Modus
- * Aktiviert Klick-auf-Karte für Wegpunkt-Hinzufügung
- */
-export function startRoutePlanning() {
-    console.log('Routen-Planung gestartet');
-
-    // Benachrichtigung anzeigen
-    if (window.BoatOS && window.BoatOS.ui && window.BoatOS.ui.showNotification) {
-        window.BoatOS.ui.showNotification('Klicke auf die Karte um Wegpunkte hinzuzufügen', 'info');
-    }
-
-    // TODO: Klick-Handler auf Karte aktivieren
-    // Der Klick-Handler sollte addWaypoint aufrufen
-}
+// Hinweis: startRoutePlanning() ist jetzt oben im MAP INTERACTION MODES Abschnitt definiert
 
 /**
  * Öffnet den Routen-Editor
@@ -2295,5 +2660,12 @@ export default {
     getCurrentRouteCoordinates,
     getCurrentRouteData,
     getLocksOnRoute,
-    setNavigationStartButton
+    setNavigationStartButton,
+
+    // Map Interaction Modes
+    startRoutePlanning,
+    startPoiPlacement,
+    setMapInteractionMode,
+    getMapInteractionMode,
+    handleMapClick
 };

@@ -297,6 +297,24 @@ window.BoatOS = {
         ui.showNotification('Route bearbeiten - Wegpunkte verschieben', 'info');
     },
 
+    // === WAYPOINT FROM CLICK (for navigation module) ===
+    addWaypointFromClick: function(lat, lon) {
+        if (window.addWaypointFromClick) {
+            window.addWaypointFromClick(lat, lon);
+        } else {
+            console.warn('addWaypointFromClick not available');
+        }
+    },
+
+    // === SET ROUTE PLANNING MODE (for navigation module) ===
+    setRoutePlanningMode: function(active) {
+        if (window.setRoutePlanningMode) {
+            window.setRoutePlanningMode(active);
+        } else {
+            console.warn('setRoutePlanningMode not available');
+        }
+    },
+
     clearRoute: function() {
         const ctx = this.context || {};
         if (navigation.clearRoute) {
@@ -383,6 +401,35 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (mapModule.initTrackLayer) {
                 mapModule.initTrackLayer();
+            }
+
+            // Schleusen-Layer initialisieren (locks.js)
+            if (typeof window.setLocksMap === 'function') {
+                window.setLocksMap(mapInstance);
+            }
+            if (typeof window.initLocksLayer === 'function') {
+                window.initLocksLayer(mapInstance);
+                console.log('Schleusen-Layer initialisiert');
+            }
+
+            // AIS-Modul Map-Referenz setzen für Pegelstände
+            if (ais.initAISModule) {
+                ais.initAISModule(mapInstance);
+                console.log('AIS-Modul initialisiert');
+            }
+
+            // Layer-Sichtbarkeit basierend auf Einstellungen initialisieren
+            if (ui.initLayerVisibility) {
+                ui.initLayerVisibility();
+            }
+
+            // Charts-Modul initialisieren (charts.js)
+            if (typeof window.setChartsMap === 'function') {
+                window.setChartsMap(mapInstance);
+            }
+            if (typeof window.loadCharts === 'function') {
+                window.loadCharts();
+                console.log('Charts-Modul initialisiert');
             }
         });
     }
@@ -480,21 +527,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Mapclick-Handler
+    // Mapclick-Handler - leitet an Navigation-Modul für Mode-Prüfung weiter
     window.addEventListener('mapclick', (e) => {
         const { lngLat } = e.detail;
-        const waypointNumber = context.waypoints.length + 1;
 
-        const waypoint = {
-            lat: lngLat.lat,
-            lon: lngLat.lng,
-            name: `WP ${waypointNumber}`,
-            timestamp: new Date().toISOString()
-        };
+        // Navigation-Modul entscheidet basierend auf aktivem Modus
+        if (navigation.handleMapClick) {
+            navigation.handleMapClick(lngLat);
+        }
+    });
 
-        navigation.addWaypoint(waypoint, context);
-        updateWaypointList(context);
-        ui.showNotification(`Wegpunkt ${waypointNumber} hinzugefügt`, 'success');
+    // Event-Listener für Mode-Änderungen
+    window.addEventListener('mapInteractionModeChanged', (e) => {
+        console.log('Map-Modus geändert:', e.detail.mode);
     });
 
     // Theme-Wechsel-Event
@@ -507,6 +552,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Trip-Status prüfen
     checkTripStatus(context);
+
+    // Dashboard initialisieren und laden
+    if (window.dashboardRenderer) {
+        console.log('Dashboard wird geladen...');
+        window.dashboardRenderer.loadAndRender();
+    }
+
+    // Globale Funktionen für Navigation-Modul
+    window.updateWaypointList = () => updateWaypointList(context);
 
     console.log('BoatOS bereit!');
 });

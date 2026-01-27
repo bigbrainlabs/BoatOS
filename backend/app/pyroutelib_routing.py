@@ -81,20 +81,21 @@ class PyRouteLibRouter:
         Initialize pyroutelib3 v2.0 router for waterways
 
         Args:
-            osm_file: Path to OSM PBF file (optional, will use LiveGraph/Overpass if not provided)
+            osm_file: Path to OSM PBF file (REQUIRED - LiveGraph/Overpass disabled to prevent API overload)
         """
         self.osm_file = osm_file
         self.graph = None
-        self.enabled = PYROUTELIB_AVAILABLE
+        self.enabled = False  # Default disabled
 
-        if not self.enabled:
+        if not PYROUTELIB_AVAILABLE:
             print("⚠️ pyroutelib3 not available, routing disabled")
             return
 
         # Create waterway profile
         self.profile = WaterwayProfile()
 
-        # Try to initialize graph with local PBF data
+        # ONLY initialize with local PBF data - NO LiveGraph/Overpass fallback
+        # LiveGraph causes massive Overpass API load and timeouts
         if osm_file and os.path.exists(osm_file):
             try:
                 # Use Graph with local PBF file
@@ -103,24 +104,14 @@ class PyRouteLibRouter:
                 self.enabled = True
             except Exception as e:
                 print(f"⚠️ Could not initialize PyRouteLib with local file: {e}")
-                print(f"   This is expected - PBF parsing is very slow. Using LiveGraph instead.")
-                # Fall back to LiveGraph (Overpass API)
-                try:
-                    self.graph = LiveGraph(self.profile)
-                    print("✅ PyRouteLib waterway router initialized (LiveGraph/Overpass mode)")
-                    self.enabled = True
-                except Exception as e2:
-                    print(f"⚠️ Could not initialize PyRouteLib LiveGraph: {e2}")
-                    self.enabled = False
-        else:
-            # Use LiveGraph (queries Overpass API on-demand)
-            try:
-                self.graph = LiveGraph(self.profile)
-                print("✅ PyRouteLib waterway router initialized (LiveGraph/Overpass mode)")
-                self.enabled = True
-            except Exception as e:
-                print(f"⚠️ Could not initialize PyRouteLib: {e}")
+                print(f"   PyRouteLib DISABLED - no LiveGraph fallback (prevents Overpass API overload)")
                 self.enabled = False
+        else:
+            # NO LiveGraph fallback - it causes Overpass API overload with 785+ locks
+            print("⚠️ PyRouteLib DISABLED - no local OSM file provided")
+            print("   LiveGraph/Overpass mode disabled to prevent API overload")
+            print("   Use OSRM or provide local OSM PBF file for PyRouteLib routing")
+            self.enabled = False
 
     def haversine_distance(self, lon1: float, lat1: float, lon2: float, lat2: float) -> float:
         """Calculate distance in meters between two points"""
