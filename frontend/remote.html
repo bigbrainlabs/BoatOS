@@ -6,7 +6,16 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0c1929">
     <title>BoatOS Remote Control</title>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
     <link rel="stylesheet" href="remote.css?v=4">
 </head>
 <body>
@@ -75,5 +84,13 @@
     </div>
 
     <script src="remote.js?v=4"></script>
+    <script>
+      // Register Service Worker for PWA
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw-remote.js')
+          .then(() => console.log('SW registered'))
+          .catch((err) => console.log('SW failed:', err));
+      }
+    </script>
 </body>
 </html>
