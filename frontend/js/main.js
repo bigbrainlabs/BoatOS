@@ -265,6 +265,13 @@ window.BoatOS = {
             navigation.toggleNavigation(navContext);
         }
         this.updateNavButton();
+
+        // Auto-start trip recording when navigation starts
+        if (navigation.isNavigationActive && navigation.isNavigationActive()) {
+            if (logbook.isTripRecording && !logbook.isTripRecording()) {
+                logbook.confirmStartTrip();
+            }
+        }
     },
 
     stopNavigation: function() {

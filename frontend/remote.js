@@ -30,9 +30,17 @@ class RemoteControl {
         this.screenshotTimeout = null; // Timeout for delayed screenshot after touch
         this.screenshotUpdateCount = 0; // Counter for multiple updates after touch
 
+        // Screenshot zoom level
+        this.zoomLevel = 1.0;
+        this.minZoom = 0.5;
+        this.maxZoom = 3.0;
+        this.zoomStep = 0.25;
+
         // Elements
         this.elements = {
             touchpad: document.getElementById('touchpad'),
+            screenshotImg: document.getElementById('screenshotImg'),
+            touchpadInstructions: document.getElementById('touchpadInstructions'),
             crosshair: document.getElementById('crosshair'),
             touchIndicator: document.getElementById('touchIndicator'),
             remoteMode: document.getElementById('remoteMode'),
@@ -279,13 +287,10 @@ class RemoteControl {
     updateScreenshotOverlay(base64Data) {
         console.log(`Screenshot received: ${Math.round(base64Data.length / 1024)}KB`);
 
-        // Update touchpad background with screenshot
+        // Update screenshot img element
         const imageUrl = `data:image/png;base64,${base64Data}`;
-        this.elements.touchpad.style.backgroundImage = `url(${imageUrl})`;
-        this.elements.touchpad.style.backgroundSize = 'contain';  // Show full screenshot
-        this.elements.touchpad.style.backgroundPosition = 'center';
-        this.elements.touchpad.style.backgroundRepeat = 'no-repeat';
-        this.elements.touchpad.style.backgroundColor = '#000';  // Black background for letterboxing
+        this.elements.screenshotImg.src = imageUrl;
+        this.elements.touchpad.classList.add('has-screenshot');
 
         console.log('Screenshot applied to touchpad');
     }
@@ -353,13 +358,8 @@ class RemoteControl {
     onTouchStart(e) {
         e.preventDefault();
 
-        // Get normalized coordinates (0-1) adjusted for screenshot letterboxing
-        const rect = this.elements.touchpad.getBoundingClientRect();
-        const touchX = (e.clientX - rect.left) / rect.width;
-        const touchY = (e.clientY - rect.top) / rect.height;
-
-        // Adjust for background-size: contain letterboxing
-        const coords = this.adjustForLetterbox(touchX, touchY, rect.width, rect.height);
+        // Get coordinates relative to the screenshot image
+        const coords = this.getImageCoordinates(e.clientX, e.clientY);
 
         // Ignore touches outside visible screenshot area
         if (!coords.isInBounds) {
@@ -369,20 +369,13 @@ class RemoteControl {
         this.isTouching = true;
         this.lastTouchTime = Date.now();
 
-        const normX = coords.x;
-        const normY = coords.y;
-
-        // Calculate position relative to touchpad (in pixels)
-        const relativeX = e.clientX - rect.left;
-        const relativeY = e.clientY - rect.top;
-
-        // Update UI
-        this.updateCrosshair(relativeX, relativeY);
-        this.updateTouchIndicator(relativeX, relativeY, true);
+        // Update UI - use screen coordinates for visual feedback
+        this.updateCrosshair(e.clientX, e.clientY);
+        this.updateTouchIndicator(e.clientX, e.clientY, true);
         this.elements.touchpad.classList.add('active');
 
-        // Send touch down event
-        this.sendTouchEvent('down', normX, normY);
+        // Send touch down event with normalized image coordinates
+        this.sendTouchEvent('down', coords.x, coords.y);
 
         // Haptic feedback
         if (navigator.vibrate) {
@@ -395,13 +388,8 @@ class RemoteControl {
 
         e.preventDefault();
 
-        // Get normalized coordinates adjusted for screenshot letterboxing
-        const rect = this.elements.touchpad.getBoundingClientRect();
-        const touchX = (e.clientX - rect.left) / rect.width;
-        const touchY = (e.clientY - rect.top) / rect.height;
-
-        // Adjust for background-size: contain letterboxing
-        const coords = this.adjustForLetterbox(touchX, touchY, rect.width, rect.height);
+        // Get coordinates relative to the screenshot image
+        const coords = this.getImageCoordinates(e.clientX, e.clientY);
 
         // If moved outside bounds, treat as touch end
         if (!coords.isInBounds) {
@@ -409,19 +397,12 @@ class RemoteControl {
             return;
         }
 
-        const normX = coords.x;
-        const normY = coords.y;
+        // Update UI - use screen coordinates for visual feedback
+        this.updateCrosshair(e.clientX, e.clientY);
+        this.updateTouchIndicator(e.clientX, e.clientY, true);
 
-        // Calculate position relative to touchpad (in pixels)
-        const relativeX = e.clientX - rect.left;
-        const relativeY = e.clientY - rect.top;
-
-        // Update UI
-        this.updateCrosshair(relativeX, relativeY);
-        this.updateTouchIndicator(relativeX, relativeY, true);
-
-        // Send touch move event
-        this.sendTouchEvent('move', normX, normY);
+        // Send touch move event with normalized image coordinates
+        this.sendTouchEvent('move', coords.x, coords.y);
     }
 
     onTouchEnd(e) {
@@ -448,42 +429,22 @@ class RemoteControl {
         this.requestMultipleScreenshots();
     }
 
-    // Adjust touch coordinates for background-size: contain letterboxing
-    adjustForLetterbox(touchX, touchY, containerWidth, containerHeight) {
-        // Screenshot dimensions
-        const screenshotWidth = this.screenWidth;
-        const screenshotHeight = this.screenHeight;
-        const screenshotRatio = screenshotWidth / screenshotHeight;
+    // Get touch coordinates relative to the screenshot image (0-1 normalized)
+    getImageCoordinates(clientX, clientY) {
+        const img = this.elements.screenshotImg;
+        const imgRect = img.getBoundingClientRect();
 
-        // Container ratio
-        const containerRatio = containerWidth / containerHeight;
-
-        let offsetX = 0;
-        let offsetY = 0;
-        let visibleWidth = 1;
-        let visibleHeight = 1;
-
-        if (containerRatio > screenshotRatio) {
-            // Container is wider - black bars on left/right
-            visibleWidth = screenshotRatio / containerRatio;
-            offsetX = (1 - visibleWidth) / 2;
-        } else {
-            // Container is taller - black bars on top/bottom
-            visibleHeight = containerRatio / screenshotRatio;
-            offsetY = (1 - visibleHeight) / 2;
-        }
-
-        // Check if touch is within visible screenshot area
+        // Check if touch is within image bounds
         const isInBounds = (
-            touchX >= offsetX &&
-            touchX <= (offsetX + visibleWidth) &&
-            touchY >= offsetY &&
-            touchY <= (offsetY + visibleHeight)
+            clientX >= imgRect.left &&
+            clientX <= imgRect.right &&
+            clientY >= imgRect.top &&
+            clientY <= imgRect.bottom
         );
 
-        // Map touch coordinates to visible screenshot area
-        let x = (touchX - offsetX) / visibleWidth;
-        let y = (touchY - offsetY) / visibleHeight;
+        // Calculate normalized coordinates (0-1) relative to the image
+        let x = (clientX - imgRect.left) / imgRect.width;
+        let y = (clientY - imgRect.top) / imgRect.height;
 
         // Clamp to 0-1
         x = Math.max(0, Math.min(1, x));
@@ -492,16 +453,18 @@ class RemoteControl {
         return { x, y, isInBounds };
     }
 
-    updateCrosshair(x, y) {
-        this.elements.crosshair.style.left = `${x}px`;
-        this.elements.crosshair.style.top = `${y}px`;
+    updateCrosshair(clientX, clientY) {
+        // Use fixed positioning with client coordinates
+        this.elements.crosshair.style.left = `${clientX}px`;
+        this.elements.crosshair.style.top = `${clientY}px`;
         this.elements.crosshair.classList.add('active');
     }
 
-    updateTouchIndicator(x, y, active) {
+    updateTouchIndicator(clientX, clientY, active) {
         if (active) {
-            this.elements.touchIndicator.style.left = `${x}px`;
-            this.elements.touchIndicator.style.top = `${y}px`;
+            // Use fixed positioning with client coordinates
+            this.elements.touchIndicator.style.left = `${clientX}px`;
+            this.elements.touchIndicator.style.top = `${clientY}px`;
             this.elements.touchIndicator.classList.add('active');
         } else {
             this.elements.touchIndicator.classList.remove('active');
@@ -543,31 +506,16 @@ class RemoteControl {
         }
     }
 
-    // Quick actions
+    // Quick actions - zoom the screenshot view
     simulateZoom(direction) {
-        console.log(`Zoom ${direction}`);
-        // Simulate pinch gesture for zoom
-        // This is a simplified version - could be enhanced
-        const centerX = 0.5;
-        const centerY = 0.5;
-
         if (direction === 'in') {
-            // Simulate zoom in
-            this.sendTouchEvent('down', centerX, centerY);
-            setTimeout(() => {
-                this.sendTouchEvent('up', centerX, centerY);
-                // Request multiple screenshots to capture animations
-                this.requestMultipleScreenshots();
-            }, 100);
+            this.zoomLevel = Math.min(this.maxZoom, this.zoomLevel + this.zoomStep);
         } else {
-            // Simulate zoom out
-            this.sendTouchEvent('down', centerX, centerY);
-            setTimeout(() => {
-                this.sendTouchEvent('up', centerX, centerY);
-                // Request multiple screenshots to capture animations
-                this.requestMultipleScreenshots();
-            }, 100);
+            this.zoomLevel = Math.max(this.minZoom, this.zoomLevel - this.zoomStep);
         }
+
+        console.log(`Screenshot zoom: ${this.zoomLevel.toFixed(2)}x`);
+        this.applyZoom();
 
         // Haptic feedback
         if (navigator.vibrate) {
@@ -575,15 +523,23 @@ class RemoteControl {
         }
     }
 
+    applyZoom() {
+        const img = this.elements.screenshotImg;
+        if (img) {
+            // Scale image width based on zoom level
+            // At zoom 1.0, image fills container width
+            // At zoom 2.0, image is 200% of container width (scrollable)
+            img.style.width = `${this.zoomLevel * 100}%`;
+            img.style.height = 'auto';
+        }
+    }
+
     simulateCenter() {
-        console.log('Center map');
-        // Simulate tap in center
-        this.sendTouchEvent('down', 0.5, 0.5);
-        setTimeout(() => {
-            this.sendTouchEvent('up', 0.5, 0.5);
-            // Request multiple screenshots to capture animations
-            this.requestMultipleScreenshots();
-        }, 50);
+        console.log('Reset zoom');
+        // Reset zoom to 1.0 and scroll to top-left
+        this.zoomLevel = 1.0;
+        this.applyZoom();
+        this.elements.touchpad.scrollTo(0, 0);
 
         // Haptic feedback
         if (navigator.vibrate) {

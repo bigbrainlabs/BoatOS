@@ -6,23 +6,23 @@
 /* ============================================
    SETTINGS PANEL
    ============================================ */
-.setting-group { margin-bottom: 20px; }
+.setting-group { margin-bottom: var(--space-2xl); }
 
 .setting-group h4 {
     color: var(--text-dim);
-    font-size: 11px;
+    font-size: var(--fs-sm);
     text-transform: uppercase;
     letter-spacing: 1px;
-    margin-bottom: 10px;
+    margin-bottom: var(--space-md);
 }
 
 .setting-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 0;
+    padding: var(--space-md) 0;
     border-bottom: 1px solid var(--border);
-    font-size: 14px;
+    font-size: var(--fs-lg);
 }
 
 .setting-item:last-child { border-bottom: none; }
@@ -30,8 +30,8 @@
 .setting-input {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    padding: var(--space-xs) var(--space-md);
     color: var(--text);
     width: 80px;
     text-align: right;
@@ -40,27 +40,27 @@
 .setting-select {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    padding: var(--space-xs) var(--space-md);
     color: var(--text);
 }
 
 /* Boat Icons Selection */
 .boat-icons {
     display: flex;
-    gap: 10px;
+    gap: var(--space-md);
     flex-wrap: wrap;
 }
 
 .boat-icon-option {
-    width: 60px;
-    height: 60px;
+    width: clamp(48px, 3.13vw, 60px);
+    height: clamp(48px, 3.13vw, 60px);
     border: 2px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 30px;
+    font-size: clamp(24px, 1.56vw, 30px);
     cursor: pointer;
     transition: all 0.2s;
 }
@@ -75,31 +75,31 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 15px;
+    margin-bottom: var(--space-lg);
 }
 
 .route-summary {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    margin-bottom: 15px;
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
 }
 
 .route-stat {
     background: var(--bg-card);
-    padding: 12px 8px;
-    border-radius: 10px;
+    padding: var(--space-base) var(--space-sm);
+    border-radius: var(--radius-md);
     text-align: center;
 }
 
 .route-stat .value {
-    font-size: 22px;
+    font-size: clamp(18px, 1.15vw, 22px);
     font-weight: 700;
     color: var(--accent);
 }
 
 .route-stat .label {
-    font-size: 10px;
+    font-size: var(--fs-xs);
     color: var(--text-dim);
     margin-top: 2px;
 }
@@ -108,16 +108,16 @@
 .waypoint-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-sm);
 }
 
 .waypoint-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
+    gap: var(--space-base);
+    padding: var(--space-md) var(--space-base);
     background: var(--bg-card);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     border-left: 4px solid var(--accent);
 }
 
@@ -126,8 +126,8 @@
 .waypoint-item.lock { border-left-color: var(--warning); }
 
 .waypoint-icon {
-    width: 32px;
-    height: 32px;
+    width: clamp(26px, 1.67vw, 32px);
+    height: clamp(26px, 1.67vw, 32px);
     border-radius: 50%;
     background: var(--accent);
     color: white;
@@ -135,26 +135,26 @@
     align-items: center;
     justify-content: center;
     font-weight: 700;
-    font-size: 14px;
+    font-size: var(--fs-lg);
 }
 
 .waypoint-item.lock .waypoint-icon { background: var(--warning); }
 
 .waypoint-info { flex: 1; }
-.waypoint-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
-.waypoint-details { font-size: 11px; color: var(--text-dim); }
+.waypoint-name { font-weight: 600; font-size: var(--fs-lg); margin-bottom: 2px; }
+.waypoint-details { font-size: var(--fs-sm); color: var(--text-dim); }
 
-.waypoint-actions { display: flex; gap: 5px; }
+.waypoint-actions { display: flex; gap: var(--space-xs); }
 
 .wp-btn {
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
+    width: clamp(24px, 1.46vw, 28px);
+    height: clamp(24px, 1.46vw, 28px);
+    border-radius: var(--radius-sm);
     border: none;
     background: var(--border);
     color: var(--text);
     cursor: pointer;
-    font-size: 12px;
+    font-size: var(--fs-base);
     transition: all 0.2s;
 }
 
@@ -166,76 +166,76 @@
 .weather-current {
     display: flex;
     align-items: center;
-    gap: 15px;
-    padding: 15px;
+    gap: var(--space-lg);
+    padding: var(--space-lg);
     background: var(--bg-card);
-    border-radius: 12px;
-    margin-bottom: 15px;
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-lg);
 }
 
-.weather-icon { font-size: 50px; }
+.weather-icon { font-size: clamp(40px, 2.6vw, 50px); }
 .weather-main { flex: 1; }
-.weather-temp { font-size: 36px; font-weight: 700; color: var(--accent); }
-.weather-desc { color: var(--text-dim); font-size: 14px; text-transform: capitalize; }
-.weather-location { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+.weather-temp { font-size: var(--fs-5xl); font-weight: 700; color: var(--accent); }
+.weather-desc { color: var(--text-dim); font-size: var(--fs-lg); text-transform: capitalize; }
+.weather-location { font-size: var(--fs-base); color: var(--text-dim); margin-top: 3px; }
 
 .weather-details {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    margin-bottom: 15px;
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
 }
 
 .weather-detail {
     text-align: center;
-    padding: 12px 8px;
+    padding: var(--space-base) var(--space-sm);
     background: var(--bg-card);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
 }
 
-.weather-detail .icon { font-size: 20px; margin-bottom: 4px; }
-.weather-detail .value { font-size: 16px; font-weight: 600; color: var(--accent); }
-.weather-detail .label { font-size: 10px; color: var(--text-dim); }
+.weather-detail .icon { font-size: var(--fs-3xl); margin-bottom: var(--space-2xs); }
+.weather-detail .value { font-size: var(--fs-xl); font-weight: 600; color: var(--accent); }
+.weather-detail .label { font-size: var(--fs-xs); color: var(--text-dim); }
 
-.forecast-title { font-size: 14px; color: var(--text-dim); margin-bottom: 10px; }
+.forecast-title { font-size: var(--fs-lg); color: var(--text-dim); margin-bottom: var(--space-md); }
 
 .forecast-list {
     display: flex;
-    gap: 10px;
+    gap: var(--space-md);
     overflow-x: auto;
-    padding-bottom: 5px;
+    padding-bottom: var(--space-xs);
 }
 
 .forecast-list::-webkit-scrollbar { display: none; }
 
 .forecast-item {
-    min-width: 70px;
+    min-width: clamp(58px, 3.65vw, 70px);
     text-align: center;
-    padding: 10px;
+    padding: var(--space-md);
     background: var(--bg-card);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
 }
 
-.forecast-item .time { font-size: 11px; color: var(--text-dim); }
-.forecast-item .icon { font-size: 24px; margin: 5px 0; }
-.forecast-item .temp { font-size: 14px; font-weight: 600; color: var(--accent); }
+.forecast-item .time { font-size: var(--fs-sm); color: var(--text-dim); }
+.forecast-item .icon { font-size: var(--fs-4xl); margin: var(--space-xs) 0; }
+.forecast-item .temp { font-size: var(--fs-lg); font-weight: 600; color: var(--accent); }
 
 /* ============================================
    LOGBOOK SECTION
    ============================================ */
 .logbook-tabs {
     display: flex;
-    gap: 10px;
-    margin-bottom: 15px;
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
 }
 
 .logbook-tab {
-    padding: 8px 16px;
+    padding: var(--space-sm) var(--space-xl);
     background: var(--bg-card);
     border: 2px solid var(--border);
-    border-radius: 20px;
+    border-radius: var(--radius-2xl);
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--fs-md);
     transition: all 0.2s;
 }
 
@@ -247,88 +247,88 @@
 
 .current-trip {
     background: var(--bg-card);
-    border-radius: 12px;
-    padding: 15px;
-    margin-bottom: 15px;
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    margin-bottom: var(--space-lg);
 }
 
 .trip-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: var(--space-base);
 }
 
-.trip-title { font-size: 16px; font-weight: 600; }
+.trip-title { font-size: var(--fs-xl); font-weight: 600; }
 
 .trip-status {
-    padding: 4px 10px;
+    padding: var(--space-2xs) var(--space-md);
     background: rgba(74, 222, 128, 0.2);
     color: var(--success);
-    border-radius: 12px;
-    font-size: 11px;
+    border-radius: var(--radius-lg);
+    font-size: var(--fs-sm);
 }
 
 .trip-stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    gap: var(--space-md);
 }
 
 .trip-stat { text-align: center; }
-.trip-stat .value { font-size: 20px; font-weight: 700; color: var(--accent); }
-.trip-stat .label { font-size: 10px; color: var(--text-dim); }
+.trip-stat .value { font-size: var(--fs-3xl); font-weight: 700; color: var(--accent); }
+.trip-stat .label { font-size: var(--fs-xs); color: var(--text-dim); }
 
-.log-entries { display: flex; flex-direction: column; gap: 8px; }
+.log-entries { display: flex; flex-direction: column; gap: var(--space-sm); }
 
 .log-entry {
     display: flex;
-    gap: 12px;
-    padding: 10px;
+    gap: var(--space-base);
+    padding: var(--space-md);
     background: var(--bg-card);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     align-items: center;
 }
 
-.log-time { font-size: 12px; color: var(--text-dim); min-width: 50px; }
-.log-text { flex: 1; font-size: 13px; }
-.log-icon { font-size: 18px; }
+.log-time { font-size: var(--fs-base); color: var(--text-dim); min-width: 50px; }
+.log-text { flex: 1; font-size: var(--fs-md); }
+.log-icon { font-size: var(--fs-2xl); }
 
 /* ============================================
    CREW SECTION
    ============================================ */
-.crew-list { display: flex; flex-direction: column; gap: 10px; }
+.crew-list { display: flex; flex-direction: column; gap: var(--space-md); }
 
 .crew-member {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px;
+    gap: var(--space-base);
+    padding: var(--space-base);
     background: var(--bg-card);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
 }
 
 .crew-avatar {
-    width: 44px;
-    height: 44px;
+    width: clamp(36px, 2.29vw, 44px);
+    height: clamp(36px, 2.29vw, 44px);
     border-radius: 50%;
     background: var(--accent);
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px;
+    font-size: var(--fs-2xl);
     font-weight: 700;
 }
 
 .crew-info { flex: 1; }
-.crew-name { font-weight: 600; font-size: 14px; }
-.crew-role { font-size: 12px; color: var(--text-dim); }
+.crew-name { font-weight: 600; font-size: var(--fs-lg); }
+.crew-role { font-size: var(--fs-base); color: var(--text-dim); }
 
 .crew-status {
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 11px;
+    padding: var(--space-2xs) var(--space-md);
+    border-radius: var(--radius-lg);
+    font-size: var(--fs-sm);
 }
 
 .crew-status.aboard { background: rgba(74, 222, 128, 0.2); color: var(--success); }
@@ -338,14 +338,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 12px;
+    gap: var(--space-sm);
+    padding: var(--space-base);
     background: var(--accent-dim);
     border: 2px dashed var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     color: var(--accent);
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--fs-lg);
     transition: all 0.2s;
 }
 
@@ -361,38 +361,38 @@
 .tank-overview {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-    margin-bottom: 15px;
+    gap: var(--space-base);
+    margin-bottom: var(--space-lg);
 }
 
 .tank-card {
     background: var(--bg-card);
-    border-radius: 12px;
-    padding: 15px;
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
 }
 
 .tank-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: var(--space-md);
 }
 
-.tank-name { font-size: 14px; font-weight: 600; }
-.tank-percent { font-size: 20px; font-weight: 700; color: var(--accent); }
+.tank-name { font-size: var(--fs-lg); font-weight: 600; }
+.tank-percent { font-size: var(--fs-3xl); font-weight: 700; color: var(--accent); }
 
 .tank-bar {
-    height: 8px;
+    height: var(--space-sm);
     background: var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
     overflow: hidden;
-    margin-bottom: 8px;
+    margin-bottom: var(--space-sm);
 }
 
 .tank-fill {
     height: 100%;
     background: var(--accent);
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
     transition: width 0.3s;
 }
 
@@ -402,35 +402,35 @@
 .tank-details {
     display: flex;
     justify-content: space-between;
-    font-size: 11px;
+    font-size: var(--fs-sm);
     color: var(--text-dim);
 }
 
-.fuel-log-title { font-size: 14px; margin-bottom: 10px; color: var(--text-dim); }
+.fuel-log-title { font-size: var(--fs-lg); margin-bottom: var(--space-md); color: var(--text-dim); }
 
-.fuel-entries { display: flex; flex-direction: column; gap: 8px; }
+.fuel-entries { display: flex; flex-direction: column; gap: var(--space-sm); }
 
 .fuel-entry {
     display: flex;
     justify-content: space-between;
-    padding: 10px;
+    padding: var(--space-md);
     background: var(--bg-card);
-    border-radius: 8px;
-    font-size: 13px;
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-md);
 }
 
 /* ============================================
    AIS LIST
    ============================================ */
-.ais-list { display: flex; flex-direction: column; gap: 8px; }
+.ais-list { display: flex; flex-direction: column; gap: var(--space-sm); }
 
 .ais-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px;
+    gap: var(--space-base);
+    padding: var(--space-base);
     background: var(--bg-card);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     cursor: pointer;
     transition: all 0.2s;
 }
@@ -441,63 +441,63 @@
 }
 
 .ais-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: var(--icon-btn-size);
+    height: var(--icon-btn-size);
+    border-radius: var(--radius-md);
     background: var(--accent);
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: var(--fs-3xl);
 }
 
 .ais-info { flex: 1; }
-.ais-name { font-weight: 600; font-size: 14px; }
-.ais-details { font-size: 11px; color: var(--text-dim); }
+.ais-name { font-weight: 600; font-size: var(--fs-lg); }
+.ais-details { font-size: var(--fs-sm); color: var(--text-dim); }
 
 .ais-distance {
     text-align: right;
 }
 
-.ais-distance .value { font-size: 16px; font-weight: 700; color: var(--accent); }
-.ais-distance .label { font-size: 10px; color: var(--text-dim); }
+.ais-distance .value { font-size: var(--fs-xl); font-weight: 700; color: var(--accent); }
+.ais-distance .label { font-size: var(--fs-xs); color: var(--text-dim); }
 
 /* ============================================
    LOCK LIST
    ============================================ */
-.lock-list { display: flex; flex-direction: column; gap: 8px; }
+.lock-list { display: flex; flex-direction: column; gap: var(--space-sm); }
 
 .lock-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px;
+    gap: var(--space-base);
+    padding: var(--space-base);
     background: var(--bg-card);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     border-left: 4px solid var(--warning);
 }
 
 .lock-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: var(--icon-btn-size);
+    height: var(--icon-btn-size);
+    border-radius: var(--radius-md);
     background: var(--warning);
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: var(--fs-3xl);
 }
 
 .lock-info { flex: 1; }
-.lock-name { font-weight: 600; font-size: 14px; }
-.lock-details { font-size: 11px; color: var(--text-dim); }
+.lock-name { font-weight: 600; font-size: var(--fs-lg); }
+.lock-details { font-size: var(--fs-sm); color: var(--text-dim); }
 
 .lock-status {
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 11px;
+    padding: var(--space-2xs) var(--space-md);
+    border-radius: var(--radius-lg);
+    font-size: var(--fs-sm);
 }
 
 .lock-status.open { background: rgba(74, 222, 128, 0.2); color: var(--success); }
@@ -569,8 +569,202 @@
 }
 
 /* ============================================
+   INLINE-STYLE REPLACEMENTS (from index.html)
+   ============================================ */
+
+/* Trip Stats Grid (Logbook inline) */
+.trip-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+}
+
+.trip-stat-card {
+    background: var(--bg-card);
+    padding: var(--space-base);
+    border-radius: var(--radius-lg);
+    text-align: center;
+}
+
+.trip-stat-card .value {
+    font-size: var(--fs-3xl);
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.trip-stat-card .label {
+    font-size: var(--fs-xs);
+    color: var(--text-dim);
+}
+
+/* Trip Control Buttons */
+.trip-btn {
+    flex: 1;
+    min-width: 120px;
+    padding: var(--space-lg);
+    border: none;
+    border-radius: var(--radius-lg);
+    font-size: var(--fs-lg);
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+}
+
+.trip-btn-sm {
+    padding: var(--space-lg) var(--space-2xl);
+    border: none;
+    border-radius: var(--radius-lg);
+    font-size: var(--fs-lg);
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-xs);
+}
+
+.trip-btn-icon {
+    padding: var(--space-lg) var(--space-2xl);
+    border: none;
+    border-radius: var(--radius-lg);
+    background: var(--bg-card);
+    color: var(--accent);
+    font-size: var(--fs-lg);
+    cursor: pointer;
+    border: 1px solid var(--border);
+}
+
+/* Trip Controls Container */
+.trip-controls {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+/* Recording Indicator */
+.recording-indicator {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid var(--danger);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md);
+    margin-bottom: var(--space-base);
+    display: none;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.recording-dot {
+    width: var(--space-base);
+    height: var(--space-base);
+    background: var(--danger);
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+}
+
+/* Paused Badge */
+.paused-badge {
+    display: none;
+    background: var(--warning);
+    color: white;
+    padding: var(--space-2xs) var(--space-md);
+    border-radius: var(--radius-2xl);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+}
+
+/* Icon Button Small */
+.icon-btn-sm {
+    width: clamp(28px, 1.67vw, 32px);
+    height: clamp(28px, 1.67vw, 32px);
+    font-size: var(--fs-lg);
+}
+
+.icon-btn-nav {
+    width: clamp(30px, 1.88vw, 36px);
+    height: clamp(30px, 1.88vw, 36px);
+    font-size: var(--fs-2xl);
+}
+
+/* Modal Overlay & Content */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 3000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: var(--bg-panel);
+    border-radius: var(--radius-2xl);
+    width: 90%;
+    max-width: clamp(320px, 25vw, 400px);
+    padding: var(--space-2xl);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-2xl);
+}
+
+.modal-header h3 {
+    font-size: var(--fs-2xl);
+    color: var(--accent);
+}
+
+.modal-close-btn {
+    background: none;
+    border: none;
+    font-size: var(--fs-4xl);
+    cursor: pointer;
+    color: var(--text-dim);
+}
+
+.modal-btn {
+    flex: 1;
+    padding: var(--space-lg);
+    border-radius: var(--radius-lg);
+    font-size: var(--fs-lg);
+    cursor: pointer;
+}
+
+.modal-btn-secondary {
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text);
+}
+
+.modal-btn-primary {
+    border: none;
+    background: var(--accent);
+    color: white;
+    font-weight: 600;
+}
+
+.modal-btn-success {
+    border: none;
+    background: var(--success);
+    color: white;
+    font-weight: 600;
+}
+
+/* ============================================
    RESPONSIVE ADJUSTMENTS
    ============================================ */
+@media (max-width: 1280px) {
+    .weather-details { grid-template-columns: repeat(2, 1fr); }
+    .route-summary { grid-template-columns: repeat(2, 1fr); }
+}
+
 @media (max-width: 500px) {
     .route-summary { grid-template-columns: repeat(2, 1fr); }
     .weather-details { grid-template-columns: repeat(2, 1fr); }

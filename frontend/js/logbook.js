@@ -10,6 +10,7 @@ import * as navigation from './navigation.js';
 
 // ==================== STATE ====================
 let context = null;
+let tripRecording = false;
 
 // ==================== HELPERS ====================
 
@@ -353,7 +354,12 @@ export async function submitManualEntry() {
 /**
  * Trip UI aktualisieren
  */
+export function isTripRecording() {
+    return tripRecording;
+}
+
 export function updateTripUI(isRecording, isPaused) {
+    tripRecording = isRecording;
     const startBtn = document.getElementById('btn-start-trip');
     const stopBtn = document.getElementById('btn-stop-trip');
     const pauseBtn = document.getElementById('btn-pause-trip');
