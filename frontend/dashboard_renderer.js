@@ -294,21 +294,21 @@ class DashboardRenderer {
         if (!container) return;
 
         container.innerHTML = `
-            <div style="text-align: center; padding: 40px; color: var(--text-dim);">
-                <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
-                <div style="font-size: 16px; color: var(--text); margin-bottom: 10px;">
+            <div style="text-align: center; padding: var(--space-4xl); color: var(--text-dim);">
+                <div style="font-size: var(--fs-5xl); margin-bottom: var(--space-lg);">⚠️</div>
+                <div style="font-size: var(--fs-xl); color: var(--text); margin-bottom: var(--space-md);">
                     Dashboard konnte nicht geladen werden
                 </div>
-                <div style="font-size: 13px; margin-bottom: 20px;">
+                <div style="font-size: var(--fs-md); margin-bottom: var(--space-2xl);">
                     Bitte prüfe die Verbindung zum Backend
                 </div>
                 <button onclick="window.dashboardRenderer.loadAndRender()" style="
-                    padding: 12px 24px;
+                    padding: var(--space-base) var(--space-3xl);
                     background: var(--accent);
                     color: white;
                     border: none;
-                    border-radius: 10px;
-                    font-size: 14px;
+                    border-radius: var(--radius-md);
+                    font-size: var(--fs-lg);
                     cursor: pointer;
                 ">Erneut versuchen</button>
             </div>
@@ -343,7 +343,7 @@ class DashboardRenderer {
         let html = `<div class="dashboard-grid" style="
             display: grid;
             grid-template-columns: repeat(${gridColumns}, 1fr);
-            gap: 20px;
+            gap: var(--space-2xl);
             max-width: 1400px;
             margin: 0 auto;
         ">`;
@@ -472,16 +472,16 @@ class DashboardRenderer {
                     background: linear-gradient(135deg, rgba(30, 60, 114, 0.8), rgba(42, 82, 152, 0.8));
                     backdrop-filter: blur(15px);
                     border: 1px solid ${border};
-                    border-radius: 24px;
-                    padding: 35px;
+                    border-radius: var(--radius-2xl);
+                    padding: var(--space-4xl);
                     box-shadow: 0 8px 32px rgba(0,0,0,0.3);
                 ">
-                    <div style="display: flex; align-items: start; justify-content: space-between; margin-bottom: 25px;">
+                    <div style="display: flex; align-items: start; justify-content: space-between; margin-bottom: var(--space-3xl);">
                         <div style="
                             background: linear-gradient(135deg, ${bg}, ${bg});
-                            padding: 18px;
-                            border-radius: 20px;
-                            font-size: 24px;
+                            padding: var(--space-2xl);
+                            border-radius: var(--radius-2xl);
+                            font-size: var(--fs-4xl);
                             font-weight: 700;
                             color: ${textColor};
                             font-family: monospace;
@@ -491,28 +491,28 @@ class DashboardRenderer {
                         <div data-sensor-status="${baseName}" style="
                             background: ${statusColors[sensor.status]};
                             color: white;
-                            padding: 6px 14px;
-                            border-radius: 20px;
-                            font-size: 11px;
+                            padding: var(--space-xs) var(--space-lg);
+                            border-radius: var(--radius-2xl);
+                            font-size: var(--fs-sm);
                             font-weight: 600;
                             text-transform: uppercase;
                         ">${sensor.status}</div>
                     </div>
-                    <div style="font-size: 22px; color: white; font-weight: 600; margin-bottom: 15px;">
+                    <div style="font-size: var(--fs-3xl); color: white; font-weight: 600; margin-bottom: var(--space-lg);">
                         ${name}
                     </div>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(clamp(120px, 7.8vw, 150px), 1fr)); gap: var(--space-lg);">
                         ${Object.entries(filteredValues).map(([key, value]) => `
                             <div style="
                                 background: rgba(10, 14, 39, 0.5);
-                                padding: 12px;
-                                border-radius: 10px;
+                                padding: var(--space-base);
+                                border-radius: var(--radius-md);
                                 border: 1px solid ${border};
                             ">
-                                <div style="color: #8892b0; font-size: 11px; text-transform: uppercase; margin-bottom: 5px;">
+                                <div style="color: #8892b0; font-size: var(--fs-sm); text-transform: uppercase; margin-bottom: var(--space-xs);">
                                     ${key}
                                 </div>
-                                <div style="color: ${textColor}; font-size: 18px; font-weight: 700; font-family: monospace;">
+                                <div style="color: ${textColor}; font-size: var(--fs-2xl); font-weight: 700; font-family: monospace;">
                                     ${createValueElement(key, value)}
                                 </div>
                             </div>
@@ -529,15 +529,15 @@ class DashboardRenderer {
                     grid-column: span ${size};
                     background: ${bg};
                     border: 1px solid ${border};
-                    border-radius: 12px;
-                    padding: 16px;
+                    border-radius: var(--radius-lg);
+                    padding: var(--space-xl);
                     box-shadow: 0 4px 16px rgba(0,0,0,0.2);
                 ">
-                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                        <span style="font-size: 20px;">${icon}</span>
+                    <div style="display: flex; align-items: center; gap: var(--space-base); margin-bottom: var(--space-sm);">
+                        <span style="font-size: var(--fs-3xl);">${icon}</span>
                         <div style="flex: 1;">
-                            <div style="font-size: 13px; color: white; font-weight: 600;">${name}</div>
-                            <div style="font-size: 10px; color: #8892b0; text-transform: uppercase;">${sensor.type}</div>
+                            <div style="font-size: var(--fs-md); color: white; font-weight: 600;">${name}</div>
+                            <div style="font-size: var(--fs-xs); color: #8892b0; text-transform: uppercase;">${sensor.type}</div>
                         </div>
                         <div data-sensor-status="${baseName}" style="
                             width: 8px;
@@ -546,20 +546,20 @@ class DashboardRenderer {
                             background: ${statusColors[sensor.status]};
                         "></div>
                     </div>
-                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; flex-wrap: wrap; gap: var(--space-sm);">
                         ${Object.entries(filteredValues).map(([key, value]) => `
                             <div style="
                                 background: rgba(10, 14, 39, 0.5);
-                                padding: 6px 10px;
-                                border-radius: 8px;
+                                padding: var(--space-xs) var(--space-md);
+                                border-radius: var(--radius-sm);
                                 border: 1px solid ${border};
                                 flex: 1;
                                 min-width: 80px;
                             ">
-                                <div style="color: #8892b0; font-size: 9px; text-transform: uppercase; margin-bottom: 2px;">
+                                <div style="color: #8892b0; font-size: var(--fs-2xs); text-transform: uppercase; margin-bottom: 2px;">
                                     ${key}
                                 </div>
-                                <div style="color: ${textColor}; font-size: 13px; font-weight: 700; font-family: monospace;">
+                                <div style="color: ${textColor}; font-size: var(--fs-md); font-weight: 700; font-family: monospace;">
                                     ${createValueElement(key, value)}
                                 </div>
                             </div>
@@ -576,36 +576,36 @@ class DashboardRenderer {
                 background: ${bg};
                 backdrop-filter: blur(15px);
                 border: 2px solid ${border};
-                border-radius: 16px;
-                padding: 24px;
+                border-radius: var(--radius-xl);
+                padding: var(--space-3xl);
                 box-shadow: 0 4px 16px rgba(0,0,0,0.2);
                 position: relative;
             ">
                 <div data-sensor-status="${baseName}" style="
                     position: absolute;
-                    top: 15px;
-                    right: 15px;
+                    top: var(--space-lg);
+                    right: var(--space-lg);
                     background: ${statusColors[sensor.status]};
                     color: white;
-                    padding: 4px 12px;
-                    border-radius: 20px;
-                    font-size: 11px;
+                    padding: var(--space-2xs) var(--space-base);
+                    border-radius: var(--radius-2xl);
+                    font-size: var(--fs-sm);
                     font-weight: 600;
                     text-transform: uppercase;
                 ">${sensor.status}</div>
 
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <span style="font-size: 36px;">${icon}</span>
+                <div style="display: flex; align-items: center; gap: var(--space-base); margin-bottom: var(--space-xl);">
+                    <span style="font-size: var(--fs-5xl);">${icon}</span>
                     <div>
-                        <div style="font-size: 19px; font-weight: 600; color: white;">${name}</div>
-                        <div style="font-size: 11px; color: #8892b0; text-transform: uppercase;">${sensor.type}</div>
+                        <div style="font-size: var(--fs-3xl); font-weight: 600; color: white;">${name}</div>
+                        <div style="font-size: var(--fs-sm); color: #8892b0; text-transform: uppercase;">${sensor.type}</div>
                     </div>
                 </div>
 
                 <div style="
                     background: rgba(10, 14, 39, 0.5);
-                    border-radius: 10px;
-                    padding: 14px;
+                    border-radius: var(--radius-md);
+                    padding: var(--space-lg);
                     border: 1px solid ${border};
                 ">
                     ${Object.entries(filteredValues).map(([key, value], index) => `
@@ -613,11 +613,11 @@ class DashboardRenderer {
                             display: flex;
                             justify-content: space-between;
                             align-items: center;
-                            padding: 8px 0;
+                            padding: var(--space-sm) 0;
                             ${index < Object.keys(filteredValues).length - 1 ? 'border-bottom: 1px solid rgba(255,255,255,0.08);' : ''}
                         ">
-                            <span style="color: #8892b0; font-size: 12px; font-weight: 500;">${key}</span>
-                            <span style="color: ${textColor}; font-size: 14px; font-weight: 700; font-family: monospace;">
+                            <span style="color: #8892b0; font-size: var(--fs-base); font-weight: 500;">${key}</span>
+                            <span style="color: ${textColor}; font-size: var(--fs-lg); font-weight: 700; font-family: monospace;">
                                 ${createValueElement(key, value)}
                             </span>
                         </div>
@@ -676,31 +676,31 @@ class DashboardRenderer {
                 background: linear-gradient(135deg, rgba(30, 60, 114, 0.6), rgba(42, 82, 152, 0.6));
                 backdrop-filter: blur(15px);
                 border: 2px solid rgba(100, 255, 218, 0.3);
-                border-radius: 16px;
-                padding: 24px;
+                border-radius: var(--radius-xl);
+                padding: var(--space-3xl);
                 box-shadow: 0 4px 16px rgba(0,0,0,0.2);
                 text-align: center;
             ">
-                ${label ? `<div style="font-size: 12px; color: #8892b0; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;">${label}</div>` : ''}
-                <div class="gauge-value" style="font-size: 36px; font-weight: 700; color: ${color}; font-family: monospace; margin-bottom: 10px;">
+                ${label ? `<div style="font-size: var(--fs-base); color: #8892b0; text-transform: uppercase; letter-spacing: 1px; margin-bottom: var(--space-md);">${label}</div>` : ''}
+                <div class="gauge-value" style="font-size: var(--fs-5xl); font-weight: 700; color: ${color}; font-family: monospace; margin-bottom: var(--space-md);">
                     ${value.toFixed(decimals)}${unit ? ` ${unit}` : ''}
                 </div>
                 <div style="
                     width: 100%;
-                    height: 12px;
+                    height: var(--space-base);
                     background: rgba(10, 14, 39, 0.5);
-                    border-radius: 6px;
+                    border-radius: var(--radius-sm);
                     overflow: hidden;
-                    margin-bottom: 10px;
+                    margin-bottom: var(--space-md);
                 ">
                     <div class="gauge-bar-fill" style="
                         width: ${percentage}%;
                         height: 100%;
                         background: ${color};
-                        border-radius: 6px;
+                        border-radius: var(--radius-sm);
                     "></div>
                 </div>
-                <div style="display: flex; justify-content: space-between; color: #8892b0; font-size: 11px;">
+                <div style="display: flex; justify-content: space-between; color: #8892b0; font-size: var(--fs-sm);">
                     <span>${min}</span>
                     <span>${max} ${unit}</span>
                 </div>
@@ -713,11 +713,13 @@ class DashboardRenderer {
      */
     renderArcGauge(widget, size, value, min, max, unit, percentage, color, label, decimals, style) {
         const gaugeId = this.generateId('gauge');
-        const svgSize = 200;
+        // Make gauge size responsive: use smaller size at narrow viewports
+        const vw = Math.max(document.documentElement.clientWidth || 1280, 1280);
+        const svgSize = Math.round(160 + (200 - 160) * Math.min(1, (vw - 1280) / (1920 - 1280)));
         const cx = svgSize / 2;
         const cy = svgSize / 2;
-        const radius = 80;
-        const strokeWidth = 12;
+        const radius = Math.round(svgSize * 0.4);
+        const strokeWidth = Math.round(svgSize * 0.06);
 
         // Arc configuration based on style
         let startAngle, endAngle, needleOffset;
@@ -760,14 +762,14 @@ class DashboardRenderer {
                 background: linear-gradient(135deg, rgba(30, 60, 114, 0.6), rgba(42, 82, 152, 0.6));
                 backdrop-filter: blur(15px);
                 border: 2px solid rgba(100, 255, 218, 0.3);
-                border-radius: 16px;
-                padding: 20px;
+                border-radius: var(--radius-xl);
+                padding: var(--space-2xl);
                 box-shadow: 0 4px 16px rgba(0,0,0,0.2);
                 text-align: center;
             ">
-                ${label ? `<div style="font-size: 11px; color: #8892b0; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 5px;">${label}</div>` : ''}
-                <div style="position: relative; width: ${svgSize}px; height: ${style === 'arc180' ? svgSize * 0.6 : svgSize}px; margin: 0 auto;">
-                    <svg width="${svgSize}" height="${style === 'arc180' ? svgSize * 0.6 : svgSize}" viewBox="0 0 ${svgSize} ${style === 'arc180' ? svgSize * 0.65 : svgSize}" style="display: block;">
+                ${label ? `<div style="font-size: var(--fs-sm); color: #8892b0; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: var(--space-xs);">${label}</div>` : ''}
+                <div style="position: relative; width: ${svgSize}px; height: ${style === 'arc180' ? Math.round(svgSize * 0.6) : svgSize}px; margin: 0 auto;">
+                    <svg width="${svgSize}" height="${style === 'arc180' ? Math.round(svgSize * 0.6) : svgSize}" viewBox="0 0 ${svgSize} ${style === 'arc180' ? Math.round(svgSize * 0.65) : svgSize}" style="display: block; max-width: 100%; height: auto;">
                         <!-- Background arc -->
                         <path d="${arcPath}" fill="none" stroke="rgba(100, 255, 218, 0.15)" stroke-width="${strokeWidth}" stroke-linecap="round"/>
 
@@ -795,11 +797,11 @@ class DashboardRenderer {
                     "></div>
                 </div>
 
-                <div class="gauge-value" style="font-size: 32px; font-weight: 700; color: ${color}; font-family: monospace; margin-top: ${style === 'arc180' ? '-15px' : '10px'};">
+                <div class="gauge-value" style="font-size: clamp(24px, 1.67vw, 32px); font-weight: 700; color: ${color}; font-family: monospace; margin-top: ${style === 'arc180' ? '-15px' : 'var(--space-md)'};">
                     ${value.toFixed(decimals)}${unit ? ` ${unit}` : ''}
                 </div>
 
-                <div style="display: flex; justify-content: space-between; color: #8892b0; font-size: 10px; margin-top: 5px; padding: 0 10px;">
+                <div style="display: flex; justify-content: space-between; color: #8892b0; font-size: var(--fs-xs); margin-top: var(--space-xs); padding: 0 var(--space-md);">
                     <span>${min}</span>
                     <span>${max}</span>
                 </div>
@@ -856,8 +858,8 @@ class DashboardRenderer {
                 background: linear-gradient(135deg, rgba(30, 60, 114, 0.6), rgba(42, 82, 152, 0.6));
                 backdrop-filter: blur(15px);
                 border: 2px solid rgba(100, 255, 218, 0.3);
-                border-radius: 16px;
-                padding: 24px;
+                border-radius: var(--radius-xl);
+                padding: var(--space-3xl);
                 box-shadow: 0 4px 16px rgba(0,0,0,0.2);
                 text-align: center;
                 display: flex;
@@ -866,12 +868,12 @@ class DashboardRenderer {
                 min-height: 200px;
             ">
                 <div>
-                    <div style="font-size: 48px; margin-bottom: 10px;">📊</div>
-                    <div style="color: white; font-size: 16px;">Chart: ${widget.sensor}</div>
-                    <div style="color: #8892b0; font-size: 12px; margin-top: 5px;">
+                    <div style="font-size: var(--fs-5xl); margin-bottom: var(--space-md);">📊</div>
+                    <div style="color: white; font-size: var(--fs-xl);">Chart: ${widget.sensor}</div>
+                    <div style="color: #8892b0; font-size: var(--fs-base); margin-top: var(--space-xs);">
                         Type: ${widget.chart_type} | Period: ${widget.period}min
                     </div>
-                    <div style="color: #f39c12; font-size: 11px; margin-top: 10px;">
+                    <div style="color: #f39c12; font-size: var(--fs-sm); margin-top: var(--space-md);">
                         Charts coming soon
                     </div>
                 </div>
@@ -896,16 +898,16 @@ class DashboardRenderer {
         const textColor = textColorMap[color] || textColorMap.cyan;
 
         const styleMap = {
-            title: { fontSize: '28px', fontWeight: '700' },
-            subtitle: { fontSize: '20px', fontWeight: '600' },
-            normal: { fontSize: '16px', fontWeight: '500' }
+            title: { fontSize: 'var(--fs-5xl)', fontWeight: '700' },
+            subtitle: { fontSize: 'var(--fs-3xl)', fontWeight: '600' },
+            normal: { fontSize: 'var(--fs-xl)', fontWeight: '500' }
         };
         const textStyle = styleMap[style] || styleMap.normal;
 
         return `
             <div style="
                 grid-column: span ${size};
-                padding: 20px;
+                padding: var(--space-2xl);
                 display: flex;
                 align-items: center;
             ">
@@ -927,15 +929,15 @@ class DashboardRenderer {
                 grid-column: span ${size};
                 background: rgba(231, 76, 60, 0.1);
                 border: 2px solid rgba(231, 76, 60, 0.3);
-                border-radius: 16px;
-                padding: 24px;
+                border-radius: var(--radius-xl);
+                padding: var(--space-3xl);
                 text-align: center;
             ">
-                <div style="font-size: 48px; margin-bottom: 10px;">❓</div>
-                <div style="color: #e74c3c; font-size: 16px; font-weight: 600;">
+                <div style="font-size: var(--fs-5xl); margin-bottom: var(--space-md);">❓</div>
+                <div style="color: #e74c3c; font-size: var(--fs-xl); font-weight: 600;">
                     Sensor nicht gefunden
                 </div>
-                <div style="color: #8892b0; font-size: 12px; margin-top: 5px;">
+                <div style="color: #8892b0; font-size: var(--fs-base); margin-top: var(--space-xs);">
                     ${widget.sensor}
                 </div>
             </div>

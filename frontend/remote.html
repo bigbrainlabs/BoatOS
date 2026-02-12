@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
 
-    <link rel="stylesheet" href="remote.css?v=4">
+    <link rel="stylesheet" href="remote.css?v=7">
 </head>
 <body>
     <div class="app">
@@ -42,11 +42,12 @@
             <!-- Touchpad Area -->
             <div class="touchpad-container">
                 <div class="touchpad" id="touchpad">
+                    <img id="screenshotImg" class="screenshot-img" src="" alt="Screen">
                     <div class="touchpad-overlay">
                         <div class="crosshair" id="crosshair"></div>
                         <div class="touch-indicator" id="touchIndicator"></div>
                     </div>
-                    <div class="touchpad-instructions">
+                    <div class="touchpad-instructions" id="touchpadInstructions">
                         Touch & Drag to Control
                     </div>
                 </div>
@@ -54,17 +55,17 @@
 
             <!-- Quick Actions -->
             <div class="quick-actions">
-                <button class="action-btn" id="zoomIn" title="Zoom In">
-                    <span class="icon">➕</span>
-                    <span class="label">Zoom+</span>
+                <button class="action-btn" id="zoomIn" title="Screenshot vergrößern">
+                    <span class="icon">🔍</span>
+                    <span class="label">Größer</span>
                 </button>
-                <button class="action-btn" id="zoomOut" title="Zoom Out">
-                    <span class="icon">➖</span>
-                    <span class="label">Zoom-</span>
+                <button class="action-btn" id="zoomOut" title="Screenshot verkleinern">
+                    <span class="icon">🔎</span>
+                    <span class="label">Kleiner</span>
                 </button>
-                <button class="action-btn" id="centerMap" title="Center Map">
-                    <span class="icon">🎯</span>
-                    <span class="label">Center</span>
+                <button class="action-btn" id="centerMap" title="Zoom zurücksetzen">
+                    <span class="icon">↩️</span>
+                    <span class="label">Reset</span>
                 </button>
             </div>
         </div>
@@ -83,7 +84,7 @@
         </div>
     </div>
 
-    <script src="remote.js?v=4"></script>
+    <script src="remote.js?v=6"></script>
     <script>
       // Register Service Worker for PWA
       if ('serviceWorker' in navigator) {

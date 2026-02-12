@@ -42,7 +42,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 16px;
+    padding: clamp(8px, 0.63vw, 12px) clamp(12px, 0.83vw, 16px);
     background: var(--surface-color);
     border-bottom: 1px solid var(--border-color);
     flex-shrink: 0;
@@ -55,7 +55,7 @@ body {
 }
 
 .title {
-    font-size: 18px;
+    font-size: clamp(15px, 0.94vw, 18px);
     font-weight: 600;
     margin: 0;
 }
@@ -64,7 +64,7 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 14px;
+    font-size: clamp(12px, 0.73vw, 14px);
 }
 
 .status-indicator {
@@ -91,7 +91,7 @@ body {
 
 .status-text {
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: clamp(11px, 0.68vw, 13px);
 }
 
 .header-right {
@@ -103,12 +103,12 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px;
+    padding: clamp(6px, 0.42vw, 8px) clamp(12px, 0.83vw, 16px);
     background: var(--primary-color);
     border: none;
     border-radius: 6px;
     color: white;
-    font-size: 14px;
+    font-size: clamp(12px, 0.73vw, 14px);
     font-weight: 500;
     cursor: pointer;
     transition: background 0.2s;
@@ -119,7 +119,7 @@ body {
 }
 
 .mode-icon {
-    font-size: 18px;
+    font-size: clamp(15px, 0.94vw, 18px);
 }
 
 /* Remote Mode */
@@ -132,30 +132,45 @@ body {
 
 .touchpad-container {
     flex: 1;
+    min-height: 0; /* Allow shrinking in flex layout */
     padding: 16px;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 .touchpad {
     flex: 1;
+    min-height: 0; /* Allow shrinking in flex layout */
     position: relative;
-    background: var(--surface-color);
+    background: #000;
     border: 2px solid var(--border-color);
     border-radius: 12px;
-    overflow: hidden;
-    touch-action: none;
+    overflow: auto;
+    touch-action: pan-x pan-y;
     cursor: crosshair;
+    -webkit-overflow-scrolling: touch;
+}
+
+.screenshot-img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: none;
+}
+
+.touchpad.has-screenshot {
+    background: #000;
 }
 
 .touchpad-overlay {
-    position: absolute;
-    inset: 0;
+    position: fixed;
     pointer-events: none;
+    z-index: 10;
 }
 
 .crosshair {
-    position: absolute;
+    position: fixed;
     width: 30px;
     height: 30px;
     border: 2px solid var(--primary-color);
@@ -164,6 +179,7 @@ body {
     opacity: 0;
     transition: opacity 0.2s;
     pointer-events: none;
+    z-index: 100;
 }
 
 .crosshair::before,
@@ -192,7 +208,7 @@ body {
 }
 
 .touch-indicator {
-    position: absolute;
+    position: fixed;
     width: 60px;
     height: 60px;
     border-radius: 50%;
@@ -200,6 +216,7 @@ body {
     transform: translate(-50%, -50%) scale(0);
     pointer-events: none;
     transition: transform 0.1s;
+    z-index: 100;
 }
 
 .touch-indicator.active {
@@ -216,14 +233,17 @@ body {
     font-size: 16px;
     opacity: 0.5;
     pointer-events: none;
+    z-index: 5;
 }
 
-.touchpad.active .touchpad-instructions {
+.touchpad.active .touchpad-instructions,
+.touchpad.has-screenshot .touchpad-instructions {
     opacity: 0;
 }
 
 /* Quick Actions */
 .quick-actions {
+    flex-shrink: 0; /* Don't shrink */
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
     gap: 12px;
@@ -237,12 +257,12 @@ body {
     flex-direction: column;
     align-items: center;
     gap: 6px;
-    padding: 16px 12px;
+    padding: clamp(12px, 0.83vw, 16px) clamp(8px, 0.63vw, 12px);
     background: var(--bg-color);
     border: 1px solid var(--border-color);
     border-radius: 8px;
     color: var(--text-color);
-    font-size: 14px;
+    font-size: clamp(12px, 0.73vw, 14px);
     cursor: pointer;
     transition: all 0.2s;
 }
@@ -253,11 +273,11 @@ body {
 }
 
 .action-btn .icon {
-    font-size: 24px;
+    font-size: clamp(20px, 1.25vw, 24px);
 }
 
 .action-btn .label {
-    font-size: 12px;
+    font-size: clamp(10px, 0.63vw, 12px);
     color: var(--text-secondary);
 }
 

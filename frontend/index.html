@@ -88,10 +88,10 @@
 
     <div class="dashboard-container active" id="dashboardContainer">
         <!-- Dynamic dashboard rendered from saved configuration -->
-        <div id="sensor-dashboard" style="padding: 10px;">
+        <div id="sensor-dashboard" class="p-2">
             <!-- Loading indicator -->
-            <div style="text-align: center; padding: 40px; color: var(--text-dim);">
-                <div style="font-size: 32px; margin-bottom: 10px;">📊</div>
+            <div class="text-center" style="padding: var(--space-4xl); color: var(--text-dim);">
+                <div style="font-size: var(--fs-5xl); margin-bottom: var(--space-md);">📊</div>
                 Dashboard wird geladen...
             </div>
         </div>
@@ -159,11 +159,11 @@
             <!-- ROUTE SECTION -->
             <div id="section-route">
                 <div class="route-header">
-                    <span style="font-size: 16px; font-weight: 600;">Aktuelle Route</span>
-                    <div style="display: flex; gap: 8px;">
-                        <button class="icon-btn" id="btn-start-nav" style="width: 36px; height: 36px; font-size: 18px; background: var(--success); color: white;" onclick="BoatOS.toggleNavigation()" title="Navigation starten">▶️</button>
-                        <button class="icon-btn" style="width: 32px; height: 32px; font-size: 14px;" onclick="BoatOS.editRoute()" title="Route bearbeiten">✏️</button>
-                        <button class="icon-btn" style="width: 32px; height: 32px; font-size: 14px;" onclick="BoatOS.clearRoute()" title="Route löschen">🗑️</button>
+                    <span style="font-size: var(--fs-xl); font-weight: 600;">Aktuelle Route</span>
+                    <div style="display: flex; gap: var(--space-sm);">
+                        <button class="icon-btn icon-btn-nav" id="btn-start-nav" style="background: var(--success); color: white;" onclick="BoatOS.toggleNavigation()" title="Navigation starten">▶️</button>
+                        <button class="icon-btn icon-btn-sm" onclick="BoatOS.editRoute()" title="Route bearbeiten">✏️</button>
+                        <button class="icon-btn icon-btn-sm" onclick="BoatOS.clearRoute()" title="Route löschen">🗑️</button>
                     </div>
                 </div>
 
@@ -187,7 +187,7 @@
                 </div>
 
                 <div class="waypoint-list" id="waypointList">
-                    <div style="text-align: center; padding: 20px; color: var(--text-dim);">
+                    <div style="text-align: center; padding: var(--space-2xl); color: var(--text-dim);">
                         Keine Route geplant.<br>
                         <small>Klicke auf die Karte um Wegpunkte hinzuzufügen.</small>
                     </div>
@@ -245,76 +245,67 @@
                 <div class="logbook-tab-content active" id="logbook-tab-current">
                     <div class="current-trip" id="currentTrip">
                         <!-- Recording Indicator -->
-                        <div id="recording-indicator-new" style="display: none; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger); border-radius: 12px; padding: 10px; margin-bottom: 12px; display: none; align-items: center; gap: 10px;">
-                            <div style="width: 12px; height: 12px; background: var(--danger); border-radius: 50%; animation: pulse 1.5s infinite;"></div>
+                        <div id="recording-indicator-new" class="recording-indicator">
+                            <div class="recording-dot"></div>
                             <span style="color: var(--danger); font-weight: 600;">Aufzeichnung läuft</span>
                             <span id="trip-duration" style="margin-left: auto; font-variant-numeric: tabular-nums;">00:00:00</span>
                         </div>
 
-                        <div class="trip-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div class="trip-header">
                             <div>
-                                <div class="trip-title" id="trip-title" style="font-size: 16px; font-weight: 600;">Keine aktive Fahrt</div>
-                                <div class="trip-status" id="trip-status" style="font-size: 12px; color: var(--text-dim);">Bereit zum Starten</div>
+                                <div class="trip-title" id="trip-title">Keine aktive Fahrt</div>
+                                <div id="trip-status" style="font-size: var(--fs-base); color: var(--text-dim);">Bereit zum Starten</div>
                             </div>
-                            <div id="trip-paused-badge" style="display: none; background: var(--warning); color: white; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;">
+                            <div id="trip-paused-badge" class="paused-badge">
                                 ⏸️ PAUSIERT
                             </div>
                         </div>
 
                         <!-- Track Stats -->
-                        <div class="trip-stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px;">
-                            <div class="trip-stat" style="background: var(--bg-card); padding: 12px; border-radius: 12px; text-align: center;">
-                                <div class="value" id="trip-points" style="font-size: 20px; font-weight: 700; color: var(--accent);">0</div>
-                                <div class="label" style="font-size: 10px; color: var(--text-dim);">Punkte</div>
+                        <div class="trip-stats-grid">
+                            <div class="trip-stat-card">
+                                <div class="value" id="trip-points">0</div>
+                                <div class="label">Punkte</div>
                             </div>
-                            <div class="trip-stat" style="background: var(--bg-card); padding: 12px; border-radius: 12px; text-align: center;">
-                                <div class="value" id="trip-distance" style="font-size: 20px; font-weight: 700; color: var(--accent);">--</div>
-                                <div class="label" id="trip-dist-label" style="font-size: 10px; color: var(--text-dim);">NM</div>
+                            <div class="trip-stat-card">
+                                <div class="value" id="trip-distance">--</div>
+                                <div class="label" id="trip-dist-label">NM</div>
                             </div>
-                            <div class="trip-stat" style="background: var(--bg-card); padding: 12px; border-radius: 12px; text-align: center;">
-                                <div class="value" id="trip-time" style="font-size: 20px; font-weight: 700; color: var(--accent);">--:--</div>
-                                <div class="label" style="font-size: 10px; color: var(--text-dim);">Dauer</div>
+                            <div class="trip-stat-card">
+                                <div class="value" id="trip-time">--:--</div>
+                                <div class="label">Dauer</div>
                             </div>
-                            <div class="trip-stat" style="background: var(--bg-card); padding: 12px; border-radius: 12px; text-align: center;">
-                                <div class="value" id="trip-avg-speed" style="font-size: 20px; font-weight: 700; color: var(--accent);">--</div>
-                                <div class="label" id="trip-speed-label" style="font-size: 10px; color: var(--text-dim);">Ø kn</div>
+                            <div class="trip-stat-card">
+                                <div class="value" id="trip-avg-speed">--</div>
+                                <div class="label" id="trip-speed-label">Ø kn</div>
                             </div>
                         </div>
 
                         <!-- Control Buttons -->
-                        <div class="trip-controls" style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <!-- Start Button (shown when not recording) -->
-                            <button id="btn-start-trip" onclick="BoatOS.startTrip()" style="flex: 1; min-width: 120px; padding: 14px; border: none; border-radius: 12px; background: var(--success); color: white; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <div class="trip-controls">
+                            <button id="btn-start-trip" class="trip-btn" onclick="BoatOS.startTrip()" style="background: var(--success); color: white;">
                                 🚢 Fahrt starten
                             </button>
-
-                            <!-- Stop Button (shown when recording) -->
-                            <button id="btn-stop-trip" onclick="BoatOS.stopTrip()" style="flex: 1; min-width: 120px; padding: 14px; border: none; border-radius: 12px; background: var(--danger); color: white; font-size: 14px; font-weight: 600; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 8px;">
+                            <button id="btn-stop-trip" class="trip-btn" onclick="BoatOS.stopTrip()" style="background: var(--danger); color: white; display: none;">
                                 ⚓ Beenden
                             </button>
-
-                            <!-- Pause Button (shown when recording and not paused) -->
-                            <button id="btn-pause-trip" onclick="BoatOS.pauseTrip()" style="padding: 14px 18px; border: none; border-radius: 12px; background: var(--warning); color: white; font-size: 14px; font-weight: 600; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 6px;" title="Pause / Ankern">
+                            <button id="btn-pause-trip" class="trip-btn-sm" onclick="BoatOS.pauseTrip()" style="background: var(--warning); color: white; display: none;" title="Pause / Ankern">
                                 ⏸️ Pause
                             </button>
-
-                            <!-- Resume Button (shown when paused) -->
-                            <button id="btn-resume-trip" onclick="BoatOS.resumeTrip()" style="padding: 14px 18px; border: none; border-radius: 12px; background: var(--success); color: white; font-size: 14px; font-weight: 600; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 6px;" title="Weiterfahren">
+                            <button id="btn-resume-trip" class="trip-btn-sm" onclick="BoatOS.resumeTrip()" style="background: var(--success); color: white; display: none;" title="Weiterfahren">
                                 ▶️ Weiter
                             </button>
-
-                            <!-- Add Entry Button (always visible) -->
-                            <button id="btn-add-entry" onclick="BoatOS.addLogEntry()" style="padding: 14px 18px; border: none; border-radius: 12px; background: var(--bg-card); color: var(--accent); font-size: 14px; cursor: pointer; border: 1px solid var(--border);" title="Notiz hinzufügen">
+                            <button id="btn-add-entry" class="trip-btn-icon" onclick="BoatOS.addLogEntry()" title="Notiz hinzufügen">
                                 📝
                             </button>
                         </div>
                     </div>
 
                     <!-- Recent Log Entries -->
-                    <div style="margin-top: 15px;">
-                        <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text);">Letzte Einträge</div>
+                    <div style="margin-top: var(--space-lg);">
+                        <div style="font-size: var(--fs-lg); font-weight: 600; margin-bottom: var(--space-md); color: var(--text);">Letzte Einträge</div>
                         <div class="log-entries" id="logEntries" style="max-height: 300px; overflow-y: auto;">
-                            <div style="text-align: center; padding: 20px; color: var(--text-dim);">
+                            <div style="text-align: center; padding: var(--space-2xl); color: var(--text-dim);">
                                 Noch keine Einträge
                             </div>
                         </div>
@@ -323,8 +314,8 @@
 
                 <!-- ARCHIV TAB -->
                 <div class="logbook-tab-content" id="logbook-tab-archive" style="display: none;">
-                    <div id="trips-list" style="display: flex; flex-direction: column; gap: 12px;">
-                        <div style="text-align: center; padding: 20px; color: var(--text-dim);">
+                    <div id="trips-list" style="display: flex; flex-direction: column; gap: var(--space-base);">
+                        <div style="text-align: center; padding: var(--space-2xl); color: var(--text-dim);">
                             Lade archivierte Fahrten...
                         </div>
                     </div>
@@ -334,7 +325,7 @@
             <!-- AIS SECTION -->
             <div id="section-ais" class="section-hidden">
                 <div class="ais-list" id="aisList">
-                    <div style="text-align: center; padding: 20px; color: var(--text-dim);">
+                    <div style="text-align: center; padding: var(--space-2xl); color: var(--text-dim);">
                         Keine AIS-Ziele in Reichweite.
                     </div>
                 </div>
@@ -343,7 +334,7 @@
             <!-- LOCKS SECTION -->
             <div id="section-locks" class="section-hidden">
                 <div class="lock-list" id="lockList">
-                    <div style="text-align: center; padding: 20px; color: var(--text-dim);">
+                    <div style="text-align: center; padding: var(--space-2xl); color: var(--text-dim);">
                         Schleusen werden geladen...
                     </div>
                 </div>
@@ -354,28 +345,28 @@
     <!-- ============================================
          MANUAL ENTRY MODAL
          ============================================ -->
-    <div class="modal-overlay" id="manual-entry-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 3000; align-items: center; justify-content: center;" onclick="BoatOS.closeManualEntryModal()">
-        <div class="modal-content" style="background: var(--bg-panel); border-radius: 20px; width: 90%; max-width: 400px; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);" onclick="event.stopPropagation()">
-            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="font-size: 18px; color: var(--accent);">📝 Logbuch-Eintrag</h3>
-                <button onclick="BoatOS.closeManualEntryModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-dim);">✕</button>
+    <div class="modal-overlay" id="manual-entry-modal" onclick="BoatOS.closeManualEntryModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3>📝 Logbuch-Eintrag</h3>
+                <button class="modal-close-btn" onclick="BoatOS.closeManualEntryModal()">✕</button>
             </div>
             <form id="manual-entry-form" onsubmit="event.preventDefault(); BoatOS.submitManualEntry();">
-                <div style="margin-bottom: 15px;">
-                    <label style="display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 6px;">Notizen</label>
-                    <textarea id="manual-entry-notes" placeholder="Was ist passiert? Beobachtungen, Ereignisse..." style="width: 100%; height: 120px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); color: var(--text); font-size: 14px; resize: none;"></textarea>
+                <div style="margin-bottom: var(--space-lg);">
+                    <label style="display: block; font-size: var(--fs-md); color: var(--text-dim); margin-bottom: var(--space-xs);">Notizen</label>
+                    <textarea id="manual-entry-notes" placeholder="Was ist passiert? Beobachtungen, Ereignisse..." style="width: 100%; height: 120px; padding: var(--space-base); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); color: var(--text); font-size: var(--fs-lg); resize: none;"></textarea>
                 </div>
-                <div style="margin-bottom: 20px;">
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                <div style="margin-bottom: var(--space-2xl);">
+                    <label style="display: flex; align-items: center; gap: var(--space-md); cursor: pointer;">
                         <input type="checkbox" id="manual-entry-weather" checked style="width: 20px; height: 20px; accent-color: var(--accent);">
-                        <span style="font-size: 14px;">🌤️ Aktuelle Wetterdaten anhängen</span>
+                        <span style="font-size: var(--fs-lg);">🌤️ Aktuelle Wetterdaten anhängen</span>
                     </label>
                 </div>
-                <div style="display: flex; gap: 10px;">
-                    <button type="button" onclick="BoatOS.closeManualEntryModal()" style="flex: 1; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); color: var(--text); font-size: 14px; cursor: pointer;">
+                <div style="display: flex; gap: var(--space-md);">
+                    <button type="button" class="modal-btn modal-btn-secondary" onclick="BoatOS.closeManualEntryModal()">
                         Abbrechen
                     </button>
-                    <button type="submit" style="flex: 1; padding: 14px; border: none; border-radius: 12px; background: var(--accent); color: white; font-size: 14px; font-weight: 600; cursor: pointer;">
+                    <button type="submit" class="modal-btn modal-btn-primary">
                         Speichern
                     </button>
                 </div>
@@ -386,21 +377,21 @@
     <!-- ============================================
          CREW SELECTION MODAL
          ============================================ -->
-    <div class="modal-overlay" id="crew-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 3000; align-items: center; justify-content: center;" onclick="BoatOS.closeCrewModal()">
-        <div class="modal-content" style="background: var(--bg-panel); border-radius: 20px; width: 90%; max-width: 400px; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);" onclick="event.stopPropagation()">
-            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="font-size: 18px; color: var(--accent);">👥 Crew auswählen</h3>
-                <button onclick="BoatOS.closeCrewModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-dim);">✕</button>
+    <div class="modal-overlay" id="crew-modal" onclick="BoatOS.closeCrewModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3>👥 Crew auswählen</h3>
+                <button class="modal-close-btn" onclick="BoatOS.closeCrewModal()">✕</button>
             </div>
-            <p style="color: var(--text-dim); margin-bottom: 15px; font-size: 14px;">Wer ist bei dieser Fahrt dabei?</p>
-            <div id="crew-list" style="max-height: 250px; overflow-y: auto; margin-bottom: 20px;">
+            <p style="color: var(--text-dim); margin-bottom: var(--space-lg); font-size: var(--fs-lg);">Wer ist bei dieser Fahrt dabei?</p>
+            <div id="crew-list" style="max-height: 250px; overflow-y: auto; margin-bottom: var(--space-2xl);">
                 <!-- Crew members loaded dynamically -->
             </div>
-            <div style="display: flex; gap: 10px;">
-                <button type="button" onclick="BoatOS.closeCrewModal()" style="flex: 1; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); color: var(--text); font-size: 14px; cursor: pointer;">
+            <div style="display: flex; gap: var(--space-md);">
+                <button type="button" class="modal-btn modal-btn-secondary" onclick="BoatOS.closeCrewModal()">
                     Abbrechen
                 </button>
-                <button type="button" onclick="BoatOS.confirmStartTrip()" style="flex: 1; padding: 14px; border: none; border-radius: 12px; background: var(--success); color: white; font-size: 14px; font-weight: 600; cursor: pointer;">
+                <button type="button" class="modal-btn modal-btn-success" onclick="BoatOS.confirmStartTrip()">
                     🚢 Fahrt starten
                 </button>
             </div>
@@ -413,9 +404,9 @@
     <div class="search-overlay" id="searchOverlay" onclick="BoatOS.ui.closeSearch(event)">
         <div class="search-container" onclick="event.stopPropagation()">
             <div class="search-input-wrapper">
-                <span style="font-size: 20px;">🔍</span>
+                <span style="font-size: var(--fs-3xl);">🔍</span>
                 <input type="text" class="search-input" id="searchInput" placeholder="Hafen, Marina, Schleuse..." oninput="BoatOS.ui.handleSearch(this.value)">
-                <button class="icon-btn" style="width: 32px; height: 32px;" onclick="BoatOS.ui.closeSearch()">✕</button>
+                <button class="icon-btn icon-btn-sm" onclick="BoatOS.ui.closeSearch()">✕</button>
             </div>
             <div class="search-results" id="searchResults">
                 <!-- Search results loaded dynamically -->
@@ -430,7 +421,7 @@
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <h3>⚙️ Einstellungen</h3>
-            <button class="icon-btn" style="width: 36px; height: 36px;" onclick="BoatOS.ui.toggleSidebar()">✕</button>
+            <button class="icon-btn icon-btn-nav" onclick="BoatOS.ui.toggleSidebar()">✕</button>
         </div>
 
         <div class="sidebar-tabs">
@@ -1017,33 +1008,16 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px 20px;
+            padding: var(--space-lg) var(--space-2xl);
             background: var(--bg-panel);
             border-bottom: 1px solid var(--border);
         ">
-            <h2 style="margin: 0; font-size: 20px; color: var(--accent);">
+            <h2 style="margin: 0; font-size: var(--fs-3xl); color: var(--accent);">
                 ✏️ Dashboard Editor
             </h2>
-            <div style="display: flex; gap: 10px;">
-                <button onclick="BoatOS.saveDashboardLayout()" style="
-                    padding: 10px 20px;
-                    background: var(--success);
-                    color: white;
-                    border: none;
-                    border-radius: 10px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    cursor: pointer;
-                ">💾 Speichern</button>
-                <button onclick="BoatOS.closeDashboardEditor()" style="
-                    padding: 10px 20px;
-                    background: var(--bg-card);
-                    color: var(--text);
-                    border: 1px solid var(--border);
-                    border-radius: 10px;
-                    font-size: 14px;
-                    cursor: pointer;
-                ">✕ Schließen</button>
+            <div style="display: flex; gap: var(--space-md);">
+                <button onclick="BoatOS.saveDashboardLayout()" class="btn btn-primary" style="background: var(--success); border-color: var(--success);">💾 Speichern</button>
+                <button onclick="BoatOS.closeDashboardEditor()" class="btn">✕ Schließen</button>
             </div>
         </div>
 
@@ -1051,7 +1025,7 @@
         <div id="dashboardEditorContent" style="
             flex: 1;
             overflow: hidden;
-            padding: 20px;
+            padding: var(--space-2xl);
         ">
             <!-- Visual Editor will be rendered here -->
         </div>
@@ -1077,14 +1051,14 @@
 
     <!-- Chart Progress Modal -->
     <div id="chart-progress-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 20000; justify-content: center; align-items: center;">
-        <div style="background: var(--bg-panel); padding: 30px; border-radius: 16px; max-width: 500px; width: 90%; border: 2px solid var(--accent);">
-            <h2 id="progress-title" style="margin-bottom: 20px; color: var(--accent); text-align: center;">Verarbeite Karten...</h2>
-            <div id="progress-status" style="color: var(--text-dim); margin-bottom: 15px; font-size: 14px; min-height: 20px; text-align: center;">Initialisiere...</div>
-            <div style="background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-bottom: 15px;">
-                <div id="progress-bar" style="background: linear-gradient(90deg, var(--accent), #2ecc71); height: 24px; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; color: #0a192f;">0%</div>
+        <div style="background: var(--bg-panel); padding: var(--space-3xl); border-radius: var(--radius-xl); max-width: clamp(400px, 26vw, 500px); width: 90%; border: 2px solid var(--accent);">
+            <h2 id="progress-title" style="margin-bottom: var(--space-2xl); color: var(--accent); text-align: center;">Verarbeite Karten...</h2>
+            <div id="progress-status" style="color: var(--text-dim); margin-bottom: var(--space-lg); font-size: var(--fs-lg); min-height: 20px; text-align: center;">Initialisiere...</div>
+            <div style="background: rgba(255,255,255,0.1); border-radius: var(--radius-md); overflow: hidden; margin-bottom: var(--space-lg);">
+                <div id="progress-bar" style="background: linear-gradient(90deg, var(--accent), #2ecc71); height: 24px; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: var(--fs-base); color: #0a192f;">0%</div>
             </div>
-            <pre id="progress-details" style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; font-size: 11px; color: var(--text-dim); display: none;"></pre>
-            <button id="progress-close-btn" onclick="closeProgressModal()" style="display: none; margin-top: 15px; width: 100%; padding: 12px; background: var(--accent); border: none; border-radius: 8px; color: #0a192f; font-weight: 600; cursor: pointer;">Schließen</button>
+            <pre id="progress-details" style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: var(--space-md); border-radius: var(--radius-sm); font-size: var(--fs-sm); color: var(--text-dim); display: none;"></pre>
+            <button id="progress-close-btn" onclick="closeProgressModal()" style="display: none; margin-top: var(--space-lg); width: 100%; padding: var(--space-base); background: var(--accent); border: none; border-radius: var(--radius-sm); color: #0a192f; font-weight: 600; cursor: pointer;">Schließen</button>
         </div>
     </div>
 

@@ -915,6 +915,10 @@ export function toggleMode() {
         if (dashboardContainer) dashboardContainer.classList.remove('active');
         if (modeToggle) modeToggle.textContent = '📊';
         if (fabContainer) fabContainer.style.display = 'flex';
+        // Map needs resize after becoming visible
+        if (typeof map !== 'undefined' && map && map.resize) {
+            setTimeout(() => map.resize(), 50);
+        }
         if (bottomSheet) {
             bottomSheet.style.display = 'block';
             // Sheet auf peek-Status zurücksetzen

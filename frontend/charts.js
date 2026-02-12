@@ -89,8 +89,9 @@ function loadChartOverlays() {
                     id: layerId,
                     type: 'raster',
                     source: sourceId,
+                    minzoom: 11,
                     paint: {
-                        'raster-opacity': 0.7
+                        'raster-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0, 12, 0.4, 14, 0.5]
                     }
                 }, firstSymbolLayer?.id);
 
