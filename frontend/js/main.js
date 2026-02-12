@@ -266,8 +266,11 @@ window.BoatOS = {
         }
         this.updateNavButton();
 
-        // Auto-start trip recording when navigation starts
+        // When navigation starts: enable auto-follow and auto-start trip
         if (navigation.isNavigationActive && navigation.isNavigationActive()) {
+            if (mapModule.setAutoFollow) {
+                mapModule.setAutoFollow(true);
+            }
             if (logbook.isTripRecording && !logbook.isTripRecording()) {
                 logbook.confirmStartTrip();
             }
