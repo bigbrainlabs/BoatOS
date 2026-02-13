@@ -129,6 +129,8 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    touch-action: manipulation;   /* kill 300ms tap delay on touch */
+    -webkit-tap-highlight-color: transparent;
 }
 
 body {
