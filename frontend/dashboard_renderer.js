@@ -30,12 +30,111 @@ class DashboardRenderer {
             }
             .gauge-needle {
                 transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+                transform-origin: 50% 50%;
             }
             .gauge-arc-value {
                 transition: stroke-dashoffset 0.5s cubic-bezier(0.4, 0, 0.2, 1);
             }
             .gauge-bar-fill {
                 transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            .gauge-instrument {
+                position: relative;
+                width: 100%;
+                flex: 1;
+                min-height: 0;
+            }
+            .gauge-instrument svg {
+                display: block;
+                width: 100%;
+                height: 100%;
+                overflow: visible;
+            }
+            .gauge-widget {
+                grid-column: span var(--gauge-span, 1);
+                background: radial-gradient(ellipse at 30% 20%, rgba(40, 80, 140, 0.7), rgba(15, 25, 50, 0.85));
+                border: 2px solid rgba(100, 180, 255, 0.25);
+                border-radius: var(--radius-xl);
+                padding: var(--space-xl);
+                box-shadow:
+                    0 4px 24px rgba(0, 0, 0, 0.4),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+                text-align: center;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+            }
+            .gauge-value-below {
+                font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Consolas', monospace;
+                font-variant-numeric: tabular-nums;
+                font-weight: 700;
+                font-size: clamp(18px, 1.5vw, 26px);
+                text-shadow: 0 0 15px currentColor;
+                margin-top: var(--space-xs);
+                flex-shrink: 0;
+                line-height: 1;
+            }
+            .gauge-glass {
+                pointer-events: none;
+            }
+            .gauge-label {
+                font-size: var(--fs-sm);
+                color: rgba(180, 200, 230, 0.8);
+                text-transform: uppercase;
+                letter-spacing: 2px;
+                font-weight: 600;
+                margin-bottom: var(--space-xs);
+                flex-shrink: 0;
+            }
+            .gauge-value-display {
+                font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Consolas', monospace;
+                font-variant-numeric: tabular-nums;
+                font-weight: 700;
+                text-shadow: 0 0 20px currentColor;
+            }
+            .gauge-range {
+                display: flex;
+                justify-content: space-between;
+                color: rgba(140, 160, 190, 0.6);
+                font-size: var(--fs-2xs);
+                font-family: 'SF Mono', monospace;
+                margin-top: var(--space-2xs);
+                padding: 0 var(--space-sm);
+                flex-shrink: 0;
+            }
+            .gauge-bar-widget {
+                grid-column: span var(--gauge-span, 1);
+                background: radial-gradient(ellipse at 30% 20%, rgba(40, 80, 140, 0.7), rgba(15, 25, 50, 0.85));
+                border: 2px solid rgba(100, 180, 255, 0.25);
+                border-radius: var(--radius-xl);
+                padding: var(--space-2xl) var(--space-3xl);
+                box-shadow:
+                    0 4px 24px rgba(0, 0, 0, 0.4),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+                text-align: center;
+            }
+            .gauge-bar-track {
+                width: 100%;
+                height: clamp(10px, 1vw, 14px);
+                background: rgba(10, 20, 40, 0.6);
+                border-radius: 7px;
+                overflow: hidden;
+                position: relative;
+                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+                border: 1px solid rgba(80, 120, 180, 0.15);
+            }
+            .gauge-bar-fill {
+                height: 100%;
+                border-radius: 7px;
+                position: relative;
+                overflow: hidden;
+            }
+            .gauge-bar-fill::after {
+                content: '';
+                position: absolute;
+                inset: 0;
+                background: linear-gradient(180deg, rgba(255,255,255,0.25) 0%, transparent 60%);
+                border-radius: inherit;
             }
         `;
         document.head.appendChild(style);
@@ -209,13 +308,14 @@ class DashboardRenderer {
 
             const value = parseFloat(this.getSensorValue(path)) || 0;
             const percentage = Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
+            const decimals = parseInt(gauge.dataset.decimals || '1');
+            const unit = gauge.dataset.unit || '';
+            const displayVal = value.toFixed(decimals) + (unit ? ` ${unit}` : '');
 
-            // Update value display
+            // Update value display (HTML element below gauge)
             const valueEl = gauge.querySelector('.gauge-value');
-            if (valueEl) {
-                const decimals = parseInt(gauge.dataset.decimals || '1');
-                const unit = gauge.dataset.unit || '';
-                valueEl.textContent = value.toFixed(decimals) + (unit ? ` ${unit}` : '');
+            if (valueEl && valueEl.textContent !== displayVal) {
+                valueEl.textContent = displayVal;
             }
 
             // Update bar gauge
@@ -224,23 +324,38 @@ class DashboardRenderer {
                 barFill.style.width = `${percentage}%`;
             }
 
-            // Update arc gauge needle
+            // Update arc gauge needle (CSS transform rotation for smooth animation)
             const needle = gauge.querySelector('.gauge-needle');
-            if (needle) {
+            if (needle && !barFill) {
                 const startAngle = parseFloat(gauge.dataset.startAngle || '-180');
                 const totalAngle = parseFloat(gauge.dataset.totalAngle || '180');
                 const needleAngle = startAngle + (percentage / 100) * totalAngle;
                 needle.style.transform = `rotate(${needleAngle}deg)`;
             }
 
-            // Update arc value path
+            // Update arc value path + glow arc
             const arcValue = gauge.querySelector('.gauge-arc-value');
+            const arcGlow = gauge.querySelector('.gauge-arc-glow');
             if (arcValue) {
-                const circumference = parseFloat(arcValue.dataset.circumference || '502');
+                const startAngle = parseFloat(gauge.dataset.startAngle || '-180');
                 const totalAngle = parseFloat(gauge.dataset.totalAngle || '180');
-                const arcLength = (circumference * totalAngle) / 360;
-                const offset = arcLength - (arcLength * percentage / 100);
-                arcValue.style.strokeDashoffset = offset;
+                const gcx = parseFloat(gauge.dataset.gcx || '100');
+                const gcy = parseFloat(gauge.dataset.gcy || '100');
+                const radius = parseFloat(gauge.dataset.radius || '78');
+                const valueEndAngle = startAngle + (percentage / 100) * totalAngle;
+
+                if (percentage > 0.5) {
+                    const newPath = this.describeArc(gcx, gcy, radius, startAngle, valueEndAngle);
+                    arcValue.setAttribute('d', newPath);
+                    arcValue.style.display = '';
+                    if (arcGlow) {
+                        arcGlow.setAttribute('d', newPath);
+                        arcGlow.style.display = '';
+                    }
+                } else {
+                    arcValue.style.display = 'none';
+                    if (arcGlow) arcGlow.style.display = 'none';
+                }
             }
         });
 
@@ -664,146 +779,164 @@ class DashboardRenderer {
     }
 
     /**
-     * Render linear bar gauge with data attributes
+     * Render linear bar gauge with glass instrument look
      */
     renderBarGauge(widget, size, value, min, max, unit, percentage, color, label, decimals) {
         const gaugeId = this.generateId('gauge');
 
         return `
-            <div id="${gaugeId}" data-gauge-path="${widget.sensor}" data-min="${min}" data-max="${max}"
-                 data-style="bar" data-decimals="${decimals}" data-unit="${unit}" style="
-                grid-column: span ${size};
-                background: linear-gradient(135deg, rgba(30, 60, 114, 0.6), rgba(42, 82, 152, 0.6));
-                backdrop-filter: blur(15px);
-                border: 2px solid rgba(100, 255, 218, 0.3);
-                border-radius: var(--radius-xl);
-                padding: var(--space-3xl);
-                box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-                text-align: center;
-            ">
-                ${label ? `<div style="font-size: var(--fs-base); color: #8892b0; text-transform: uppercase; letter-spacing: 1px; margin-bottom: var(--space-md);">${label}</div>` : ''}
-                <div class="gauge-value" style="font-size: var(--fs-5xl); font-weight: 700; color: ${color}; font-family: monospace; margin-bottom: var(--space-md);">
+            <div id="${gaugeId}" class="gauge-bar-widget" data-gauge-path="${widget.sensor}" data-min="${min}" data-max="${max}"
+                 data-style="bar" data-decimals="${decimals}" data-unit="${unit}" style="--gauge-span: ${size}; grid-column: span ${size};">
+                ${label ? `<div class="gauge-label">${label}</div>` : ''}
+                <div class="gauge-value gauge-value-display" style="font-size: var(--fs-5xl); color: ${color}; margin-bottom: var(--space-lg);">
                     ${value.toFixed(decimals)}${unit ? ` ${unit}` : ''}
                 </div>
-                <div style="
-                    width: 100%;
-                    height: var(--space-base);
-                    background: rgba(10, 14, 39, 0.5);
-                    border-radius: var(--radius-sm);
-                    overflow: hidden;
-                    margin-bottom: var(--space-md);
-                ">
+                <div class="gauge-bar-track">
                     <div class="gauge-bar-fill" style="
                         width: ${percentage}%;
-                        height: 100%;
-                        background: ${color};
-                        border-radius: var(--radius-sm);
+                        background: linear-gradient(90deg, ${color}88, ${color});
                     "></div>
                 </div>
-                <div style="display: flex; justify-content: space-between; color: #8892b0; font-size: var(--fs-sm);">
-                    <span>${min}</span>
-                    <span>${max} ${unit}</span>
+                <div class="gauge-range">
+                    <span>${min}${unit ? ` ${unit}` : ''}</span>
+                    <span>${max}${unit ? ` ${unit}` : ''}</span>
                 </div>
             </div>
         `;
     }
 
     /**
-     * Render arc gauge with CSS-based needle rotation for smooth updates
+     * Render arc gauge as premium instrument with glass effect
      */
     renderArcGauge(widget, size, value, min, max, unit, percentage, color, label, decimals, style) {
         const gaugeId = this.generateId('gauge');
-        // Make gauge size responsive: use smaller size at narrow viewports
-        const vw = Math.max(document.documentElement.clientWidth || 1280, 1280);
-        const svgSize = Math.round(160 + (200 - 160) * Math.min(1, (vw - 1280) / (1920 - 1280)));
-        const cx = svgSize / 2;
-        const cy = svgSize / 2;
-        const radius = Math.round(svgSize * 0.4);
-        const strokeWidth = Math.round(svgSize * 0.06);
+
+        // Viewbox size (internal SVG coordinate system)
+        const S = 200;
+        const cx = S / 2;
+        const cy = S / 2;
+        const radius = 78;
+        const strokeWidth = 12;
 
         // Arc configuration based on style
-        let startAngle, endAngle, needleOffset;
+        let startAngle, endAngle;
         switch (style) {
             case 'arc360':
                 startAngle = -90;
                 endAngle = 270;
-                needleOffset = 0;
                 break;
             case 'arc270':
                 startAngle = -225;
                 endAngle = 45;
-                needleOffset = 0;
                 break;
             case 'arc180':
             default:
                 startAngle = -180;
                 endAngle = 0;
-                needleOffset = 20;
                 break;
         }
 
         const totalAngle = endAngle - startAngle;
         const needleAngle = startAngle + (percentage / 100) * totalAngle;
 
-        // SVG arc path calculation
-        const arcPath = this.describeArc(cx, cy + needleOffset, radius, startAngle, endAngle);
+        // For arc180, shift center down so the half-circle fills the space
+        const isHalf = style === 'arc180';
+        const gcx = cx;
+        const gcy = isHalf ? cy + 15 : cy;
+        const viewH = isHalf ? Math.round(S * 0.62) : S;
 
-        // Tick marks
-        const ticks = this.generateTicks(min, max, startAngle, totalAngle, cx, cy + needleOffset, radius + 8, 5);
+        // SVG arcs
+        const bgArc = this.describeArc(gcx, gcy, radius, startAngle, endAngle);
+        const valueEndAngle = startAngle + (percentage / 100) * totalAngle;
+        const valueArc = percentage > 0.5 ? this.describeArc(gcx, gcy, radius, startAngle, valueEndAngle) : '';
 
-        // Calculate needle endpoint
-        const needleLength = radius - 15;
+        // Tick marks with labels
+        const tickCount = style === 'arc360' ? 8 : (style === 'arc270' ? 6 : 5);
+        const ticks = this.generateInstrumentTicks(min, max, startAngle, totalAngle, gcx, gcy, radius, tickCount, color);
+
+        // Needle drawn pointing RIGHT (0°), rotated via CSS transform for smooth animation
+        const needleLen = radius - 12;
+        const tailLen = 14;
+        const baseW = 3.5;
+        // Tip (pointing right from center)
+        const tipX = gcx + needleLen;
+        const tipY = gcy;
+        // Base (perpendicular at center)
+        const b1x = gcx;
+        const b1y = gcy - baseW;
+        const b2x = gcx;
+        const b2y = gcy + baseW;
+        // Counter-weight tail (pointing left)
+        const t1x = gcx - tailLen;
+        const t1y = gcy - 2.5;
+        const t2x = gcx - tailLen;
+        const t2y = gcy + 2.5;
+
+        // Padding around the gauge so tick labels aren't clipped
+        const P = 24;
+        const vbX = -P;
+        const vbY = isHalf ? 0 : -P;
+        const vbW = S + 2 * P;
+        const vbH = isHalf ? Math.round(gcy + P) : S + 2 * P;
 
         return `
-            <div id="${gaugeId}" data-gauge-path="${widget.sensor}" data-min="${min}" data-max="${max}"
+            <div id="${gaugeId}" class="gauge-widget" data-gauge-path="${widget.sensor}" data-min="${min}" data-max="${max}"
                  data-style="${style}" data-decimals="${decimals}" data-unit="${unit}"
-                 data-start-angle="${startAngle}" data-total-angle="${totalAngle}" style="
-                grid-column: span ${size};
-                background: linear-gradient(135deg, rgba(30, 60, 114, 0.6), rgba(42, 82, 152, 0.6));
-                backdrop-filter: blur(15px);
-                border: 2px solid rgba(100, 255, 218, 0.3);
-                border-radius: var(--radius-xl);
-                padding: var(--space-2xl);
-                box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-                text-align: center;
-            ">
-                ${label ? `<div style="font-size: var(--fs-sm); color: #8892b0; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: var(--space-xs);">${label}</div>` : ''}
-                <div style="position: relative; width: ${svgSize}px; height: ${style === 'arc180' ? Math.round(svgSize * 0.6) : svgSize}px; margin: 0 auto;">
-                    <svg width="${svgSize}" height="${style === 'arc180' ? Math.round(svgSize * 0.6) : svgSize}" viewBox="0 0 ${svgSize} ${style === 'arc180' ? Math.round(svgSize * 0.65) : svgSize}" style="display: block; max-width: 100%; height: auto;">
-                        <!-- Background arc -->
-                        <path d="${arcPath}" fill="none" stroke="rgba(100, 255, 218, 0.15)" stroke-width="${strokeWidth}" stroke-linecap="round"/>
+                 data-start-angle="${startAngle}" data-total-angle="${totalAngle}"
+                 data-gcx="${gcx}" data-gcy="${gcy}" data-radius="${radius}"
+                 style="--gauge-span: ${size}; grid-column: span ${size};">
+                ${label ? `<div class="gauge-label">${label}</div>` : ''}
+                <div class="gauge-instrument">
+                    <svg viewBox="${vbX} ${vbY} ${vbW} ${vbH}" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <radialGradient id="glass-${gaugeId}" cx="40%" cy="30%" r="60%">
+                                <stop offset="0%" stop-color="rgba(255,255,255,0.12)"/>
+                                <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+                            </radialGradient>
+                        </defs>
 
-                        <!-- Tick marks -->
+                        <!-- Outer bezel ring -->
+                        <circle cx="${gcx}" cy="${gcy}" r="${radius + 18}" fill="none"
+                                stroke="rgba(60, 100, 160, 0.3)" stroke-width="1.5"
+                                ${isHalf ? `clip-path="inset(0 0 50% 0)"` : ''}/>
+                        <circle cx="${gcx}" cy="${gcy}" r="${radius + 15}" fill="none"
+                                stroke="rgba(40, 70, 120, 0.2)" stroke-width="3"
+                                ${isHalf ? `clip-path="inset(0 0 50% 0)"` : ''}/>
+
+                        <!-- Background arc (track) -->
+                        <path d="${bgArc}" fill="none" stroke="rgba(60, 100, 160, 0.2)"
+                              stroke-width="${strokeWidth}" stroke-linecap="round"/>
+
+                        <!-- Value arc (colored glow + solid) -->
+                        ${valueArc ? `<path d="${valueArc}" fill="none" stroke="${color}"
+                              stroke-width="${strokeWidth + 1}" stroke-linecap="round" opacity="0.45"
+                              class="gauge-arc-glow"/>` : ''}
+                        ${valueArc ? `<path d="${valueArc}" fill="none" stroke="${color}"
+                              stroke-width="${strokeWidth}" stroke-linecap="round"
+                              class="gauge-arc-value" data-circumference="${2 * Math.PI * radius}"/>` : ''}
+
+                        <!-- Tick marks with labels -->
                         ${ticks}
 
-                        <!-- Center circle -->
-                        <circle cx="${cx}" cy="${cy + needleOffset}" r="8" fill="rgba(30, 60, 114, 0.9)" stroke="${color}" stroke-width="2"/>
+                        <!-- Needle -->
+                        <g class="gauge-needle" style="transform-origin: ${gcx}px ${gcy}px; transform: rotate(${needleAngle}deg);">
+                            <polygon points="${tipX},${tipY} ${b1x},${b1y} ${t1x},${t1y} ${t2x},${t2y} ${b2x},${b2y}"
+                                     fill="rgba(240, 240, 255, 0.95)" stroke="rgba(0,0,0,0.3)" stroke-width="0.5"/>
+                        </g>
 
-                        <!-- Center dot -->
-                        <circle cx="${cx}" cy="${cy + needleOffset}" r="4" fill="${color}"/>
+                        <!-- Center cap -->
+                        <circle cx="${gcx}" cy="${gcy}" r="6" fill="rgba(15, 25, 45, 0.95)"
+                                stroke="${color}" stroke-width="1.5"/>
+                        <circle cx="${gcx}" cy="${gcy}" r="2.5" fill="${color}" opacity="0.8"/>
+
+                        <!-- Glass overlay -->
+                        <circle cx="${gcx}" cy="${gcy}" r="${radius + 14}" fill="url(#glass-${gaugeId})"
+                                class="gauge-glass"
+                                ${isHalf ? `clip-path="inset(0 0 50% 0)"` : ''}/>
                     </svg>
-
-                    <!-- Needle as separate div for CSS transform -->
-                    <div class="gauge-needle" style="
-                        position: absolute;
-                        left: ${cx}px;
-                        top: ${cy + needleOffset}px;
-                        width: ${needleLength}px;
-                        height: 3px;
-                        background: ${color};
-                        border-radius: 2px;
-                        transform-origin: 0 50%;
-                        transform: rotate(${needleAngle}deg);
-                    "></div>
                 </div>
-
-                <div class="gauge-value" style="font-size: clamp(24px, 1.67vw, 32px); font-weight: 700; color: ${color}; font-family: monospace; margin-top: ${style === 'arc180' ? '-15px' : 'var(--space-md)'};">
+                <div class="gauge-value gauge-value-below" style="color: ${color};">
                     ${value.toFixed(decimals)}${unit ? ` ${unit}` : ''}
-                </div>
-
-                <div style="display: flex; justify-content: space-between; color: #8892b0; font-size: var(--fs-xs); margin-top: var(--space-xs); padding: 0 var(--space-md);">
-                    <span>${min}</span>
-                    <span>${max}</span>
                 </div>
             </div>
         `;
@@ -828,22 +961,52 @@ class DashboardRenderer {
     }
 
     /**
-     * Generate tick marks for gauge
+     * Generate tick marks for gauge (legacy, kept for compatibility)
      */
     generateTicks(min, max, startAngle, totalAngle, cx, cy, radius, count) {
+        return this.generateInstrumentTicks(min, max, startAngle, totalAngle, cx, cy, radius, count, '#64ffda');
+    }
+
+    /**
+     * Generate instrument-style tick marks with numeric labels
+     */
+    generateInstrumentTicks(min, max, startAngle, totalAngle, cx, cy, radius, majorCount, color) {
         let ticks = '';
-        for (let i = 0; i <= count; i++) {
-            const angle = startAngle + (i / count) * totalAngle;
+        const outerR = radius + 10;
+        const majorInnerR = radius + 3;
+        const minorInnerR = radius + 6;
+        const labelR = radius + 22;
+
+        // Minor ticks (between each major tick)
+        const minorPerMajor = 4;
+        const totalMinor = majorCount * minorPerMajor;
+        for (let i = 0; i <= totalMinor; i++) {
+            const angle = startAngle + (i / totalMinor) * totalAngle;
             const rad = (angle * Math.PI) / 180;
-            const innerRadius = radius - 8;
-            const outerRadius = radius;
+            const isMajor = i % minorPerMajor === 0;
+            const innerR = isMajor ? majorInnerR : minorInnerR;
 
-            const x1 = cx + innerRadius * Math.cos(rad);
-            const y1 = cy + innerRadius * Math.sin(rad);
-            const x2 = cx + outerRadius * Math.cos(rad);
-            const y2 = cy + outerRadius * Math.sin(rad);
+            const x1 = cx + innerR * Math.cos(rad);
+            const y1 = cy + innerR * Math.sin(rad);
+            const x2 = cx + outerR * Math.cos(rad);
+            const y2 = cy + outerR * Math.sin(rad);
 
-            ticks += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(100, 255, 218, 0.4)" stroke-width="1.5"/>`;
+            const strokeW = isMajor ? 2 : 0.8;
+            const strokeColor = isMajor ? 'rgba(180, 200, 230, 0.7)' : 'rgba(120, 150, 190, 0.35)';
+
+            ticks += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${strokeColor}" stroke-width="${strokeW}"/>`;
+
+            // Labels on major ticks
+            if (isMajor) {
+                const labelVal = min + (i / totalMinor) * (max - min);
+                const lx = cx + labelR * Math.cos(rad);
+                const ly = cy + labelR * Math.sin(rad);
+                // Format: show integer if whole, otherwise 1 decimal
+                const labelText = labelVal === Math.round(labelVal) ? Math.round(labelVal) : labelVal.toFixed(1);
+                ticks += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" dominant-baseline="central"
+                           fill="rgba(140, 165, 200, 0.7)" font-size="8" font-family="'SF Mono', monospace"
+                           font-weight="500">${labelText}</text>`;
+            }
         }
         return ticks;
     }
