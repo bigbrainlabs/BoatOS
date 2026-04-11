@@ -1572,6 +1572,12 @@ export function initLayerVisibility() {
         pegelBtn.classList.toggle('active', pegelEnabled);
     }
 
+    // Satellit-Button-Zustand aus localStorage
+    const satBtn = document.getElementById('btn-satellite');
+    if (satBtn) {
+        satBtn.classList.toggle('active', localStorage.getItem('satelliteMode') === 'true');
+    }
+
     console.log(`Layer-Sichtbarkeit initialisiert: Schleusen=${locksEnabled}, Pegel=${pegelEnabled}`);
 }
 

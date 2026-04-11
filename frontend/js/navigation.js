@@ -2599,6 +2599,140 @@ export function init() {
     console.log('Navigation-Modul initialisiert');
 }
 
+// ===== SATELLITE TILE CACHING =====
+
+let _satCacheCancel = false;
+
+function _lngLatToTile(lng, lat, zoom) {
+    const z = Math.floor(zoom);
+    const x = Math.floor((lng + 180) / 360 * Math.pow(2, z));
+    const latRad = lat * Math.PI / 180;
+    const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * Math.pow(2, z));
+    return { x, y, z };
+}
+
+function _getTilesForBounds(bounds, zoom) {
+    const z = Math.floor(zoom);
+    const nw = _lngLatToTile(bounds.west, bounds.north, z);
+    const se = _lngLatToTile(bounds.east, bounds.south, z);
+    const tiles = [];
+    for (let x = nw.x; x <= se.x; x++) {
+        for (let y = nw.y; y <= se.y; y++) {
+            tiles.push({ x, y, z });
+        }
+    }
+    return tiles;
+}
+
+function _buildSatUrls(tileSets) {
+    return tileSets.map(({ x, y, z }) =>
+        `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`
+    );
+}
+
+function _showCacheBar(text) {
+    const bar = document.getElementById('sat-cache-bar');
+    if (bar) { bar.style.display = 'flex'; }
+    const status = document.getElementById('sat-cache-status');
+    if (status) status.textContent = text;
+    const prog = document.getElementById('sat-cache-progress-bar');
+    if (prog) prog.style.width = '0%';
+}
+
+function _updateCacheProgress(done, total) {
+    const status = document.getElementById('sat-cache-status');
+    if (status) status.textContent = `${done} / ${total} Kacheln`;
+    const prog = document.getElementById('sat-cache-progress-bar');
+    if (prog) prog.style.width = `${Math.round(done / total * 100)}%`;
+}
+
+function _hideCacheBar() {
+    const bar = document.getElementById('sat-cache-bar');
+    if (bar) bar.style.display = 'none';
+}
+
+async function _sendTilesToSW(urls) {
+    return new Promise((resolve) => {
+        if (!navigator.serviceWorker?.controller) { resolve({ cached: 0, failed: urls.length }); return; }
+        const channel = new MessageChannel();
+        let done = 0, failed = 0;
+        channel.port1.onmessage = (e) => {
+            if (e.data.type === 'CACHE_PROGRESS') {
+                _updateCacheProgress(e.data.done, e.data.total);
+            } else if (e.data.type === 'CACHE_COMPLETE') {
+                resolve({ cached: e.data.done, failed: e.data.failed || 0 });
+            }
+        };
+        navigator.serviceWorker.controller.postMessage(
+            { type: 'CACHE_SATELLITE_TILES', urls },
+            [channel.port2]
+        );
+    });
+}
+
+async function _runCacheOperation(tiles, label) {
+    if (tiles.length === 0) {
+        if (window.BoatOS?.ui?.showNotification) window.BoatOS.ui.showNotification('Keine Kacheln zum Cachen', 'info');
+        return;
+    }
+    _satCacheCancel = false;
+    _showCacheBar(`${label}: ${tiles.length} Kacheln...`);
+    const urls = _buildSatUrls(tiles);
+    const result = await _sendTilesToSW(urls);
+    _hideCacheBar();
+    if (window.BoatOS?.ui?.showNotification) {
+        window.BoatOS.ui.showNotification(`✅ ${result.cached} Kacheln gecacht`, 'success');
+    }
+}
+
+async function cacheRouteArea() {
+    const coords = getCurrentRouteCoordinates ? getCurrentRouteCoordinates() : null;
+    if (!coords || coords.length < 2) {
+        if (window.BoatOS?.ui?.showNotification) window.BoatOS.ui.showNotification('Keine Route vorhanden', 'info');
+        return;
+    }
+    const allTiles = new Map();
+    for (let z = 0; z <= 16; z++) {
+        for (let i = 0; i < coords.length - 1; i++) {
+            const t1 = _lngLatToTile(coords[i].lon, coords[i].lat, z);
+            const t2 = _lngLatToTile(coords[i + 1].lon, coords[i + 1].lat, z);
+            const xMin = Math.max(0, Math.min(t1.x, t2.x) - 1);
+            const xMax = Math.min(Math.pow(2, z) - 1, Math.max(t1.x, t2.x) + 1);
+            const yMin = Math.max(0, Math.min(t1.y, t2.y) - 1);
+            const yMax = Math.min(Math.pow(2, z) - 1, Math.max(t1.y, t2.y) + 1);
+            for (let x = xMin; x <= xMax; x++) {
+                for (let y = yMin; y <= yMax; y++) {
+                    allTiles.set(`${z}/${x}/${y}`, { x, y, z });
+                }
+            }
+        }
+        if (allTiles.size > 5000) break; // safety cap
+    }
+    await _runCacheOperation(Array.from(allTiles.values()), 'Route');
+}
+
+async function cacheViewportArea() {
+    const mapModule = window.BoatOS?.map;
+    if (!mapModule) return;
+    const urls = mapModule.cacheSatelliteViewport ? mapModule.cacheSatelliteViewport() : [];
+    if (!urls || urls.length === 0) {
+        if (window.BoatOS?.ui?.showNotification) window.BoatOS.ui.showNotification('Keine Kacheln im Bereich', 'info');
+        return;
+    }
+    _satCacheCancel = false;
+    _showCacheBar(`${urls.length} Kacheln...`);
+    const result = await _sendTilesToSW(urls);
+    _hideCacheBar();
+    if (window.BoatOS?.ui?.showNotification) {
+        window.BoatOS.ui.showNotification(`✅ ${result.cached} Kacheln gecacht`, 'success');
+    }
+}
+
+function cancelSatelliteCache() {
+    _satCacheCancel = true;
+    _hideCacheBar();
+}
+
 // ==================== EXPORT ALLER FUNKTIONEN ====================
 
 export default {
@@ -2670,5 +2804,10 @@ export default {
     startPoiPlacement,
     setMapInteractionMode,
     getMapInteractionMode,
-    handleMapClick
+    handleMapClick,
+
+    // Satellite tile caching
+    cacheRouteArea,
+    cacheViewportArea,
+    cancelSatelliteCache
 };

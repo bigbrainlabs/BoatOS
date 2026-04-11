@@ -162,6 +162,27 @@ export function initMap(options = {}) {
         console.log('Karte geladen');
         addLabelsLayer();
         addOpenSeaMapOverlays();
+
+        // Satelliten-Source und -Layer vorinitialisieren (standardmaessig versteckt)
+        map.addSource('satellite', {
+            type: 'raster',
+            tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+            tileSize: 256,
+            attribution: '© Esri, Maxar, Earthstar Geographics',
+            maxzoom: 19
+        });
+        map.addLayer({
+            id: 'satellite-layer',
+            type: 'raster',
+            source: 'satellite',
+            layout: { visibility: 'none' }
+        }, 'background'); // unterhalb aller anderen Layer einfuegen
+
+        // Gespeicherte Satelliteneinstellung wiederherstellen
+        if (localStorage.getItem('satelliteMode') === 'true') {
+            toggleSatellite(true);
+        }
+
         initMapMarkers();
     });
 
@@ -1028,6 +1049,136 @@ export function toggleInlandLayer(visible) {
  */
 export function getCurrentBaseLayer() {
     return currentBaseLayer;
+}
+
+/**
+ * Schaltet den Satelliten-Layer ein oder aus
+ * @param {boolean} [active] - true = an, false = aus, undefined = umschalten
+ */
+export function toggleSatellite(active) {
+    if (!map) return;
+
+    if (active === undefined) {
+        active = currentBaseLayer !== 'satellite';
+    }
+
+    if (active) {
+        // Satelliten-Layer einblenden
+        if (map.getLayer('satellite-layer')) {
+            map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
+        }
+        // OSM-Vektor-Layer ausblenden, damit Satellit als Basis sichtbar ist
+        hideVectorLayers();
+        currentBaseLayer = 'satellite';
+        console.log('Satellitenansicht aktiviert');
+    } else {
+        // Satelliten-Layer ausblenden
+        if (map.getLayer('satellite-layer')) {
+            map.setLayoutProperty('satellite-layer', 'visibility', 'none');
+        }
+        // OSM-Vektor-Layer wieder einblenden
+        showVectorLayers();
+        currentBaseLayer = 'osm';
+        console.log('Kartenansicht aktiviert');
+    }
+
+    // Button-Zustand aktualisieren
+    const btn = document.getElementById('btn-satellite');
+    if (btn) {
+        btn.classList.toggle('active', active);
+    }
+
+    // Praeferenz speichern
+    localStorage.setItem('satelliteMode', active ? 'true' : 'false');
+
+    return currentBaseLayer;
+}
+
+/**
+ * Gibt zurueck ob der Satelliten-Layer aktiv ist
+ * @returns {boolean}
+ */
+export function isSatelliteMode() {
+    return currentBaseLayer === 'satellite';
+}
+
+/**
+ * Konvertiert Laengen-/Breitengrad in Kachel-Koordinaten (XYZ)
+ * @param {number} lng - Laengengrad
+ * @param {number} lat - Breitengrad
+ * @param {number} zoom - Zoom-Level
+ * @returns {{x: number, y: number, z: number}}
+ */
+function lngLatToTile(lng, lat, zoom) {
+    const z = Math.floor(zoom);
+    const x = Math.floor((lng + 180) / 360 * Math.pow(2, z));
+    const latRad = lat * Math.PI / 180;
+    const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * Math.pow(2, z));
+    return { x, y, z };
+}
+
+/**
+ * Berechnet alle Satelliten-Kachel-URLs fuer den aktuellen Viewport
+ * Fetcht die Kacheln NICHT selbst — gibt nur die URLs zurueck.
+ * @param {Function} [progressCallback] - Fortschritts-Callback (aktuelle, gesamt)
+ * @returns {string[]} Array aller Kachel-URLs
+ */
+export function cacheSatelliteViewport(progressCallback) {
+    if (!map) return [];
+
+    const BASE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile';
+    const MAX_TILES = 3000;
+    const bounds = map.getBounds();
+    const currentZoom = map.getZoom();
+
+    const minLng = bounds.getWest();
+    const maxLng = bounds.getEast();
+    const minLat = bounds.getSouth();
+    const maxLat = bounds.getNorth();
+
+    // Zoom-Bereiche: von 0 bis min(currentZoom, 10) und von currentZoom bis 16
+    const minOverviewZoom = 0;
+    const maxOverviewZoom = Math.min(Math.floor(currentZoom), 10);
+    const maxDetailZoom = Math.min(Math.floor(currentZoom), 16);
+
+    const urls = [];
+
+    // Hilfsfunktion: URLs fuer einen Zoom-Level zum Array hinzufuegen
+    function addZoomLevel(z) {
+        const tileMin = lngLatToTile(minLng, maxLat, z); // maxLat = kleinste y-Kachel
+        const tileMax = lngLatToTile(maxLng, minLat, z); // minLat = groesste y-Kachel
+
+        const xMin = Math.max(0, tileMin.x);
+        const xMax = Math.min(Math.pow(2, z) - 1, tileMax.x);
+        const yMin = Math.max(0, tileMin.y);
+        const yMax = Math.min(Math.pow(2, z) - 1, tileMax.y);
+
+        for (let x = xMin; x <= xMax; x++) {
+            for (let y = yMin; y <= yMax; y++) {
+                if (urls.length >= MAX_TILES) return false; // Limit erreicht
+                urls.push(`${BASE_URL}/${z}/${y}/${x}`);
+            }
+        }
+        return true;
+    }
+
+    // Uebersichts-Zoom-Level (globale Kacheln, immer hinzufuegen)
+    for (let z = minOverviewZoom; z <= maxOverviewZoom; z++) {
+        if (!addZoomLevel(z)) break;
+    }
+
+    // Detail-Zoom-Level (viewport-spezifisch, bis Limit)
+    for (let z = maxOverviewZoom + 1; z <= maxDetailZoom; z++) {
+        if (!addZoomLevel(z)) break;
+    }
+
+    console.log(`Satelliten-Cache: ${urls.length} Kacheln berechnet (Zoom ${minOverviewZoom}–${maxDetailZoom})`);
+
+    if (progressCallback) {
+        progressCallback(0, urls.length);
+    }
+
+    return urls;
 }
 
 // ===========================================
