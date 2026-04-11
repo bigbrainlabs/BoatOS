@@ -699,6 +699,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('mapclick', (e) => {
         const { lngLat, longPress } = e.detail;
 
+        // Close AIS detail panel on map tap
+        if (ais.closeAISDetails) ais.closeAISDetails();
+
         if (navigation.handleMapClick) {
             navigation.handleMapClick(lngLat, longPress);
         }
