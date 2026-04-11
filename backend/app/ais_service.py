@@ -21,6 +21,7 @@ class AISService:
         self.ws_task = None
         self.ws_running = False
         self.bounding_box = None  # Current map bounding box
+        self._last_cleanup = 0
 
     def configure(self, provider: str = "aishub", api_key: str = "", enabled: bool = None):
         """Configure AIS service with provider, API key, and enabled flag"""
@@ -248,12 +249,18 @@ class AISService:
         if not self.ws_running:
             asyncio.create_task(self.start_aisstream_websocket())
 
-        # Filter vessels in bounding box from cache
+        # Filter vessels in bounding box from cache, cap at 200
+        center_lat = (lat_min + lat_max) / 2
+        center_lon = (lon_min + lon_max) / 2
         vessels_in_bounds = []
-        for mmsi, vessel in list(self.vessels.items()):
+        for vessel in self.vessels.values():
             if (lat_min <= vessel['lat'] <= lat_max and
-                lon_min <= vessel['lon'] <= lon_max):
+                    lon_min <= vessel['lon'] <= lon_max):
                 vessels_in_bounds.append(vessel)
+
+        if len(vessels_in_bounds) > 200:
+            vessels_in_bounds.sort(key=lambda v: (v['lat'] - center_lat)**2 + (v['lon'] - center_lon)**2)
+            vessels_in_bounds = vessels_in_bounds[:200]
 
         return vessels_in_bounds
 
@@ -327,42 +334,42 @@ class AISService:
             lat = msg.get('Latitude')
             lon = msg.get('Longitude')
 
-            if not all([mmsi, lat, lon]):
+            if not mmsi or not lat or not lon:
                 return
 
+            meta = data.get('MetaData', {})
+            now = int(time.time())
+
             # Log first few vessels
-            if len(self.vessels) < 5:
+            if len(self.vessels) < 3:
                 print(f"📍 AIS vessel: {mmsi} at ({lat:.4f}, {lon:.4f})")
 
             # Update cache
             self.vessels[mmsi] = {
                 'mmsi': mmsi,
-                'name': data.get('MetaData', {}).get('ShipName', f"Vessel {mmsi}"),
+                'name': meta.get('ShipName', f"Vessel {mmsi}"),
                 'lat': float(lat),
                 'lon': float(lon),
                 'cog': float(msg.get('Cog', 0)) / 10.0,
-                'sog': float(msg.get('Sog', 0) / 10.0),  # AISStream sends in 0.1 knots
+                'sog': float(msg.get('Sog', 0)) / 10.0,
                 'heading': int(msg.get('TrueHeading', 0)),
                 'navstat': int(msg.get('NavigationalStatus', 0)),
-                'type': int(data.get('MetaData', {}).get('ShipType', 0)),
-                'timestamp': int(time.time()),
-                'destination': data.get('MetaData', {}).get('Destination', ''),
+                'type': int(meta.get('ShipType', 0)),
+                'timestamp': now,
+                'destination': meta.get('Destination', ''),
                 'eta': '',
-                'length': int(data.get('MetaData', {}).get('Dimension', {}).get('A', 0)) +
-                         int(data.get('MetaData', {}).get('Dimension', {}).get('B', 0)),
-                'width': int(data.get('MetaData', {}).get('Dimension', {}).get('C', 0)) +
-                        int(data.get('MetaData', {}).get('Dimension', {}).get('D', 0)),
-                'draught': float(msg.get('Draught', 0) / 10.0),
-                'callsign': data.get('MetaData', {}).get('CallSign', ''),
+                'length': int(meta.get('Dimension', {}).get('A', 0)) + int(meta.get('Dimension', {}).get('B', 0)),
+                'width': int(meta.get('Dimension', {}).get('C', 0)) + int(meta.get('Dimension', {}).get('D', 0)),
+                'draught': float(msg.get('Draught', 0)) / 10.0,
+                'callsign': meta.get('CallSign', ''),
                 'imo': ''
             }
 
-            # Clean old vessels (older than 10 minutes)
-            current_time = time.time()
-            self.vessels = {
-                mmsi: v for mmsi, v in self.vessels.items()
-                if current_time - v['timestamp'] < 600
-            }
+            # Periodic cleanup: only every 60s, not on every message
+            if now - self._last_cleanup > 60:
+                cutoff = now - 600
+                self.vessels = {k: v for k, v in self.vessels.items() if v['timestamp'] > cutoff}
+                self._last_cleanup = now
 
         except Exception as e:
             print(f"⚠️ Error processing AISStream message: {e}")

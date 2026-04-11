@@ -162,7 +162,18 @@ async function fetchAISVessels() {
         const response = await fetch(`${API_URL}/api/ais/vessels?${params}`);
         if (response.ok) {
             const data = await response.json();
-            updateAISMarkers(data.vessels);
+            // Limit to 150 vessels closest to map center to avoid rendering overload
+            let vessels = data.vessels;
+            if (vessels.length > 150) {
+                const center = map.getCenter();
+                vessels.sort((a, b) => {
+                    const da = (a.lat - center.lat) ** 2 + (a.lon - center.lng) ** 2;
+                    const db = (b.lat - center.lat) ** 2 + (b.lon - center.lng) ** 2;
+                    return da - db;
+                });
+                vessels = vessels.slice(0, 150);
+            }
+            updateAISMarkers(vessels);
         }
     } catch (error) {
         console.warn('AIS Abruf-Fehler:', error);
