@@ -687,6 +687,32 @@
     margin: var(--space-md) 0;
 }
 
+/* ============================================
+   MAP OVERLAY BUTTONS (cache route/viewport)
+   ============================================ */
+
+.map-overlay-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-lg);
+    background: var(--bg-panel);
+    color: var(--text-primary);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px;
+    font-size: var(--fs-base);
+    font-weight: 600;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    cursor: pointer;
+    touch-action: manipulation;
+    pointer-events: auto;
+    backdrop-filter: blur(8px);
+}
+
+.map-overlay-btn:active {
+    opacity: 0.75;
+}
+
 /* selected marker ring */
 .ais-ship-icon.selected svg path {
     stroke: #fff;
