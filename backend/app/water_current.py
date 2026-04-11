@@ -13,6 +13,7 @@ class WaterCurrentService:
         self.live_data_cache = {}
         self.known_flow_directions = {}
         self.river_areas = {}
+        self.river_mouths = {}
 
     def configure(self, settings: Dict):
         """
@@ -58,6 +59,18 @@ class WaterCurrentService:
             'Donau': (47.5, 49.5,  9.0, 17.0),
             'Weser': (51.3, 53.6,  8.0,  9.6),
             'Oder':  (50.0, 53.8, 13.8, 15.0),
+        }
+        # Mouth coordinates (lat, lon) — where the river flows into the next body of water.
+        # Bearing from any point on the river TO the mouth = local downstream direction.
+        self.river_mouths = {
+            'Rhein': (51.960,  4.120),  # Hoek van Holland (North Sea)
+            'Mosel': (50.370,  7.608),  # Koblenz (into Rhein)
+            'Main':  (50.007,  8.274),  # Mainz (into Rhein)
+            'Elbe':  (53.895,  8.668),  # Cuxhaven (North Sea)
+            'Saale': (51.966, 11.897),  # Barby (into Elbe)
+            'Donau': (45.217, 29.633),  # Sulina/Black Sea
+            'Weser': (53.537,  8.572),  # Bremerhaven (North Sea)
+            'Oder':  (53.742, 14.568),  # Szczecin Lagoon
         }
 
         print(f"🌊 Water current service configured: {'enabled' if self.enabled else 'disabled'}")
@@ -309,15 +322,11 @@ class WaterCurrentService:
                         flow_direction = self.known_flow_directions.get(waterway_name)
                         break
 
-        # If no specific waterway detected, use route bearing (old behavior)
-        if flow_direction is None:
-            flow_direction = self._estimate_flow_direction_from_route(route_geometry)
-            waterway_info = "estimated from route"
-        else:
-            waterway_info = f"{detected_waterway} (known)"
+        waterway_info = detected_waterway if detected_waterway else "unknown"
+        mouth = self.river_mouths.get(detected_waterway) if detected_waterway else None
 
-        print(f"   🌊 Current adjustment: boat={boat_speed_kmh:.1f} km/h, distance={distance_km:.1f} km")
-        print(f"      Waterway: {waterway_info}, flow_dir={flow_direction:.0f}°")
+        print(f"   🌊 Current: boat={boat_speed_kmh:.1f}km/h, dist={distance_km:.1f}km, river={waterway_info}" +
+              (f", mouth=({mouth[0]:.3f},{mouth[1]:.3f})" if mouth else " (no mouth data)"))
 
         # Sample points along route (every ~10km)
         num_samples = max(3, int(distance_km / 10))
@@ -349,17 +358,24 @@ class WaterCurrentService:
             current_kmh = self.get_current_at_point(mid_lat, mid_lon, detected_waterway)
 
             if current_kmh:
+                # Dynamic downstream direction = bearing from this point toward river mouth.
+                # This automatically handles every bend and section of the river.
+                if mouth:
+                    bearing_to_mouth = self._calculate_bearing(mid_lat, mid_lon, mouth[0], mouth[1])
+                else:
+                    bearing_to_mouth = flow_direction if flow_direction is not None else route_bearing
                 effective_speed = self.calculate_effective_speed(
-                    boat_speed_kmh, current_kmh, bearing, flow_direction
+                    boat_speed_kmh, current_kmh, bearing, bearing_to_mouth
                 )
-                angle_diff = abs(bearing - flow_direction)
+                angle_diff = abs(bearing - bearing_to_mouth)
                 if angle_diff > 180:
                     angle_diff = 360 - angle_diff
-                print(f"      Seg {i+1}: {segment_dist_km:.1f}km, bearing={bearing:.0f}° (Δ{angle_diff:.0f}° from flow), current={current_kmh}km/h → eff={effective_speed:.1f}km/h")
+                direction = "↓tal" if angle_diff < 90 else "↑berg"
+                print(f"      Seg {i+1}: {segment_dist_km:.1f}km, bearing={bearing:.0f}°, mouth={bearing_to_mouth:.0f}° ({direction}, Δ{angle_diff:.0f}°), current={current_kmh}km/h → eff={effective_speed:.1f}km/h")
                 segment_infos.append({
                     'distance_km': segment_dist_km,
                     'current_kmh': current_kmh,
-                    'flow_direction_deg': flow_direction,
+                    'bearing_to_mouth_deg': bearing_to_mouth,
                     'segment_bearing_deg': bearing,
                     'effective_speed_kmh': effective_speed,
                 })
@@ -385,7 +401,6 @@ class WaterCurrentService:
         debug_info = {
             'segments': segment_infos,
             'detected_waterway': detected_waterway,
-            'flow_direction_deg': flow_direction,
             'original_duration_h': distance_km / boat_speed_kmh,
             'adjusted_duration_h': total_adjusted_time,
             'time_diff_h': total_adjusted_time - (distance_km / boat_speed_kmh)
