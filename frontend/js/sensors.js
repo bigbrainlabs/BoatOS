@@ -39,6 +39,9 @@ let lastBackendGpsTime = null; // Zeitpunkt des letzten gültigen Backend-GPS
 let backendGpsUnavailableStartTime = null; // Zeitpunkt wann Backend-GPS nicht mehr verfuegbar war
 let firstGpsPositionReceived = false; // Ob Karte bereits auf erste GPS-Position zentriert wurde
 let currentBoatHeading = 0; // Aktueller Kurs/Heading des Boots
+let browserGpsWatchId = null; // ID des navigator.geolocation.watchPosition Watchers
+let browserGpsFallbackTimer = null; // Timer für verzögerten Fallback-Start
+let browserGpsCallback = null; // Callback wenn Browser-GPS Position empfängt
 
 // Kompass-Zustand
 let compassRoseElement = null;
@@ -71,6 +74,17 @@ export function handleGPSUpdate(gps) {
     if (gps && gps.lat !== 0 && gps.lon !== 0) {
         lastBackendGpsTime = Date.now();
         backendGpsUnavailableStartTime = null; // Timer zuruecksetzen
+
+        // Browser-GPS stoppen sobald Backend wieder liefert
+        if (browserGpsWatchId !== null) {
+            navigator.geolocation.clearWatch(browserGpsWatchId);
+            browserGpsWatchId = null;
+            console.log('GPS: Backend wieder aktiv – Browser-GPS gestoppt');
+        }
+        if (browserGpsFallbackTimer !== null) {
+            clearTimeout(browserGpsFallbackTimer);
+            browserGpsFallbackTimer = null;
+        }
 
         if (gpsSource !== "backend") {
             gpsSource = "backend";
@@ -849,6 +863,87 @@ export function setBrowserGpsAccuracy(accuracy) {
     browserGpsAccuracy = accuracy;
 }
 
+// ==================== BROWSER GPS FALLBACK ====================
+
+/**
+ * Startet Browser-Geolocation als Fallback wenn Backend-GPS fehlt.
+ * Wird nach BACKEND_GPS_FALLBACK_DELAY ms ohne gültiges Backend-GPS aktiviert.
+ * Stoppt automatisch wenn Backend-GPS wieder verfügbar ist.
+ *
+ * @param {Function} onPositionCallback - Callback mit {lat, lon, speed, heading}
+ */
+export function startBrowserGpsFallback(onPositionCallback) {
+    if (!navigator.geolocation) {
+        console.log('GPS Fallback: Browser Geolocation nicht verfügbar');
+        return;
+    }
+
+    browserGpsCallback = onPositionCallback;
+
+    // Prüft periodisch ob Backend-GPS fehlt und startet dann den Watcher
+    const checkAndStart = () => {
+        // Backend-GPS aktiv → nichts tun
+        if (gpsSource === "backend") return;
+
+        // Watcher bereits aktiv → nichts tun
+        if (browserGpsWatchId !== null) return;
+
+        console.log('GPS Fallback: Kein Backend-GPS – starte Browser Geolocation');
+
+        browserGpsWatchId = navigator.geolocation.watchPosition(
+            (position) => {
+                const { latitude, longitude, accuracy, speed, heading } = position.coords;
+
+                // Nur verwenden solange kein Backend-GPS aktiv
+                if (gpsSource === "backend") return;
+
+                browserGpsAccuracy = accuracy;
+                gpsSource = "browser";
+                updateGpsSourceIndicator();
+
+                // Karte auf erste Browser-Position zentrieren
+                if (!firstGpsPositionReceived) {
+                    firstGpsPositionReceived = true;
+                    const map = getMap();
+                    if (map) {
+                        map.flyTo({ center: [longitude, latitude], zoom: 14, duration: 1500 });
+                    }
+                }
+
+                const pos = {
+                    lat: latitude,
+                    lon: longitude,
+                    speed: speed != null ? speed * 1.944 : 0, // m/s → Knoten
+                    heading: heading || 0,
+                    satellites: 0,
+                    source: 'browser'
+                };
+
+                if (browserGpsCallback) browserGpsCallback(pos);
+            },
+            (error) => {
+                console.warn('GPS Fallback Fehler:', error.message);
+                if (gpsSource === "browser") {
+                    gpsSource = null;
+                    updateGpsSourceIndicator();
+                }
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
+        );
+    };
+
+    // Nach BACKEND_GPS_FALLBACK_DELAY starten falls noch kein GPS
+    browserGpsFallbackTimer = setTimeout(checkAndStart, BACKEND_GPS_FALLBACK_DELAY);
+
+    // Zusätzlich: sofort starten wenn beim Seitenaufruf gar kein Backend erreichbar
+    // (d.h. nie einen backend GPS-Fix bekommen)
+    setTimeout(() => {
+        if (!lastBackendGpsTime && browserGpsWatchId === null) {
+            checkAndStart();
+        }
+    }, 5000);
+}
+
 // ==================== EXPORT FUER GLOBALEN ZUGRIFF ====================
 // Diese Funktionen und Variablen werden auch global verfuegbar gemacht
 // fuer Rueckwaertskompatibilitaet mit bestehendem Code
@@ -884,6 +979,7 @@ if (typeof window !== 'undefined') {
     window.setAutoFollow = setAutoFollow;
     window.setMaxTrackPoints = setMaxTrackPoints;
     window.setLowSatelliteThreshold = setLowSatelliteThreshold;
+    window.startBrowserGpsFallback = startBrowserGpsFallback;
 
     // Variablen fuer externen Zugriff
     window.sensors = {

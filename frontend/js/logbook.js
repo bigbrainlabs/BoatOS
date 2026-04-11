@@ -44,6 +44,7 @@ export async function startTrip() {
                 crewList.innerHTML = crewMembers.map(member => `
                     <label style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-card); border-radius: 12px; margin-bottom: 8px; cursor: pointer; border: 1px solid var(--border);">
                         <input type="checkbox" name="crew" value="${member.id}" style="width: 20px; height: 20px; accent-color: var(--accent);">
+                        <div style="font-size: 28px; line-height: 1;">${member.avatar || '👤'}</div>
                         <div>
                             <div style="font-weight: 600;">${member.name}</div>
                             <div style="font-size: 12px; color: var(--text-dim);">${member.role}</div>
@@ -95,18 +96,6 @@ export async function confirmStartTrip() {
             updateTripUI(true, false);
             loadLogEntries();
 
-            // Navigation starten wenn Route vorhanden
-            if (context && context.waypoints && context.waypoints.length >= 2) {
-                if (navigation.isNavigationActive && !navigation.isNavigationActive()) {
-                    if (navigation.toggleNavigation) {
-                        navigation.toggleNavigation({
-                            waypoints: context.waypoints,
-                            showNotification: ui.showNotification,
-                            currentPosition: context.currentPosition
-                        });
-                    }
-                }
-            }
         } else {
             if (ui.showNotification) {
                 ui.showNotification('Fehler beim Starten', 'error');
@@ -471,21 +460,19 @@ export function renderLogEntry(entry) {
  * Logbuch-Tab wechseln
  */
 export function showLogbookTab(tab, element) {
-    // Tabs aktualisieren
     document.querySelectorAll('#section-logbook .logbook-tab').forEach(t => t.classList.remove('active'));
     if (element) element.classList.add('active');
 
-    // Content wechseln
     const currentTab = document.getElementById('logbook-tab-current');
     const archiveTab = document.getElementById('logbook-tab-archive');
+    const crewTab = document.getElementById('logbook-tab-crew');
 
     if (currentTab) currentTab.style.display = tab === 'current' ? 'block' : 'none';
     if (archiveTab) archiveTab.style.display = tab === 'archive' ? 'block' : 'none';
+    if (crewTab) crewTab.style.display = tab === 'crew' ? 'block' : 'none';
 
-    // Archiv laden
-    if (tab === 'archive') {
-        loadArchivedTrips();
-    }
+    if (tab === 'archive') loadArchivedTrips();
+    if (tab === 'crew') loadCrewManagement();
 }
 
 // ==================== ARCHIVE ====================
@@ -619,5 +606,176 @@ export async function deleteTrip(tripId) {
         if (ui.showNotification) {
             ui.showNotification('Fehler beim Löschen', 'error');
         }
+    }
+}
+
+// ==================== CREW MANAGEMENT ====================
+
+const CREW_AVATARS = [
+    { emoji: '👨‍✈️', label: 'Skipper' },
+    { emoji: '👩‍✈️', label: 'Skipperin' },
+    { emoji: '🧔‍♂️', label: 'Co-Skipper' },
+    { emoji: '👱‍♀️', label: 'Co-Skipperin' },
+    { emoji: '👨‍🍳', label: 'Koch' },
+    { emoji: '👩‍🍳', label: 'Köchin' },
+    { emoji: '👨‍💻', label: 'Funker' },
+    { emoji: '👩‍💻', label: 'Funkerin' },
+    { emoji: '👨',   label: 'Crew' },
+    { emoji: '👩',   label: 'Crew' },
+    { emoji: '🧒',   label: 'Crew jung' },
+    { emoji: '👴',   label: 'Crew senior' },
+];
+
+let crewManageList = [];
+let selectedAvatar = '';
+
+export async function loadCrewManagement() {
+    try {
+        const response = await fetch(`${getApiUrl()}/api/crew`);
+        crewManageList = await response.json();
+        renderCrewManageList();
+    } catch (error) {
+        console.error('Fehler beim Laden der Crew:', error);
+    }
+}
+
+function renderCrewManageList() {
+    const container = document.getElementById('crew-manage-list');
+    if (!container) return;
+
+    if (crewManageList.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: var(--space-2xl); color: var(--text-dim);">
+                <div style="font-size: 40px; margin-bottom: var(--space-md);">👥</div>
+                <div>Noch keine Crew-Mitglieder</div>
+                <div style="font-size: var(--fs-sm); margin-top: var(--space-xs);">Tippe auf "+ Hinzufügen"</div>
+            </div>`;
+        return;
+    }
+
+    const roleColors = { Captain: 'var(--accent)', Crew: 'var(--success)', Guest: 'var(--text-dim)' };
+
+    container.innerHTML = crewManageList.map(m => `
+        <div style="display: flex; align-items: center; gap: var(--space-md); padding: var(--space-md) var(--space-lg); background: var(--bg-card); border-radius: var(--radius-lg); margin-bottom: var(--space-sm); border: 1px solid var(--border);">
+            <div style="font-size: 34px; line-height: 1;">${m.avatar || '👤'}</div>
+            <div style="flex: 1; min-width: 0;">
+                <div style="font-weight: 600; font-size: var(--fs-lg);">${m.name}</div>
+                <div style="font-size: var(--fs-sm); color: ${roleColors[m.role] || 'var(--text-dim)'};">${m.role}</div>
+                ${m.phone ? `<div style="font-size: var(--fs-sm); color: var(--text-dim);">📱 ${m.phone}</div>` : ''}
+            </div>
+            <div style="display: flex; gap: var(--space-sm);">
+                <button onclick="BoatOS.editCrewMember(${m.id})"
+                    style="padding: var(--space-sm) var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-panel); color: var(--text); font-size: var(--fs-base); cursor: pointer;">✏️</button>
+                <button onclick="BoatOS.deleteCrewMemberConfirm(${m.id})"
+                    style="padding: var(--space-sm) var(--space-md); border: 1px solid var(--danger); border-radius: var(--radius-md); background: transparent; color: var(--danger); font-size: var(--fs-base); cursor: pointer;">🗑️</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+export function showCrewManageModal(member = null) {
+    const modal = document.getElementById('crew-manage-modal');
+    const title = document.getElementById('crew-manage-title');
+    if (!modal) return;
+
+    document.getElementById('crew-manage-name').value = member?.name || '';
+    document.getElementById('crew-manage-role').value = member?.role || 'Crew';
+    document.getElementById('crew-manage-email').value = member?.email || '';
+    document.getElementById('crew-manage-phone').value = member?.phone || '';
+    document.getElementById('crew-manage-form').dataset.editId = member?.id || '';
+
+    selectedAvatar = member?.avatar || CREW_AVATARS[0].emoji;
+
+    // Avatar-Picker rendern
+    const picker = document.getElementById('crew-avatar-picker');
+    if (picker) {
+        picker.innerHTML = CREW_AVATARS.map(a => `
+            <button type="button" data-avatar="${a.emoji}"
+                onclick="BoatOS._selectCrewAvatar('${a.emoji}')"
+                title="${a.label}"
+                style="width: 52px; height: 52px; font-size: 28px; border-radius: 12px; border: 2px solid ${selectedAvatar === a.emoji ? 'var(--accent)' : 'var(--border)'}; background: ${selectedAvatar === a.emoji ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'var(--bg-card)'}; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                ${a.emoji}
+            </button>
+        `).join('');
+    }
+
+    if (title) title.textContent = member ? 'Crew-Mitglied bearbeiten' : 'Neues Crew-Mitglied';
+    modal.style.display = 'flex';
+}
+
+export function selectCrewAvatar(emoji) {
+    selectedAvatar = emoji;
+    document.querySelectorAll('#crew-avatar-picker button').forEach(btn => {
+        const active = btn.dataset.avatar === emoji;
+        btn.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
+        btn.style.background = active ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'var(--bg-card)';
+    });
+}
+
+export function closeCrewManageModal() {
+    const modal = document.getElementById('crew-manage-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+export function editCrewMember(id) {
+    const member = crewManageList.find(m => m.id === id);
+    if (member) showCrewManageModal(member);
+}
+
+export async function deleteCrewMemberConfirm(id) {
+    const member = crewManageList.find(m => m.id === id);
+    if (!member) return;
+    if (!confirm(`"${member.name}" wirklich löschen?`)) return;
+
+    try {
+        const response = await fetch(`${getApiUrl()}/api/crew/${id}`, { method: 'DELETE' });
+        if (response.ok) {
+            crewManageList = crewManageList.filter(m => m.id !== id);
+            renderCrewManageList();
+            if (ui.showNotification) ui.showNotification('Crew-Mitglied gelöscht', 'info');
+        }
+    } catch (error) {
+        if (ui.showNotification) ui.showNotification('Fehler beim Löschen', 'error');
+    }
+}
+
+export async function submitCrewManageForm() {
+    const name = document.getElementById('crew-manage-name').value.trim();
+    const role = document.getElementById('crew-manage-role').value;
+    const email = document.getElementById('crew-manage-email').value.trim();
+    const phone = document.getElementById('crew-manage-phone').value.trim();
+    const editId = document.getElementById('crew-manage-form').dataset.editId;
+
+    if (!name) {
+        if (ui.showNotification) ui.showNotification('Bitte Namen eingeben', 'warning');
+        return;
+    }
+
+    try {
+        const payload = { name, role, email, phone, avatar: selectedAvatar };
+        let response;
+        if (editId) {
+            response = await fetch(`${getApiUrl()}/api/crew/${editId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        } else {
+            response = await fetch(`${getApiUrl()}/api/crew`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        }
+
+        if (response.ok) {
+            closeCrewManageModal();
+            await loadCrewManagement();
+            if (ui.showNotification) ui.showNotification(editId ? 'Crew-Mitglied aktualisiert' : 'Crew-Mitglied hinzugefügt', 'success');
+        } else {
+            if (ui.showNotification) ui.showNotification('Fehler beim Speichern', 'error');
+        }
+    } catch (error) {
+        if (ui.showNotification) ui.showNotification('Fehler beim Speichern', 'error');
     }
 }

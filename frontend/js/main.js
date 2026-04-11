@@ -119,6 +119,7 @@ function updateAllUnitLabels() {
 // ==================== ROUTE INFO ====================
 function showRouteInfo(distanceNM, etaHours, etaMinutes, routeInfo, isReverse, isWaterway, avgSpeed, locksCount = 0) {
     console.log('showRouteInfo aufgerufen:', { distanceNM, etaHours, etaMinutes, locksCount });
+    updateSimButton();
 
     // Distanz anzeigen
     const distEl = document.getElementById('route-distance');
@@ -185,6 +186,7 @@ function updateWaypointList(context) {
                 Keine Route geplant.<br>
                 <small>Klicke auf die Karte um Wegpunkte hinzuzufügen.</small>
             </div>`;
+        updateSimButton();
         return;
     }
 
@@ -196,10 +198,120 @@ function updateWaypointList(context) {
                 <div class="waypoint-details">${wp.lat.toFixed(5)}, ${wp.lon.toFixed(5)}</div>
             </div>
             <div class="waypoint-actions">
-                <button class="wp-btn" onclick="BoatOS.removeWaypoint(${i})" title="Löschen">🗑️</button>
+                <button class="wp-btn" onclick="BoatOS.removeWaypoint(${i})" title="Löschen"
+                    ${navigation.isNavigationActive && navigation.isNavigationActive() ? 'disabled style="opacity:0.3;cursor:not-allowed;"' : ''}>🗑️</button>
             </div>
         </div>
     `).join('');
+
+    updateSimButton();
+    window.BoatOS?.updateNavButton();
+}
+
+// ==================== SIMULATION ====================
+let simInterval = null;
+let simDistanceTraveled = 0;
+let simMultiplier = 25; // ×25 = ~13 m/tick
+let simSavedPosition = null; // Boot-Position vor Simulation sichern
+
+function simHaversine(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function simBearing(lat1, lon1, lat2, lon2) {
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
+    const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180)
+            - Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+function interpolateAlongRoute(coords, targetDist) {
+    let accumulated = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+        const segDist = simHaversine(coords[i].lat, coords[i].lon, coords[i+1].lat, coords[i+1].lon);
+        if (accumulated + segDist >= targetDist) {
+            const t = segDist > 0 ? (targetDist - accumulated) / segDist : 0;
+            return {
+                lat: coords[i].lat + t * (coords[i+1].lat - coords[i].lat),
+                lon: coords[i].lon + t * (coords[i+1].lon - coords[i].lon),
+                bearing: simBearing(coords[i].lat, coords[i].lon, coords[i+1].lat, coords[i+1].lon)
+            };
+        }
+        accumulated += segDist;
+    }
+    return null; // Route abgefahren
+}
+
+function simTick() {
+    const routeCoords = navigation.getCurrentRouteCoordinates
+        ? navigation.getCurrentRouteCoordinates()
+        : null;
+    if (!routeCoords || routeCoords.length < 2) { stopSimulation(); return; }
+
+    // Meter pro Tick (100ms): Basis 10 kn × Multiplikator
+    simDistanceTraveled += simMultiplier * 10 * 1852 / 36000;
+
+    const pos = interpolateAlongRoute(routeCoords, simDistanceTraveled);
+    if (!pos) {
+        stopSimulation();
+        if (ui.showNotification) ui.showNotification('🏁 Simulation beendet', 'info');
+        return;
+    }
+
+    mapModule.updateBoatPosition({ lat: pos.lat, lon: pos.lon, course: pos.bearing });
+    window.currentPosition = { lat: pos.lat, lon: pos.lon };
+}
+
+function startSimulation() {
+    const routeCoords = navigation.getCurrentRouteCoordinates
+        ? navigation.getCurrentRouteCoordinates()
+        : null;
+    if (!routeCoords || routeCoords.length < 2) {
+        if (ui.showNotification) ui.showNotification('Keine berechnete Route für Simulation', 'warning');
+        return;
+    }
+    simSavedPosition = window.currentPosition ? { ...window.currentPosition } : null;
+    simDistanceTraveled = 0;
+    simInterval = setInterval(simTick, 100);
+    setSimButtonState(true);
+    mapModule.setAutoFollow(true);
+    mapModule.updateFollowButton && mapModule.updateFollowButton(true);
+    if (ui.showNotification) ui.showNotification('▶ Simulation gestartet', 'info');
+}
+
+function stopSimulation() {
+    if (simInterval) { clearInterval(simInterval); simInterval = null; }
+    setSimButtonState(false);
+    // Boot-Marker zurück auf echte Position
+    if (simSavedPosition) {
+        mapModule.updateBoatPosition(simSavedPosition);
+        window.currentPosition = simSavedPosition;
+    }
+}
+
+function setSimButtonState(running) {
+    const btn = document.getElementById('btn-simulation');
+    const bar = document.getElementById('sim-speed-bar');
+    if (btn) {
+        btn.textContent = running ? '⏹ Stop' : '▶ Simulation';
+        btn.style.background = running ? 'var(--danger)' : 'var(--success)';
+    }
+    if (bar) bar.style.display = running ? 'flex' : 'none';
+}
+
+function updateSimButton() {
+    const btn = document.getElementById('btn-simulation');
+    if (!btn) return;
+    const hasRoute = !!(navigation.getCurrentRouteCoordinates
+        && navigation.getCurrentRouteCoordinates()?.length >= 2);
+    const navActive = navigation.isNavigationActive && navigation.isNavigationActive();
+    const simRunning = simInterval !== null;
+    btn.style.display = (hasRoute && !navActive) || simRunning ? 'flex' : 'none';
 }
 
 // ==================== TRIP STATUS ====================
@@ -266,13 +378,12 @@ window.BoatOS = {
         }
         this.updateNavButton();
 
-        // When navigation starts: enable auto-follow and auto-start trip
+        updateSimButton();
+
+        // When navigation starts: enable auto-follow and fly to boat
         if (navigation.isNavigationActive && navigation.isNavigationActive()) {
-            if (mapModule.setAutoFollow) {
-                mapModule.setAutoFollow(true);
-            }
-            if (logbook.isTripRecording && !logbook.isTripRecording()) {
-                logbook.confirmStartTrip();
+            if (mapModule.centerOnBoat) {
+                mapModule.centerOnBoat();
             }
         }
     },
@@ -285,18 +396,24 @@ window.BoatOS = {
     },
 
     updateNavButton: function() {
+        const isActive = navigation.isNavigationActive ? navigation.isNavigationActive() : false;
+        const hasRoute = (window.BoatOS?.context?.waypoints?.length >= 2);
+
+        // Sheet-Button (kleines Icon)
         const btn = document.getElementById('btn-start-nav');
         if (btn) {
-            const isActive = navigation.isNavigationActive ? navigation.isNavigationActive() : false;
-            if (isActive) {
-                btn.innerHTML = '⏸️';
-                btn.title = 'Navigation pausieren';
-                btn.style.background = 'var(--warning)';
-            } else {
-                btn.innerHTML = '▶️';
-                btn.title = 'Navigation starten';
-                btn.style.background = 'var(--success)';
-            }
+            btn.innerHTML = isActive ? '⏸️' : '▶️';
+            btn.title = isActive ? 'Navigation stoppen' : 'Navigation starten';
+            btn.style.background = isActive ? 'var(--warning)' : 'var(--success)';
+        }
+
+        // Map-Button (Pill, top-left)
+        const mapBtn = document.getElementById('btn-nav-map');
+        if (mapBtn) {
+            const visible = hasRoute || isActive;
+            mapBtn.style.display = visible ? 'flex' : 'none';
+            mapBtn.textContent = isActive ? '⏹ Navigation' : '▶ Navigation';
+            mapBtn.style.background = isActive ? 'var(--danger)' : 'var(--success)';
         }
     },
 
@@ -358,6 +475,7 @@ window.BoatOS = {
     },
 
     removeWaypoint: function(index) {
+        if (navigation.isNavigationActive && navigation.isNavigationActive()) return;
         navigation.removeWaypoint(index, this.context);
         updateWaypointList(this.context);
     },
@@ -380,6 +498,21 @@ window.BoatOS = {
     exportTrip: (tripId) => logbook.exportTrip(tripId),
     viewTripOnMap: (tripId) => logbook.viewTripOnMap(tripId),
     deleteTrip: (tripId) => logbook.deleteTrip(tripId),
+    loadCrewManagement: () => logbook.loadCrewManagement(),
+    showCrewManageModal: (member) => logbook.showCrewManageModal(member),
+    closeCrewManageModal: () => logbook.closeCrewManageModal(),
+    editCrewMember: (id) => logbook.editCrewMember(id),
+    deleteCrewMemberConfirm: (id) => logbook.deleteCrewMemberConfirm(id),
+    submitCrewManageForm: () => logbook.submitCrewManageForm(),
+    _selectCrewAvatar: (emoji) => logbook.selectCrewAvatar(emoji),
+
+    // === SIMULATION ===
+    toggleSimulation: () => simInterval ? stopSimulation() : startSimulation(),
+    setSimSpeed: (val) => {
+        simMultiplier = Math.max(1, Math.min(1000, val));
+        const lbl = document.getElementById('sim-speed-label');
+        if (lbl) lbl.textContent = '×' + simMultiplier;
+    },
 
     // === SETTINGS FUNCTIONS (delegated) ===
     saveAllSettings: () => settings.saveAllSettings(),
@@ -457,6 +590,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             unitSettings.speed = loadedSettings.units.speed === 'knots' ? 'kn' :
                                  loadedSettings.units.speed === 'kmh' ? 'kmh' : 'kn';
         }
+        // AIS-Modul mit gespeicherten Settings initialisieren (API-Key etc.)
+        if (loadedSettings.ais && ais.updateAISSettings) {
+            ais.updateAISSettings(loadedSettings.ais);
+        }
     }
 
     // Settings-Change Event
@@ -468,6 +605,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                                  changedSettings.units.speed === 'kmh' ? 'kmh' : 'kn';
             console.log('Einheiten aktualisiert:', unitSettings);
             updateAllUnitLabels();
+        }
+        // AIS-Settings an Modul weitergeben
+        if (changedSettings.ais && ais.updateAISSettings) {
+            ais.updateAISSettings(changedSettings.ais);
         }
     });
 
@@ -502,6 +643,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // UI initialisieren
     if (ui.initUI) ui.initUI();
 
+    // Layer-Sichtbarkeit sofort setzen (Button-Zustände, kein Map-Zugriff nötig)
+    if (ui.initLayerVisibility) ui.initLayerVisibility();
+
     // Einheiten-Labels aktualisieren
     updateAllUnitLabels();
 
@@ -519,7 +663,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // GPS-Updates weiterleiten
     if (core.onGpsUpdate && sensors.handleGPSUpdate) {
         core.onGpsUpdate((gpsData) => {
-            sensors.handleGPSUpdate(gpsData);
+            sensors.handleGPSUpdate(gpsData); // Sensor-Anzeige immer aktualisieren
+
+            if (simInterval !== null) return; // Position während Simulation einfrieren
 
             if (mapModule.updateBoatPosition && gpsData.lat && gpsData.lon) {
                 mapModule.updateBoatPosition(gpsData);
@@ -537,13 +683,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // Browser Geolocation als Fallback starten
+    if (sensors.startBrowserGpsFallback) {
+        sensors.startBrowserGpsFallback((pos) => {
+            if (simInterval !== null) return; // Position während Simulation einfrieren
+            if (mapModule.updateBoatPosition) mapModule.updateBoatPosition(pos);
+            window.BoatOS.context.currentPosition = { lat: pos.lat, lon: pos.lon };
+            if (navigation.isNavigationActive && navigation.isNavigationActive()) {
+                navigation.updateNavigation(pos.lat, pos.lon, window.BoatOS.context);
+            }
+        });
+    }
+
     // Mapclick-Handler - leitet an Navigation-Modul für Mode-Prüfung weiter
     window.addEventListener('mapclick', (e) => {
-        const { lngLat } = e.detail;
+        const { lngLat, longPress } = e.detail;
 
-        // Navigation-Modul entscheidet basierend auf aktivem Modus
         if (navigation.handleMapClick) {
-            navigation.handleMapClick(lngLat);
+            navigation.handleMapClick(lngLat, longPress);
         }
     });
 

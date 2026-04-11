@@ -86,17 +86,34 @@ function addLockMarker(lock) {
     const el = document.createElement('div');
     el.className = 'lock-marker';
     el.innerHTML = `
-        <div class="lock-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="6" y="10" width="12" height="10" rx="1" fill="#FF8C00" stroke="white" stroke-width="2"/>
-                <path d="M8 10V7C8 4.79 9.79 3 12 3C14.21 3 16 4.79 16 7V10" stroke="white" stroke-width="2" stroke-linecap="round"/>
-                <circle cx="12" cy="15" r="1.5" fill="white"/>
+        <div class="lock-icon" style="
+            width:38px;height:38px;
+            background:#1565C0;
+            border-radius:9px;
+            display:flex;align-items:center;justify-content:center;
+            box-shadow:0 2px 6px rgba(0,0,0,0.45);
+            border:1.5px solid rgba(255,255,255,0.3);
+        ">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Lock chamber from above (CEVNI-style) -->
+                <!-- Left wall -->
+                <rect x="2" y="2" width="2.5" height="20" rx="1" fill="white"/>
+                <!-- Right wall -->
+                <rect x="19.5" y="2" width="2.5" height="20" rx="1" fill="white"/>
+                <!-- Top mitre gate (V pointing inward) -->
+                <polyline points="2,3.5 12,9 22,3.5"
+                    fill="none" stroke="white" stroke-width="1.8"
+                    stroke-linejoin="round" stroke-linecap="round"/>
+                <!-- Bottom mitre gate -->
+                <polyline points="2,20.5 12,15 22,20.5"
+                    fill="none" stroke="white" stroke-width="1.8"
+                    stroke-linejoin="round" stroke-linecap="round"/>
             </svg>
         </div>
     `;
     el.style.cursor = 'pointer';
-    el.style.width = '32px';
-    el.style.height = '32px';
+    el.style.width = '38px';
+    el.style.height = '38px';
 
     // Create MapLibre marker
     const marker = new maplibregl.Marker({ element: el })

@@ -25,7 +25,7 @@ let map = null;
 let boatMarker = null;
 let boatMarkerElement = null;
 let currentBoatHeading = 0;
-let autoFollow = true;
+let autoFollow = false;
 
 // Layer State
 let currentBaseLayer = 'osm'; // 'osm' oder 'satellite'
@@ -165,17 +165,81 @@ export function initMap(options = {}) {
         initMapMarkers();
     });
 
-    // Click-Handler (wird von Waypoint-Modul verwendet)
+    // Long-Press Erkennung direkt auf Canvas (nicht via MapLibre-Events),
+    // damit Overlay-Buttons (nav, follow, sim) keine falschen Triggers auslösen
+    let longPressTimer = null;
+    let longPressFired = false;
+    let longPressOrigin = null;
+    let longPressLngLat = null;
+
+    const canvas = map.getCanvas();
+
+    canvas.addEventListener('pointerdown', (e) => {
+        // Sicherstellen dass wirklich die Karte getippt wurde und nicht ein Overlay-Button
+        const topEl = document.elementFromPoint(e.clientX, e.clientY);
+        if (topEl !== canvas) return; // Button oder anderes UI-Element liegt darüber
+
+        longPressFired = false;
+        longPressOrigin = { x: e.clientX, y: e.clientY };
+        const rect = canvas.getBoundingClientRect();
+        longPressLngLat = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
+        longPressTimer = setTimeout(() => {
+            longPressFired = true;
+            longPressTimer = null;
+            window.dispatchEvent(new CustomEvent('mapclick', {
+                detail: { lngLat: longPressLngLat, longPress: true }
+            }));
+            // Flag nach kurzer Zeit zurücksetzen, damit nachfolgende reguläre Klicks funktionieren
+            setTimeout(() => { longPressFired = false; }, 300);
+        }, 500);
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+        if (!longPressTimer || !longPressOrigin) return;
+        const dx = e.clientX - longPressOrigin.x;
+        const dy = e.clientY - longPressOrigin.y;
+        if (dx * dx + dy * dy > 100) { // >10px → kein Long-Press
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+    });
+
+    canvas.addEventListener('pointerup',     () => { clearTimeout(longPressTimer); longPressTimer = null; });
+    canvas.addEventListener('pointercancel', () => { clearTimeout(longPressTimer); longPressTimer = null; });
+
+    // Kurzer Tap → normaler Click (für POI etc., kein Wegpunkt)
     map.on('click', (e) => {
+        if (longPressFired) { longPressFired = false; return; } // bereits als Long-Press behandelt
         window.dispatchEvent(new CustomEvent('mapclick', {
-            detail: { lngLat: e.lngLat }
+            detail: { lngLat: e.lngLat, longPress: false }
         }));
     });
 
+    // Overlay-Buttons: pointerdown-Events stoppen, damit MapLibre keine Drag-Geste erkennt
+    // und suppressClick() nach Button-Taps nicht aufgerufen wird
+    const overlayButtons = document.getElementById('map-overlay-buttons');
+    if (overlayButtons) {
+        overlayButtons.addEventListener('pointerdown', (e) => {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+            e.stopPropagation();
+        });
+    }
+
     // Auto-Follow deaktivieren bei manueller Interaktion
     map.on('dragstart', () => {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
         autoFollow = false;
-        console.log('Auto-Follow deaktiviert (Karte verschoben)');
+        updateFollowButton(false);
+    });
+
+    // Auto-Follow deaktivieren bei User-initiiertem Zoom (Pinch, Scroll) — nicht bei flyTo/easeTo
+    map.on('zoomstart', (e) => {
+        if (e.originalEvent) {
+            autoFollow = false;
+            updateFollowButton(false);
+        }
     });
 
     return map;
@@ -770,6 +834,7 @@ export function setLayerOpacity(layerId, opacity) {
 export function centerOnBoat() {
     const currentPos = window.currentPosition || { lat: 51.855, lon: 12.046 };
     autoFollow = true;
+    updateFollowButton(true);
 
     if (map) {
         map.flyTo({
@@ -778,26 +843,32 @@ export function centerOnBoat() {
             duration: 1000
         });
     }
+}
 
-    console.log('Karte auf Boot zentriert');
+function updateFollowButton(following) {
+    const btn = document.getElementById('btn-follow-resume');
+    if (!btn) return;
+    // Follow-Button nur anzeigen wenn Navigation aktiv ist und Folgen deaktiviert wurde
+    const navActive = window.BoatOS?.navigation?.isNavigationActive?.() ?? false;
+    btn.style.display = (navActive && !following) ? 'flex' : 'none';
 }
 
 /**
  * Zoomt die Karte hinein
  */
 export function zoomIn() {
-    if (map) {
-        map.zoomIn({ duration: 300 });
-    }
+    autoFollow = false;
+    updateFollowButton(false);
+    if (map) map.zoomIn({ duration: 300 });
 }
 
 /**
  * Zoomt die Karte heraus
  */
 export function zoomOut() {
-    if (map) {
-        map.zoomOut({ duration: 300 });
-    }
+    autoFollow = false;
+    updateFollowButton(false);
+    if (map) map.zoomOut({ duration: 300 });
 }
 
 /**
@@ -836,7 +907,7 @@ export function fitBounds(bounds, options = {}) {
  */
 export function setAutoFollow(enable) {
     autoFollow = enable;
-    console.log(`Auto-Follow: ${enable ? 'aktiviert' : 'deaktiviert'}`);
+    updateFollowButton(enable);
 }
 
 /**
