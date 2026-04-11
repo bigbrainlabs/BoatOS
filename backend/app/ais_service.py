@@ -273,7 +273,7 @@ class AISService:
                     # Subscribe to AIS messages (Europe only to reduce load)
                     subscribe_message = {
                         "APIKey": self.api_key,
-                        "BoundingBoxes": [[[-25, 35], [45, 72]]]  # Europe (Atlantic to Black Sea, Mediterranean to North Cape)
+                        "BoundingBoxes": [[[35, -25], [72, 45]]]  # Europe: lat 35-72, lon -25 to 45
                     }
                     await websocket.send(json.dumps(subscribe_message))
                     print("✅ AISStream WebSocket connected")
@@ -340,7 +340,7 @@ class AISService:
                 'name': data.get('MetaData', {}).get('ShipName', f"Vessel {mmsi}"),
                 'lat': float(lat),
                 'lon': float(lon),
-                'cog': float(msg.get('Cog', 0)),
+                'cog': float(msg.get('Cog', 0)) / 10.0,
                 'sog': float(msg.get('Sog', 0) / 10.0),  # AISStream sends in 0.1 knots
                 'heading': int(msg.get('TrueHeading', 0)),
                 'navstat': int(msg.get('NavigationalStatus', 0)),
