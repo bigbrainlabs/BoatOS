@@ -3094,8 +3094,12 @@ async def create_crew_member(request: dict):
     role = request.get("role", "Crew")
     email = request.get("email", "")
     phone = request.get("phone", "")
+    avatar = request.get("avatar", "")
 
     member = crew_management.add_crew_member(name, role, email, phone)
+    if avatar:
+        member["avatar"] = avatar
+        crew_management.update_crew_member(member["id"], {"avatar": avatar})
     return member
 
 @app.put("/api/crew/{crew_id}")

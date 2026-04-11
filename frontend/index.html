@@ -84,6 +84,59 @@
          ============================================ -->
     <div class="map-container hidden" id="mapContainer">
         <div id="map"></div>
+
+        <!-- Top-left button stack -->
+        <div id="map-overlay-buttons" style="position: absolute; top: var(--space-lg); left: var(--space-lg); z-index: 100; pointer-events: auto; display: flex; flex-direction: column; gap: var(--space-sm);">
+            <button id="btn-nav-map" onclick="BoatOS.toggleNavigation()"
+                style="display: none; align-items: center; gap: var(--space-sm);
+                       padding: var(--space-sm) var(--space-lg);
+                       background: var(--success); color: white;
+                       border: none; border-radius: 20px;
+                       font-size: var(--fs-lg); font-weight: 600;
+                       box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+                       cursor: pointer; touch-action: manipulation;
+                       pointer-events: auto;">
+                ▶ Navigation
+            </button>
+            <button id="btn-follow-resume" onclick="BoatOS.map.centerOnBoat()"
+                style="display: none; align-items: center; gap: var(--space-sm);
+                       padding: var(--space-sm) var(--space-lg);
+                       background: var(--accent); color: white;
+                       border: none; border-radius: 20px;
+                       font-size: var(--fs-lg); font-weight: 600;
+                       box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+                       cursor: pointer; touch-action: manipulation;
+                       pointer-events: auto;">
+                📍 Folgen
+            </button>
+            <button id="btn-simulation" onclick="BoatOS.toggleSimulation()"
+                style="display: none; align-items: center; gap: var(--space-sm);
+                       padding: var(--space-sm) var(--space-lg);
+                       background: var(--success); color: white;
+                       border: none; border-radius: 20px;
+                       font-size: var(--fs-lg); font-weight: 600;
+                       box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+                       cursor: pointer; touch-action: manipulation;
+                       pointer-events: auto;">
+                ▶ Simulation
+            </button>
+        </div>
+
+        <!-- Simulation speed bar (top-center, only during simulation) -->
+        <div id="sim-speed-bar"
+            style="display: none; position: absolute; top: var(--space-lg); left: 50%; transform: translateX(-50%); z-index: 10;
+                   align-items: center; gap: var(--space-md);
+                   padding: var(--space-sm) var(--space-xl);
+                   background: rgba(0,0,0,0.65); color: white;
+                   border-radius: 20px; border: 1px solid rgba(255,255,255,0.15);
+                   backdrop-filter: blur(10px);
+                   font-size: var(--fs-lg); white-space: nowrap;">
+            🚢
+            <input type="range" id="sim-speed-slider" min="1" max="1000" value="25" step="5"
+                oninput="BoatOS.setSimSpeed(+this.value)"
+                style="width: 130px; accent-color: var(--accent);">
+            <span id="sim-speed-label" style="min-width: 3.5em; text-align: right; font-weight: 600;">×25</span>
+        </div>
     </div>
 
     <div class="dashboard-container active" id="dashboardContainer">
@@ -133,7 +186,7 @@
                 <span class="icon">⭐</span>
                 <span class="label">Favoriten</span>
             </div>
-            <div class="quick-action" onclick="BoatOS.ais.showAISPanel()">
+            <div class="quick-action" id="btn-ais" onclick="BoatOS.ais.toggleAIS()">
                 <span class="icon">🚢</span>
                 <span class="label">AIS</span>
             </div>
@@ -239,6 +292,7 @@
                 <div class="logbook-tabs">
                     <div class="logbook-tab active" onclick="BoatOS.showLogbookTab('current', this)">Aktuelle Fahrt</div>
                     <div class="logbook-tab" onclick="BoatOS.showLogbookTab('archive', this)">Archiv</div>
+                    <div class="logbook-tab" onclick="BoatOS.showLogbookTab('crew', this)">Crew</div>
                 </div>
 
                 <!-- AKTUELLE FAHRT TAB -->
@@ -320,6 +374,15 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- CREW TAB -->
+                <div class="logbook-tab-content" id="logbook-tab-crew" style="display: none;">
+                    <button onclick="BoatOS.showCrewManageModal()"
+                        style="width: 100%; padding: var(--space-md); background: var(--accent); color: white; border: none; border-radius: var(--radius-lg); font-size: var(--fs-lg); font-weight: 600; cursor: pointer; margin-bottom: var(--space-lg);">
+                        + Hinzufügen
+                    </button>
+                    <div id="crew-manage-list"></div>
+                </div>
             </div>
 
             <!-- AIS SECTION -->
@@ -395,6 +458,51 @@
                     🚢 Fahrt starten
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         CREW MANAGE MODAL
+         ============================================ -->
+    <div class="modal-overlay" id="crew-manage-modal" onclick="BoatOS.closeCrewManageModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="crew-manage-title">Neues Crew-Mitglied</h3>
+                <button class="modal-close-btn" onclick="BoatOS.closeCrewManageModal()">✕</button>
+            </div>
+            <form id="crew-manage-form" onsubmit="event.preventDefault(); BoatOS.submitCrewManageForm();">
+                <div style="margin-bottom: var(--space-lg);">
+                    <label style="display: block; font-size: var(--fs-md); color: var(--text-dim); margin-bottom: var(--space-sm);">Avatar</label>
+                    <div id="crew-avatar-picker" style="display: flex; flex-wrap: wrap; gap: var(--space-sm);"></div>
+                </div>
+                <div style="margin-bottom: var(--space-lg);">
+                    <label style="display: block; font-size: var(--fs-md); color: var(--text-dim); margin-bottom: var(--space-xs);">Name *</label>
+                    <input id="crew-manage-name" type="text" placeholder="Vollständiger Name"
+                        style="width: 100%; padding: var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); color: var(--text); font-size: var(--fs-lg);">
+                </div>
+                <div style="margin-bottom: var(--space-lg);">
+                    <label style="display: block; font-size: var(--fs-md); color: var(--text-dim); margin-bottom: var(--space-xs);">Rolle</label>
+                    <select id="crew-manage-role" class="setting-select">
+                        <option value="Captain">⚓ Kapitän</option>
+                        <option value="Crew" selected>🧑‍✈️ Crew</option>
+                        <option value="Guest">👤 Gast</option>
+                    </select>
+                </div>
+                <div style="margin-bottom: var(--space-lg);">
+                    <label style="display: block; font-size: var(--fs-md); color: var(--text-dim); margin-bottom: var(--space-xs);">Telefon</label>
+                    <input id="crew-manage-phone" type="tel" placeholder="Optional"
+                        style="width: 100%; padding: var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); color: var(--text); font-size: var(--fs-lg);">
+                </div>
+                <div style="margin-bottom: var(--space-2xl);">
+                    <label style="display: block; font-size: var(--fs-md); color: var(--text-dim); margin-bottom: var(--space-xs);">E-Mail</label>
+                    <input id="crew-manage-email" type="email" placeholder="Optional"
+                        style="width: 100%; padding: var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-card); color: var(--text); font-size: var(--fs-lg);">
+                </div>
+                <div style="display: flex; gap: var(--space-md);">
+                    <button type="button" class="modal-btn modal-btn-secondary" onclick="BoatOS.closeCrewManageModal()">Abbrechen</button>
+                    <button type="submit" class="modal-btn modal-btn-primary">Speichern</button>
+                </div>
+            </form>
         </div>
     </div>
 

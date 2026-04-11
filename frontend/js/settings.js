@@ -173,12 +173,19 @@ export function saveAllSettings() {
         if (el) settings.routing.currentTypes[type] = parseFloat(el.value) || 0;
     });
 
-    // Speichern
+    // Lokal speichern
     if (ui?.saveSettings) {
         ui.saveSettings(settings);
     } else {
         localStorage.setItem('boatos_settings', JSON.stringify(settings));
     }
+
+    // Ans Backend senden (damit AIS, Routing etc. sofort neu konfiguriert werden)
+    fetch(`${API_URL}/api/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+    }).catch(err => console.warn('Settings-Backend-Sync fehlgeschlagen:', err));
 
     // Event für andere Module auslösen
     window.dispatchEvent(new CustomEvent('settingsChanged', { detail: { settings } }));

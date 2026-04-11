@@ -191,20 +191,23 @@ function updateMapCursor() {
  * Wird von main.js aufgerufen
  * @param {Object} lngLat - {lng, lat} Koordinaten
  */
-export function handleMapClick(lngLat) {
+export function handleMapClick(lngLat, longPress = false) {
+    // Während aktiver Navigation keine Wegpunkte per Tap hinzufügen
+    if (isNavigationActive()) return;
+
     switch (mapInteractionMode) {
         case 'route':
-            // Wegpunkt hinzufügen
+            if (!longPress) return; // Wegpunkt nur bei langem Drücken
             addWaypointFromMapClick(lngLat.lat, lngLat.lng);
             break;
 
         case 'poi':
-            // POI-Dialog öffnen
             openPoiDialog(lngLat.lat, lngLat.lng);
             break;
 
         default:
-            // Kein spezieller Modus - normales Verhalten (nichts tun)
+            // Langer Tap ohne aktiven Modus → Wegpunkt setzen und Routenplanung starten
+            if (longPress) addWaypointFromMapClick(lngLat.lat, lngLat.lng);
             break;
     }
 }

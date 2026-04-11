@@ -354,6 +354,13 @@ function getShipTypeText(type) {
 function updateAISSettings(settings) {
     aisSettings = settings;
 
+    // aisEnabled mit Settings synchronisieren + Button-Zustand setzen
+    aisEnabled = settings.enabled === true;
+    const btn = document.getElementById('btn-ais');
+    if (btn) btn.classList.toggle('active', aisEnabled);
+    const settingsToggle = document.getElementById('toggle-ais');
+    if (settingsToggle) settingsToggle.classList.toggle('active', aisEnabled);
+
     // Interval löschen
     if (aisUpdateInterval) {
         clearInterval(aisUpdateInterval);
@@ -1256,6 +1263,49 @@ function getLockMarkers() {
 // ==================== UI WRAPPER FUNKTIONEN ====================
 
 /**
+ * Togglet AIS-Anzeige an/aus (Quick-Action Button)
+ */
+function toggleAIS() {
+    aisEnabled = !aisEnabled;
+
+    // Button-Zustand aktualisieren
+    const btn = document.getElementById('btn-ais');
+    if (btn) btn.classList.toggle('active', aisEnabled);
+
+    // aisSettings.enabled synchronisieren (wird von fetchAISVessels geprüft)
+    aisSettings.enabled = aisEnabled;
+
+    // Settings-Toggle synchronisieren
+    const settingsToggle = document.getElementById('toggle-ais');
+    if (settingsToggle) settingsToggle.classList.toggle('active', aisEnabled);
+
+    if (aisEnabled) {
+        fetchAISVessels();
+        if (!aisUpdateInterval) {
+            aisUpdateInterval = setInterval(fetchAISVessels, (aisSettings.updateInterval || 60) * 1000);
+        }
+        // AIS-Panel öffnen
+        if (window.BoatOS?.ui?.showSection) {
+            window.BoatOS.ui.showSection('ais', document.querySelector('.sheet-tab[onclick*="ais"]'));
+        }
+        if (window.BoatOS?.ui?.showNotification) {
+            window.BoatOS.ui.showNotification('📡 AIS aktiviert', 'info');
+        }
+    } else {
+        // AIS deaktivieren: Interval stoppen + Marker entfernen
+        if (aisUpdateInterval) {
+            clearInterval(aisUpdateInterval);
+            aisUpdateInterval = null;
+        }
+        Object.values(aisVessels).forEach(({ marker }) => marker.remove());
+        aisVessels = {};
+        if (window.BoatOS?.ui?.showNotification) {
+            window.BoatOS.ui.showNotification('📡 AIS deaktiviert', 'info');
+        }
+    }
+}
+
+/**
  * Zeigt das AIS-Panel im Bottom Sheet
  */
 function showAISPanel() {
@@ -1306,6 +1356,7 @@ export {
     getNavstatText,
     getShipTypeText,
     showAISPanel,
+    toggleAIS,
 
     // UI Wrapper
     showLocks,

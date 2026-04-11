@@ -5,9 +5,50 @@ Handles database operations for locks/sluices on German waterways
 
 import sqlite3
 import json
+import math
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime, time
+
+
+def _score_lock(lock: Dict) -> int:
+    """Score a lock by data completeness. Higher = better representative."""
+    score = 0
+    for f in ('phone', 'vhf_channel', 'email', 'website', 'opening_hours',
+              'max_length', 'max_width', 'max_draft', 'max_height',
+              'registration_method', 'notes', 'river_km'):
+        if lock.get(f):
+            score += 1
+    # Prefer specific names over generic "Schleuse" or bare gate entries
+    name = (lock.get('name') or '').lower()
+    if name and name not in ('schleuse', 'lock', 'sluice'):
+        score += 2
+    return score
+
+
+def _haversine_m(a: Dict, b: Dict) -> float:
+    R = 6371000.0
+    dlat = (b['lat'] - a['lat']) * math.pi / 180
+    dlon = (b['lon'] - a['lon']) * math.pi / 180
+    x = (math.sin(dlat / 2) ** 2 +
+         math.cos(a['lat'] * math.pi / 180) * math.cos(b['lat'] * math.pi / 180) *
+         math.sin(dlon / 2) ** 2)
+    return R * 2 * math.atan2(math.sqrt(x), math.sqrt(1 - x))
+
+
+def _deduplicate_locks(locks: List[Dict], min_dist_m: float = 300.0) -> List[Dict]:
+    """
+    Cluster locks within min_dist_m of each other and keep only the
+    best-scored (most data) representative per cluster.
+    Removes individual gate / chamber entries that clutter the map.
+    """
+    # Sort best-first so the greedy pass always keeps the richest entry
+    ranked = sorted(locks, key=_score_lock, reverse=True)
+    result: List[Dict] = []
+    for lock in ranked:
+        if not any(_haversine_m(lock, kept) < min_dist_m for kept in result):
+            result.append(lock)
+    return result
 
 # Database path
 DB_DIR = Path("data")
@@ -182,6 +223,9 @@ def get_locks_in_bounds(lat_min: float, lon_min: float,
             except:
                 lock['facilities'] = None
         locks.append(lock)
+
+    # Deduplicate: one icon per physical lock (removes gate/chamber duplicates within 300m)
+    locks = _deduplicate_locks(locks)
 
     return locks
 
