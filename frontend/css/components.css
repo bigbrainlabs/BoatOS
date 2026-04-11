@@ -576,7 +576,7 @@
     position: fixed;
     bottom: calc(var(--sheet-peek) + var(--space-base));
     left: 50%;
-    transform: translateX(-50%) translateY(calc(100% + var(--space-xl)));
+    transform: translateX(-50%) translateY(100vh);
     width: min(92vw, 420px);
     background: var(--bg-panel);
     border-radius: var(--radius-2xl);
