@@ -1157,6 +1157,55 @@
          - js/settings.js - Settings save/load functions
     -->
 
+    <!-- AIS Vessel Detail Panel -->
+    <div id="ais-details-panel">
+        <div class="ais-panel-header">
+            <div class="ais-panel-icon" id="ais-panel-icon"></div>
+            <div class="ais-panel-title">
+                <div class="ais-panel-name" id="ais-name">—</div>
+                <div class="ais-panel-type" id="ais-type">—</div>
+            </div>
+            <button class="ais-panel-close" onclick="BoatOS.ais.closeAISDetails()">✕</button>
+        </div>
+        <div class="ais-panel-grid">
+            <div class="ais-panel-cell">
+                <span class="ais-cell-label">Geschwindigkeit</span>
+                <span class="ais-cell-value highlight" id="ais-speed">—</span>
+            </div>
+            <div class="ais-panel-cell">
+                <span class="ais-cell-label">Kurs</span>
+                <span class="ais-cell-value" id="ais-course">—</span>
+            </div>
+            <div class="ais-panel-cell">
+                <span class="ais-cell-label">Steuerkurs</span>
+                <span class="ais-cell-value" id="ais-heading">—</span>
+            </div>
+            <div class="ais-panel-cell">
+                <span class="ais-cell-label">Status</span>
+                <span class="ais-cell-value" id="ais-navstat">—</span>
+            </div>
+        </div>
+        <div class="ais-panel-divider"></div>
+        <div class="ais-panel-grid">
+            <div class="ais-panel-cell">
+                <span class="ais-cell-label">MMSI</span>
+                <span class="ais-cell-value dim" id="ais-mmsi">—</span>
+            </div>
+            <div class="ais-panel-cell">
+                <span class="ais-cell-label">Rufzeichen</span>
+                <span class="ais-cell-value dim" id="ais-callsign">—</span>
+            </div>
+            <div class="ais-panel-cell" id="ais-dest-cell">
+                <span class="ais-cell-label">Ziel</span>
+                <span class="ais-cell-value" id="ais-destination">—</span>
+            </div>
+            <div class="ais-panel-cell" id="ais-dim-cell">
+                <span class="ais-cell-label">L × B</span>
+                <span class="ais-cell-value dim" id="ais-dimensions">—</span>
+            </div>
+        </div>
+    </div>
+
     <!-- Chart Progress Modal -->
     <div id="chart-progress-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 20000; justify-content: center; align-items: center;">
         <div style="background: var(--bg-panel); padding: var(--space-3xl); border-radius: var(--radius-xl); max-width: clamp(400px, 26vw, 500px); width: 90%; border: 2px solid var(--accent);">

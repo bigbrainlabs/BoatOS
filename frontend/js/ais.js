@@ -217,9 +217,10 @@ function updateAISMarkers(vessels) {
                 .setLngLat([vessel.lon, vessel.lat])
                 .addTo(map);
 
-            // Popup bei Klick hinzufügen
-            element.addEventListener('click', () => {
-                showAISDetails(vessel);
+            // Popup bei Klick hinzufügen — MMSI als Key, damit immer aktuelle Daten
+            element.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showAISDetails(vessel.mmsi);
             });
 
             aisVessels[vessel.mmsi] = { marker, element, data: vessel };
@@ -286,23 +287,50 @@ function createAISPopup(vessel) {
  * Zeigt das AIS-Detailpanel für ein Schiff an
  * @param {Object} vessel - Schiffsobjekt mit allen Daten
  */
-function showAISDetails(vessel) {
+let _selectedMMSI = null;
+
+function showAISDetails(mmsi) {
     const panel = document.getElementById('ais-details-panel');
     if (!panel) return;
 
-    document.getElementById('ais-name').textContent = vessel.name;
-    document.getElementById('ais-mmsi').textContent = vessel.mmsi;
-    document.getElementById('ais-callsign').textContent = vessel.callsign || 'N/A';
+    // Always read fresh data from cache
+    const entry = aisVessels[mmsi];
+    const vessel = entry ? entry.data : null;
+    if (!vessel) return;
+
+    // Deselect previous marker
+    if (_selectedMMSI && _selectedMMSI !== mmsi) {
+        const prev = aisVessels[_selectedMMSI];
+        if (prev?.element) prev.element.classList.remove('selected');
+    }
+    _selectedMMSI = mmsi;
+    if (entry?.element) entry.element.classList.add('selected');
+
+    // Ship icon in panel header
+    const color = getShipColor(vessel.navstat);
+    const iconEl = document.getElementById('ais-panel-icon');
+    if (iconEl) {
+        iconEl.innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24">
+            <path d="M12 2 L20 20 L12 17 L4 20 Z" fill="${color}" stroke="white" stroke-width="1.5"/>
+        </svg>`;
+    }
+
+    document.getElementById('ais-name').textContent = vessel.name || `MMSI ${vessel.mmsi}`;
     document.getElementById('ais-type').textContent = getShipTypeText(vessel.type);
     document.getElementById('ais-speed').textContent = vessel.sog.toFixed(1) + ' kn';
-    document.getElementById('ais-course').textContent = Math.round(vessel.cog) + '\u00B0';
-    document.getElementById('ais-heading').textContent = vessel.heading ? vessel.heading + '\u00B0' : 'N/A';
+    document.getElementById('ais-course').textContent = Math.round(vessel.cog) + '°';
+    document.getElementById('ais-heading').textContent = (vessel.heading && vessel.heading !== 511) ? vessel.heading + '°' : '—';
     document.getElementById('ais-navstat').textContent = getNavstatText(vessel.navstat);
-    document.getElementById('ais-destination').textContent = vessel.destination || 'N/A';
-    document.getElementById('ais-eta').textContent = vessel.eta || 'N/A';
-    document.getElementById('ais-length').textContent = vessel.length ? vessel.length + ' m' : 'N/A';
-    document.getElementById('ais-width').textContent = vessel.width ? vessel.width + ' m' : 'N/A';
-    document.getElementById('ais-draught').textContent = vessel.draught ? vessel.draught.toFixed(1) + ' m' : 'N/A';
+    document.getElementById('ais-mmsi').textContent = vessel.mmsi;
+    document.getElementById('ais-callsign').textContent = vessel.callsign || '—';
+    document.getElementById('ais-destination').textContent = vessel.destination?.trim() || '—';
+
+    const dimEl = document.getElementById('ais-dimensions');
+    if (vessel.length || vessel.width) {
+        dimEl.textContent = `${vessel.length || '?'} × ${vessel.width || '?'} m`;
+    } else {
+        dimEl.textContent = '—';
+    }
 
     panel.classList.add('show');
 }
@@ -312,8 +340,11 @@ function showAISDetails(vessel) {
  */
 function closeAISDetails() {
     const panel = document.getElementById('ais-details-panel');
-    if (panel) {
-        panel.classList.remove('show');
+    if (panel) panel.classList.remove('show');
+    if (_selectedMMSI) {
+        const entry = aisVessels[_selectedMMSI];
+        if (entry?.element) entry.element.classList.remove('selected');
+        _selectedMMSI = null;
     }
 }
 

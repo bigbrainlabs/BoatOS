@@ -569,6 +569,131 @@
 }
 
 /* ============================================
+   AIS VESSEL DETAIL PANEL
+   ============================================ */
+
+#ais-details-panel {
+    position: fixed;
+    bottom: calc(var(--sheet-peek) + var(--space-base));
+    left: 50%;
+    transform: translateX(-50%) translateY(calc(100% + var(--space-xl)));
+    width: min(92vw, 420px);
+    background: var(--bg-panel);
+    border-radius: var(--radius-2xl);
+    box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    z-index: 2500;
+    transition: transform 0.28s cubic-bezier(0.34, 1.1, 0.64, 1);
+    padding: var(--space-lg) var(--space-xl);
+    backdrop-filter: blur(12px);
+}
+
+#ais-details-panel.show {
+    transform: translateX(-50%) translateY(0);
+}
+
+.ais-panel-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+}
+
+.ais-panel-icon {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ais-panel-title {
+    flex: 1;
+    min-width: 0;
+}
+
+.ais-panel-name {
+    font-size: var(--fs-xl);
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ais-panel-type {
+    font-size: var(--fs-sm);
+    color: var(--text-dim);
+    margin-top: 2px;
+}
+
+.ais-panel-close {
+    background: rgba(255,255,255,0.08);
+    border: none;
+    color: var(--text-dim);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: var(--fs-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.ais-panel-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-sm) var(--space-lg);
+}
+
+.ais-panel-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ais-panel-cell.full-width {
+    grid-column: 1 / -1;
+}
+
+.ais-cell-label {
+    font-size: var(--fs-xs);
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.ais-cell-value {
+    font-size: var(--fs-base);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.ais-cell-value.dim {
+    color: var(--text-dim);
+    font-weight: 400;
+}
+
+.ais-cell-value.highlight {
+    color: var(--accent);
+}
+
+.ais-panel-divider {
+    height: 1px;
+    background: rgba(255,255,255,0.07);
+    margin: var(--space-md) 0;
+}
+
+/* selected marker ring */
+.ais-ship-icon.selected svg path {
+    stroke: #fff;
+    stroke-width: 3;
+}
+
+/* ============================================
    INLINE-STYLE REPLACEMENTS (from index.html)
    ============================================ */
 
