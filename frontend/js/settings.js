@@ -173,6 +173,18 @@ export function saveAllSettings() {
         if (el) settings.routing.currentTypes[type] = parseFloat(el.value) || 0;
     });
 
+    // Build waterCurrent object in format expected by backend water_current_service
+    const nameMap = { rhein: 'Rhein', mosel: 'Mosel', main: 'Main', elbe: 'Elbe', saale: 'Saale', donau: 'Donau' };
+    settings.waterCurrent = {
+        enabled: settings.routing.waterCurrentEnabled === true,
+        byName: {},
+        byType: settings.routing.currentTypes || {}
+    };
+    ['rhein', 'mosel', 'main', 'elbe', 'saale', 'donau'].forEach(name => {
+        const val = settings.routing.currents?.[name];
+        if (val) settings.waterCurrent.byName[nameMap[name]] = { current_kmh: val, type: 'river' };
+    });
+
     // Lokal speichern
     if (ui?.saveSettings) {
         ui.saveSettings(settings);

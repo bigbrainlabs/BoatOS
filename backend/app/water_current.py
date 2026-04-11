@@ -8,8 +8,11 @@ import math
 
 class WaterCurrentService:
     def __init__(self):
-        self.static_currents = {}  # Will be loaded from settings
-        self.live_data_cache = {}  # Cache for Pegelonline VA data
+        self.enabled = False
+        self.static_currents = {'byName': {}, 'byType': {}}
+        self.live_data_cache = {}
+        self.known_flow_directions = {}
+        self.river_areas = {}
 
     def configure(self, settings: Dict):
         """
@@ -32,17 +35,29 @@ class WaterCurrentService:
             'byType': settings.get('byType', {})
         }
 
-        # Known flow directions for major German rivers (bearing in degrees)
-        # These are approximate predominant flow directions
+        # Known flow directions (bearing = downstream direction in degrees)
+        # Elbe: flows W in middle section (Aken/Magdeburg), then WNW toward Hamburg → 270°
         self.known_flow_directions = {
-            'Rhein': 0,      # North (generally flows northward)
-            'Main': 270,     # West (flows into Rhine)
-            'Mosel': 45,     # Northeast (flows into Rhine at Koblenz)
-            'Elbe': 315,     # Northwest (flows from Czech Republic to North Sea)
-            'Saale': 0,      # North (flows into Elbe)
-            'Donau': 90,     # East (flows eastward to Black Sea)
-            'Weser': 0,      # North (flows to North Sea)
-            'Oder': 0,       # North (flows to Baltic Sea)
+            'Rhein': 0,    # North
+            'Main':  270,  # West
+            'Mosel': 45,   # Northeast
+            'Elbe':  270,  # West (middle Elbe; ~315° near Hamburg, but 270° fits Aken–Magdeburg best)
+            'Saale': 0,    # North
+            'Donau': 90,   # East
+            'Weser': 0,    # North
+            'Oder':  0,    # North
+        }
+        # Geographic bounding boxes [lat_min, lat_max, lon_min, lon_max]
+        # Used to eliminate rivers that can't physically be at the route location
+        self.river_areas = {
+            'Rhein': (47.5, 52.0,  6.0,  9.0),
+            'Mosel': (49.2, 50.4,  6.0,  7.7),
+            'Main':  (49.7, 50.3,  8.0, 12.7),
+            'Elbe':  (50.9, 54.0,  9.0, 15.0),
+            'Saale': (51.0, 52.6, 11.3, 12.6),
+            'Donau': (47.5, 49.5,  9.0, 17.0),
+            'Weser': (51.3, 53.6,  8.0,  9.6),
+            'Oder':  (50.0, 53.8, 13.8, 15.0),
         }
 
         print(f"🌊 Water current service configured: {'enabled' if self.enabled else 'disabled'}")
@@ -238,42 +253,60 @@ class WaterCurrentService:
         # First, estimate the route's general direction
         route_bearing = self._estimate_flow_direction_from_route(route_geometry)
 
-        # Find the waterway whose known flow direction is closest to route bearing
-        # This assumes the route follows the waterway direction
+        # Route midpoint for geographic filtering
+        mid_idx = len(route_geometry) // 2
+        mid_lon, mid_lat = route_geometry[mid_idx]
+
+        # Select waterway: must be (1) in geographic area AND (2) bearing within 50°
+        # Among candidates prefer highest configured current as tiebreaker
         best_match_waterway = None
-        best_angle_diff = 180  # Start with worst case
+        best_match_current = 0
 
         for waterway_name, waterway_data in self.static_currents['byName'].items():
-            if waterway_data.get('current_kmh', 0) > 0:
-                known_direction = self.known_flow_directions.get(waterway_name)
-                if known_direction is not None:
-                    # Calculate angle difference (considering both directions of travel)
-                    angle_diff = abs(route_bearing - known_direction)
-                    if angle_diff > 180:
-                        angle_diff = 360 - angle_diff
+            current_kmh = waterway_data.get('current_kmh', 0)
+            if current_kmh <= 0:
+                continue
 
-                    # Also check reverse direction (traveling upstream)
-                    reverse_diff = abs(route_bearing - ((known_direction + 180) % 360))
-                    if reverse_diff > 180:
-                        reverse_diff = 360 - reverse_diff
+            # Geographic filter: skip rivers that aren't in this area
+            area = self.river_areas.get(waterway_name)
+            if area:
+                lat_min, lat_max, lon_min, lon_max = area
+                if not (lat_min <= mid_lat <= lat_max and lon_min <= mid_lon <= lon_max):
+                    continue
 
-                    # Use the smaller angle (either downstream or upstream)
-                    final_diff = min(angle_diff, reverse_diff)
+            # Bearing filter: route must be within 50° of flow or reverse-flow direction
+            known_direction = self.known_flow_directions.get(waterway_name)
+            if known_direction is None:
+                continue
+            angle_diff = abs(route_bearing - known_direction)
+            if angle_diff > 180:
+                angle_diff = 360 - angle_diff
+            reverse_diff = abs(route_bearing - ((known_direction + 180) % 360))
+            if reverse_diff > 180:
+                reverse_diff = 360 - reverse_diff
+            final_diff = min(angle_diff, reverse_diff)
 
-                    if final_diff < best_angle_diff and final_diff < 45:  # Must be within 45° to match
-                        best_angle_diff = final_diff
-                        best_match_waterway = waterway_name
-                        flow_direction = known_direction
+            if final_diff < 50 and current_kmh > best_match_current:
+                best_match_current = current_kmh
+                best_match_waterway = waterway_name
+                flow_direction = known_direction
 
         if best_match_waterway:
             detected_waterway = best_match_waterway
         else:
-            # Fallback: use first configured waterway (old behavior)
-            for waterway_name, waterway_data in self.static_currents['byName'].items():
-                if waterway_data.get('current_kmh', 0) > 0:
-                    detected_waterway = waterway_name
-                    flow_direction = self.known_flow_directions.get(waterway_name)
-                    if flow_direction is not None:
+            # Fallback: use spatially-nearest configured waterway (highest current in area)
+            for waterway_name, waterway_data in sorted(
+                self.static_currents['byName'].items(),
+                key=lambda x: x[1].get('current_kmh', 0), reverse=True
+            ):
+                if waterway_data.get('current_kmh', 0) <= 0:
+                    continue
+                area = self.river_areas.get(waterway_name)
+                if area:
+                    lat_min, lat_max, lon_min, lon_max = area
+                    if lat_min <= mid_lat <= lat_max and lon_min <= mid_lon <= lon_max:
+                        detected_waterway = waterway_name
+                        flow_direction = self.known_flow_directions.get(waterway_name)
                         break
 
         # If no specific waterway detected, use route bearing (old behavior)
@@ -294,7 +327,11 @@ class WaterCurrentService:
         # Ensure last index is exactly the last point
         sample_indices[-1] = len(route_geometry) - 1
 
-        total_adjusted_time = 0
+        # Accumulate weighted effective speed; sampled crow-fly distances are shorter
+        # than actual route distance, so we compute avg effective speed then scale
+        # to the actual total route distance.
+        weighted_speed_sum = 0.0
+        total_sampled_dist = 0.0
         segment_infos = []
 
         for i in range(len(sample_indices) - 1):
@@ -304,55 +341,46 @@ class WaterCurrentService:
             lon1, lat1 = route_geometry[idx1]
             lon2, lat2 = route_geometry[idx2]
 
-            # Calculate segment distance
             segment_dist_km = self._haversine_distance(lat1, lon1, lat2, lon2)
-
-            # Calculate bearing for this segment
             bearing = self._calculate_bearing(lat1, lon1, lat2, lon2)
 
-            # Get current at midpoint
             mid_lat = (lat1 + lat2) / 2
             mid_lon = (lon1 + lon2) / 2
             current_kmh = self.get_current_at_point(mid_lat, mid_lon, detected_waterway)
 
             if current_kmh:
-                # Use detected flow direction (either from known waterway or estimated)
                 effective_speed = self.calculate_effective_speed(
-                    boat_speed_kmh,
-                    current_kmh,
-                    bearing,
-                    flow_direction
+                    boat_speed_kmh, current_kmh, bearing, flow_direction
                 )
-
-                segment_time_h = segment_dist_km / effective_speed if effective_speed > 0 else 0
-
-                # Calculate angle difference for logging
                 angle_diff = abs(bearing - flow_direction)
                 if angle_diff > 180:
                     angle_diff = 360 - angle_diff
-
-                print(f"      Seg {i+1}: {segment_dist_km:.1f}km, bearing={bearing:.0f}° (Δ{angle_diff:.0f}° from flow), current={current_kmh}km/h → eff={effective_speed:.1f}km/h, time={segment_time_h:.2f}h")
-
+                print(f"      Seg {i+1}: {segment_dist_km:.1f}km, bearing={bearing:.0f}° (Δ{angle_diff:.0f}° from flow), current={current_kmh}km/h → eff={effective_speed:.1f}km/h")
                 segment_infos.append({
                     'distance_km': segment_dist_km,
                     'current_kmh': current_kmh,
                     'flow_direction_deg': flow_direction,
                     'segment_bearing_deg': bearing,
                     'effective_speed_kmh': effective_speed,
-                    'time_h': segment_time_h
                 })
             else:
-                # No current data, use base speed
-                segment_time_h = segment_dist_km / boat_speed_kmh
-
+                effective_speed = boat_speed_kmh
                 segment_infos.append({
                     'distance_km': segment_dist_km,
                     'current_kmh': 0,
                     'effective_speed_kmh': boat_speed_kmh,
-                    'time_h': segment_time_h
                 })
 
-            total_adjusted_time += segment_time_h
+            if effective_speed > 0 and segment_dist_km > 0:
+                weighted_speed_sum += segment_dist_km * effective_speed
+                total_sampled_dist += segment_dist_km
+
+        # Apply weighted avg effective speed to ACTUAL route distance (not sampled crow-fly)
+        if total_sampled_dist > 0 and weighted_speed_sum > 0:
+            avg_effective_speed = weighted_speed_sum / total_sampled_dist
+            total_adjusted_time = distance_km / avg_effective_speed
+        else:
+            total_adjusted_time = distance_km / boat_speed_kmh
 
         debug_info = {
             'segments': segment_infos,
