@@ -200,6 +200,13 @@ export function initMap(options = {}) {
         const topEl = document.elementFromPoint(e.clientX, e.clientY);
         if (topEl !== canvas) return; // Button oder anderes UI-Element liegt darüber
 
+        // Zweiter Finger (Pinch-Zoom) → Long-Press sofort abbrechen
+        if (!e.isPrimary) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+            return;
+        }
+
         longPressFired = false;
         longPressOrigin = { x: e.clientX, y: e.clientY };
         const rect = canvas.getBoundingClientRect();
