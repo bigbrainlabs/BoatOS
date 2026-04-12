@@ -55,7 +55,7 @@ class WaterCurrentService:
             'Mosel': (49.2, 50.4,  6.0,  7.7),
             'Main':  (49.7, 50.3,  8.0, 12.7),
             'Elbe':  (50.9, 54.0,  9.0, 15.0),
-            'Saale': (51.0, 52.6, 11.3, 12.6),
+            'Saale': (51.0, 51.98, 11.5, 12.3),
             'Donau': (47.5, 49.5,  9.0, 17.0),
             'Weser': (51.3, 53.6,  8.0,  9.6),
             'Oder':  (50.0, 53.8, 13.8, 15.0),
@@ -271,9 +271,10 @@ class WaterCurrentService:
         mid_lon, mid_lat = route_geometry[mid_idx]
 
         # Select waterway: must be (1) in geographic area AND (2) bearing within 50°
-        # Among candidates prefer highest configured current as tiebreaker
+        # Use mouth-based bearing for selection (same as per-segment calculation).
+        # Among candidates prefer best bearing match (lowest angle diff) as tiebreaker.
         best_match_waterway = None
-        best_match_current = 0
+        best_match_diff = float('inf')
 
         for waterway_name, waterway_data in self.static_currents['byName'].items():
             current_kmh = waterway_data.get('current_kmh', 0)
@@ -287,22 +288,28 @@ class WaterCurrentService:
                 if not (lat_min <= mid_lat <= lat_max and lon_min <= mid_lon <= lon_max):
                     continue
 
-            # Bearing filter: route must be within 50° of flow or reverse-flow direction
-            known_direction = self.known_flow_directions.get(waterway_name)
-            if known_direction is None:
-                continue
-            angle_diff = abs(route_bearing - known_direction)
+            # Use mouth-based bearing for selection (geometrically correct for any section)
+            mouth_candidate = self.river_mouths.get(waterway_name)
+            if mouth_candidate:
+                candidate_bearing = self._calculate_bearing(mid_lat, mid_lon, mouth_candidate[0], mouth_candidate[1])
+            else:
+                candidate_bearing = self.known_flow_directions.get(waterway_name)
+                if candidate_bearing is None:
+                    continue
+
+            # Bearing filter: route within 50° of downstream or upstream direction
+            angle_diff = abs(route_bearing - candidate_bearing)
             if angle_diff > 180:
                 angle_diff = 360 - angle_diff
-            reverse_diff = abs(route_bearing - ((known_direction + 180) % 360))
+            reverse_diff = abs(route_bearing - ((candidate_bearing + 180) % 360))
             if reverse_diff > 180:
                 reverse_diff = 360 - reverse_diff
             final_diff = min(angle_diff, reverse_diff)
 
-            if final_diff < 50 and current_kmh > best_match_current:
-                best_match_current = current_kmh
+            if final_diff < 50 and final_diff < best_match_diff:
+                best_match_diff = final_diff
                 best_match_waterway = waterway_name
-                flow_direction = known_direction
+                flow_direction = candidate_bearing
 
         if best_match_waterway:
             detected_waterway = best_match_waterway
