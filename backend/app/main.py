@@ -54,6 +54,7 @@ completed_trips = logbook_storage.load_logbook_entries()
 current_track = []
 track_recording = False
 track_paused = False
+track_sensors_config: List[str] = []
 weather_data: Dict[str, Any] = {}
 gps_module_data: Dict[str, Any] = {}
 chart_layers: List[Dict[str, Any]] = []
@@ -372,6 +373,11 @@ async def save_settings(settings: Dict[str, Any]):
         # Apply Water Current settings
         if 'waterCurrent' in settings:
             water_current_service.configure(settings['waterCurrent'])
+
+        # Apply Track Sensors config
+        if 'trackSensors' in settings:
+            global track_sensors_config
+            track_sensors_config = list(settings['trackSensors'])
 
         # Generate dynamic Lua profile if boat data is present
         if 'boat' in settings:
@@ -2160,6 +2166,22 @@ async def track_recording_loop():
             point = {"lat": sensor_data["gps"]["lat"], "lon": sensor_data["gps"]["lon"],
                      "timestamp": datetime.now().isoformat(), "speed": sensor_data["speed"],
                      "heading": sensor_data["heading"]}
+            if track_sensors_config:
+                sensors_snapshot = {}
+                for base_name in track_sensors_config:
+                    prefix = base_name + "/"
+                    vals = {}
+                    for topic, val in list(topic_values.items()):
+                        if topic == base_name or topic.startswith(prefix):
+                            subtopic = topic[len(prefix):] if topic.startswith(prefix) else "value"
+                            try:
+                                vals[subtopic] = float(val)
+                            except (ValueError, TypeError):
+                                vals[subtopic] = val
+                    if vals:
+                        sensors_snapshot[base_name] = vals
+                if sensors_snapshot:
+                    point["sensors"] = sensors_snapshot
             current_track.append(point)
 
 # ==================== MQTT ====================
@@ -3464,6 +3486,10 @@ async def startup_event():
             # Configure Water Current service
             if 'waterCurrent' in settings:
                 water_current_service.configure(settings['waterCurrent'])
+
+            # Load Track Sensors config
+            if 'trackSensors' in settings:
+                track_sensors_config = list(settings['trackSensors'])
     except FileNotFoundError:
         print("⚠️ No settings file found, services not configured")
 

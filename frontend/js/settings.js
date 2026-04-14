@@ -173,6 +173,12 @@ export function saveAllSettings() {
         if (el) settings.routing.currentTypes[type] = parseFloat(el.value) || 0;
     });
 
+    // === TRACK SENSORS (dynamic, from dashboard) ===
+    settings.trackSensors = [];
+    document.querySelectorAll('#recording-sensors-container .toggle.active[data-rec-path]').forEach(el => {
+        settings.trackSensors.push(el.dataset.recPath);
+    });
+
     // Build waterCurrent object in format expected by backend water_current_service
     const nameMap = { rhein: 'Rhein', mosel: 'Mosel', main: 'Main', elbe: 'Elbe', saale: 'Saale', donau: 'Donau' };
     settings.waterCurrent = {
@@ -216,6 +222,59 @@ export function saveAllSettings() {
 }
 
 // ==================== LOAD SETTINGS ====================
+
+// Sensor-Pfade, die bereits im Track-Punkt enthalten sind (immer aufgezeichnet)
+const REC_SKIP = new Set(['navigation/position', 'navigation/speed', 'navigation/heading']);
+
+/**
+ * Aufzeichnungs-Toggles dynamisch aus dem aktuellen Dashboard-Layout generieren
+ * @param {string[]} savedSensors - Liste der bereits aktivierten Sensor-Pfade
+ */
+async function buildRecordingToggles(savedSensors) {
+    const container = document.getElementById('recording-sensors-container');
+    if (!container) return;
+
+    // Dashboard-Layout laden und Sensor-Pfade extrahieren
+    let sensorPaths = [];
+    try {
+        const resp = await fetch(`${API_URL}/api/dashboard/layout`);
+        const data = await resp.json();
+        const dsl = data.layout || '';
+        const seen = new Set();
+        for (const m of dsl.matchAll(/(?:SENSOR|GAUGE|CHART)\s+([\w\/]+)/gi)) {
+            const p = m[1];
+            if (!REC_SKIP.has(p) && !seen.has(p)) { seen.add(p); sensorPaths.push(p); }
+        }
+    } catch (e) {
+        container.innerHTML = `<div style="color:var(--text-dim);font-size:13px;padding:4px 0">Keine Verbindung zum Backend</div>`;
+        return;
+    }
+
+    if (sensorPaths.length === 0) {
+        container.innerHTML = `<div style="color:var(--text-dim);font-size:13px;padding:4px 0">Keine Sensoren im Dashboard konfiguriert</div>`;
+        return;
+    }
+
+    // Sensor-Metadaten laden (Name, Icon)
+    const nameMap = {};
+    try {
+        const resp = await fetch(`${API_URL}/api/sensors/list`);
+        const data = await resp.json();
+        (data.sensors || []).forEach(s => { nameMap[s.base_name] = { name: s.name, icon: s.icon }; });
+    } catch (e) {}
+
+    // Toggles rendern
+    const savedSet = new Set(savedSensors);
+    container.innerHTML = sensorPaths.map(path => {
+        const meta = nameMap[path] || {};
+        const label = meta.icon ? `${meta.icon} ${meta.name || path}` : path;
+        const active = savedSet.has(path) ? ' active' : '';
+        return `<div class="setting-item">
+            <span>${label}</span>
+            <div class="toggle${active}" data-rec-path="${path}" onclick="BoatOS.ui.toggleSettingToggle(this, 'rec')"></div>
+        </div>`;
+    }).join('');
+}
 
 /**
  * Alle Einstellungen in das Formular laden
@@ -373,6 +432,9 @@ export function loadAllSettings() {
             });
         }
     }
+
+    // === TRACK SENSORS (dynamic, from dashboard) ===
+    buildRecordingToggles(settings.trackSensors || []);
 
     // Provider-Sichtbarkeit initial setzen
     updateRoutingProviderVisibility();
