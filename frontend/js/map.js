@@ -30,7 +30,7 @@ let autoFollow = false;
 // Layer State
 let currentBaseLayer = 'osm'; // 'osm' oder 'satellite'
 let seaMarkLayerVisible = true;
-let inlandLayerVisible = true;
+let inlandLayerVisible = false;
 
 // Track History
 let trackHistory = [];
@@ -192,26 +192,43 @@ export function initMap(options = {}) {
     let longPressFired = false;
     let longPressOrigin = null;
     let longPressLngLat = null;
+    let hadMultiTouch = false; // zweiter Finger → nachfolgenden click unterdrücken
 
     const canvas = map.getCanvas();
+
+    // touchstart ist zuverlässiger als isPrimary für Multi-Touch-Erkennung
+    // (isPrimary funktioniert auf manchen Touch-Treibern nicht korrekt)
+    canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 1) {
+            // Zweiter Finger → Long-Press und nachfolgenden Click unterdrücken
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+            hadMultiTouch = true;
+        }
+    }, { passive: true });
 
     canvas.addEventListener('pointerdown', (e) => {
         // Sicherstellen dass wirklich die Karte getippt wurde und nicht ein Overlay-Button
         const topEl = document.elementFromPoint(e.clientX, e.clientY);
         if (topEl !== canvas) return; // Button oder anderes UI-Element liegt darüber
 
-        // Zweiter Finger (Pinch-Zoom) → Long-Press sofort abbrechen
+        // Zweiter Finger per isPrimary (Fallback, falls touchstart nicht ausreicht)
         if (!e.isPrimary) {
             clearTimeout(longPressTimer);
             longPressTimer = null;
+            hadMultiTouch = true;
             return;
         }
 
+        // Erstes Finger-Down → neuer Einzel-Touch-Gesture
+        hadMultiTouch = false;
         longPressFired = false;
         longPressOrigin = { x: e.clientX, y: e.clientY };
         const rect = canvas.getBoundingClientRect();
         longPressLngLat = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
         longPressTimer = setTimeout(() => {
+            // Nochmals prüfen: falls zwischenzeitlich Multi-Touch erkannt wurde, abbrechen
+            if (hadMultiTouch) return;
             longPressFired = true;
             longPressTimer = null;
             window.dispatchEvent(new CustomEvent('mapclick', {
@@ -238,6 +255,7 @@ export function initMap(options = {}) {
     // Kurzer Tap → normaler Click (für POI etc., kein Wegpunkt)
     map.on('click', (e) => {
         if (longPressFired) { longPressFired = false; return; } // bereits als Long-Press behandelt
+        if (hadMultiTouch) { hadMultiTouch = false; return; }  // Pinch-Zoom Nachfolge-Click
         window.dispatchEvent(new CustomEvent('mapclick', {
             detail: { lngLat: e.lngLat, longPress: false }
         }));
@@ -382,6 +400,7 @@ function addOpenSeaMapOverlays() {
             id: 'seamark-overlay',
             type: 'raster',
             source: 'seamark',
+            layout: { visibility: 'visible' },
             paint: { 'raster-opacity': 1.0 }
         });
 
@@ -395,6 +414,7 @@ function addOpenSeaMapOverlays() {
             id: 'inland-overlay',
             type: 'raster',
             source: 'inland',
+            layout: { visibility: 'none' },
             paint: { 'raster-opacity': 1.0 }
         });
 
@@ -408,27 +428,30 @@ function addOpenSeaMapOverlays() {
 // Boot-Marker Funktionen
 // ===========================================
 
+// Mapping: Settings-Icon-Keys → Emoji
+const BOAT_ICON_EMOJIS = {
+    motorboat: '🚤',
+    sailboat:  '⛵',
+    yacht:     '🛥️',
+    ship:      '🚢',
+};
+
+function boatEmoji(iconType) {
+    return BOAT_ICON_EMOJIS[iconType] || '🚤';
+}
+
 /**
  * Initialisiert den Boot-Marker auf der Karte
  */
 function initMapMarkers() {
     // Boot-Icon aus Einstellungen laden
     const settings = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
-    const boatIconType = settings.boat?.icon || 'motorboat_small';
-    const boatIconHtml = (typeof window.getBoatIcon === 'function')
-        ? window.getBoatIcon(boatIconType)
-        : '⛵';
+    const boatIconType = settings.boat?.icon || 'motorboat';
 
     // HTML-Element fuer Boot-Marker erstellen
     const el = document.createElement('div');
     el.className = 'boat-marker';
-    el.innerHTML = boatIconHtml;
-    el.style.width = '40px';
-    el.style.height = '40px';
-    el.style.display = 'flex';
-    el.style.alignItems = 'center';
-    el.style.justifyContent = 'center';
-    el.style.fontSize = '32px';
+    el.textContent = boatEmoji(boatIconType);
     boatMarkerElement = el;
 
     // Aktuelle Position aus globalem State
@@ -451,20 +474,13 @@ function initMapMarkers() {
  * @param {string} iconType - Typ des Boot-Icons
  * @returns {Object} Marker-Instanz
  */
-export function createBoatMarker(iconType = 'motorboat_small') {
-    const boatIconHtml = (typeof window.getBoatIcon === 'function')
-        ? window.getBoatIcon(iconType)
-        : '⛵';
+export function createBoatMarker(iconType = 'motorboat') {
+    const settings = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
+    const type = settings.boat?.icon || iconType;
 
     const el = document.createElement('div');
     el.className = 'boat-marker';
-    el.innerHTML = boatIconHtml;
-    el.style.width = '40px';
-    el.style.height = '40px';
-    el.style.display = 'flex';
-    el.style.alignItems = 'center';
-    el.style.justifyContent = 'center';
-    el.style.fontSize = '32px';
+    el.textContent = boatEmoji(type);
     boatMarkerElement = el;
 
     return el;
@@ -526,11 +542,7 @@ export function updateBoatMarkerIcon(iconType) {
         return;
     }
 
-    const boatIconHtml = (typeof window.getBoatIcon === 'function')
-        ? window.getBoatIcon(iconType)
-        : '⛵';
-
-    boatMarkerElement.innerHTML = boatIconHtml;
+    boatMarkerElement.textContent = boatEmoji(iconType);
     boatMarkerElement.style.transform = `rotate(${currentBoatHeading}deg)`;
     console.log(`Boot-Marker Icon aktualisiert: ${iconType}`);
 }
