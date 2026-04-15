@@ -625,6 +625,7 @@ export function openSidebar(sidebarId = 'sidebar') {
     // Settings laden wenn es die Settings-Sidebar ist
     if (sidebarId === 'sidebar' && window.BoatOS && window.BoatOS.loadAllSettings) {
         window.BoatOS.loadAllSettings();
+        window.dispatchEvent(new Event('settingsPanelOpened'));
     }
 
     console.log(`Sidebar geöffnet: ${sidebarId}`);
@@ -1370,7 +1371,7 @@ export function showLogbookTab(tabId, tabElement) {
  */
 export function showSettingsTab(tabId, tabElement) {
     // Alle Settings-Sektionen verstecken
-    const sections = ['settings-general', 'settings-boat', 'settings-map', 'settings-nav', 'settings-ais', 'settings-charts', 'settings-gps', 'settings-data', 'settings-routing'];
+    const sections = ['settings-general', 'settings-boat', 'settings-map', 'settings-nav', 'settings-ais', 'settings-charts', 'settings-gps', 'settings-data', 'settings-routing', 'settings-wifi'];
     sections.forEach(id => {
         const section = document.getElementById(id);
         if (section) {
@@ -1390,6 +1391,12 @@ export function showSettingsTab(tabId, tabElement) {
     });
     if (tabElement) {
         tabElement.classList.add('active');
+    }
+
+    // Tab-spezifische Initialisierung
+    if (tabId === 'wifi' && window.BoatOS?.wifi) {
+        window.BoatOS.wifi.loadStatus();
+        window.BoatOS.wifi.loadSaved();
     }
 }
 

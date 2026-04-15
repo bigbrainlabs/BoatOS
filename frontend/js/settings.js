@@ -278,10 +278,28 @@ async function buildRecordingToggles(savedSensors) {
 
 /**
  * Alle Einstellungen in das Formular laden
+ * Versucht zuerst localStorage, dann Backend als Fallback
  */
-export function loadAllSettings() {
+export async function loadAllSettings() {
     const ui = getUI();
-    const settings = ui?.loadSettings ? ui.loadSettings() : {};
+    let settings = ui?.loadSettings ? ui.loadSettings() : {};
+
+    // Always merge backend settings on top of localStorage — backend is authoritative
+    // (localStorage may be empty, default-only, or from a different browser origin)
+    try {
+        const res = await fetch(`${API_URL}/api/settings`);
+        const backendSettings = await res.json();
+        if (backendSettings && backendSettings.boat?.name) {
+            // Backend has real data — merge over current settings (backend wins)
+            const merged = Object.assign({}, settings, backendSettings);
+            if (ui?.saveSettings) ui.saveSettings(merged);
+            else localStorage.setItem('boatos_settings', JSON.stringify(merged));
+            settings = merged;
+            console.log('Einstellungen vom Backend geladen:', backendSettings.boat?.name);
+        }
+    } catch (e) {
+        console.warn('Backend-Settings nicht erreichbar, nutze localStorage:', e);
+    }
 
     // === ALLGEMEIN - Einheiten ===
     if (settings.units) {
