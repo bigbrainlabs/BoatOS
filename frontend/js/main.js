@@ -16,6 +16,8 @@ import * as ui from './ui.js';
 import * as ais from './ais.js';
 import * as logbook from './logbook.js';
 import * as settings from './settings.js';
+import * as wifi from './wifi.js';
+import { initKeyboard } from './keyboard.js';
 
 // ==================== UNIT SYSTEM ====================
 let unitSettings = {
@@ -357,6 +359,7 @@ window.BoatOS = {
     ais,
     logbook,
     settings,
+    wifi,
 
     // Context (wird bei Init gesetzt)
     context: null,
@@ -520,11 +523,32 @@ window.BoatOS = {
 };
 
 // ==================== INITIALIZATION ====================
+// Force dark styling on all <select> elements via inline style (reliable across all WebKit builds)
+function applyDarkSelects() {
+    const style = getComputedStyle(document.documentElement);
+    const bg = style.getPropertyValue('--bg-card').trim() || '#141b2d';
+    const fg = style.getPropertyValue('--text').trim() || '#e2e8f0';
+    const border = style.getPropertyValue('--border').trim() || '#2a3550';
+    document.querySelectorAll('select').forEach(el => {
+        el.style.backgroundColor = bg;
+        el.style.color = fg;
+        el.style.borderColor = border;
+        el.style.webkitAppearance = 'none';
+    });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('BoatOS wird initialisiert...');
 
     // Theme initialisieren
     theme.initTheme();
+
+    // Apply dark selects immediately and whenever settings panel opens
+    applyDarkSelects();
+    document.addEventListener('settingsPanelOpened', applyDarkSelects);
+
+    // On-screen keyboard for touch
+    initKeyboard();
 
     // Karte initialisieren
     const mapInstance = mapModule.initMap({

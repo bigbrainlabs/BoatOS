@@ -37,12 +37,32 @@
     text-align: right;
 }
 
+/* Force dark styling on ALL select elements — WPE WebKit needs !important */
+select {
+    background-color: var(--bg-card) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
+    padding: var(--space-xs) var(--space-md) !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    color-scheme: dark !important;
+}
+
+select option {
+    background-color: var(--bg-card) !important;
+    color: var(--text) !important;
+}
+
 .setting-select {
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: var(--space-xs) var(--space-md);
     color: var(--text);
+    -webkit-appearance: none;
+    appearance: none;
+    color-scheme: dark;
 }
 
 /* Boat Icons Selection */

@@ -7,6 +7,8 @@
    LIGHT THEME (Default) - Ocean Soft
    ============================================ */
 :root {
+    color-scheme: dark;
+
     /* ====== RESPONSIVE SCALING SYSTEM ======
        clamp(min @1280px, preferred, max @1920px)
        At 1920×1080 all values equal max (unchanged).
@@ -140,6 +142,7 @@ body {
     height: 100vh;
     overflow: hidden;
     transition: background 0.3s, color 0.3s;
+    color-scheme: dark;
 }
 
 /* ============================================

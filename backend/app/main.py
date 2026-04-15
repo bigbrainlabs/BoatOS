@@ -3452,6 +3452,204 @@ async def toggle_onscreen_keyboard(action: str = "show"):
         print(f"⚠️ Keyboard toggle error: {e}")
         return {"status": "error", "error": str(e)}
 
+# ==================== WIFI MANAGEMENT ====================
+
+def _run_nmcli(*args) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["sudo", "nmcli", "--terse", "--colors", "no"] + list(args),
+        capture_output=True, text=True
+    )
+
+def _run_nmcli_fields(fields: str, *args) -> subprocess.CompletedProcess:
+    """nmcli mit expliziten Feldern und ohne Escape-Zeichen (kein BSSID-Colon-Problem)"""
+    return subprocess.run(
+        ["sudo", "nmcli", "--fields", fields, "--escape", "no", "--terse", "--colors", "no"] + list(args),
+        capture_output=True, text=True
+    )
+
+@app.get("/api/wifi/status")
+async def get_wifi_status():
+    """Aktueller WLAN-Status: SSID, IP, Signalstärke, Verbindungsstatus"""
+    try:
+        dev = _run_nmcli("device", "show", "wlan0")
+        info = {}
+        for line in dev.stdout.splitlines():
+            if ":" in line:
+                k, _, v = line.partition(":")
+                info[k.strip()] = v.strip()
+
+        state = info.get("GENERAL.STATE", "")
+        ssid  = info.get("GENERAL.CONNECTION", "")
+        ip4   = info.get("IP4.ADDRESS[1]", "")
+        ip    = ip4.split("/")[0] if ip4 else ""
+
+        # Signal aus scan — fields: IN-USE,SSID,SIGNAL (kein BSSID, kein Colon-Problem)
+        signal = None
+        if ssid and ssid != "--":
+            scan = _run_nmcli_fields("IN-USE,SSID,SIGNAL", "device", "wifi", "list", "ifname", "wlan0")
+            for line in scan.stdout.splitlines():
+                parts = line.split(":")
+                if len(parts) >= 3 and parts[1] == ssid:
+                    try:
+                        signal = int(parts[2])
+                    except ValueError:
+                        pass
+                    break
+
+        connected = "100" in state or "connected" in state.lower()
+        return {
+            "connected": connected,
+            "ssid": ssid if ssid != "--" else "",
+            "ip": ip,
+            "signal": signal,
+            "state": state
+        }
+    except Exception as e:
+        return {"connected": False, "ssid": "", "ip": "", "signal": None, "state": str(e)}
+
+@app.get("/api/wifi/scan")
+async def scan_wifi():
+    """WLAN-Netzwerke scannen (mit rescan)"""
+    try:
+        # fields: IN-USE,SSID,SIGNAL,CHAN,SECURITY — kein BSSID, kein Colon-Problem
+        result = _run_nmcli_fields(
+            "IN-USE,SSID,SIGNAL,CHAN,SECURITY",
+            "device", "wifi", "list", "ifname", "wlan0", "--rescan", "yes"
+        )
+        networks = []
+        seen_ssids = set()
+        for line in result.stdout.splitlines():
+            parts = line.split(":")
+            if len(parts) < 5:
+                continue
+            in_use   = parts[0].strip() == "*"
+            ssid     = parts[1]
+            chan     = parts[3]
+            security = parts[4] if len(parts) > 4 else ""
+            try:
+                signal = int(parts[2])
+            except ValueError:
+                signal = 0
+            if not ssid or ssid == "--":
+                continue
+            if ssid in seen_ssids:
+                for n in networks:
+                    if n["ssid"] == ssid and signal > n["signal"]:
+                        n["signal"] = signal
+                        n["in_use"] = n["in_use"] or in_use
+                continue
+            seen_ssids.add(ssid)
+            networks.append({
+                "ssid": ssid,
+                "signal": signal,
+                "security": "open" if not security or security == "--" else "wpa",
+                "in_use": in_use,
+                "channel": chan
+            })
+        networks.sort(key=lambda x: x["signal"], reverse=True)
+        return {"networks": networks}
+    except Exception as e:
+        return {"networks": [], "error": str(e)}
+
+@app.get("/api/wifi/networks")
+async def get_saved_networks():
+    """Gespeicherte WLAN-Profile aus NetworkManager"""
+    try:
+        result = _run_nmcli("connection", "show")
+        networks = []
+        for line in result.stdout.splitlines():
+            parts = line.split(":")
+            if len(parts) < 4:
+                continue
+            name, uuid, ctype, device = parts[0], parts[1], parts[2], parts[3]
+            if "wifi" in ctype.lower() or "wireless" in ctype.lower():
+                networks.append({"name": name, "uuid": uuid, "active": bool(device and device != "--")})
+        return {"networks": networks}
+    except Exception as e:
+        return {"networks": [], "error": str(e)}
+
+@app.post("/api/wifi/connect")
+async def connect_wifi(request: Request):
+    """Mit WLAN-Netzwerk verbinden (neu oder bekannt)"""
+    try:
+        body = await request.json()
+        ssid     = body.get("ssid", "").strip()
+        password = body.get("password", "").strip()
+        if not ssid:
+            return {"status": "error", "message": "SSID fehlt"}
+
+        if password:
+            # Write .nmconnection file directly to /etc/ to bypass the netplan
+            # plugin, which routes `nmcli connection add` into /run/ (volatile,
+            # read-only for NM) and causes psk-flags to be ignored → NM asks
+            # for secrets again at activation time even though they're stored.
+            safe_name = ssid.replace("/", "_").replace("\x00", "")
+            conn_path = f"/etc/NetworkManager/system-connections/{safe_name}.nmconnection"
+            nm_conf = (
+                "[connection]\n"
+                f"id={ssid}\n"
+                "type=wifi\n"
+                "autoconnect=true\n\n"
+                "[wifi]\n"
+                f"ssid={ssid}\n"
+                "mode=infrastructure\n\n"
+                "[wifi-security]\n"
+                "key-mgmt=wpa-psk\n"
+                f"psk={password}\n"
+                "psk-flags=0\n\n"
+                "[ipv4]\n"
+                "method=auto\n\n"
+                "[ipv6]\n"
+                "method=auto\n"
+                "addr-gen-mode=default\n"
+            )
+            # Delete old profile from NM first (ignore failure)
+            _run_nmcli("connection", "delete", ssid)
+            # Write file as root, chmod 600 (required by NM)
+            write = subprocess.run(
+                ["sudo", "bash", "-c",
+                 f"cat > {conn_path} && chmod 600 {conn_path}"],
+                input=nm_conf, text=True, capture_output=True
+            )
+            if write.returncode != 0:
+                return {"status": "error", "message": write.stderr.strip()}
+            # Reload connections so NM picks up the new file
+            _run_nmcli("connection", "reload")
+            result = _run_nmcli("connection", "up", "id", ssid)
+        else:
+            # Use existing saved profile — device wifi connect re-scans first
+            result = _run_nmcli("device", "wifi", "connect", ssid)
+
+        if result.returncode == 0:
+            return {"status": "ok", "message": f"Verbunden mit {ssid}"}
+        else:
+            err = result.stderr.strip() or result.stdout.strip()
+            return {"status": "error", "message": err}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.delete("/api/wifi/networks/{uuid}")
+async def delete_wifi_network(uuid: str):
+    """Gespeichertes WLAN-Profil löschen"""
+    try:
+        result = _run_nmcli("connection", "delete", uuid)
+        if result.returncode == 0:
+            return {"status": "ok"}
+        return {"status": "error", "message": result.stderr.strip()}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/wifi/disconnect")
+async def disconnect_wifi():
+    """WLAN trennen"""
+    try:
+        result = _run_nmcli("device", "disconnect", "wlan0")
+        if result.returncode == 0:
+            return {"status": "ok"}
+        return {"status": "error", "message": result.stderr.strip()}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 # ==================== STARTUP ====================
 @app.on_event("startup")
 async def startup_event():

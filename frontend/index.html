@@ -179,10 +179,6 @@
         </div>
 
         <div class="quick-actions">
-            <div class="quick-action" data-mode="route" onclick="BoatOS.navigation.startRoutePlanning()">
-                <span class="icon">🧭</span>
-                <span class="label">Route</span>
-            </div>
             <div class="quick-action" data-mode="poi" onclick="BoatOS.navigation.startPoiPlacement()">
                 <span class="icon">📍</span>
                 <span class="label">POI</span>
@@ -574,6 +570,7 @@
             <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('gps', this)">GPS</div>
             <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('data', this)">Daten</div>
             <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('routing', this)">Routing</div>
+            <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('wifi', this)">WLAN</div>
         </div>
 
         <div class="sidebar-content">
@@ -1128,6 +1125,66 @@
                         • Stromaufwärts: Geschwindigkeit - Strömung<br>
                         • Live-Daten von PEGELONLINE (falls verfügbar)
                     </div>
+                </div>
+            </div>
+
+            <!-- WLAN Settings -->
+            <div id="settings-wifi" class="section-hidden">
+                <!-- Current Status -->
+                <div class="setting-group" id="wifi-status-group">
+                    <h4>Verbindungsstatus</h4>
+                    <div id="wifi-status-display" style="padding: 12px; background: var(--bg-card); border-radius: 8px; margin-bottom: 10px;">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <div id="wifi-status-dot" style="width:10px;height:10px;border-radius:50%;background:var(--text-dim);flex-shrink:0"></div>
+                            <div>
+                                <div id="wifi-status-ssid" style="font-weight:600;color:var(--text)">Lade…</div>
+                                <div id="wifi-status-ip" style="font-size:12px;color:var(--text-dim)"></div>
+                            </div>
+                            <div id="wifi-signal-bars" style="margin-left:auto;font-size:18px;"></div>
+                        </div>
+                    </div>
+                    <button onclick="BoatOS.wifi.disconnect()" id="btn-wifi-disconnect"
+                        style="display:none; width:100%; padding:10px; background:var(--danger); color:#fff; border:none; border-radius:8px; font-size:14px; cursor:pointer;">
+                        Trennen
+                    </button>
+                </div>
+
+                <!-- Scan -->
+                <div class="setting-group">
+                    <h4>Verfügbare Netzwerke</h4>
+                    <button onclick="BoatOS.wifi.scan()" id="btn-wifi-scan"
+                        style="width:100%; padding:10px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-size:14px; cursor:pointer; margin-bottom:12px;">
+                        Netzwerke scannen
+                    </button>
+                    <div id="wifi-scan-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+                </div>
+
+                <!-- Saved Networks -->
+                <div class="setting-group">
+                    <h4>Gespeicherte Netzwerke</h4>
+                    <div id="wifi-saved-list" style="display:flex; flex-direction:column; gap:6px;">
+                        <div style="color:var(--text-dim);font-size:13px;">Lade…</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- WiFi Password Modal -->
+        <div id="wifi-pw-modal" style="display:none; position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,0.7); align-items:center; justify-content:center;">
+            <div style="background:var(--bg-panel); border-radius:12px; padding:24px; width:340px; max-width:90vw;">
+                <h3 id="wifi-pw-title" style="margin:0 0 16px 0; color:var(--text);">Netzwerk verbinden</h3>
+                <div style="font-size:13px; color:var(--text-dim); margin-bottom:12px;">Passwort für <strong id="wifi-pw-ssid-label"></strong></div>
+                <input type="password" id="wifi-pw-input" placeholder="Passwort"
+                    style="width:100%; padding:10px 12px; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:15px; box-sizing:border-box; margin-bottom:16px;">
+                <div style="display:flex; gap:10px;">
+                    <button onclick="BoatOS.wifi.cancelConnect()"
+                        style="flex:1; padding:10px; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:8px; cursor:pointer;">
+                        Abbrechen
+                    </button>
+                    <button onclick="BoatOS.wifi.confirmConnect()"
+                        style="flex:1; padding:10px; background:var(--accent); color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:600;">
+                        Verbinden
+                    </button>
                 </div>
             </div>
         </div>
