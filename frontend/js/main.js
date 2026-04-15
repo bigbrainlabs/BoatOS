@@ -474,6 +474,7 @@ window.BoatOS = {
         if (routeEta) routeEta.textContent = '--:--';
 
         this.stopNavigation();
+        updateSimButton();
         ui.showNotification('Route gelöscht', 'info');
     },
 

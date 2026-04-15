@@ -13,6 +13,7 @@ let chartsMap = null;
 
 let chartLayers = [];
 let chartOverlays = {}; // chartId -> { sourceId, layerId }
+let chartsVisible = false; // ENC-Karten standardmäßig aus
 
 // ==================== CHARTS LOADING ====================
 async function loadCharts() {
@@ -89,9 +90,9 @@ function loadChartOverlays() {
                     id: layerId,
                     type: 'raster',
                     source: sourceId,
-                    minzoom: 11,
+                    minzoom: 14,
                     paint: {
-                        'raster-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0, 12, 0.4, 14, 0.5]
+                        'raster-opacity': ['interpolate', ['linear'], ['zoom'], 14, 0, 15, 0.6, 16, 0.8]
                     }
                 }, firstSymbolLayer?.id);
 
@@ -626,5 +627,25 @@ function showMsg(message) {
         console.log(message);
     }
 }
+
+// ==================== ENC TOGGLE ====================
+
+function toggleCharts() {
+    chartsVisible = !chartsVisible;
+    const map = chartsMap || window.map || window.BoatOS?.map?.getMap?.();
+    if (map) {
+        Object.values(chartOverlays).forEach(({ layerId }) => {
+            if (map.getLayer(layerId)) {
+                map.setLayoutProperty(layerId, 'visibility', chartsVisible ? 'visible' : 'none');
+            }
+        });
+    }
+    // Sync button state
+    const btn = document.getElementById('btn-enc');
+    if (btn) btn.classList.toggle('active', chartsVisible);
+    showMsg(chartsVisible ? '📊 ENC-Karten eingeblendet' : '📊 ENC-Karten ausgeblendet');
+}
+
+window.toggleCharts = toggleCharts;
 
 console.log('📊 Charts module loaded (MapLibre version)');

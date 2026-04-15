@@ -10,9 +10,9 @@
     <script src="lib/maplibre-gl.js"></script>
 
     <!-- BoatOS Styles -->
-    <link rel="stylesheet" href="css/theme.css">
-    <link rel="stylesheet" href="css/layout.css">
-    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/theme.css?v=10">
+    <link rel="stylesheet" href="css/layout.css?v=10">
+    <link rel="stylesheet" href="css/components.css?v=10">
 </head>
 <body>
     <!-- ============================================
@@ -84,7 +84,6 @@
          ============================================ -->
     <div class="map-container hidden" id="mapContainer">
         <div id="map"></div>
-
         <!-- Top-left button stack -->
         <div id="map-overlay-buttons" style="position: absolute; top: var(--space-lg); left: var(--space-lg); z-index: 100; pointer-events: auto; display: flex; flex-direction: column; gap: var(--space-sm);">
             <button id="btn-nav-map" onclick="BoatOS.toggleNavigation()"
@@ -206,6 +205,10 @@
             <div class="quick-action" id="btn-satellite" onclick="BoatOS.map.toggleSatellite()">
                 <span class="icon">🛰️</span>
                 <span class="label">Satellit</span>
+            </div>
+            <div class="quick-action" id="btn-enc" onclick="toggleCharts()">
+                <span class="icon">📊</span>
+                <span class="label">ENC</span>
             </div>
         </div>
 
