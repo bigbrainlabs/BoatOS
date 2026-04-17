@@ -101,6 +101,30 @@ class DashboardDSLParser:
                     widget = self._parse_text(line)
                     current_row['widgets'].append(widget)
 
+                # Parse SPACER
+                elif line.upper().startswith('SPACER'):
+                    if not current_row:
+                        self.errors.append(f"Line {line_num}: SPACER without ROW")
+                        continue
+                    widget = self._parse_spacer(line)
+                    current_row['widgets'].append(widget)
+
+                # Parse CLOCK
+                elif line.upper().startswith('CLOCK'):
+                    if not current_row:
+                        self.errors.append(f"Line {line_num}: CLOCK without ROW")
+                        continue
+                    widget = self._parse_clock(line)
+                    current_row['widgets'].append(widget)
+
+                # Parse COMPASS
+                elif line.upper().startswith('COMPASS'):
+                    if not current_row:
+                        self.errors.append(f"Line {line_num}: COMPASS without ROW")
+                        continue
+                    widget = self._parse_compass(line)
+                    current_row['widgets'].append(widget)
+
                 else:
                     self.errors.append(f"Line {line_num}: Unknown command: {line}")
 
@@ -256,6 +280,24 @@ class DashboardDSLParser:
         # Parse options
         widget.update(self._parse_options(line))
 
+        return widget
+
+    def _parse_spacer(self, line: str) -> Dict[str, Any]:
+        """Parse SPACER command"""
+        widget = {"type": "spacer", "size": 1}
+        widget.update(self._parse_options(line))
+        return widget
+
+    def _parse_clock(self, line: str) -> Dict[str, Any]:
+        """Parse CLOCK command"""
+        widget = {"type": "clock", "size": 1, "color": "cyan"}
+        widget.update(self._parse_options(line))
+        return widget
+
+    def _parse_compass(self, line: str) -> Dict[str, Any]:
+        """Parse COMPASS command"""
+        widget = {"type": "compass", "size": 1, "color": "cyan"}
+        widget.update(self._parse_options(line))
         return widget
 
     def _parse_options(self, line: str) -> Dict[str, Any]:
