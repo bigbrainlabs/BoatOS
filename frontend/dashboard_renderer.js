@@ -359,6 +359,15 @@ class DashboardRenderer {
             }
         });
 
+        // Update clock widgets
+        document.querySelectorAll('[data-clock="true"]').forEach(el => {
+            const now = new Date();
+            const timeEl = el.querySelector('.clock-time');
+            const dateEl = el.querySelector('.clock-date');
+            if (timeEl) timeEl.textContent = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            if (dateEl) dateEl.textContent = now.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+        });
+
         // Update status indicators
         document.querySelectorAll('[data-sensor-status]').forEach(el => {
             const baseName = el.dataset.sensorStatus;
@@ -490,6 +499,12 @@ class DashboardRenderer {
                 return this.renderChartWidget(widget, size);
             case 'text':
                 return this.renderTextWidget(widget, size);
+            case 'spacer':
+                return this.renderSpacerWidget(widget, size);
+            case 'clock':
+                return this.renderClockWidget(widget, size);
+            case 'compass':
+                return `<div style="grid-column: span ${size}; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:var(--fs-4xl); padding:var(--space-3xl);">🧭</div>`;
             default:
                 return '';
         }
@@ -1079,6 +1094,61 @@ class DashboardRenderer {
                     font-size: ${textStyle.fontSize};
                     font-weight: ${textStyle.fontWeight};
                 ">${widget.text}</div>
+            </div>
+        `;
+    }
+
+    /**
+     * Render spacer widget (invisible grid filler)
+     */
+    renderSpacerWidget(widget, size) {
+        return `<div style="grid-column: span ${size};"></div>`;
+    }
+
+    /**
+     * Render clock widget showing current time and date
+     */
+    renderClockWidget(widget, size) {
+        const clockId = this.generateId('clock');
+        const color = widget.color || 'cyan';
+        const textColorMap = {
+            cyan: '#64ffda', blue: '#3498db', orange: '#e67e22',
+            green: '#2ecc71', purple: '#9b59b6', red: '#e74c3c', yellow: '#f1c40f'
+        };
+        const textColor = textColorMap[color] || textColorMap.cyan;
+
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const dateStr = now.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+
+        return `
+            <div id="${clockId}" class="clock-widget" data-clock="true" style="
+                grid-column: span ${size};
+                background: radial-gradient(ellipse at 30% 20%, rgba(40, 80, 140, 0.7), rgba(15, 25, 50, 0.85));
+                border: 2px solid rgba(100, 180, 255, 0.2);
+                border-radius: var(--radius-xl);
+                padding: var(--space-3xl);
+                box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+                text-align: center;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                gap: var(--space-sm);
+            ">
+                <div class="clock-time" style="
+                    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+                    font-size: clamp(26px, 2.5vw, 44px);
+                    font-weight: 700;
+                    color: ${textColor};
+                    letter-spacing: 3px;
+                    text-shadow: 0 0 15px ${textColor}88;
+                ">${timeStr}</div>
+                <div class="clock-date" style="
+                    font-size: var(--fs-base);
+                    color: rgba(180, 200, 230, 0.65);
+                    letter-spacing: 1px;
+                ">${dateStr}</div>
             </div>
         `;
     }
