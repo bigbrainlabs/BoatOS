@@ -97,6 +97,7 @@ body {
 .header-right {
     display: flex;
     gap: 12px;
+    margin-right: 48px;
 }
 
 .mode-toggle {
