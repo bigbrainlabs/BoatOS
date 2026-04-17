@@ -3,11 +3,13 @@ package com.boatos.remote;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.webkit.WebSettings;
@@ -33,22 +35,45 @@ public class MainActivity extends Activity {
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         );
-
-        // Hide system UI
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_FULLSCREEN |
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         );
-
-        // Keep screen on
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        // Create WebView
-        webView = new WebView(this);
-        setContentView(webView);
+        // Root: FrameLayout mit WebView + Overlay-Button
+        FrameLayout root = new FrameLayout(this);
 
-        // Configure WebView
+        // WebView
+        webView = new WebView(this);
+        root.addView(webView, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+
+        // Kleiner ⚙️-Button oben rechts
+        TextView settingsBtn = new TextView(this);
+        settingsBtn.setText("⚙");
+        settingsBtn.setTextSize(18);
+        settingsBtn.setTextColor(Color.WHITE);
+        settingsBtn.setBackgroundColor(Color.argb(80, 0, 0, 0));
+        int pad = (int) (10 * getResources().getDisplayMetrics().density);
+        settingsBtn.setPadding(pad, pad / 2, pad, pad / 2);
+        settingsBtn.setOnClickListener(v -> showHostDialog(false));
+
+        FrameLayout.LayoutParams btnParams = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP | Gravity.END
+        );
+        btnParams.topMargin = pad;
+        btnParams.rightMargin = pad;
+        root.addView(settingsBtn, btnParams);
+
+        setContentView(root);
+
+        // WebView konfigurieren
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -58,23 +83,15 @@ public class MainActivity extends Activity {
         settings.setDisplayZoomControls(false);
         settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
 
-        // Handle SSL errors (self-signed certificate)
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
                 handler.proceed();
             }
         });
-
         webView.setWebChromeClient(new WebChromeClient());
 
-        // Long press → Adresse ändern
-        webView.setOnLongClickListener(v -> {
-            showHostDialog(false);
-            return true;
-        });
-
-        // Beim ersten Start: Dialog zeigen, sonst direkt laden
+        // Erster Start oder direkt laden
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         if (!prefs.contains(PREF_HOST)) {
             showHostDialog(true);
@@ -93,7 +110,6 @@ public class MainActivity extends Activity {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         String currentHost = prefs.getString(PREF_HOST, DEFAULT_HOST);
 
-        // Layout
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         int pad = (int) (20 * getResources().getDisplayMetrics().density);
@@ -128,8 +144,6 @@ public class MainActivity extends Activity {
 
         AlertDialog dialog = builder.create();
         dialog.show();
-
-        // Keyboard automatisch zeigen
         input.requestFocus();
         dialog.getWindow().setSoftInputMode(
             WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
