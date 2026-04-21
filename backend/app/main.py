@@ -1902,9 +1902,11 @@ async def get_track_status():
 
 @app.post("/api/track/start")
 async def start_track_recording(request: Dict[str, Any] = None):
-    global track_recording, current_track
+    global track_recording, current_track, _distance_cache, _distance_cache_len
     track_recording = True
     current_track = []
+    _distance_cache = 0.0
+    _distance_cache_len = 0
     current_session_entries.clear()  # Clear session on new start
 
     # Get crew_ids from request if provided
@@ -2073,14 +2075,22 @@ async def export_trip_pdf(trip_id: int):
     return Response(content=pdf_buffer.getvalue(),
                     media_type="application/pdf",
                     headers={"Content-Disposition": f"attachment; filename={filename}"})
+_distance_cache = 0.0
+_distance_cache_len = 0
+
 def calculate_track_distance():
-    if len(current_track) < 2:
+    global _distance_cache, _distance_cache_len
+    n = len(current_track)
+    if n < 2:
         return 0
-    distance = 0
-    for i in range(1, len(current_track)):
+    # Nur neue Punkte seit letztem Aufruf berechnen
+    if n == _distance_cache_len:
+        return _distance_cache
+    start_i = max(1, _distance_cache_len)
+    distance = _distance_cache
+    for i in range(start_i, n):
         lat1, lon1 = current_track[i-1]["lat"], current_track[i-1]["lon"]
         lat2, lon2 = current_track[i]["lat"], current_track[i]["lon"]
-        # Skip if any coordinate is None
         if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
             continue
         R = 3440.065
@@ -2089,7 +2099,9 @@ def calculate_track_distance():
         a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
         c = 2 * atan2(sqrt(a), sqrt(1-a))
         distance += R * c
-    return round(distance, 2)
+    _distance_cache = round(distance, 2)
+    _distance_cache_len = n
+    return _distance_cache
 
 def calculate_track_duration():
     # Versuche zuerst aus Session-Einträgen (trip_start bis jetzt)
@@ -2183,6 +2195,13 @@ async def track_recording_loop():
                 if sensors_snapshot:
                     point["sensors"] = sensors_snapshot
             current_track.append(point)
+            # Prevent unbounded memory growth on long trips (10k pts ≈ 28h at 10s interval)
+            if len(current_track) > 10000:
+                current_track.pop(0)
+                # Keep cache consistent: shift index down by 1
+                global _distance_cache_len
+                if _distance_cache_len > 0:
+                    _distance_cache_len -= 1
 
 # ==================== MQTT ====================
 def load_known_topics():
