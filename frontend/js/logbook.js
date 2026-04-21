@@ -567,7 +567,7 @@ export function exportTrip(tripId) {
  */
 export async function viewTripOnMap(tripId) {
     try {
-        const response = await fetch(`${getApiUrl()}/api/logbook/${tripId}`);
+        const response = await fetch(`${getApiUrl()}/api/logbook/trip/${tripId}`);
         const entry = await response.json();
 
         if (!entry.track_data || entry.track_data.length === 0) {
@@ -577,7 +577,20 @@ export async function viewTripOnMap(tripId) {
             return;
         }
 
-        // TODO: Track auf Karte zeichnen
+        // Track auf max. 500 Punkte decimieren für Performance
+        const trackData = decimateTrack(entry.track_data, 500);
+
+        // Zur Kartenansicht wechseln (nur wenn gerade Dashboard aktiv)
+        const dashContainer = document.getElementById('dashboardContainer');
+        if (dashContainer && dashContainer.classList.contains('active')) {
+            window.BoatOS?.ui?.toggleMode();
+        }
+
+        // Track auf Karte zeichnen
+        if (window.BoatOS?.map?.showTrackOnMap) {
+            window.BoatOS.map.showTrackOnMap(trackData);
+        }
+
         if (ui.showNotification) {
             ui.showNotification(`🗺️ Track mit ${entry.track_data.length} Punkten`, 'info');
         }
@@ -586,6 +599,19 @@ export async function viewTripOnMap(tripId) {
             ui.showNotification('Fehler beim Laden', 'error');
         }
     }
+}
+
+/**
+ * Track auf max. N Punkte ausdünnen
+ */
+function decimateTrack(trackData, maxPoints) {
+    if (trackData.length <= maxPoints) return trackData;
+    const step = Math.ceil(trackData.length / maxPoints);
+    const decimated = trackData.filter((_, i) => i % step === 0);
+    // Letzten Punkt immer einschließen
+    const last = trackData[trackData.length - 1];
+    if (decimated[decimated.length - 1] !== last) decimated.push(last);
+    return decimated;
 }
 
 /**
