@@ -863,6 +863,111 @@ export function setBrowserGpsAccuracy(accuracy) {
     browserGpsAccuracy = accuracy;
 }
 
+// ==================== PHONE GPS (manuell, sendet ans Backend) ====================
+
+let phoneGpsActive = false;
+let phoneGpsWatchId = null;
+let phoneGpsSendTimer = null;
+let phoneGpsLastPos = null;
+
+/**
+ * Schaltet Phone-GPS ein/aus.
+ * Wenn aktiv: Browser-Geolocation → POST /api/gps/external → Backend broadcastet an alle Clients.
+ */
+export function togglePhoneGps() {
+    if (phoneGpsActive) {
+        _stopPhoneGps();
+    } else {
+        _startPhoneGps();
+    }
+    _updatePhoneGpsButton();
+}
+
+function _startPhoneGps() {
+    if (!navigator.geolocation) {
+        alert('Geolocation wird von diesem Browser nicht unterstützt.');
+        return;
+    }
+    phoneGpsActive = true;
+
+    phoneGpsWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+            phoneGpsLastPos = pos;
+            // Debounce: sende max. alle 3s
+            if (phoneGpsSendTimer === null) {
+                phoneGpsSendTimer = setTimeout(_sendPhoneGps, 3000);
+            }
+        },
+        (err) => {
+            console.warn('Phone GPS Fehler:', err.message);
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 3000 }
+    );
+
+    // Sofort erste Position senden wenn verfügbar
+    navigator.geolocation.getCurrentPosition(_sendImmediatePhoneGps, () => {}, { enableHighAccuracy: true });
+    console.log('Phone GPS aktiviert');
+}
+
+function _sendImmediatePhoneGps(pos) {
+    phoneGpsLastPos = pos;
+    _sendPhoneGps();
+}
+
+async function _sendPhoneGps() {
+    phoneGpsSendTimer = null;
+    if (!phoneGpsLastPos || !phoneGpsActive) return;
+
+    const { latitude, longitude, accuracy, speed, heading } = phoneGpsLastPos.coords;
+    const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : (window.API_URL || '');
+
+    try {
+        await fetch(`${apiUrl}/api/gps/external`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                lat: latitude,
+                lon: longitude,
+                speed: speed != null ? speed * 1.944 : 0,   // m/s → knots
+                heading: heading || 0,
+                accuracy: accuracy
+            })
+        });
+    } catch (e) {
+        console.warn('Phone GPS senden fehlgeschlagen:', e.message);
+    }
+}
+
+function _stopPhoneGps() {
+    phoneGpsActive = false;
+    if (phoneGpsWatchId !== null) {
+        navigator.geolocation.clearWatch(phoneGpsWatchId);
+        phoneGpsWatchId = null;
+    }
+    if (phoneGpsSendTimer !== null) {
+        clearTimeout(phoneGpsSendTimer);
+        phoneGpsSendTimer = null;
+    }
+    // Backend informieren
+    const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : (window.API_URL || '');
+    fetch(`${apiUrl}/api/gps/external/disable`, { method: 'POST' }).catch(() => {});
+    console.log('Phone GPS deaktiviert');
+}
+
+function _updatePhoneGpsButton() {
+    const btn = document.getElementById('btn-phone-gps');
+    if (!btn) return;
+    if (phoneGpsActive) {
+        btn.classList.add('active');
+        btn.querySelector('.label').textContent = 'Phone GPS';
+    } else {
+        btn.classList.remove('active');
+        btn.querySelector('.label').textContent = 'Phone GPS';
+    }
+}
+
+export function isPhoneGpsActive() { return phoneGpsActive; }
+
 // ==================== BROWSER GPS FALLBACK ====================
 
 /**
@@ -980,6 +1085,8 @@ if (typeof window !== 'undefined') {
     window.setMaxTrackPoints = setMaxTrackPoints;
     window.setLowSatelliteThreshold = setLowSatelliteThreshold;
     window.startBrowserGpsFallback = startBrowserGpsFallback;
+    window.togglePhoneGps = togglePhoneGps;
+    window.isPhoneGpsActive = isPhoneGpsActive;
 
     // Variablen fuer externen Zugriff
     window.sensors = {

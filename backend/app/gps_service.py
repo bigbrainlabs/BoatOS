@@ -4,6 +4,7 @@ Reads GPS data from SignalK server and broadcasts via WebSocket
 """
 import asyncio
 import json
+import time
 from datetime import datetime
 import httpx
 
@@ -24,6 +25,38 @@ gps_data = {
 # WebSocket clients
 websocket_clients = set()
 
+# External GPS override (phone/tablet browser GPS)
+_external_gps_active = False
+_external_gps_last_update = 0.0
+_EXTERNAL_GPS_TIMEOUT = 10.0  # seconds without update → falls back to SignalK
+
+
+def set_external_gps(lat, lon, speed=0.0, heading=0.0, accuracy=None):
+    """Accept GPS position from an external browser (phone/tablet)."""
+    global _external_gps_active, _external_gps_last_update
+    gps_data['lat'] = lat
+    gps_data['lon'] = lon
+    gps_data['speed'] = speed
+    gps_data['heading'] = heading
+    gps_data['fix'] = True
+    gps_data['satellites'] = 0          # browser geolocation has no satellite count
+    gps_data['hdop'] = accuracy / 10.0 if accuracy else None
+    gps_data['timestamp'] = datetime.utcnow().isoformat()
+    _external_gps_active = True
+    _external_gps_last_update = time.time()
+
+
+def clear_external_gps():
+    """Disable external GPS override, fall back to SignalK."""
+    global _external_gps_active
+    _external_gps_active = False
+
+
+def is_external_gps_active():
+    if not _external_gps_active:
+        return False
+    return (time.time() - _external_gps_last_update) < _EXTERNAL_GPS_TIMEOUT
+
 async def read_gps_from_signalk(signalk_url='http://localhost:3000'):
     """Read GPS data from SignalK server"""
     print(f"📡 Starting GPS reader from SignalK at {signalk_url}")
@@ -33,6 +66,11 @@ async def read_gps_from_signalk(signalk_url='http://localhost:3000'):
 
     async with httpx.AsyncClient(timeout=5.0) as client:
         while True:
+            # While phone GPS is active, skip SignalK polling — external data takes priority
+            if is_external_gps_active():
+                await asyncio.sleep(2)
+                continue
+
             try:
                 # Fetch navigation data from SignalK
                 response = await client.get(f"{signalk_url}/signalk/v1/api/")
