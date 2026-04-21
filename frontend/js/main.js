@@ -548,8 +548,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     applyDarkSelects();
     document.addEventListener('settingsPanelOpened', applyDarkSelects);
 
-    // On-screen keyboard for touch
-    initKeyboard();
+    // On-screen keyboard only on Pi kiosk (localhost) — external devices use their OS keyboard
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        initKeyboard();
+    }
 
     // Karte initialisieren
     const mapInstance = mapModule.initMap({
