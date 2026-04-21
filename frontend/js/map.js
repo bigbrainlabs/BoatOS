@@ -27,6 +27,41 @@ let boatMarkerElement = null;
 let currentBoatHeading = 0;
 let autoFollow = false;
 
+// ---- GPS smoothing ----
+const GPS_EMA_ALPHA = 0.35;       // 0=no update, 1=raw — lower=smoother but more lag
+const GPS_ANIM_DURATION = 4200;   // ms to glide to new position (slightly < 5s SignalK interval)
+let _emaLat = null, _emaLon = null;     // EMA-filtered target
+let _fromLat = null, _fromLon = null;   // animation start point
+let _targetLat = null, _targetLon = null; // animation end point
+let _dispLat = null, _dispLon = null;   // current displayed (animated) position
+let _animStart = null;
+let _animRafId = null;
+let _lastMapFollow = 0;
+
+function _easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+function _animateBoatMarker(ts) {
+    const t = Math.min((ts - _animStart) / GPS_ANIM_DURATION, 1);
+    const e = _easeOutCubic(t);
+
+    _dispLat = _fromLat + (_targetLat - _fromLat) * e;
+    _dispLon = _fromLon + (_targetLon - _fromLon) * e;
+
+    boatMarker.setLngLat([_dispLon, _dispLat]);
+
+    // Update map follow at max 10 fps to spare Pi GPU
+    if (autoFollow && ts - _lastMapFollow > 100) {
+        map.easeTo({ center: [_dispLon, _dispLat], duration: 120 });
+        _lastMapFollow = ts;
+    }
+
+    if (t < 1) {
+        _animRafId = requestAnimationFrame(_animateBoatMarker);
+    } else {
+        _animRafId = null;
+    }
+}
+
 // Layer State
 let currentBaseLayer = 'osm'; // 'osm' oder 'satellite'
 let seaMarkLayerVisible = true;
@@ -494,42 +529,45 @@ export function updateBoatPosition(gps) {
     if (!gps || !gps.lat || !gps.lon) return;
     if (!map || !boatMarker) return;
 
-    const newLat = gps.lat;
-    const newLon = gps.lon;
+    const rawLat = gps.lat;
+    const rawLon = gps.lon;
 
-    // Nur aktualisieren wenn Position sich geaendert hat
+    // Skip if identical to last raw position
     const currentPos = window.currentPosition || {};
-    if (newLat === currentPos.lat && newLon === currentPos.lon) {
-        return;
+    if (rawLat === currentPos.lat && rawLon === currentPos.lon) return;
+
+    // Update raw position state + track history (unsmoothed — accurate for logging)
+    window.currentPosition = { lat: rawLat, lon: rawLon };
+    addToTrackHistory(rawLat, rawLon);
+
+    // EMA filter: blend new measurement into smoothed target
+    if (_emaLat === null) {
+        _emaLat = rawLat; _emaLon = rawLon;
+    } else {
+        _emaLat = GPS_EMA_ALPHA * rawLat + (1 - GPS_EMA_ALPHA) * _emaLat;
+        _emaLon = GPS_EMA_ALPHA * rawLon + (1 - GPS_EMA_ALPHA) * _emaLon;
     }
 
-    // Globalen State aktualisieren
-    window.currentPosition = { lat: newLat, lon: newLon };
-
-    // Zur Track-History hinzufuegen
-    addToTrackHistory(newLat, newLon);
-
-    // Marker-Position aktualisieren
-    boatMarker.setLngLat([newLon, newLat]);
-
-    // Marker basierend auf Kurs rotieren
-    let heading = gps.course || gps.heading || 0;
-    if (heading !== undefined && heading !== 0) {
+    // Heading (rotate marker)
+    const heading = gps.course || gps.heading || 0;
+    if (heading !== 0) {
         currentBoatHeading = heading;
         if (boatMarkerElement) {
             boatMarkerElement.style.transform = `rotate(${heading}deg)`;
         }
     }
 
-    // Karte folgt Boot wenn Auto-Follow aktiv
-    if (autoFollow) {
-        map.easeTo({
-            center: [newLon, newLat],
-            duration: 500
-        });
-    }
+    // Start smooth animation from current display position toward new EMA target
+    _fromLat = _dispLat ?? _emaLat;
+    _fromLon = _dispLon ?? _emaLon;
+    _targetLat = _emaLat;
+    _targetLon = _emaLon;
+    _animStart = performance.now();
 
-    console.log(`GPS: ${newLat.toFixed(6)}, ${newLon.toFixed(6)}`);
+    if (!_animRafId) {
+        _animRafId = requestAnimationFrame(_animateBoatMarker);
+    }
+    // If RAF already running, it picks up the updated _from/_target/_animStart next frame
 }
 
 /**
