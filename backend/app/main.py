@@ -328,6 +328,40 @@ async def get_gps():
     return gps_service.get_gps_status()
 
 
+@app.post("/api/gps/external")
+async def post_external_gps(data: dict):
+    """Receive GPS position from a remote browser (phone/tablet).
+    Updates GPS state and broadcasts to all WebSocket clients (incl. Pi kiosk).
+    """
+    lat = data.get("lat")
+    lon = data.get("lon")
+    if lat is None or lon is None:
+        return {"status": "error", "message": "lat/lon required"}
+
+    gps_service.set_external_gps(
+        lat=float(lat),
+        lon=float(lon),
+        speed=float(data.get("speed", 0)),
+        heading=float(data.get("heading", 0)),
+        accuracy=data.get("accuracy"),
+    )
+    # Also update sensor_data so track recording picks it up
+    sensor_data["gps"]["lat"] = float(lat)
+    sensor_data["gps"]["lon"] = float(lon)
+    sensor_data["gps"]["speed"] = float(data.get("speed", 0))
+    sensor_data["gps"]["heading"] = float(data.get("heading", 0))
+    # Broadcast to all connected WebSocket clients
+    await gps_service.broadcast_gps_data()
+    return {"status": "ok"}
+
+
+@app.post("/api/gps/external/disable")
+async def disable_external_gps():
+    """Stop external GPS override, return to SignalK."""
+    gps_service.clear_external_gps()
+    return {"status": "ok"}
+
+
 @app.get("/api/settings")
 async def get_settings():
     """Get user settings"""
