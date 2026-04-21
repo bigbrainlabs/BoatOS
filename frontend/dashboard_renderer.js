@@ -393,11 +393,11 @@ class DashboardRenderer {
             clearInterval(this.updateInterval);
         }
 
-        // Update values every 1 second (smooth, no flicker)
+        // Update values every 3s — sensor data arrives via MQTT, no need to poll faster
         this.updateInterval = setInterval(async () => {
             await this.updateSensors();
             this.updateValues();
-        }, 1000);
+        }, 3000);
     }
 
     /**
