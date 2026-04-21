@@ -40,21 +40,35 @@ function buildKeyboard(isNumeric) {
     kb.id = 'osk-panel';
     kb.setAttribute('data-numeric', isNumeric ? '1' : '0');
     // Prevent any touch on the panel from bubbling up and causing blur
-    kb.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
-    kb.addEventListener('mousedown',  e => e.preventDefault());
+    kb.addEventListener('pointerdown', e => e.stopPropagation());
     kb.style.cssText = `
         position: fixed;
         bottom: 0; left: 0; right: 0;
         background: #0d1426;
         border-top: 1px solid #2a3550;
-        padding: 8px 6px 10px;
+        padding: 4px 6px 10px;
         z-index: 99999;
-        touch-action: none;
+        touch-action: manipulation;
         box-shadow: 0 -4px 20px rgba(0,0,0,0.6);
         display: flex;
         flex-direction: column;
         gap: 5px;
     `;
+
+    // Close button top-right
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText = `
+        position: absolute; top: 6px; right: 10px;
+        background: transparent; border: none;
+        color: #64748b; font-size: 18px; cursor: pointer;
+        touch-action: manipulation; padding: 4px 8px;
+        -webkit-tap-highlight-color: transparent;
+    `;
+    closeBtn.tabIndex = -1;
+    closeBtn.addEventListener('pointerdown', e => e.preventDefault());
+    closeBtn.addEventListener('pointerup', e => { e.preventDefault(); hide(); });
+    kb.appendChild(closeBtn);
 
     let rows;
     if (isNumeric) {
@@ -109,16 +123,15 @@ function buildKeyboard(isNumeric) {
 
             btn.tabIndex = -1;  // prevent button from receiving focus
 
-            const onDown = e => {
+            // Use only pointerdown/pointerup — covers touch + mouse without double-firing.
+            // touchstart/touchend + pointerdown/pointerup both fire on touch → double key press.
+            btn.addEventListener('pointerdown', e => {
                 e.preventDefault();
-                _pressing = true;   // set BEFORE focusout can fire
+                _pressing = true;
                 btn.style.background = isOK ? '#0f766e' : '#2a3f60';
-            };
-            btn.addEventListener('mousedown',   onDown);
-            btn.addEventListener('touchstart',  onDown, { passive: false });
-            btn.addEventListener('pointerdown', onDown);
+            });
 
-            const onUp = e => {
+            btn.addEventListener('pointerup', e => {
                 e.preventDefault();
                 e.stopPropagation();
                 handleKey(key);
@@ -126,10 +139,8 @@ function buildKeyboard(isNumeric) {
                 setTimeout(() => {
                     btn.style.background = bgColor;
                     _pressing = false;
-                }, 150);
-            };
-            btn.addEventListener('touchend',  onUp, { passive: false });
-            btn.addEventListener('pointerup', onUp);
+                }, 120);
+            });
 
             rowEl.appendChild(btn);
         });
@@ -254,13 +265,22 @@ function scrollInputIntoView(input, kbHeight) {
     const rect = input.getBoundingClientRect();
     const windowH = window.innerHeight;
     const visibleBottom = windowH - kbHeight - 16;
-    if (rect.bottom > visibleBottom) {
-        const scrollable = input.closest('.sidebar-content');
-        if (scrollable) {
-            const diff = rect.bottom - visibleBottom;
-            scrollable.scrollTop += diff;
+    if (rect.bottom <= visibleBottom) return;
+
+    // Walk up DOM to find nearest scrollable ancestor
+    const diff = rect.bottom - visibleBottom + 8;
+    let el = input.parentElement;
+    while (el && el !== document.body) {
+        const style = window.getComputedStyle(el);
+        const canScroll = /auto|scroll/.test(style.overflowY) && el.scrollHeight > el.clientHeight;
+        if (canScroll) {
+            el.scrollTop += diff;
+            return;
         }
+        el = el.parentElement;
     }
+    // Last resort: scroll the window
+    window.scrollBy(0, diff);
 }
 
 // ==================== INIT ====================
@@ -278,14 +298,13 @@ export function initKeyboard() {
     }, true);
 
     document.addEventListener('focusout', e => {
-        // Don't hide while a keyboard key is being pressed
-        if (_pressing) return;
+        // Delay check: pointerup clears _pressing after 120ms, so wait longer
         setTimeout(() => {
             if (_pressing) return;
             const active = document.activeElement;
             if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA')) {
                 hide();
             }
-        }, 200);
+        }, 250);
     }, true);
 }
