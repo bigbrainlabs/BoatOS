@@ -543,7 +543,7 @@ export function renderTripCard(trip) {
             </div>
             <div style="display: flex; gap: 8px;">
                 <button onclick="BoatOS.exportTrip(${trip.id})" style="flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); color: var(--text); font-size: 12px; cursor: pointer;">💾 GPX</button>
-                <button onclick="BoatOS.viewTripOnMap(${trip.id})" style="flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); color: var(--text); font-size: 12px; cursor: pointer;">🗺️ Karte</button>
+                <button id="btn-view-map-${trip.id}" onclick="BoatOS.viewTripOnMap(${trip.id})" style="flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); color: var(--text); font-size: 12px; cursor: pointer;">🗺️ Karte</button>
                 <button onclick="BoatOS.deleteTrip(${trip.id})" style="padding: 8px 12px; border: 1px solid var(--danger); border-radius: 8px; background: transparent; color: var(--danger); font-size: 12px; cursor: pointer;">🗑️</button>
             </div>
         </div>
@@ -565,19 +565,25 @@ export function exportTrip(tripId) {
 /**
  * Track auf Karte anzeigen
  */
+let _viewTripOnMapBusy = false;
+
 export async function viewTripOnMap(tripId) {
+    if (_viewTripOnMapBusy) return;
+    _viewTripOnMapBusy = true;
+
+    const btn = document.getElementById(`btn-view-map-${tripId}`);
+    const origText = btn ? btn.textContent : null;
+    if (btn) { btn.textContent = '⏳ Laden…'; btn.disabled = true; }
+
     try {
         const response = await fetch(`${getApiUrl()}/api/logbook/trip/${tripId}`);
         const entry = await response.json();
 
         if (!entry.track_data || entry.track_data.length === 0) {
-            if (ui.showNotification) {
-                ui.showNotification('Keine Track-Daten verfügbar', 'warning');
-            }
+            if (ui.showNotification) ui.showNotification('Keine Track-Daten verfügbar', 'warning');
             return;
         }
 
-        // Track auf max. 500 Punkte decimieren für Performance
         const trackData = decimateTrack(entry.track_data, 500);
 
         // Zur Kartenansicht wechseln (nur wenn gerade Dashboard aktiv)
@@ -586,7 +592,6 @@ export async function viewTripOnMap(tripId) {
             window.BoatOS?.ui?.toggleMode();
         }
 
-        // Track auf Karte zeichnen
         if (window.BoatOS?.map?.showTrackOnMap) {
             window.BoatOS.map.showTrackOnMap(trackData);
         }
@@ -595,9 +600,10 @@ export async function viewTripOnMap(tripId) {
             ui.showNotification(`🗺️ Track mit ${entry.track_data.length} Punkten`, 'info');
         }
     } catch (error) {
-        if (ui.showNotification) {
-            ui.showNotification('Fehler beim Laden', 'error');
-        }
+        if (ui.showNotification) ui.showNotification('Fehler beim Laden', 'error');
+    } finally {
+        _viewTripOnMapBusy = false;
+        if (btn) { btn.textContent = origText; btn.disabled = false; }
     }
 }
 
