@@ -605,6 +605,52 @@ async def save_route(route: Dict[str, Any]):
     routes[route_id] = route
     return {"status": "saved"}
 
+# ==================== SAVED ROUTES (persistent) ====================
+
+def load_saved_routes():
+    routes_file = "data/saved_routes.json"
+    if os.path.exists(routes_file):
+        try:
+            with open(routes_file, 'r', encoding='utf-8') as f:
+                return json.load(f).get('routes', [])
+        except Exception as e:
+            print(f"❌ Error loading saved routes: {e}")
+    return []
+
+def _persist_saved_routes(routes_list):
+    routes_file = "data/saved_routes.json"
+    try:
+        with open(routes_file, 'w', encoding='utf-8') as f:
+            json.dump({'routes': routes_list}, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"❌ Error saving routes: {e}")
+        return False
+
+@app.get("/api/saved-routes")
+async def get_saved_routes():
+    return {"routes": load_saved_routes()}
+
+@app.post("/api/saved-routes")
+async def add_saved_route(route: Dict[str, Any]):
+    import uuid
+    routes_list = load_saved_routes()
+    route['id'] = str(uuid.uuid4())
+    route['created'] = datetime.now().isoformat()
+    if 'name' not in route or not route['name']:
+        route['name'] = f"Route {len(routes_list) + 1}"
+    routes_list.append(route)
+    if _persist_saved_routes(routes_list):
+        return {"status": "success", "route": route}
+    return {"status": "error", "message": "Failed to save route"}
+
+@app.delete("/api/saved-routes/{route_id}")
+async def delete_saved_route(route_id: str):
+    routes_list = load_saved_routes()
+    routes_list = [r for r in routes_list if r.get('id') != route_id]
+    _persist_saved_routes(routes_list)
+    return {"status": "deleted"}
+
 # ==================== FAVORITES ====================
 
 def load_favorites():

@@ -28,15 +28,29 @@ let currentBoatHeading = 0;
 let autoFollow = false;
 
 // ---- GPS smoothing ----
-const GPS_EMA_ALPHA = 0.35;       // 0=no update, 1=raw — lower=smoother but more lag
-const GPS_ANIM_DURATION = 4200;   // ms to glide to new position (slightly < 5s SignalK interval)
-let _emaLat = null, _emaLon = null;     // EMA-filtered target
-let _fromLat = null, _fromLon = null;   // animation start point
-let _targetLat = null, _targetLon = null; // animation end point
-let _dispLat = null, _dispLon = null;   // current displayed (animated) position
+const GPS_EMA_ALPHA = 0.35;
+const GPS_ANIM_DURATION = 4200;
+let _emaLat = null, _emaLon = null;
+let _fromLat = null, _fromLon = null;
+let _targetLat = null, _targetLon = null;
+let _dispLat = null, _dispLon = null;
 let _animStart = null;
 let _animRafId = null;
 let _lastMapFollow = 0;
+
+// ---- Course Up mode ----
+let courseUpMode = false;
+let _smoothHeading = null;
+const HEADING_EMA_ALPHA = 0.15; // low = very smooth bearing rotation
+
+function _updateSmoothedHeading(raw) {
+    if (_smoothHeading === null) { _smoothHeading = raw; return raw; }
+    let diff = raw - _smoothHeading;
+    if (diff > 180) diff -= 360;
+    if (diff < -180) diff += 360;
+    _smoothHeading = (_smoothHeading + HEADING_EMA_ALPHA * diff + 360) % 360;
+    return _smoothHeading;
+}
 
 function _easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
@@ -51,7 +65,11 @@ function _animateBoatMarker(ts) {
 
     // Update map follow at max 10 fps to spare Pi GPU
     if (autoFollow && ts - _lastMapFollow > 100) {
-        map.easeTo({ center: [_dispLon, _dispLat], duration: 120 });
+        const easeOpts = { center: [_dispLon, _dispLat], duration: 120 };
+        if (courseUpMode && currentBoatHeading !== 0) {
+            easeOpts.bearing = -_updateSmoothedHeading(currentBoatHeading);
+        }
+        map.easeTo(easeOpts);
         _lastMapFollow = ts;
     }
 
@@ -187,6 +205,12 @@ export function initMap(options = {}) {
     // Fehler-Handler
     map.on('error', (e) => {
         console.error('Map Fehler:', e.error);
+    });
+
+    // Kompass-Nadel mit Karten-Rotation mitdrehen
+    map.on('rotate', () => {
+        const needle = document.getElementById('compass-needle-group');
+        if (needle) needle.style.transform = `rotate(${-map.getBearing()}deg)`;
     });
 
     // Navigations-Controls hinzufuegen
@@ -915,12 +939,31 @@ export function centerOnBoat() {
     updateFollowButton(true);
 
     if (map) {
-        map.flyTo({
+        const flyOpts = {
             center: [currentPos.lon, currentPos.lat],
             zoom: 15,
             duration: 1000
-        });
+        };
+        if (courseUpMode && currentBoatHeading !== 0) {
+            flyOpts.bearing = -currentBoatHeading;
+        }
+        map.flyTo(flyOpts);
     }
+}
+
+export function toggleCourseUp() {
+    courseUpMode = !courseUpMode;
+    if (!courseUpMode) {
+        // Zurück zu Norden
+        if (map) map.easeTo({ bearing: 0, duration: 600 });
+        _smoothHeading = null;
+    }
+    _updateCourseUpButton();
+}
+
+function _updateCourseUpButton() {
+    const ring = document.getElementById('compass-active-ring');
+    if (ring) ring.setAttribute('opacity', courseUpMode ? '1' : '0');
 }
 
 function updateFollowButton(following) {

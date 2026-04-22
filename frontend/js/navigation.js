@@ -1307,6 +1307,8 @@ export function stopNavigation(context) {
             navigationStartButton.style.background = 'white';
         }
 
+        resetNavHeader();
+
         const showNotification = context?.showNotification;
         if (showNotification) showNotification('Navigation beendet', 'info');
         console.log('Navigation BEENDET');
@@ -1408,91 +1410,231 @@ export function updateNavigation(lat, lon, context) {
  * @param {number} speedKnots - Geschwindigkeit in Knoten
  * @returns {Object} {hours, minutes, arrivalTime}
  */
-export function calculateETA(distanceNM, speedKnots) {
+// ---- Tagesplanung-Einstellungen (werden von settings.js gesetzt) ----
+let _departureTime = null;      // null = jetzt
+let _dailyTravelHours = 0;      // 0 = unbegrenzt
+let _dayStartHour = 8;          // Beginn jedes Fahrtags (Uhr)
+
+export function setDepartureTime(dt) { _departureTime = dt; }
+export function getDepartureTime() { return _departureTime; }
+export function setDailyTravelHours(h) { _dailyTravelHours = h || 0; }
+export function setDayStartHour(h) { _dayStartHour = (h >= 0 && h < 24) ? h : 8; }
+
+/**
+ * Formatiert Ankunftszeit für Anzeige:
+ * - Heute:             "14:30"
+ * - Diese Woche:       "Mo 14:30"
+ * - Weiter weg:        "25.04 09:15"
+ */
+export function formatArrivalTime(arrivalDate) {
+    if (!arrivalDate) return '--:--';
+    const now = new Date();
+    const hhmm = arrivalDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    const sameDay = arrivalDate.toDateString() === now.toDateString();
+    if (sameDay) return hhmm;
+    const diffDays = Math.round((arrivalDate - now) / 86400000);
+    if (diffDays < 7) {
+        const day = arrivalDate.toLocaleDateString('de-DE', { weekday: 'short' });
+        return `${day} ${hhmm}`;
+    }
+    const date = arrivalDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+    return `${date} ${hhmm}`;
+}
+
+export function calculateETA(distanceNM, speedKnots, departureOverride) {
     if (!speedKnots || speedKnots <= 0) {
         return { hours: 0, minutes: 0, arrivalTime: null };
     }
 
-    const etaHours = distanceNM / speedKnots;
-    const hours = Math.floor(etaHours);
-    const minutes = Math.round((etaHours - hours) * 60);
+    const totalHours = distanceNM / speedKnots;
+    // departureOverride erlaubt Live-Berechnung ab "jetzt" unabhängig von der geplanten Abfahrt
+    const departure = departureOverride || (_departureTime ? new Date(_departureTime) : new Date());
 
-    const now = new Date();
-    const arrivalTime = new Date(now.getTime() + etaHours * 60 * 60 * 1000);
+    let arrivalTime;
+    if (_dailyTravelHours > 0) {
+        arrivalTime = _calcArrivalWithDailyLimit(departure, totalHours, _dailyTravelHours, _dayStartHour);
+    } else {
+        arrivalTime = new Date(departure.getTime() + totalHours * 3600000);
+    }
 
+    // Für Rückwärtskompatibilität: hours/minutes = reine Fahrtzeit
+    const hours = Math.floor(totalHours);
+    const minutes = Math.round((totalHours - hours) * 60);
     return { hours, minutes, arrivalTime };
+}
+
+/**
+ * Berechnet Ankunftszeitpunkt unter Berücksichtigung der täglichen Fahrstunden.
+ * Jeder Fahrtag beginnt um dayStartHour und endet nach dailyHours Stunden.
+ */
+function _calcArrivalWithDailyLimit(departure, totalHours, dailyHours, dayStartHour) {
+    let current = new Date(departure);
+    let remaining = totalHours;
+
+    for (let safety = 0; safety < 365 && remaining > 0.001; safety++) {
+        // Vor Fahrtbeginn des Tages → auf dayStartHour vorspulen
+        const todayStart = new Date(current);
+        todayStart.setHours(dayStartHour, 0, 0, 0);
+        if (current < todayStart) current = todayStart;
+
+        // Ende des Fahrtfensters dieses Tages
+        const windowEnd = new Date(current);
+        windowEnd.setHours(dayStartHour + dailyHours, 0, 0, 0);
+
+        if (current >= windowEnd) {
+            // Fahrtfenster vorbei → nächster Tag
+            current.setDate(current.getDate() + 1);
+            current.setHours(dayStartHour, 0, 0, 0);
+            continue;
+        }
+
+        const availableToday = (windowEnd - current) / 3600000;
+        if (remaining <= availableToday) {
+            return new Date(current.getTime() + remaining * 3600000);
+        }
+        remaining -= availableToday;
+        current.setDate(current.getDate() + 1);
+        current.setHours(dayStartHour, 0, 0, 0);
+    }
+    return current;
 }
 
 /**
  * Aktualisiert die Live-ETA Anzeige
  * @param {Object} context - Kontext
  */
+/**
+ * Berechnet die verbleibende Strecke entlang der Route-Polyline ab der aktuellen Position.
+ * Projiziert die Position auf das nächste Segment und summiert die Reststrecke bis zum Ziel.
+ */
+function _remainingRouteDistanceM(currentLat, currentLon) {
+    const coords = currentRouteCoordinates;
+    if (!coords || coords.length < 2) return null;
+
+    let minDist = Infinity;
+    let bestIdx = 0;
+    let bestT = 0;
+
+    for (let i = 0; i < coords.length - 1; i++) {
+        const A = coords[i], B = coords[i + 1];
+        const dx = B.lon - A.lon, dy = B.lat - A.lat;
+        const lenSq = dx * dx + dy * dy;
+        const t = lenSq > 0
+            ? Math.max(0, Math.min(1, ((currentLon - A.lon) * dx + (currentLat - A.lat) * dy) / lenSq))
+            : 0;
+        const projLat = A.lat + t * dy, projLon = A.lon + t * dx;
+        const d = haversineDistance(currentLat, currentLon, projLat, projLon);
+        if (d < minDist) { minDist = d; bestIdx = i; bestT = t; }
+    }
+
+    const A = coords[bestIdx], B = coords[bestIdx + 1];
+    const projLat = A.lat + bestT * (B.lat - A.lat);
+    const projLon = A.lon + bestT * (B.lon - A.lon);
+
+    let remaining = haversineDistance(projLat, projLon, B.lat, B.lon);
+    for (let i = bestIdx + 1; i < coords.length - 1; i++) {
+        remaining += haversineDistance(coords[i].lat, coords[i].lon, coords[i + 1].lat, coords[i + 1].lon);
+    }
+    return remaining; // Meter
+}
+
 export function updateLiveETA(context) {
     const { waypoints, currentPosition } = context;
 
-    // Nur aktualisieren wenn Route und Navigation aktiv
-    if (!navigationActive || !waypoints || waypoints.length === 0 ||
-        !currentPosition || !currentPosition.lat || !currentPosition.lon) {
+    // Braucht mindestens eine berechnete Route + gültige Position
+    const hasRoute = waypoints && waypoints.length >= 2 && currentRouteCoordinates && currentRouteCoordinates.length >= 2;
+    if (!hasRoute || !currentPosition || !currentPosition.lat || !currentPosition.lon) {
         const liveEtaDisplay = document.getElementById('live-eta-display');
-        if (liveEtaDisplay) {
-            liveEtaDisplay.style.display = 'none';
-        }
+        if (liveEtaDisplay) liveEtaDisplay.style.display = 'none';
         return;
     }
 
-    const currentSpeed = window.lastSensorData?.speed || 0;
+    const currentLat = currentPosition.lat;
+    const currentLon = currentPosition.lon;
 
-    // Mindestens 0.5 Knoten für sinnvolle ETA
+    // Verbleibende Distanz entlang der Route-Polyline
+    const remainingM = _remainingRouteDistanceM(currentLat, currentLon);
+    if (remainingM === null) return;
+    const remainingDistanceNM = remainingM / 1852;
+
+    // --- Header: Restdistanz immer anzeigen ---
+    const distEl = document.getElementById('dist-value');
+    const distLabelEl = document.getElementById('dist-label');
+    if (distEl) {
+        const fmt = window.formatDistance ? window.formatDistance(remainingDistanceNM) : remainingDistanceNM.toFixed(1);
+        // extract just the number part (formatDistance returns "x.x NM")
+        distEl.textContent = fmt.split(' ')[0];
+    }
+    if (distLabelEl) {
+        const unit = window.getUnitSettings ? window.getUnitSettings().distance.toUpperCase() : 'NM';
+        distLabelEl.textContent = `REST ${unit}`;
+    }
+
+    const currentSpeed = window.lastSensorData?.gps?.speed || window.lastSensorData?.speed || 0;
+
     if (currentSpeed < 0.5) {
+        // Geschwindigkeit zu gering → ETA nicht berechenbar
+        const etaEl = document.getElementById('eta-value');
+        if (etaEl) etaEl.textContent = '--:--';
+
         const liveEtaDisplay = document.getElementById('live-eta-display');
         if (liveEtaDisplay) {
-            liveEtaDisplay.innerHTML = 'Live ETA: Warte auf GPS-Geschwindigkeit...';
+            liveEtaDisplay.innerHTML = 'Live ETA: Warte auf Fahrtgeschwindigkeit…';
             liveEtaDisplay.style.display = 'block';
         }
         return;
     }
 
-    // Verbleibende Gesamtdistanz berechnen
-    let totalRemainingDistanceMeters = 0;
-    const currentLat = currentPosition.lat;
-    const currentLon = currentPosition.lon;
+    // Live: Basis immer "jetzt" — bereits gefahrene Zeit ist schon aus dem Tageslimit verbraucht
+    const eta = calculateETA(remainingDistanceNM, currentSpeed, new Date());
+    const arrivalTimeStr = formatArrivalTime(eta.arrivalTime);
 
-    if (waypoints.length > 0) {
-        // Distanz zum ersten Wegpunkt
-        const firstWP = waypoints[0].marker.getLngLat();
-        totalRemainingDistanceMeters = haversineDistance(currentLat, currentLon, firstWP.lat, firstWP.lng);
+    // --- Header: ETA als Ankunftszeit ---
+    const etaEl = document.getElementById('eta-value');
+    if (etaEl) etaEl.textContent = arrivalTimeStr;
 
-        // Distanz zwischen allen verbleibenden Wegpunkten addieren
-        for (let i = 0; i < waypoints.length - 1; i++) {
-            const wp1 = waypoints[i].marker.getLngLat();
-            const wp2 = waypoints[i + 1].marker.getLngLat();
-            totalRemainingDistanceMeters += haversineDistance(wp1.lat, wp1.lng, wp2.lat, wp2.lng);
-        }
-    }
+    // --- Route-Summary ETA aktualisieren ---
+    const routeEtaEl = document.getElementById('route-eta');
+    if (routeEtaEl) routeEtaEl.textContent = arrivalTimeStr;
 
-    const remainingDistanceNM = totalRemainingDistanceMeters / 1852;
-    const eta = calculateETA(remainingDistanceNM, currentSpeed);
-
-    const speedFormatted = typeof formatSpeed === 'function'
-        ? formatSpeed(currentSpeed)
-        : `${currentSpeed.toFixed(1)} kn`;
-
-    const arrivalTimeStr = eta.arrivalTime
-        ? eta.arrivalTime.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
-        : '--:--';
-
-    let etaText = '';
-    if (eta.hours > 0) {
-        etaText = `${eta.hours}h ${eta.minutes}min`;
-    } else {
-        etaText = `${eta.minutes}min`;
-    }
+    // --- Panel: ausführlichere Info ---
+    const speedFormatted = window.formatSpeed ? window.formatSpeed(currentSpeed) : `${currentSpeed.toFixed(1)} kn`;
+    let etaText = eta.hours > 0 ? `${eta.hours}h ${eta.minutes}min` : `${eta.minutes}min`;
+    if (_dailyTravelHours > 0) etaText += ` (${_dailyTravelHours}h/Tag)`;
 
     const liveEtaDisplay = document.getElementById('live-eta-display');
     if (liveEtaDisplay) {
-        liveEtaDisplay.innerHTML = `<strong>Live ETA (GPS):</strong> ${etaText} @ ${speedFormatted} | Ankunft: ${arrivalTimeStr}`;
+        liveEtaDisplay.innerHTML = `<strong>Live ETA:</strong> ${etaText} @ ${speedFormatted} | Ankunft: ${arrivalTimeStr}`;
         liveEtaDisplay.style.display = 'block';
     }
+}
+
+/**
+ * Aktualisiert ETA-Anzeige sofort aus den gespeicherten Routendaten.
+ * Wird aufgerufen wenn Abfahrtszeit oder Tageslimit geändert wird.
+ */
+export function refreshETADisplay() {
+    const dist = currentRouteData.totalDistanceNM;
+    const speed = currentRouteData.plannedSpeed || 6;
+    if (!dist || dist <= 0) return;
+
+    const eta = calculateETA(dist, speed);
+    const arrivalStr = formatArrivalTime(eta.arrivalTime);
+
+    const etaEl = document.getElementById('route-eta');
+    const topEtaEl = document.getElementById('eta-value');
+    if (etaEl) etaEl.textContent = arrivalStr;
+    if (topEtaEl) topEtaEl.textContent = arrivalStr;
+}
+
+/** Setzt Header-Werte zurück wenn Navigation endet */
+export function resetNavHeader() {
+    const distEl = document.getElementById('dist-value');
+    const distLabelEl = document.getElementById('dist-label');
+    const etaEl = document.getElementById('eta-value');
+    if (distEl) distEl.textContent = '--';
+    if (distLabelEl) distLabelEl.textContent = window.getUnitSettings ? window.getUnitSettings().distance.toUpperCase() : 'NM';
+    if (etaEl) etaEl.textContent = '--:--';
 }
 
 // ==================== KURSABWEICHUNG (XTE) ====================
@@ -2733,6 +2875,37 @@ function cancelSatelliteCache() {
     _hideCacheBar();
 }
 
+// ==================== GESPEICHERTE ROUTEN ====================
+
+export async function saveCurrentRoute(name, waypoints, distanceNM) {
+    const apiUrl = window.API_URL || '';
+    const payload = {
+        name: name || '',
+        waypoints: waypoints.map(w => ({ name: w.name, lat: w.lat, lon: w.lon })),
+        totalDistanceNM: distanceNM || 0
+    };
+    const resp = await fetch(`${apiUrl}/api/saved-routes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+    if (data.status === 'success') return data.route;
+    throw new Error(data.message || 'Fehler beim Speichern');
+}
+
+export async function loadSavedRoutesList() {
+    const apiUrl = window.API_URL || '';
+    const resp = await fetch(`${apiUrl}/api/saved-routes`);
+    const data = await resp.json();
+    return data.routes || [];
+}
+
+export async function deleteSavedRoute(routeId) {
+    const apiUrl = window.API_URL || '';
+    await fetch(`${apiUrl}/api/saved-routes/${routeId}`, { method: 'DELETE' });
+}
+
 // ==================== EXPORT ALLER FUNKTIONEN ====================
 
 export default {
@@ -2770,6 +2943,7 @@ export default {
     // ETA/Distanz
     calculateETA,
     updateLiveETA,
+    resetNavHeader,
 
     // Kursabweichung
     calculateCrossTrackError,
@@ -2809,5 +2983,18 @@ export default {
     // Satellite tile caching
     cacheRouteArea,
     cacheViewportArea,
-    cancelSatelliteCache
+    cancelSatelliteCache,
+
+    // Gespeicherte Routen
+    saveCurrentRoute,
+    loadSavedRoutesList,
+    deleteSavedRoute,
+
+    // Tagesplanung
+    setDepartureTime,
+    getDepartureTime,
+    setDailyTravelHours,
+    setDayStartHour,
+    formatArrivalTime,
+    refreshETADisplay
 };

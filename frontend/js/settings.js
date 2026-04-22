@@ -116,6 +116,10 @@ export function saveAllSettings() {
     if (defaultSpeed) settings.navigation.defaultSpeed = parseFloat(defaultSpeed.value) || 6;
     if (toggleArrivalAlarm) settings.navigation.arrivalAlarm = toggleArrivalAlarm.classList.contains('active');
     if (alarmDistance) settings.navigation.alarmDistance = parseFloat(alarmDistance.value) || 0.1;
+    const dailyHours = document.getElementById('setting-daily-travel-hours');
+    const dayStartTime = document.getElementById('setting-day-start-time');
+    if (dailyHours) settings.navigation.dailyTravelHours = parseFloat(dailyHours.value) || 0;
+    if (dayStartTime) settings.navigation.dayStartTime = dayStartTime.value || '08:00';
 
     // === AIS ===
     settings.ais = settings.ais || {};
@@ -390,6 +394,18 @@ export async function loadAllSettings() {
         if (defaultSpeed && settings.navigation.defaultSpeed) defaultSpeed.value = settings.navigation.defaultSpeed;
         if (toggleArrivalAlarm) toggleArrivalAlarm.classList.toggle('active', settings.navigation.arrivalAlarm !== false);
         if (alarmDistance && settings.navigation.alarmDistance) alarmDistance.value = settings.navigation.alarmDistance;
+        const dailyHours = document.getElementById('setting-daily-travel-hours');
+        const dayStartTime = document.getElementById('setting-day-start-time');
+        if (dailyHours && settings.navigation.dailyTravelHours !== undefined) dailyHours.value = settings.navigation.dailyTravelHours;
+        if (dayStartTime && settings.navigation.dayStartTime) dayStartTime.value = settings.navigation.dayStartTime;
+        // Werte an navigation.js weitergeben
+        const navMod = moduleContext?.navigation;
+        if (navMod?.setDailyTravelHours) navMod.setDailyTravelHours(settings.navigation.dailyTravelHours || 0);
+        if (navMod?.setDayStartHour) {
+            const parts = (settings.navigation.dayStartTime || '08:00').split(':');
+            navMod.setDayStartHour(parseInt(parts[0]) || 8);
+        }
+        if (navMod?.refreshETADisplay) navMod.refreshETADisplay();
     }
 
     // === AIS ===
