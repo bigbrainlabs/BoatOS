@@ -142,14 +142,11 @@ function showRouteInfo(distanceNM, etaHours, etaMinutes, routeInfo, isReverse, i
         timeEl.textContent = `${hours}:${mins}`;
     }
 
-    // ETA berechnen
+    // ETA berechnen — mit Tageslimit falls gesetzt
     const etaEl = document.getElementById('route-eta');
     if (etaEl) {
-        const now = new Date();
-        const arrivalTime = new Date(now.getTime() + (etaHours * 60 + etaMinutes) * 60000);
-        const arrivalHours = String(arrivalTime.getHours()).padStart(2, '0');
-        const arrivalMins = String(arrivalTime.getMinutes()).padStart(2, '0');
-        etaEl.textContent = `${arrivalHours}:${arrivalMins}`;
+        const etaData = navigation.calculateETA(parseFloat(distanceNM), avgSpeed || 6);
+        etaEl.textContent = navigation.formatArrivalTime(etaData.arrivalTime);
     }
 
     // Schleusen
@@ -170,9 +167,7 @@ function showRouteInfo(distanceNM, etaHours, etaMinutes, routeInfo, isReverse, i
     }
 
     const topEtaEl = document.getElementById('eta-value');
-    if (topEtaEl && etaEl) {
-        topEtaEl.textContent = etaEl.textContent;
-    }
+    if (topEtaEl && etaEl) topEtaEl.textContent = etaEl.textContent;
 
     console.log(`Route: ${distanceNM} NM, ETA: ${etaHours}h ${etaMinutes}min, Schleusen: ${locksCount}`);
 }
@@ -304,6 +299,11 @@ function setSimButtonState(running) {
         btn.style.background = running ? 'var(--danger)' : 'var(--success)';
     }
     if (bar) bar.style.display = running ? 'flex' : 'none';
+}
+
+function _toDatetimeLocalString(date) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function updateSimButton() {
@@ -473,6 +473,14 @@ window.BoatOS = {
         if (routeLocks) routeLocks.textContent = '0';
         if (routeEta) routeEta.textContent = '--:--';
 
+        // Top-bar zurücksetzen
+        const topDist = document.getElementById('dist-value');
+        const topEta = document.getElementById('eta-value');
+        const topDistLabel = document.getElementById('dist-label');
+        if (topDist) topDist.textContent = '--';
+        if (topEta) topEta.textContent = '--:--';
+        if (topDistLabel) topDistLabel.textContent = 'NM';
+
         this.stopNavigation();
         updateSimButton();
         ui.showNotification('Route gelöscht', 'info');
@@ -509,6 +517,124 @@ window.BoatOS = {
     deleteCrewMemberConfirm: (id) => logbook.deleteCrewMemberConfirm(id),
     submitCrewManageForm: () => logbook.submitCrewManageForm(),
     _selectCrewAvatar: (emoji) => logbook.selectCrewAvatar(emoji),
+
+    // === DEPARTURE TIME ===
+    setDepartureNow: function() {
+        navigation.setDepartureTime(null);
+        const input = document.getElementById('departure-datetime');
+        if (input) input.value = _toDatetimeLocalString(new Date());
+        navigation.refreshETADisplay();
+    },
+    onDepartureChanged: function(val) {
+        navigation.setDepartureTime(val ? new Date(val) : null);
+        navigation.refreshETADisplay();
+    },
+
+    // === SAVED ROUTES ===
+    saveCurrentRouteWithName: async function() {
+        const ctx = this.context || {};
+        const wps = ctx.waypoints || [];
+        if (wps.length < 2) {
+            ui.showNotification('Mindestens 2 Wegpunkte benötigt', 'warning');
+            return;
+        }
+        const distEl = document.getElementById('route-distance');
+        const distNM = parseFloat(distEl?.textContent) || 0;
+        const autoName = wps.map(w => w.name).join(' → ');
+        const name = prompt('Routenname:', autoName);
+        if (name === null) return; // cancelled
+        try {
+            await navigation.saveCurrentRoute(name || autoName, wps, distNM);
+            ui.showNotification(`Route gespeichert: ${name || autoName}`, 'success');
+        } catch(e) {
+            ui.showNotification('Fehler beim Speichern', 'error');
+        }
+    },
+
+    showSavedRoutesPanel: async function() {
+        const existing = document.getElementById('saved-routes-panel');
+        if (existing) { existing.remove(); return; }
+
+        let routes;
+        try {
+            routes = await navigation.loadSavedRoutesList();
+        } catch(e) {
+            ui.showNotification('Fehler beim Laden der Routen', 'error');
+            return;
+        }
+
+        const panel = document.createElement('div');
+        panel.id = 'saved-routes-panel';
+        panel.style.cssText = `
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: var(--bg-panel); border: 1px solid var(--border);
+            border-radius: var(--radius-xl); padding: var(--space-lg);
+            z-index: 2000; width: min(420px, 92vw); max-height: 70vh;
+            overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        `;
+
+        const renderPanel = (routeList) => {
+            panel.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-md);">
+                    <span style="font-size:var(--fs-xl); font-weight:600; color:var(--accent);">📂 Gespeicherte Routen (${routeList.length})</span>
+                    <button onclick="document.getElementById('saved-routes-panel').remove()"
+                            style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;padding:4px 8px;">✕</button>
+                </div>
+                ${routeList.length === 0 ? `<div style="text-align:center;padding:var(--space-2xl);color:var(--text-dim);">Keine gespeicherten Routen</div>` :
+                    routeList.map(r => {
+                        const date = new Date(r.created).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'2-digit' });
+                        const dist = r.totalDistanceNM ? ` · ${parseFloat(r.totalDistanceNM).toFixed(1)} NM` : '';
+                        const wps = (r.waypoints || []).length;
+                        return `
+                        <div style="display:flex; align-items:center; gap:var(--space-md); padding:var(--space-sm) 0; border-bottom:1px solid var(--border);">
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-weight:600; font-size:var(--fs-base); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${r.name}</div>
+                                <div style="font-size:var(--fs-sm); color:var(--text-dim);">${wps} Wegpunkte${dist} · ${date}</div>
+                            </div>
+                            <button onclick="window.BoatOS._loadSavedRoute(${JSON.stringify(r).replace(/"/g, '&quot;')})"
+                                    style="padding:var(--space-xs) var(--space-md); background:var(--accent); color:white;
+                                           border:none; border-radius:var(--radius-md); font-size:var(--fs-sm); cursor:pointer; white-space:nowrap; touch-action:manipulation;">
+                                Laden
+                            </button>
+                            <button onclick="window.BoatOS._deleteSavedRoute('${r.id}', this)"
+                                    style="padding:var(--space-xs) var(--space-sm); background:none; color:var(--text-dim);
+                                           border:1px solid var(--border); border-radius:var(--radius-md); font-size:var(--fs-sm); cursor:pointer; touch-action:manipulation;">
+                                🗑️
+                            </button>
+                        </div>`;
+                    }).join('')
+                }
+            `;
+        };
+
+        renderPanel(routes);
+        document.body.appendChild(panel);
+    },
+
+    _loadSavedRoute: function(route) {
+        const ctx = this.context || {};
+        // Clear current route first
+        this.clearRoute();
+        // Add waypoints one by one
+        (route.waypoints || []).forEach((wp, i) => {
+            navigation.addWaypoint({ name: wp.name, lat: wp.lat, lon: wp.lon }, ctx);
+        });
+        updateWaypointList(ctx);
+        document.getElementById('saved-routes-panel')?.remove();
+        ui.showNotification(`Route "${route.name}" geladen`, 'success');
+    },
+
+    _deleteSavedRoute: async function(routeId, btnEl) {
+        if (!confirm('Route löschen?')) return;
+        try {
+            await navigation.deleteSavedRoute(routeId);
+            // refresh panel
+            document.getElementById('saved-routes-panel')?.remove();
+            this.showSavedRoutesPanel();
+        } catch(e) {
+            ui.showNotification('Fehler beim Löschen', 'error');
+        }
+    },
 
     // === SIMULATION ===
     toggleSimulation: () => simInterval ? stopSimulation() : startSimulation(),
@@ -637,6 +763,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (changedSettings.ais && ais.updateAISSettings) {
             ais.updateAISSettings(changedSettings.ais);
         }
+        // Tagesplanung-Settings an navigation weitergeben
+        if (changedSettings.navigation) {
+            if (navigation.setDailyTravelHours) navigation.setDailyTravelHours(changedSettings.navigation.dailyTravelHours || 0);
+            if (navigation.setDayStartHour) {
+                const parts = (changedSettings.navigation.dayStartTime || '08:00').split(':');
+                navigation.setDayStartHour(parseInt(parts[0]) || 8);
+            }
+            navigation.refreshETADisplay();
+        }
     });
 
     // Kontext erstellen
@@ -706,6 +841,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (navigation.isNavigationActive && navigation.isNavigationActive()) {
                 navigation.updateNavigation(gpsData.lat, gpsData.lon, window.BoatOS.context);
+            } else if (window.BoatOS.context.waypoints?.length >= 2) {
+                // Route geplant aber Navigation noch nicht gestartet → Restdistanz + ETA live aktualisieren
+                navigation.updateLiveETA(window.BoatOS.context);
             }
         });
     }
@@ -755,6 +893,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('Dashboard wird geladen...');
         window.dashboardRenderer.loadAndRender();
     }
+
+    // Abfahrt-Input auf jetzt vorbelegen
+    const depInput = document.getElementById('departure-datetime');
+    if (depInput) depInput.value = _toDatetimeLocalString(new Date());
 
     // Globale Funktionen für Navigation-Modul
     window.updateWaypointList = () => updateWaypointList(context);

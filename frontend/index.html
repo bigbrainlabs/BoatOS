@@ -12,7 +12,7 @@
     <!-- BoatOS Styles -->
     <link rel="stylesheet" href="css/theme.css?v=10">
     <link rel="stylesheet" href="css/layout.css?v=10">
-    <link rel="stylesheet" href="css/components.css?v=10">
+    <link rel="stylesheet" href="css/components.css?v=11">
 </head>
 <body>
     <!-- ============================================
@@ -137,6 +137,34 @@
             <span id="sim-speed-label" style="min-width: 3.5em; text-align: right; font-weight: 600;">×25</span>
         </div>
 
+        <!-- Compass widget (top-right of map, toggles Course Up) -->
+        <div id="compass-widget" onclick="BoatOS.map.toggleCourseUp()" title="Kurs/Nord"
+             style="position: absolute; top: var(--space-lg); right: var(--space-lg); z-index: 100;
+                    cursor: pointer; touch-action: manipulation; pointer-events: auto;
+                    width: 48px; height: 48px; user-select: none;">
+            <svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                <!-- Outer ring: grey normally, accent when Course Up active -->
+                <circle cx="24" cy="24" r="22.5" fill="rgba(10,14,26,0.85)"
+                        stroke="rgba(255,255,255,0.18)" stroke-width="1.5"/>
+                <circle id="compass-active-ring" cx="24" cy="24" r="22.5"
+                        fill="none" stroke="#2979ff" stroke-width="2" opacity="0"
+                        style="transition: opacity 0.2s;"/>
+                <!-- Needle group — rotates so red tip always points true North -->
+                <g id="compass-needle-group" style="transform-origin: 24px 24px; transform: rotate(0deg); transition: transform 0.15s linear;">
+                    <!-- North: red -->
+                    <polygon points="24,6 21,24 24,21.5 27,24" fill="#e53935"/>
+                    <!-- South: grey -->
+                    <polygon points="24,42 21,24 24,26.5 27,24" fill="#666"/>
+                    <!-- Center hub -->
+                    <circle cx="24" cy="24" r="2.2" fill="rgba(200,200,200,0.6)"/>
+                    <!-- N label on north tip -->
+                    <text x="24" y="4.5" text-anchor="middle" dominant-baseline="middle"
+                          font-size="6.5" font-weight="700" fill="#ef9a9a"
+                          font-family="system-ui, sans-serif">N</text>
+                </g>
+            </svg>
+        </div>
+
         <!-- Satellite cache bar -->
         <div id="sat-cache-bar" style="display:none; position:absolute; top: calc(var(--topbar-height) + var(--space-sm)); left:50%; transform:translateX(-50%); background:var(--bg-panel); border-radius:var(--radius-xl); padding: var(--space-sm) var(--space-lg); display:none; align-items:center; gap:var(--space-md); z-index:1100; box-shadow:0 2px 12px rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); white-space:nowrap;">
             <span id="sat-cache-status" style="font-size:var(--fs-sm); color:var(--text-dim);">Caching...</span>
@@ -190,6 +218,10 @@
                 <span class="icon">⭐</span>
                 <span class="label">Favoriten</span>
             </div>
+            <div class="quick-action" onclick="BoatOS.showSavedRoutesPanel()">
+                <span class="icon">📂</span>
+                <span class="label">Routen</span>
+            </div>
             <div class="quick-action" id="btn-ais" onclick="BoatOS.ais.toggleAIS()">
                 <span class="icon">🚢</span>
                 <span class="label">AIS</span>
@@ -210,10 +242,6 @@
                 <span class="icon">📱</span>
                 <span class="label">Phone GPS</span>
             </div>
-            <div class="quick-action" id="btn-enc" onclick="toggleCharts()">
-                <span class="icon">📊</span>
-                <span class="label">ENC</span>
-            </div>
         </div>
 
         <div class="sheet-tabs">
@@ -231,6 +259,7 @@
                     <span style="font-size: var(--fs-xl); font-weight: 600;">Aktuelle Route</span>
                     <div style="display: flex; gap: var(--space-sm);">
                         <button class="icon-btn icon-btn-nav" id="btn-start-nav" style="background: var(--success); color: white;" onclick="BoatOS.toggleNavigation()" title="Navigation starten">▶️</button>
+                        <button class="icon-btn icon-btn-sm" onclick="BoatOS.saveCurrentRouteWithName()" title="Route speichern">💾</button>
                         <button class="icon-btn icon-btn-sm" onclick="BoatOS.editRoute()" title="Route bearbeiten">✏️</button>
                         <button class="icon-btn icon-btn-sm" onclick="BoatOS.clearRoute()" title="Route löschen">🗑️</button>
                     </div>
@@ -253,6 +282,22 @@
                         <div class="value" id="route-eta">--:--</div>
                         <div class="label">ETA</div>
                     </div>
+                </div>
+
+                <!-- Abfahrtzeit (optional) -->
+                <div style="display:flex; align-items:center; gap:var(--space-sm); margin-bottom:var(--space-md); flex-wrap:wrap;">
+                    <span style="font-size:var(--fs-sm); color:var(--text-dim); white-space:nowrap;">Abfahrt:</span>
+                    <input type="datetime-local" id="departure-datetime"
+                           onchange="BoatOS.onDepartureChanged(this.value)"
+                           style="flex:1; min-width:0; background:var(--bg-card); color:var(--text);
+                                  border:1px solid var(--border); border-radius:var(--radius-md);
+                                  padding:4px 8px; font-size:var(--fs-sm);">
+                    <button onclick="BoatOS.setDepartureNow()"
+                            style="padding:4px 10px; background:var(--bg-card); color:var(--text-dim);
+                                   border:1px solid var(--border); border-radius:var(--radius-md);
+                                   font-size:var(--fs-sm); cursor:pointer; white-space:nowrap; touch-action:manipulation;">
+                        Jetzt
+                    </button>
                 </div>
 
                 <div class="waypoint-list" id="waypointList">
@@ -795,6 +840,21 @@
                     <div class="setting-item">
                         <span>Standard-Geschwindigkeit</span>
                         <input type="number" class="setting-input" id="setting-default-speed" value="6" step="0.5"> <span class="unit-speed">kn</span>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Tagesplanung</h4>
+                    <div class="setting-item">
+                        <span>Tägliche Fahrzeit (0 = unbegrenzt)</span>
+                        <div style="display:flex; align-items:center; gap:var(--space-sm);">
+                            <input type="number" class="setting-input" id="setting-daily-travel-hours" value="0" min="0" max="24" step="0.5" style="width:60px;">
+                            <span style="color:var(--text-dim); font-size:var(--fs-sm);">h</span>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Fahrtbeginn täglich</span>
+                        <input type="time" class="setting-input" id="setting-day-start-time" value="08:00" style="width:90px;">
                     </div>
                 </div>
 

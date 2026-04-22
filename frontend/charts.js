@@ -84,13 +84,14 @@ function loadChartOverlays() {
                     maxzoom: 18
                 });
 
-                // Add raster layer (before labels if possible)
+                // Add raster layer hidden by default — toggle via toggleCharts()
                 const firstSymbolLayer = map.getStyle().layers.find(l => l.type === 'symbol');
                 map.addLayer({
                     id: layerId,
                     type: 'raster',
                     source: sourceId,
                     minzoom: 14,
+                    layout: { 'visibility': 'none' },
                     paint: {
                         'raster-opacity': ['interpolate', ['linear'], ['zoom'], 14, 0, 15, 0.6, 16, 0.8]
                     }

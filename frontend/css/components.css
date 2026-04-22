@@ -105,6 +105,10 @@ select option {
     margin-bottom: var(--space-lg);
 }
 
+@media (orientation: portrait) {
+    .route-summary { grid-template-columns: repeat(2, 1fr); }
+}
+
 .route-stat {
     background: var(--bg-card);
     padding: var(--space-base) var(--space-sm);
@@ -939,11 +943,9 @@ select option {
    ============================================ */
 @media (max-width: 1280px) {
     .weather-details { grid-template-columns: repeat(2, 1fr); }
-    .route-summary { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 500px) {
-    .route-summary { grid-template-columns: repeat(2, 1fr); }
     .weather-details { grid-template-columns: repeat(2, 1fr); }
     .tank-overview { grid-template-columns: 1fr; }
     .trip-stats { grid-template-columns: repeat(3, 1fr); }
