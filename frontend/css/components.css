@@ -910,6 +910,14 @@ select option {
     color: var(--text-dim);
 }
 
+.detail-section-label {
+    font-size: var(--fs-sm);
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: var(--space-sm);
+}
+
 .modal-btn {
     flex: 1;
     padding: var(--space-lg);

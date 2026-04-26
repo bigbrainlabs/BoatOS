@@ -882,6 +882,8 @@ function drawWaterwayRoute(routeData, context) {
     let etaHours;
     if (routeData.properties.duration_adjusted_h) {
         etaHours = routeData.properties.duration_adjusted_h;
+        // Effektive Geschwindigkeit aus korrigierter Fahrzeit ableiten (inkl. Strömung)
+        if (distanceNM > 0) avgSpeed = distanceNM / etaHours;
     } else {
         etaHours = distanceNM / avgSpeed;
     }

@@ -510,6 +510,8 @@ window.BoatOS = {
     exportTrip: (tripId) => logbook.exportTrip(tripId),
     viewTripOnMap: (tripId) => logbook.viewTripOnMap(tripId),
     deleteTrip: (tripId) => logbook.deleteTrip(tripId),
+    openTripDetail: (tripId) => logbook.openTripDetail(tripId),
+    closeTripDetailModal: () => logbook.closeTripDetailModal(),
     loadCrewManagement: () => logbook.loadCrewManagement(),
     showCrewManageModal: (member) => logbook.showCrewManageModal(member),
     closeCrewManageModal: () => logbook.closeCrewManageModal(),
@@ -538,8 +540,7 @@ window.BoatOS = {
             ui.showNotification('Mindestens 2 Wegpunkte benötigt', 'warning');
             return;
         }
-        const distEl = document.getElementById('route-distance');
-        const distNM = parseFloat(distEl?.textContent) || 0;
+        const distNM = navigation.getCurrentRouteData?.()?.totalDistanceNM || 0;
         const autoName = wps.map(w => w.name).join(' → ');
         const name = prompt('Routenname:', autoName);
         if (name === null) return; // cancelled
@@ -583,7 +584,9 @@ window.BoatOS = {
                 ${routeList.length === 0 ? `<div style="text-align:center;padding:var(--space-2xl);color:var(--text-dim);">Keine gespeicherten Routen</div>` :
                     routeList.map(r => {
                         const date = new Date(r.created).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'2-digit' });
-                        const dist = r.totalDistanceNM ? ` · ${parseFloat(r.totalDistanceNM).toFixed(1)} NM` : '';
+                        const dist = r.totalDistanceNM
+                            ? ` · ${window.formatDistance ? window.formatDistance(parseFloat(r.totalDistanceNM)) : parseFloat(r.totalDistanceNM).toFixed(1) + ' NM'}`
+                            : '';
                         const wps = (r.waypoints || []).length;
                         return `
                         <div style="display:flex; align-items:center; gap:var(--space-md); padding:var(--space-sm) 0; border-bottom:1px solid var(--border);">
@@ -646,7 +649,12 @@ window.BoatOS = {
 
     // === SETTINGS FUNCTIONS (delegated) ===
     saveAllSettings: () => settings.saveAllSettings(),
-    loadAllSettings: () => settings.loadAllSettings()
+    loadAllSettings: () => settings.loadAllSettings(),
+    settings: {
+        applyGpsConfig: () => settings.applyGpsConfig(),
+        exportSettings: () => settings.exportSettings?.(),
+        importSettings: () => settings.importSettings?.(),
+    }
 };
 
 // ==================== INITIALIZATION ====================

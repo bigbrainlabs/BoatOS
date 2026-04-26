@@ -55,6 +55,7 @@ current_track = []
 track_recording = False
 track_paused = False
 track_sensors_config: List[str] = []
+current_pegel_nearby: List[Dict] = []   # cached Pegel stations near boat, updated every 15 min
 weather_data: Dict[str, Any] = {}
 gps_module_data: Dict[str, Any] = {}
 chart_layers: List[Dict[str, Any]] = []
@@ -312,6 +313,31 @@ async def get_sensors_list():
             "base_name": base_name
         })
 
+    # Inject synthetic GPS sensors (altitude, HDOP, satellites) from gps_service
+    gps_status = gps_service.get_gps_status()
+    gps_online = "online" if gps_status.get("fix") else "standby"
+    synthetic_gps = [
+        ("navigation/altitude",  "📡 Höhe (GPS)",    {"value": gps_status.get("altitude") or 0},  "m"),
+        ("navigation/accuracy",  "📡 GPS-Genauigkeit (HDOP)", {"value": gps_status.get("hdop") or 0}, ""),
+        ("navigation/satellites","📡 Satelliten",    {"value": gps_status.get("satellites") or 0}, ""),
+    ]
+    existing_bases = {s["base_name"] for s in sensors_list}
+    for base_name, name, values, unit in synthetic_gps:
+        if base_name not in existing_bases:
+            sensors_list.append({
+                "id": base_name.replace('/', '_'),
+                "name": name,
+                "type": "navigation",
+                "status": gps_online,
+                "values": values,
+                "topics": [],
+                "icon": "📡",
+                "age_minutes": 0,
+                "has_alias": False,
+                "base_name": base_name,
+                "unit": unit
+            })
+
     # Sort sensors by name
     sensors_list.sort(key=lambda s: s["name"])
 
@@ -322,6 +348,49 @@ async def get_sensors_list():
         "standby": sum(1 for s in sensors_list if s["status"] == "standby"),
         "sensors": sensors_list
     }
+
+@app.post("/api/gps/config")
+async def set_gps_config(config: Dict[str, Any]):
+    """Update GPS device config in SignalK settings and restart SignalK"""
+    import subprocess, json as _json
+    signalk_settings = Path("/home/arielle/.signalk/settings.json")
+    try:
+        with open(signalk_settings, 'r') as f:
+            sk = _json.load(f)
+        device   = config.get("device", "/dev/ttyUSB0")
+        baudrate = int(config.get("baudrate", 4800))
+        for provider in sk.get("pipedProviders", []):
+            if provider.get("id") == "gps-usb":
+                for el in provider.get("pipeElements", []):
+                    if "serialport" in el.get("type", ""):
+                        el["options"]["device"]   = device
+                        el["options"]["baudrate"] = baudrate
+        with open(signalk_settings, 'w') as f:
+            _json.dump(sk, f, indent=2)
+        subprocess.run(["sudo", "systemctl", "restart", "signalk.service"], check=True)
+        return {"status": "ok", "device": device, "baudrate": baudrate}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/gps/config")
+async def get_gps_config():
+    """Get current GPS device config from SignalK settings"""
+    import json as _json
+    signalk_settings = Path("/home/arielle/.signalk/settings.json")
+    try:
+        with open(signalk_settings, 'r') as f:
+            sk = _json.load(f)
+        for provider in sk.get("pipedProviders", []):
+            if provider.get("id") == "gps-usb":
+                for el in provider.get("pipeElements", []):
+                    if "serialport" in el.get("type", ""):
+                        return {
+                            "device":   el["options"].get("device",   "/dev/ttyUSB0"),
+                            "baudrate": el["options"].get("baudrate", 4800)
+                        }
+    except Exception:
+        pass
+    return {"device": "/dev/ttyUSB0", "baudrate": 4800}
 
 @app.get("/api/gps")
 async def get_gps():
@@ -2009,6 +2078,7 @@ async def start_track_recording(request: Dict[str, Any] = None):
             "wind_speed": weather_data.get("current", {}).get("wind_speed"),
             "wind_deg": weather_data.get("current", {}).get("wind_deg")
         } if weather_data else None,
+        "pegel_nearby": _get_nearest_pegel(sensor_data["gps"]["lat"], sensor_data["gps"]["lon"], n=5),
         "notes": "Fahrt gestartet",
         "crew_ids": crew_ids
     }
@@ -2039,6 +2109,7 @@ async def stop_track_recording():
                 "wind_speed": weather_data.get("current", {}).get("wind_speed"),
                 "wind_deg": weather_data.get("current", {}).get("wind_deg")
             } if weather_data else None,
+            "pegel_nearby": _get_nearest_pegel(sensor_data["gps"]["lat"], sensor_data["gps"]["lon"], n=5),
             "points": len(current_track),
             "distance": calculate_track_distance(),
             "duration": calculate_track_duration(),
@@ -2255,8 +2326,26 @@ async def track_recording_loop():
     while True:
         await asyncio.sleep(10)
         if track_recording and not track_paused and sensor_data["gps"]["lat"] != 0:
+            spd = sensor_data["speed"]
+            # If GPS doesn't report SOG, calculate from last track point
+            if spd == 0 and len(current_track) > 0:
+                prev = current_track[-1]
+                try:
+                    dt_h = (datetime.now() - datetime.fromisoformat(prev["timestamp"])).total_seconds() / 3600
+                    if 0 < dt_h < 1:
+                        import math as _math
+                        R = 6371000
+                        lat1, lat2 = _math.radians(prev["lat"]), _math.radians(sensor_data["gps"]["lat"])
+                        dLat = lat2 - lat1
+                        dLon = _math.radians(sensor_data["gps"]["lon"] - prev["lon"])
+                        a = _math.sin(dLat/2)**2 + _math.cos(lat1)*_math.cos(lat2)*_math.sin(dLon/2)**2
+                        dist_m = 2 * _math.atan2(_math.sqrt(a), _math.sqrt(1-a)) * R
+                        spd = round((dist_m / 1852) / dt_h, 1)
+                        if spd > 50: spd = 0  # filter GPS jump outliers
+                except Exception:
+                    pass
             point = {"lat": sensor_data["gps"]["lat"], "lon": sensor_data["gps"]["lon"],
-                     "timestamp": datetime.now().isoformat(), "speed": sensor_data["speed"],
+                     "timestamp": datetime.now().isoformat(), "speed": spd,
                      "heading": sensor_data["heading"]}
             if track_sensors_config:
                 sensors_snapshot = {}
@@ -2274,6 +2363,10 @@ async def track_recording_loop():
                         sensors_snapshot[base_name] = vals
                 if sensors_snapshot:
                     point["sensors"] = sensors_snapshot
+            # Add nearest Pegel reading to track point
+            nearest_pegel = _get_nearest_pegel(point["lat"], point["lon"], n=2)
+            if nearest_pegel:
+                point["pegel"] = nearest_pegel
             current_track.append(point)
             # Prevent unbounded memory growth on long trips (10k pts ≈ 28h at 10s interval)
             if len(current_track) > 10000:
@@ -2282,6 +2375,50 @@ async def track_recording_loop():
                 global _distance_cache_len
                 if _distance_cache_len > 0:
                     _distance_cache_len -= 1
+
+# ==================== PEGEL TRACKER ====================
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    import math as _m
+    R = 6371.0
+    dLat = _m.radians(lat2 - lat1)
+    dLon = _m.radians(lon2 - lon1)
+    a = _m.sin(dLat/2)**2 + _m.cos(_m.radians(lat1)) * _m.cos(_m.radians(lat2)) * _m.sin(dLon/2)**2
+    return 2 * _m.atan2(_m.sqrt(a), _m.sqrt(1-a)) * R
+
+def _get_nearest_pegel(lat: float, lon: float, n: int = 3) -> List[Dict]:
+    """Return up to n nearest cached Pegel stations, sorted by distance."""
+    if not current_pegel_nearby or lat == 0:
+        return []
+    with_dist = []
+    for g in current_pegel_nearby:
+        dist = _haversine_km(lat, lon, g['lat'], g['lon'])
+        with_dist.append({
+            "name": g["name"], "water": g["water"],
+            "cm": g["water_level_cm"], "dist_km": round(dist, 1),
+            "timestamp": g.get("timestamp")
+        })
+    with_dist.sort(key=lambda x: x["dist_km"])
+    return with_dist[:n]
+
+async def pegel_tracker_loop():
+    """Background task: refresh nearby Pegel stations every 15 min."""
+    global current_pegel_nearby
+    await asyncio.sleep(30)  # let GPS settle on startup
+    while True:
+        lat = sensor_data["gps"]["lat"]
+        lon = sensor_data["gps"]["lon"]
+        if lat != 0:
+            try:
+                pad = 1.0  # ~100 km radius
+                gauges = await asyncio.get_event_loop().run_in_executor(
+                    None, pegelonline.fetch_gauges,
+                    lat - pad, lon - pad, lat + pad, lon + pad
+                )
+                current_pegel_nearby = gauges
+                print(f"📊 Pegel-Cache: {len(gauges)} Stationen ({lat:.3f},{lon:.3f} ±{pad}°)")
+            except Exception as e:
+                print(f"⚠️ Pegel-Tracker: {e}")
+        await asyncio.sleep(900)  # 15 minutes
 
 # ==================== MQTT ====================
 def load_known_topics():
@@ -2860,6 +2997,8 @@ def init_waterway_router():
             settings = json.load(f)
             routing_config = settings.get('routing', {})
             osrm_url = routing_config.get('osrmUrl', osrm_url)
+            # OSRM only binds IPv4 — replace localhost with 127.0.0.1 to avoid IPv6 resolution
+            osrm_url = osrm_url.replace('//localhost:', '//127.0.0.1:')
             routing_provider = routing_config.get('provider', 'osrm')
             osm_file = routing_config.get('osmFile', '/home/arielle/osrm_data/germany-latest.osm.pbf')
     except:
@@ -3754,6 +3893,7 @@ async def disconnect_wifi():
 async def startup_event():
     # asyncio.create_task(signalk_listener())  # DISABLED: Duplicate GPS reader, gps_service handles this
     asyncio.create_task(track_recording_loop())
+    asyncio.create_task(pegel_tracker_loop())
     asyncio.create_task(fetch_weather())
     asyncio.create_task(fetch_weather_alerts_periodic())  # Start periodic weather alerts
     asyncio.create_task(gps_service.read_gps_from_signalk())  # Start GPS service from SignalK
