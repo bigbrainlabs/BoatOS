@@ -12,7 +12,7 @@
     <!-- BoatOS Styles -->
     <link rel="stylesheet" href="css/theme.css?v=10">
     <link rel="stylesheet" href="css/layout.css?v=10">
-    <link rel="stylesheet" href="css/components.css?v=11">
+    <link rel="stylesheet" href="css/components.css?v=12">
 </head>
 <body>
     <!-- ============================================
@@ -587,6 +587,20 @@
     </div>
 
     <!-- ============================================
+         TRIP DETAIL MODAL
+         ============================================ -->
+    <div class="modal-overlay" id="trip-detail-modal" onclick="BoatOS.closeTripDetailModal()">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h3>Fahrt Details</h3>
+                <button class="modal-close-btn" onclick="BoatOS.closeTripDetailModal()">✕</button>
+            </div>
+            <div id="trip-detail-body" style="overflow-y: auto; flex: 1; padding-bottom: var(--space-md);">
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
          SEARCH OVERLAY
          ============================================ -->
     <div class="search-overlay" id="searchOverlay" onclick="BoatOS.ui.closeSearch(event)">
@@ -968,6 +982,37 @@
 
             <!-- GPS Settings -->
             <div id="settings-gps" class="section-hidden">
+                <div class="setting-group">
+                    <h4>GPS-Gerät</h4>
+                    <div class="setting-item">
+                        <span>Port</span>
+                        <input type="text" class="setting-input" id="setting-gps-device" value="/dev/ttyUSB0"
+                               list="gps-device-list" placeholder="/dev/ttyUSB0" style="width: 130px;">
+                        <datalist id="gps-device-list">
+                            <option value="/dev/ttyUSB0">
+                            <option value="/dev/ttyUSB1">
+                            <option value="/dev/ttyACM0">
+                            <option value="/dev/ttyACM1">
+                        </datalist>
+                    </div>
+                    <div class="setting-item">
+                        <span>Baudrate</span>
+                        <select class="setting-select" id="setting-gps-baudrate">
+                            <option value="4800">4800</option>
+                            <option value="9600">9600</option>
+                            <option value="19200">19200</option>
+                            <option value="38400">38400</option>
+                            <option value="57600">57600</option>
+                            <option value="115200">115200</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <button onclick="BoatOS.settings.applyGpsConfig()" class="btn-secondary" style="width:100%;">
+                            🔄 Übernehmen &amp; SignalK neu starten
+                        </button>
+                    </div>
+                    <div id="gps-config-status" style="font-size:var(--fs-sm); color:var(--text-dim); margin-top:var(--space-xs); display:none;"></div>
+                </div>
                 <div class="setting-group">
                     <h4>SignalK Server</h4>
                     <div class="setting-item">

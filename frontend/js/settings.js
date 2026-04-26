@@ -440,6 +440,16 @@ export async function loadAllSettings() {
         if (gpsSource && settings.gps.source) gpsSource.value = settings.gps.source;
     }
 
+    // Load GPS device config from backend (live from SignalK settings)
+    try {
+        const cfgResp = await fetch(`${API_URL}/api/gps/config`);
+        const cfg = await cfgResp.json();
+        const devEl = document.getElementById('setting-gps-device');
+        const baudEl = document.getElementById('setting-gps-baudrate');
+        if (devEl && cfg.device) devEl.value = cfg.device;
+        if (baudEl && cfg.baudrate) baudEl.value = String(cfg.baudrate);
+    } catch (e) {}
+
     // === ROUTING ===
     if (settings.routing) {
         const routingProvider = document.getElementById('setting-routing-provider');
@@ -789,5 +799,29 @@ export async function switchOSRMRegion() {
     } catch (error) {
         showMsg(`❌ Fehler: ${error.message}`);
         if (statusEl) statusEl.textContent = `❌ ${error.message}`;
+    }
+}
+
+export async function applyGpsConfig() {
+    const device   = document.getElementById('setting-gps-device')?.value?.trim() || '/dev/ttyUSB0';
+    const baudrate = parseInt(document.getElementById('setting-gps-baudrate')?.value || '4800');
+    const statusEl = document.getElementById('gps-config-status');
+
+    if (statusEl) { statusEl.textContent = '⏳ Wird übernommen…'; statusEl.style.display = 'block'; }
+
+    try {
+        const resp = await fetch(`${API_URL}/api/gps/config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device, baudrate })
+        });
+        const result = await resp.json();
+        if (result.status === 'ok') {
+            if (statusEl) statusEl.textContent = `✅ ${device} @ ${baudrate} Baud — SignalK neugestartet`;
+        } else {
+            if (statusEl) statusEl.textContent = `❌ ${result.message || 'Fehler'}`;
+        }
+    } catch (e) {
+        if (statusEl) statusEl.textContent = `❌ Verbindungsfehler`;
     }
 }

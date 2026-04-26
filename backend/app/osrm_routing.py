@@ -146,16 +146,24 @@ class OSRMRouter:
             return self._direct_route(waypoints)
 
         try:
+            # Snap waypoints to nearest waterway node before routing
+            snapped = await self._snap_waypoints(waypoints)
+
             # Build OSRM route request
             # Format: /route/v1/driving/lon1,lat1;lon2,lat2?overview=full&geometries=geojson
-            coordinates_str = ";".join([f"{lon},{lat}" for lon, lat in waypoints])
+            coordinates_str = ";".join([f"{lon},{lat}" for lon, lat in snapped])
             url = f"{self.osrm_url}/route/v1/driving/{coordinates_str}"
 
+            # radiuses=unlimited lets OSRM snap each waypoint to the nearest
+            # waterway node regardless of distance (prevents NoSegment errors
+            # when a WP is placed away from the waterway network)
+            radiuses = ";".join(["unlimited"] * len(snapped))
             params = {
                 "overview": "full",
                 "geometries": "geojson",
-                "steps": "true",  # Enable steps to get maneuver details
-                "annotations": "true"  # Enable annotations for metadata
+                "steps": "true",
+                "annotations": "true",
+                "radiuses": radiuses
             }
 
             async with aiohttp.ClientSession() as session:
@@ -233,6 +241,36 @@ class OSRMRouter:
         except Exception as e:
             print(f"❌ OSRM routing error: {e}")
             return self._direct_route(waypoints)
+
+    async def _snap_waypoints(self, waypoints: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
+        """
+        Snap each waypoint to the nearest node on the waterway network using OSRM /nearest.
+        Falls back to original coordinate if snapping fails or snapped point is > 5km away.
+        """
+        snapped = []
+        MAX_SNAP_DIST_M = 5000  # ignore snaps further than 5km
+
+        async with aiohttp.ClientSession() as session:
+            for lon, lat in waypoints:
+                try:
+                    url = f"{self.osrm_url}/nearest/v1/driving/{lon},{lat}?number=1"
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=3)) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            if data.get("code") == "Ok" and data.get("waypoints"):
+                                wp = data["waypoints"][0]
+                                snap_lon, snap_lat = wp["location"]
+                                dist = wp.get("distance", MAX_SNAP_DIST_M + 1)
+                                if dist <= MAX_SNAP_DIST_M:
+                                    snapped.append((snap_lon, snap_lat))
+                                    if dist > 100:
+                                        print(f"📍 Snapped WP ({lat:.4f},{lon:.4f}) → ({snap_lat:.4f},{snap_lon:.4f}) dist={dist:.0f}m")
+                                    continue
+                except Exception:
+                    pass
+                snapped.append((lon, lat))  # fallback: original coordinate
+
+        return snapped
 
     def _direct_route(self, waypoints: List[Tuple[float, float]]) -> dict:
         """Fallback direct line routing (Rhumbline)"""

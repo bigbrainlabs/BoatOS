@@ -528,26 +528,361 @@ export function renderTripCard(trip) {
     const dist = window.formatDistance ? window.formatDistance(parseFloat(trip.distance || 0)) : (trip.distance || 0) + ' NM';
 
     return `
-        <div style="background: var(--bg-card); border-radius: 12px; padding: 15px; border: 1px solid var(--border);">
-            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
-                <div>
+        <div style="background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); overflow: hidden;">
+            <div onclick="BoatOS.openTripDetail(${trip.id})"
+                 style="padding: 15px 15px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: start; gap: 8px;"
+                 title="Details anzeigen">
+                <div style="flex: 1; min-width: 0;">
                     <div style="font-size: 16px; font-weight: 600;">🚢 ${dateStr}</div>
-                    <div style="font-size: 12px; color: var(--text-dim);">${timeStr} Uhr</div>
+                    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;">${timeStr} Uhr</div>
+                    <div style="display: flex; gap: 14px; flex-wrap: wrap;">
+                        <div><span style="font-size: 17px; font-weight: 700; color: var(--accent);">${dist}</span></div>
+                        <div><span style="font-size: 17px; font-weight: 700; color: var(--accent);">${trip.duration || '0:00'}</span> <span style="font-size: 12px; color: var(--text-dim);">Dauer</span></div>
+                        <div><span style="font-size: 17px; font-weight: 700; color: var(--accent);">${trip.points || 0}</span> <span style="font-size: 12px; color: var(--text-dim);">Pkt</span></div>
+                    </div>
                 </div>
-                ${trip.crew_ids?.length ? `<div style="font-size: 12px; color: var(--text-dim);">👥 ${trip.crew_ids.length}</div>` : ''}
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0;">
+                    ${trip.crew_ids?.length ? `<div style="font-size: 12px; color: var(--text-dim);">👥 ${trip.crew_ids.length}</div>` : ''}
+                    <div style="font-size: 18px; color: var(--text-dim); opacity: 0.5;">›</div>
+                </div>
             </div>
-            <div style="display: flex; gap: 15px; margin-bottom: 12px;">
-                <div><span style="font-size: 18px; font-weight: 700; color: var(--accent);">${dist}</span></div>
-                <div><span style="font-size: 18px; font-weight: 700; color: var(--accent);">${trip.duration || '0:00'}</span> <span style="font-size: 12px; color: var(--text-dim);">Dauer</span></div>
-                <div><span style="font-size: 18px; font-weight: 700; color: var(--accent);">${trip.points || 0}</span> <span style="font-size: 12px; color: var(--text-dim);">Punkte</span></div>
-            </div>
-            <div style="display: flex; gap: 8px;">
-                <button onclick="BoatOS.exportTrip(${trip.id})" style="flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); color: var(--text); font-size: 12px; cursor: pointer;">💾 GPX</button>
-                <button id="btn-view-map-${trip.id}" onclick="BoatOS.viewTripOnMap(${trip.id})" style="flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); color: var(--text); font-size: 12px; cursor: pointer;">🗺️ Karte</button>
-                <button onclick="BoatOS.deleteTrip(${trip.id})" style="padding: 8px 12px; border: 1px solid var(--danger); border-radius: 8px; background: transparent; color: var(--danger); font-size: 12px; cursor: pointer;">🗑️</button>
+            <div style="display: flex; gap: 0; border-top: 1px solid var(--border);">
+                <button onclick="event.stopPropagation(); BoatOS.exportTrip(${trip.id})" style="flex: 1; padding: 9px 4px; border: none; border-right: 1px solid var(--border); border-radius: 0; background: var(--bg-panel); color: var(--text); font-size: 12px; cursor: pointer;">💾 GPX</button>
+                <button id="btn-view-map-${trip.id}" onclick="event.stopPropagation(); BoatOS.viewTripOnMap(${trip.id})" style="flex: 1; padding: 9px 4px; border: none; border-right: 1px solid var(--border); border-radius: 0; background: var(--bg-panel); color: var(--text); font-size: 12px; cursor: pointer;">🗺️ Karte</button>
+                <button onclick="event.stopPropagation(); BoatOS.deleteTrip(${trip.id})" style="padding: 9px 14px; border: none; border-radius: 0; background: var(--bg-panel); color: var(--danger); font-size: 12px; cursor: pointer;">🗑️</button>
             </div>
         </div>
     `;
+}
+
+// ==================== TRIP DETAIL ====================
+
+function _windDir(deg) {
+    if (deg == null) return '';
+    const dirs = ['N','NO','O','SO','S','SW','W','NW'];
+    return dirs[Math.round(deg / 45) % 8];
+}
+
+function _weatherBlock(w, label) {
+    if (!w) return '';
+    const windFmt = window.formatSpeed ? window.formatSpeed(w.wind_speed || 0, 0) : `${(w.wind_speed || 0).toFixed(0)} kn`;
+    return `
+        <div style="flex:1; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:var(--space-md);">
+            <div style="font-size:var(--fs-sm); color:var(--text-dim); margin-bottom:4px;">${label}</div>
+            <div style="font-size:var(--fs-lg); font-weight:600;">${w.temp != null ? w.temp.toFixed(1) + '°C' : '--'}</div>
+            <div style="font-size:var(--fs-sm); color:var(--text-dim);">${w.description || ''}</div>
+            <div style="font-size:var(--fs-sm); color:var(--text-dim); margin-top:2px;">💨 ${windFmt} ${_windDir(w.wind_deg)}</div>
+        </div>`;
+}
+
+/**
+ * Fahrt-Detailansicht öffnen
+ */
+export async function openTripDetail(tripId) {
+    const modal = document.getElementById('trip-detail-modal');
+    const body = document.getElementById('trip-detail-body');
+    if (!modal || !body) return;
+
+    body.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-dim);">⏳ Laden…</div>';
+    modal.style.display = 'flex';
+
+    try {
+        const [tripResp, crewResp] = await Promise.all([
+            fetch(`${getApiUrl()}/api/logbook/trip/${tripId}`),
+            fetch(`${getApiUrl()}/api/crew`)
+        ]);
+        const trip = await tripResp.json();
+        const allCrew = await crewResp.json();
+
+        if (trip.error) {
+            body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger);">Fehler beim Laden</div>';
+            return;
+        }
+
+        const startDate = new Date(trip.trip_start);
+        const endDate = trip.trip_end ? new Date(trip.trip_end) : null;
+        const dateStr = startDate.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+        const timeStr = startDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        const endTimeStr = endDate ? endDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '--';
+        const dist = window.formatDistance ? window.formatDistance(parseFloat(trip.distance || 0)) : (trip.distance || 0) + ' NM';
+
+        // Avg speed
+        const entries = trip.entries || [];
+        const startEntry = entries.find(e => e.type === 'trip_start');
+        const endEntry = entries.find(e => e.type === 'trip_end');
+
+        const durationParts = (trip.duration || '0:00').split(':');
+        const durationH = parseInt(durationParts[0] || 0) + (parseInt(durationParts[1] || 0) / 60);
+        const distNM = parseFloat(trip.distance || 0);
+        const avgSpeedKn = durationH > 0 ? distNM / durationH : 0;
+        const avgSpeedFmt = window.formatSpeed ? window.formatSpeed(avgSpeedKn, 1) : avgSpeedKn.toFixed(1) + ' kn';
+
+        // Max speed: prefer GPS-reported speed, fall back to calculated from coordinates
+        let maxSpeedKn = 0;
+        if (trip.track_data && trip.track_data.length > 0) {
+            const reportedMax = Math.max(...trip.track_data.map(p => p.speed || 0));
+            if (reportedMax > 0) {
+                maxSpeedKn = reportedMax;
+            } else if (trip.track_data.length >= 2) {
+                // Calculate from consecutive points: haversine / time diff
+                for (let i = 1; i < trip.track_data.length; i++) {
+                    const a = trip.track_data[i - 1], b = trip.track_data[i];
+                    const dt = (new Date(b.timestamp) - new Date(a.timestamp)) / 3600000; // hours
+                    if (dt <= 0 || dt > 1) continue; // skip gaps > 1h (pauses)
+                    const R = 6371000;
+                    const dLat = (b.lat - a.lat) * Math.PI / 180;
+                    const dLon = (b.lon - a.lon) * Math.PI / 180;
+                    const sinA = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180) * Math.cos(b.lat*Math.PI/180) * Math.sin(dLon/2)**2;
+                    const distM = 2 * Math.atan2(Math.sqrt(sinA), Math.sqrt(1-sinA)) * R;
+                    const speedKn = (distM / 1852) / dt;
+                    if (speedKn > maxSpeedKn && speedKn < 50) maxSpeedKn = speedKn; // cap at 50kn to filter outliers
+                }
+            }
+        }
+        const maxSpeedFmt = window.formatSpeed ? window.formatSpeed(maxSpeedKn, 1) : maxSpeedKn.toFixed(1) + ' kn';
+
+        // Crew
+        let crewHtml = '';
+        if (trip.crew_ids && trip.crew_ids.length > 0) {
+            const crewMembers = allCrew.filter(m => trip.crew_ids.includes(m.id));
+            if (crewMembers.length > 0) {
+                crewHtml = `
+                    <div style="margin-bottom: var(--space-lg);">
+                        <div class="detail-section-label">Crew</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: var(--space-sm);">
+                            ${crewMembers.map(m => `
+                                <div style="display:flex; align-items:center; gap:var(--space-sm); background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:var(--space-xs) var(--space-md);">
+                                    <span style="font-size:20px;">${m.avatar || '👤'}</span>
+                                    <div>
+                                        <div style="font-size:var(--fs-base); font-weight:600;">${m.name}</div>
+                                        <div style="font-size:var(--fs-sm); color:var(--text-dim);">${m.role}</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>`;
+            }
+        }
+
+        // Weather
+        const startWeather = startEntry?.weather;
+        const endWeather = endEntry?.weather;
+        let weatherHtml = '';
+        if (startWeather || endWeather) {
+            weatherHtml = `
+                <div style="margin-bottom: var(--space-lg);">
+                    <div class="detail-section-label">Wetter</div>
+                    <div style="display: flex; gap: var(--space-sm);">
+                        ${_weatherBlock(startWeather, '🚀 Abfahrt')}
+                        ${endWeather ? _weatherBlock(endWeather, '⚓ Ankunft') : ''}
+                    </div>
+                </div>`;
+        }
+
+        // Pegel — snapshot from start/end entries + min/max per station from track points
+        let pegelHtml = '';
+        {
+            // Collect all pegel readings from track points per station
+            const stationTrack = {};  // name -> {cm values[]}
+            if (trip.track_data) {
+                for (const pt of trip.track_data) {
+                    if (!pt.pegel) continue;
+                    for (const p of pt.pegel) {
+                        if (!stationTrack[p.name]) stationTrack[p.name] = { water: p.water, dist_km: p.dist_km, values: [] };
+                        stationTrack[p.name].values.push(p.cm);
+                    }
+                }
+            }
+
+            // Fallback: use snapshot from start/end entry if no track pegel
+            const pegelSnapshot = startEntry?.pegel_nearby || endEntry?.pegel_nearby || [];
+
+            const stations = Object.keys(stationTrack).length > 0
+                ? Object.entries(stationTrack).map(([name, d]) => {
+                    const min = Math.min(...d.values), max = Math.max(...d.values);
+                    const avg = d.values.reduce((a, b) => a + b, 0) / d.values.length;
+                    return { name, water: d.water, dist_km: d.dist_km, min, max, avg: Math.round(avg) };
+                  }).sort((a, b) => a.dist_km - b.dist_km)
+                : pegelSnapshot.map(p => ({ name: p.name, water: p.water, dist_km: p.dist_km, min: p.cm, max: p.cm, avg: p.cm }));
+
+            if (stations.length > 0) {
+                const rows = stations.map(s => `
+                    <tr>
+                        <td style="padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm);">
+                            <div style="font-weight:600;">${s.name}</div>
+                            <div style="color:var(--text-dim); font-size:11px;">${s.water} · ${s.dist_km} km</div>
+                        </td>
+                        <td style="padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm); text-align:right; color:var(--text-dim);">${s.min} cm</td>
+                        <td style="padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm); text-align:right; color:var(--text-dim);">${s.avg} cm</td>
+                        <td style="padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm); text-align:right; color:var(--accent); font-weight:600;">${s.max} cm</td>
+                    </tr>`).join('');
+
+                pegelHtml = `
+                    <div style="margin-bottom: var(--space-lg);">
+                        <div class="detail-section-label">Pegelstände</div>
+                        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden;">
+                            <table style="width:100%; border-collapse:collapse;">
+                                <thead>
+                                    <tr style="border-bottom:1px solid var(--border);">
+                                        <th style="padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm); color:var(--text-dim); text-align:left; font-weight:500;">Station</th>
+                                        <th style="padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm); color:var(--text-dim); text-align:right; font-weight:500;">Min</th>
+                                        <th style="padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm); color:var(--text-dim); text-align:right; font-weight:500;">Ø</th>
+                                        <th style="padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm); color:var(--text-dim); text-align:right; font-weight:500;">Max</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${rows}</tbody>
+                            </table>
+                        </div>
+                    </div>`;
+            }
+        }
+
+        // Sensor stats from track data
+        let sensorHtml = '';
+        if (trip.track_data && trip.track_data.length > 0) {
+            // Collect all sensor paths and their values across all points
+            const sensorAccum = {};  // path -> {sum, min, max, count}
+            for (const pt of trip.track_data) {
+                if (!pt.sensors) continue;
+                for (const [baseName, subObj] of Object.entries(pt.sensors)) {
+                    for (const [sub, val] of Object.entries(subObj)) {
+                        const key = sub === 'value' ? baseName : `${baseName}/${sub}`;
+                        const num = parseFloat(val);
+                        if (isNaN(num)) continue;
+                        if (!sensorAccum[key]) sensorAccum[key] = { sum: 0, min: Infinity, max: -Infinity, count: 0 };
+                        sensorAccum[key].sum += num;
+                        sensorAccum[key].min = Math.min(sensorAccum[key].min, num);
+                        sensorAccum[key].max = Math.max(sensorAccum[key].max, num);
+                        sensorAccum[key].count++;
+                    }
+                }
+            }
+
+            const sensorKeys = Object.keys(sensorAccum);
+            if (sensorKeys.length > 0) {
+                // Load sensor metadata for labels
+                let nameMap = {};
+                try {
+                    const metaResp = await fetch(`${getApiUrl()}/api/sensors/list`);
+                    const metaData = await metaResp.json();
+                    (metaData.sensors || []).forEach(s => {
+                        nameMap[s.base_name] = { name: s.name, icon: s.icon, unit: s.unit };
+                    });
+                } catch (e) {}
+
+                const rows = sensorKeys.map(key => {
+                    const acc = sensorAccum[key];
+                    const avg = acc.sum / acc.count;
+                    const baseName = key.includes('/') ? key.split('/').slice(0, -1).join('/') : key;
+                    const meta = nameMap[key] || nameMap[baseName] || {};
+                    const label = meta.icon ? `${meta.icon} ${meta.name || key}` : key;
+                    const unit = meta.unit || '';
+                    const fmt = (v) => Number.isInteger(v) ? v : v.toFixed(1);
+                    return `
+                        <tr>
+                            <td style="padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm); color: var(--text);">${label}</td>
+                            <td style="padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm); text-align:right; color: var(--text-dim);">${fmt(acc.min)}${unit}</td>
+                            <td style="padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm); text-align:right; color: var(--text-dim);">${fmt(avg)}${unit}</td>
+                            <td style="padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm); text-align:right; color: var(--accent); font-weight:600;">${fmt(acc.max)}${unit}</td>
+                        </tr>`;
+                }).join('');
+
+                sensorHtml = `
+                    <div style="margin-bottom: var(--space-lg);">
+                        <div class="detail-section-label">Sensordaten</div>
+                        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden;">
+                            <table style="width:100%; border-collapse:collapse;">
+                                <thead>
+                                    <tr style="border-bottom:1px solid var(--border);">
+                                        <th style="padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm); color: var(--text-dim); text-align:left; font-weight:500;">Sensor</th>
+                                        <th style="padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm); color: var(--text-dim); text-align:right; font-weight:500;">Min</th>
+                                        <th style="padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm); color: var(--text-dim); text-align:right; font-weight:500;">Ø</th>
+                                        <th style="padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm); color: var(--text-dim); text-align:right; font-weight:500;">Max</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${rows}</tbody>
+                            </table>
+                        </div>
+                    </div>`;
+            }
+        }
+
+        // Manual / pause / resume entries
+        const logEntries = entries.filter(e => !['trip_start','trip_end'].includes(e.type));
+        let entriesHtml = '';
+        if (logEntries.length > 0) {
+            entriesHtml = `
+                <div style="margin-bottom: var(--space-lg);">
+                    <div class="detail-section-label">Einträge</div>
+                    ${logEntries.map(e => renderLogEntry(e)).join('')}
+                </div>`;
+        }
+
+        // Start / end position
+        let posHtml = '';
+        const endPos = endEntry?.position;
+        const startPos = startEntry?.position;
+        const hasPos = (endPos?.lat && endPos?.lat !== 0) || (startPos?.lat && startPos?.lat !== 0);
+        if (hasPos) {
+            const fmtPos = (p) => p && p.lat ? `${p.lat.toFixed(4)}° N, ${p.lon.toFixed(4)}° E` : null;
+            const startPosStr = fmtPos(startPos);
+            const endPosStr = fmtPos(endPos);
+            posHtml = `
+                <div style="margin-bottom: var(--space-lg);">
+                    <div class="detail-section-label">Positionen</div>
+                    <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:var(--space-md); font-size:var(--fs-sm);">
+                        ${startPosStr ? `<div style="margin-bottom:4px;">🚀 ${startPosStr}</div>` : ''}
+                        ${endPosStr ? `<div>⚓ ${endPosStr}</div>` : ''}
+                    </div>
+                </div>`;
+        }
+
+        body.innerHTML = `
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, var(--bg-card) 0%, color-mix(in srgb, var(--accent) 10%, var(--bg-card)) 100%); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-lg); border: 1px solid var(--border);">
+                <div style="font-size: var(--fs-xl); font-weight: 700; margin-bottom: 2px;">🚢 ${dateStr}</div>
+                <div style="font-size: var(--fs-sm); color: var(--text-dim); margin-bottom: var(--space-md);">${timeStr} – ${endTimeStr} Uhr</div>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-sm);">
+                    <div style="background:rgba(255,255,255,0.04); border-radius:var(--radius-md); padding:var(--space-sm) var(--space-md); text-align:center;">
+                        <div style="font-size:var(--fs-xl); font-weight:700; color:var(--accent);">${dist}</div>
+                        <div style="font-size:var(--fs-sm); color:var(--text-dim);">Distanz</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.04); border-radius:var(--radius-md); padding:var(--space-sm) var(--space-md); text-align:center;">
+                        <div style="font-size:var(--fs-xl); font-weight:700; color:var(--accent);">${trip.duration || '--'}</div>
+                        <div style="font-size:var(--fs-sm); color:var(--text-dim);">Dauer</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.04); border-radius:var(--radius-md); padding:var(--space-sm) var(--space-md); text-align:center;">
+                        <div style="font-size:var(--fs-xl); font-weight:700; color:var(--accent);">${avgSpeedFmt}</div>
+                        <div style="font-size:var(--fs-sm); color:var(--text-dim);">Ø Geschw.</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.04); border-radius:var(--radius-md); padding:var(--space-sm) var(--space-md); text-align:center;">
+                        <div style="font-size:var(--fs-xl); font-weight:700; color:var(--accent);">${maxSpeedFmt}</div>
+                        <div style="font-size:var(--fs-sm); color:var(--text-dim);">Max. Geschw.</div>
+                    </div>
+                </div>
+            </div>
+            ${crewHtml}
+            ${weatherHtml}
+            ${pegelHtml}
+            ${sensorHtml}
+            ${posHtml}
+            ${entriesHtml}
+            <!-- Action buttons -->
+            <div style="display: flex; gap: var(--space-md);">
+                <button onclick="BoatOS.exportTrip(${trip.id})" style="flex:1; padding: var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-panel); color: var(--text); font-size: var(--fs-base); cursor: pointer;">💾 GPX</button>
+                <button onclick="BoatOS.closeTripDetailModal(); BoatOS.viewTripOnMap(${trip.id})" style="flex:1; padding: var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-panel); color: var(--text); font-size: var(--fs-base); cursor: pointer;">🗺️ Karte</button>
+                <button onclick="BoatOS.closeTripDetailModal(); if(confirm('Diese Fahrt wirklich löschen?')) BoatOS.deleteTrip(${trip.id})" style="padding: var(--space-md) var(--space-lg); border: 1px solid var(--danger); border-radius: var(--radius-lg); background: transparent; color: var(--danger); font-size: var(--fs-base); cursor: pointer;">🗑️</button>
+            </div>
+        `;
+
+    } catch (error) {
+        body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger);">Fehler beim Laden</div>';
+    }
+}
+
+export function closeTripDetailModal() {
+    const modal = document.getElementById('trip-detail-modal');
+    if (modal) modal.style.display = 'none';
 }
 
 // ==================== TRIP ACTIONS ====================
