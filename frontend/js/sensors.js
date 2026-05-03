@@ -180,8 +180,12 @@ export function updateGpsStatus(gps) {
 export function updateNavigationHeader(gps) {
     // SOG (Speed Over Ground)
     const sogEl = document.getElementById('sog-value');
+    const sogLabelEl = document.getElementById('sog-label');
     if (sogEl && gps.speed !== undefined) {
-        sogEl.textContent = gps.speed.toFixed(1);
+        const unitSettings = window.getUnitSettings ? window.getUnitSettings() : { speed: 'knots' };
+        const displaySpeed = unitSettings.speed === 'kmh' ? gps.speed * 1.852 : gps.speed;
+        sogEl.textContent = displaySpeed.toFixed(1);
+        if (sogLabelEl) sogLabelEl.textContent = unitSettings.speed === 'kmh' ? 'SOG km/h' : 'SOG kn';
     }
 
     // COG (Course Over Ground)
