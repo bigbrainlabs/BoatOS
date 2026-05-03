@@ -1994,8 +1994,11 @@ async def get_logbook():
 
 @app.get("/api/logbook/trips")
 async def get_trips():
-    """Get all completed trips"""
-    return completed_trips
+    """Get all completed trips (summary, no track_data)"""
+    return [
+        {k: v for k, v in t.items() if k not in ('track_data', 'entries')}
+        for t in completed_trips
+    ]
 
 @app.get("/api/logbook/trip/{trip_id}")
 async def get_trip_details(trip_id: int):
@@ -2128,7 +2131,7 @@ async def stop_track_recording():
 
         # Save complete trip with all session entries
         trip = {
-            "id": len(completed_trips) + 1,
+            "id": int(datetime.now().timestamp()),
             "trip_start": current_session_entries[0]["timestamp"] if current_session_entries else None,
             "trip_end": entry["timestamp"],
             "entries": current_session_entries.copy(),

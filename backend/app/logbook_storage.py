@@ -30,21 +30,48 @@ def save_logbook_entry(entry: Dict) -> str:
 def load_logbook_entries() -> List[Dict]:
     """Load all logbook entries (trips) from disk, sorted by timestamp."""
     entries = []
-    
+    filepaths = []
+
     if not LOGBOOK_DIR.exists():
         LOGBOOK_DIR.mkdir(parents=True, exist_ok=True)
         return entries
-    
+
     for filepath in LOGBOOK_DIR.glob("trip_*.json"):
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 entry = json.load(f)
                 entries.append(entry)
+                filepaths.append(filepath)
         except Exception as e:
             print(f"Error loading {filepath}: {e}")
-    
+
     # Sort by trip_end timestamp
-    entries.sort(key=lambda x: x.get("trip_end", ""))
+    paired = sorted(zip(entries, filepaths), key=lambda x: x[0].get("trip_end", ""))
+    entries = [e for e, _ in paired]
+    filepaths = [f for _, f in paired]
+
+    # Fix duplicate or missing IDs: reassign and persist
+    seen_ids: set = set()
+    needs_fix = any(e.get("id") is None or e.get("id") in seen_ids
+                    or not seen_ids.add(e.get("id")) and False
+                    for e in entries)
+    seen_ids = set()
+    for e in entries:
+        eid = e.get("id")
+        if eid is None or eid in seen_ids:
+            needs_fix = True
+            break
+        seen_ids.add(eid)
+
+    if needs_fix:
+        for i, (entry, filepath) in enumerate(zip(entries, filepaths)):
+            entry["id"] = i + 1
+            try:
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    json.dump(entry, f, indent=2, ensure_ascii=False)
+            except Exception as e:
+                print(f"Error fixing ID in {filepath}: {e}")
+
     return entries
 
 def get_logbook_entry(entry_id: int) -> Optional[Dict]:

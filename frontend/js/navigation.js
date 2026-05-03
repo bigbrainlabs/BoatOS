@@ -1286,7 +1286,7 @@ export function startNavigation(context) {
 
     // Anzeigen aktualisieren
     if (currentPosition && currentPosition.lat && currentPosition.lon) {
-        const currentSpeed = window.lastSensorData?.speed || 0;
+        const currentSpeed = window.lastSensorData?.gps?.speed || 0;
         updateNextWaypointDisplay(currentPosition.lat, currentPosition.lon, currentSpeed, context);
         updateTurnByTurnDisplay(currentPosition.lat, currentPosition.lon, context);
         updateLiveETA(context);
@@ -1345,7 +1345,7 @@ export function toggleNavigation(context) {
 
         // Anzeigen aktualisieren
         if (currentPosition && currentPosition.lat && currentPosition.lon) {
-            const currentSpeed = window.lastSensorData?.speed || 0;
+            const currentSpeed = window.lastSensorData?.gps?.speed || 0;
             updateNextWaypointDisplay(currentPosition.lat, currentPosition.lon, currentSpeed, context);
             updateTurnByTurnDisplay(currentPosition.lat, currentPosition.lon, context);
             updateLiveETA(context);
@@ -1390,7 +1390,7 @@ export function toggleNavigation(context) {
  * @param {Object} context - Kontext
  */
 export function updateNavigation(lat, lon, context) {
-    const currentSpeed = window.lastSensorData?.speed || 0;
+    const currentSpeed = window.lastSensorData?.gps?.speed || 0;
 
     updateNextWaypointDisplay(lat, lon, currentSpeed, context);
     updateTurnByTurnDisplay(lat, lon, context);
@@ -1572,20 +1572,10 @@ export function updateLiveETA(context) {
         distLabelEl.textContent = `REST ${unit}`;
     }
 
-    const currentSpeed = window.lastSensorData?.gps?.speed || window.lastSensorData?.speed || 0;
-
-    if (currentSpeed < 0.5) {
-        // Geschwindigkeit zu gering → ETA nicht berechenbar
-        const etaEl = document.getElementById('eta-value');
-        if (etaEl) etaEl.textContent = '--:--';
-
-        const liveEtaDisplay = document.getElementById('live-eta-display');
-        if (liveEtaDisplay) {
-            liveEtaDisplay.innerHTML = 'Live ETA: Warte auf Fahrtgeschwindigkeit…';
-            liveEtaDisplay.style.display = 'block';
-        }
-        return;
-    }
+    const gpsSpeed = window.lastSensorData?.gps?.speed || 0;
+    const plannedSpeed = currentRouteData?.plannedSpeed || 6;
+    const currentSpeed = gpsSpeed >= 0.5 ? gpsSpeed : plannedSpeed;
+    const usingPlanned = gpsSpeed < 0.5;
 
     // Live: Basis immer "jetzt" — bereits gefahrene Zeit ist schon aus dem Tageslimit verbraucht
     const eta = calculateETA(remainingDistanceNM, currentSpeed, new Date());
@@ -1606,7 +1596,8 @@ export function updateLiveETA(context) {
 
     const liveEtaDisplay = document.getElementById('live-eta-display');
     if (liveEtaDisplay) {
-        liveEtaDisplay.innerHTML = `<strong>Live ETA:</strong> ${etaText} @ ${speedFormatted} | Ankunft: ${arrivalTimeStr}`;
+        const speedNote = usingPlanned ? ' (Plan)' : '';
+        liveEtaDisplay.innerHTML = `<strong>Live ETA:</strong> ${etaText} @ ${speedFormatted}${speedNote} | Ankunft: ${arrivalTimeStr}`;
         liveEtaDisplay.style.display = 'block';
     }
 }
