@@ -2509,16 +2509,43 @@ def update_gps_from_module():
             sensor_data["gps"]["lon"] = lon
             print(f"📍 GPS: {lat:.6f}, {lon:.6f} ({gps_module_data.get('satellites', 0)} sats)")
 
-def mqtt_client_init():
-    client = mqtt.Client()
-    client.on_message = on_mqtt_message
-    try:
-        client.connect("localhost", 1883, 60)
-        client.subscribe("#")  # Subscribe to all topics
-        client.loop_start()
+_mqtt_client: mqtt.Client | None = None
+
+def _on_mqtt_connect(client, userdata, flags, rc):
+    if rc == 0:
+        client.subscribe("#")
         print("✅ MQTT connected (all topics: #)")
-    except Exception as e:
-        print(f"⚠️ MQTT connection failed: {e}")
+    else:
+        print(f"⚠️ MQTT connect failed: rc={rc}")
+
+def _on_mqtt_disconnect(client, userdata, rc):
+    if rc != 0:
+        print(f"⚠️ MQTT disconnected (rc={rc}), will auto-reconnect…")
+
+def mqtt_client_init():
+    global _mqtt_client
+    import threading
+
+    def _run():
+        import time
+        while True:
+            try:
+                c = mqtt.Client()
+                c.on_message = on_mqtt_message
+                c.on_connect = _on_mqtt_connect
+                c.on_disconnect = _on_mqtt_disconnect
+                c.reconnect_delay_set(min_delay=2, max_delay=30)
+                c.connect("localhost", 1883, 60)
+                global _mqtt_client
+                _mqtt_client = c
+                c.loop_forever()        # blocks; returns on persistent disconnect
+                print("⚠️ MQTT loop_forever exited, reconnecting in 5 s…")
+            except Exception as e:
+                print(f"⚠️ MQTT error: {e} — retry in 5 s")
+            time.sleep(5)
+
+    t = threading.Thread(target=_run, daemon=True, name="mqtt-client")
+    t.start()
 
 # ==================== MQTT PUBLISHER (Home Assistant Integration) ====================
 mqtt_publisher_client = None
