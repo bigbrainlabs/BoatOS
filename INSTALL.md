@@ -1,558 +1,548 @@
-# BoatOS Installation Guide
+# BoatOS — Installationsanleitung
 
-## 🚀 Schnellstart (Empfohlen)
+## Überblick
 
-Für eine vollautomatische Installation mit allen Features:
+BoatOS besteht aus mehreren Komponenten, die auf einem Raspberry Pi 4 zusammenarbeiten:
 
-```bash
-cd /home/$(whoami)
-git clone https://github.com/yourusername/BoatOS.git
-cd BoatOS
-chmod +x install.sh
-./install.sh
-```
-
-Das Installations-Skript richtet automatisch ein:
-- ✅ SignalK Server (GPS/NMEA Integration)
-- ✅ MQTT Broker (Mosquitto für Sensordaten)
-- ✅ BoatOS Backend (FastAPI mit allen Services)
-- ✅ Nginx Reverse Proxy mit SSL
-- ✅ OSRM Waterway Routing (ARM64)
-- ✅ Alle Datenverzeichnisse (Logbook, Charts, Crew, etc.)
-
-**Nach der Installation:** Abmelden und wieder anmelden (für dialout-Gruppe).
-
----
-
-## ⚙️ Konfiguration
-
-### OpenWeather API Key (Optional, aber empfohlen)
-
-BoatOS verwendet die OpenWeatherMap API für Wettervorhersagen. Um diese Funktion zu nutzen:
-
-1. **Kostenlosen API Key erstellen:**
-   - Registriere dich bei [OpenWeatherMap](https://home.openweathermap.org/users/sign_up)
-   - Erstelle einen API Key unter [API Keys](https://home.openweathermap.org/api_keys)
-   - Der kostenlose "Free Plan" reicht aus (60 Calls/Minute, 1M Calls/Monat)
-
-2. **API Key in .env eintragen:**
-   ```bash
-   nano ~/BoatOS/.env
-   ```
-
-   Ersetze `your_api_key_here` mit deinem echten API Key:
-   ```
-   OPENWEATHER_API_KEY=dein_api_key_hier
-   ```
-
-3. **Service neu starten:**
-   ```bash
-   sudo systemctl restart boatos
-   ```
-
-**Wichtig:** Committe niemals die `.env` Datei in Git! Diese enthält sensitive Daten und ist bereits in `.gitignore`.
+| Komponente | Port | Beschreibung |
+|---|---|---|
+| BoatOS Backend | 8000 | FastAPI, REST API + WebSocket |
+| Martin Tile Server | 8081 | Lokale Vektorkacheln (Offline-Karten) |
+| OSRM Routing | 5000 | Wasserweg-Routing (IPv4-only) |
+| SignalK Server | 3000 | GPS / NMEA-Integration |
+| Mosquitto MQTT | 1883 | Sensordaten-Broker |
+| Nginx | 80/443 | Reverse Proxy für V1 Web-Frontend |
 
 ---
 
 ## Systemanforderungen
 
-- **Betriebssystem**: Debian/Ubuntu basiert (getestet auf Debian 12 Bookworm)
-- **Hardware**: Raspberry Pi 4/5 oder vergleichbar (min. 2GB RAM, 4GB empfohlen)
-- **Speicher**: Min. 16GB SD-Karte (32GB empfohlen für Karten-Cache)
-- **GPS**: USB GPS-Empfänger (z.B. U-blox, wird als /dev/ttyACM* erkannt)
-- **Netzwerk**: WiFi oder Ethernet
-- **Optional**: Touchscreen (7" oder größer für optimale Bedienung)
+- **Hardware**: Raspberry Pi 4 (min. 2 GB RAM, 4 GB empfohlen)
+- **OS**: Raspberry Pi OS Bookworm 64-bit (`aarch64`)
+- **Speicher**: Min. 32 GB SD-Karte (Karten + OSRM-Daten benötigen ~15 GB)
+- **GPS**: USB-Empfänger (z. B. BU-353N5 → `/dev/ttyUSB0`, 4800 baud)
+- **Touchscreen**: z. B. QDtech MPI1001 10.1" (1280×800)
 
-## Abhängigkeiten
+---
 
-> **Hinweis:** Bei Verwendung des `install.sh` Skripts werden alle Abhängigkeiten automatisch installiert.
-
-### 1. System-Pakete installieren
+## 1. System-Pakete
 
 ```bash
-sudo apt update
-sudo apt install -y python3 python3-pip python3-venv nginx git curl \
-  gdal-bin python3-gdal openssl mosquitto mosquitto-clients sqlite3
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y \
+  python3 python3-pip python3-venv \
+  nginx git curl mosquitto mosquitto-clients \
+  sqlite3 openssl \
+  gdal-bin python3-gdal
 ```
 
-Installierte Komponenten:
-- **Python 3.9+**: Backend Runtime
-- **Nginx**: Webserver & Reverse Proxy
-- **GDAL**: Geospatial Data Abstraction Library (für Kartenkonvertierung)
-- **Mosquitto**: MQTT Broker für Sensordaten
-- **SQLite3**: Datenbank für Schleusen, Logbook, etc.
-- **OpenSSL**: SSL-Zertifikate
+Benutzer zur `dialout`-Gruppe hinzufügen (für GPS-Zugriff):
+```bash
+sudo usermod -a -G dialout $USER
+# Abmelden und neu anmelden
+```
 
-### 2. Node.js für SignalK installieren
+---
+
+## 2. Node.js & SignalK
 
 ```bash
+# Node.js 20.x
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
+
+# SignalK Server
+sudo npm install -g --unsafe-perm signalk-server
 ```
 
-### 3. SignalK Server installieren
-
-SignalK ist ein Open-Source Marine Data Server, der GPS und andere Sensordaten verwaltet.
+### SignalK Systemd-Service
 
 ```bash
-# SignalK als normaler Benutzer installieren
-sudo npm install -g --unsafe-perm signalk-server
-
-# SignalK Service erstellen
-sudo tee /etc/systemd/system/signalk.service > /dev/null << 'SIGNALK'
+sudo tee /etc/systemd/system/signalk.service > /dev/null << EOF
 [Unit]
 Description=SignalK Server
 After=network.target
 
 [Service]
 Type=simple
-User=
-WorkingDirectory=/home/
+User=$USER
+WorkingDirectory=$HOME
 ExecStart=/usr/bin/signalk-server
 Restart=always
 RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
-SIGNALK
+EOF
 
-# Service aktivieren und starten
 sudo systemctl daemon-reload
 sudo systemctl enable signalk
 sudo systemctl start signalk
 ```
 
-SignalK läuft standardmäßig auf Port 3000: http://localhost:3000
+### GPS in SignalK konfigurieren
 
-### 4. SignalK GPS-Verbindung konfigurieren
+GPS-Device identifizieren:
+```bash
+ls -la /dev/ttyUSB* /dev/ttyACM*
+```
 
-Nach der Installation muss SignalK mit dem GPS-Modul verbunden werden:
+SignalK-Konfiguration (`~/.signalk/settings.json`) — Beispiel für BU-353N5:
+```json
+{
+  "pipedProviders": [
+    {
+      "id": "gps-usb",
+      "pipeElements": [
+        {
+          "type": "providers/simple",
+          "options": {
+            "type": "NMEA0183",
+            "subOptions": {
+              "type": "serial",
+              "device": "/dev/ttyUSB0",
+              "baudrate": 4800
+            }
+          }
+        }
+      ],
+      "enabled": true
+    }
+  ]
+}
+```
 
-1. GPS-Device identifizieren:
-   ```bash
-   ls -la /dev/ttyACM*
-   ```
+> **Hinweis**: Bei alten GPS-Mäusen (cdc_acm-Treiber) lautet das Device `/dev/ttyACM0` mit 9600 baud. Das BU-353N5 nutzt `/dev/ttyUSB0` mit 4800 baud.
 
-2. Benutzer zur dialout-Gruppe hinzufügen:
-   ```bash
-   sudo usermod -a -G dialout 
-   ```
+GPS-Verbindung testen:
+```bash
+sudo systemctl restart signalk
+curl http://localhost:3000/signalk/v1/api/vessels/self/navigation/position
+```
 
-3. SignalK Konfiguration bearbeiten (`~/.signalk/settings.json`):
-   ```json
-   {
-     interfaces: {},
-     ssl: false,
-     pipedProviders: [
-       {
-         id: gps,
-         pipeElements: [
-           {
-             type: providers/simple,
-             options: {
-               type: NMEA0183,
-               subOptions: {
-                 type: serial,
-                 device: /dev/ttyACM1,
-                 baudrate: 9600
-               },
-               logging: false,
-               providerId: gps,
-               suppress0183event: false
-             }
-           }
-         ],
-         enabled: true
-       }
-     ],
-     security: {
-       strategy: ./tokensecurity
-     }
-   }
-   ```
+---
 
-4. SignalK neu starten:
-   ```bash
-   sudo systemctl restart signalk
-   ```
-
-## BoatOS Installation
-
-### 1. Repository klonen
+## 3. BoatOS Repository
 
 ```bash
-cd /home/
-git clone https://github.com/yourusername/BoatOS.git
+cd $HOME
+git clone https://github.com/bigbrainlabs/BoatOS.git
 cd BoatOS
 ```
 
-### 2. Backend einrichten
+### Python-Backend
 
 ```bash
 cd backend
-
-# Python Virtual Environment erstellen
 python3 -m venv venv
 source venv/bin/activate
-
-# Abhängigkeiten installieren
 pip install -r requirements.txt
 ```
 
-**requirements.txt** sollte enthalten:
-```
-fastapi==0.118.0
-uvicorn[standard]==0.37.0
-paho-mqtt==2.1.0
-httpx==0.28.1
-pynmea2==1.19.0
-beautifulsoup4==4.14.2
-lxml
-pyproj
-aiohttp==3.10.11
-requests==2.32.5
-python-multipart==0.0.20
-networkx==3.2.1
-pyroutelib3>=2.0.0
-reportlab>=4.0.0
-websockets>=12.0
-```
-
-**Was diese Pakete bieten:**
-- **FastAPI/Uvicorn**: Modernes async Web-Framework
-- **paho-mqtt**: MQTT Client für Sensordaten
-- **httpx/aiohttp/requests**: HTTP Clients für APIs (SignalK, Weather, etc.)
-- **pynmea2**: NMEA GPS-Daten Parser
-- **beautifulsoup4/lxml**: Web Scraping (ELWIS Charts, etc.)
-- **pyproj**: Koordinaten-Transformationen
-- **networkx/pyroutelib3**: Routing-Algorithmen
-- **reportlab**: PDF Generation (Logbook Export)
-- **websockets**: AIS Stream WebSocket Client
-
-### 3. BoatOS Systemd Service erstellen
+### Backend Systemd-Service
 
 ```bash
-sudo tee /etc/systemd/system/boatos.service > /dev/null << 'BOATOS'
+sudo tee /etc/systemd/system/boatos.service > /dev/null << EOF
 [Unit]
 Description=BoatOS Backend API
-After=network.target signalk.service
-Requires=signalk.service
+After=network.target signalk.service mosquitto.service
 
 [Service]
 Type=simple
-User=
-WorkingDirectory=/home//BoatOS/backend
-ExecStart=/home//BoatOS/backend/venv/bin/python app/main.py
+User=$USER
+WorkingDirectory=$HOME/BoatOS/backend
+ExecStart=$HOME/BoatOS/backend/venv/bin/python app/main.py
 Restart=always
 RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
-BOATOS
+EOF
 
-# Platzhalter ersetzen
-sudo sed -i s/$USER//g /etc/systemd/system/boatos.service
-
-# Service aktivieren und starten
 sudo systemctl daemon-reload
 sudo systemctl enable boatos
 sudo systemctl start boatos
 ```
 
-### 4. Nginx für Frontend konfigurieren
+Status prüfen:
+```bash
+sudo systemctl status boatos
+curl http://localhost:8000/api/sensors/list
+```
+
+---
+
+## 4. Martin Tile Server (Offline-Karten)
+
+Martin stellt lokale Vektorkacheln aus MBTiles-Dateien bereit.
+
+### Installation
 
 ```bash
-sudo tee /etc/nginx/sites-available/boatos > /dev/null << 'NGINX'
+# Aktuelles Release von https://github.com/maplibre/martin/releases
+wget https://github.com/maplibre/martin/releases/latest/download/martin-aarch64-unknown-linux-musl.tar.gz
+tar -xzf martin-aarch64-unknown-linux-musl.tar.gz
+sudo mv martin /usr/local/bin/
+```
+
+### Karten-Dateien
+
+BoatOS erwartet MBTiles-Dateien unter `$HOME/BoatOS/maps/`:
+```
+maps/
+├── germany.mbtiles       # Deutschland (OpenMapTiles-Format)
+├── waterways.mbtiles     # Optional: Wasserstraßen-Detail
+└── ...
+```
+
+MBTiles beziehen (z. B. von [OpenMapTiles](https://openmaptiles.org/) oder [Protomaps](https://protomaps.com/)):
+```bash
+mkdir -p $HOME/BoatOS/maps
+# MBTiles-Datei(en) hierhin kopieren
+```
+
+### Martin Systemd-Service
+
+```bash
+sudo tee /etc/systemd/system/tileserver.service > /dev/null << EOF
+[Unit]
+Description=Martin Vector Tile Server
+After=network.target
+
+[Service]
+Type=simple
+User=$USER
+ExecStart=/usr/local/bin/martin --listen-addresses 0.0.0.0:8081 $HOME/BoatOS/maps/
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable tileserver
+sudo systemctl start tileserver
+```
+
+Test:
+```bash
+curl http://localhost:8081/catalog
+```
+
+---
+
+## 5. OSRM Routing Server
+
+OSRM berechnet Wasserweg-Routen (Binnenschifffahrt). Läuft **IPv4-only** — kein `localhost`, immer `127.0.0.1`.
+
+### Vorkompilierte Binaries
+
+Für ARM64 (Pi 4) empfiehlt sich ein vorkompiliertes Binary oder Docker:
+
+```bash
+# Option A: Docker (einfacher)
+docker run -t -i -p 5000:5000 -v $HOME/BoatOS/maps:/data \
+  ghcr.io/project-osrm/osrm-backend \
+  osrm-routed --algorithm mld /data/waterways.osrm
+
+# Option B: Vorkompilierte Binary
+# Siehe: https://github.com/Project-OSRM/osrm-backend/releases
+```
+
+### OSRM-Daten vorbereiten
+
+```bash
+# OSM-Daten für Wasserstraßen extrahieren (auf leistungsfähigerem Rechner empfohlen)
+osrm-extract -p profiles/waterway.lua waterways.osm.pbf
+osrm-partition waterways.osrm
+osrm-customize waterways.osrm
+```
+
+Test:
+```bash
+curl "http://127.0.0.1:5000/route/v1/driving/12.046,51.855;12.1,51.9"
+```
+
+> **Wichtig**: In `backend/app/main.py` und Settings immer `http://127.0.0.1:5000` verwenden — Python löst `localhost` auf IPv6 auf, OSRM hört nur auf IPv4.
+
+---
+
+## 6. V1 Web-Frontend (Nginx)
+
+Das Web-Frontend wird über Nginx mit selbst-signiertem SSL-Zertifikat ausgeliefert.
+
+### SSL-Zertifikat erstellen
+
+```bash
+sudo mkdir -p /etc/nginx/ssl
+sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+  -keyout /etc/nginx/ssl/boatos.key \
+  -out /etc/nginx/ssl/boatos.crt \
+  -subj "/CN=boatos.local"
+```
+
+### Nginx-Konfiguration
+
+```bash
+sudo tee /etc/nginx/sites-available/boatos > /dev/null << EOF
 server {
     listen 80;
-    server_name _;
+    return 301 https://\$host\$request_uri;
+}
 
-    # Frontend
+server {
+    listen 443 ssl;
+    ssl_certificate     /etc/nginx/ssl/boatos.crt;
+    ssl_certificate_key /etc/nginx/ssl/boatos.key;
+
+    # Frontend-Dateien
     location / {
-        root /home//BoatOS/frontend;
+        root $HOME/BoatOS/frontend;
         index index.html;
-        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-store, no-cache";
+    }
+
+    # JS/CSS mit kurzem Cache
+    location ~* \.(js|css)$ {
+        root $HOME/BoatOS/frontend;
+        add_header Cache-Control "public, max-age=3600";
     }
 
     # Backend API
     location /api/ {
         proxy_pass http://localhost:8000/api/;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
+        proxy_set_header Host \$host;
+        proxy_read_timeout 60s;
     }
 
     # WebSocket
     location /ws {
         proxy_pass http://localhost:8000/ws;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection upgrade;
-        proxy_set_header Host $host;
-    }
-
-    # SignalK Proxy (optional)
-    location /signalk/ {
-        proxy_pass http://localhost:3000/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_read_timeout 3600s;
     }
 }
-NGINX
+EOF
 
-# Platzhalter ersetzen
-sudo sed -i s/$USER//g /etc/nginx/sites-available/boatos
-
-# Site aktivieren
 sudo ln -sf /etc/nginx/sites-available/boatos /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
-
-# Nginx neu starten
-sudo nginx -t
-sudo systemctl restart nginx
+sudo nginx -t && sudo systemctl restart nginx
 ```
 
-## Konfiguration
+V1 öffnen: `https://<pi-ip>/`
 
-### Backend Konfiguration
+---
 
-Die wichtigsten Einstellungen in `backend/app/main.py`:
+## 7. V2 Flutter-App (flutter-pi)
 
-- **SignalK URL**: Standardmäßig `http://localhost:3000`
-- **MQTT Server**: Falls gewünscht für externe Sensoren
-- **OpenWeatherMap API Key**: Für Wetterdaten
+Die native Flutter-App läuft über flutter-pi direkt auf dem Pi-Framebuffer (kein X11/Wayland nötig).
 
-### Frontend Konfiguration
-
-Die Frontend-Dateien in `frontend/`:
-- `index.html` - Haupt-UI
-- `app.js` - Hauptlogik
-- `i18n.js` - Übersetzungen (DE/EN)
-- `style.css` - Styling
-
-## Dienste verwalten
+### flutter-pi installieren
 
 ```bash
-# Status prüfen
-sudo systemctl status signalk
-sudo systemctl status boatos
-sudo systemctl status nginx
+# Abhängigkeiten
+sudo apt install -y libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
+  libdrm-dev libgbm-dev libinput-dev libudev-dev libsystemd-dev \
+  libxkbcommon-dev
 
-# Logs anzeigen
-sudo journalctl -u signalk -f
-sudo journalctl -u boatos -f
-
-# Dienste neu starten
-sudo systemctl restart signalk
-sudo systemctl restart boatos
-sudo systemctl restart nginx
+# flutter-pi bauen (oder vorkompiliertes Binary nutzen)
+git clone https://github.com/ardera/flutter-pi.git
+cd flutter-pi
+mkdir build && cd build
+cmake .. && make -j$(nproc)
+sudo make install
 ```
 
-## Zugriff
+### Flutter-App deployen
 
-Nach erfolgreicher Installation:
-
-- **BoatOS UI**: https://your-pi-ip/ (mit SSL)
-- **SignalK Dashboard**: http://your-pi-ip:3000/
-- **Backend API**: http://your-pi-ip/api/sensors
-- **MQTT Broker**: mqtt://your-pi-ip:1883/
-
-## Features & Module
-
-Nach der Installation sind folgende Features verfügbar:
-
-### 🎨 Dashboard & UI
-- **Drag & Drop Editor**: Visueller Dashboard-Builder mit SortableJS
-- **Touch-optimiert**: Gestensteuerung für Tablets/Smartphones
-- **Undo/Redo**: Vollständige History (Strg+Z)
-- **Responsive**: Automatische Anpassung an Bildschirmgröße
-
-### 🧭 Navigation
-- **GPS Tracking**: Live-Position via SignalK
-- **AIS Integration**: Schiffsverfolgung (AISStream WebSocket)
-- **Waterway Routing**: Elbe, Kanäle mit OSRM + PyRouteLib3
-- **Offline Maps**: OpenStreetMap + ELWIS ENC Charts
-
-### 📊 Sensoren & Daten
-- **MQTT Broker**: Mosquitto für beliebige Sensoren
-- **SignalK Integration**: NMEA0183/NMEA2000 Daten
-- **Dynamic Topics**: Auto-Discovery von MQTT Topics
-- **Sensor Dashboard**: Live-Visualisierung
-
-### 📖 Logbuch & Management
-- **Digitales Logbuch**: Automatische Trip-Aufzeichnung
-- **PDF Export**: Professionelle Reports (ReportLab)
-- **Crew Management**: Personen, Rollen, Zertifikate
-- **Fuel Tracking**: Tankungen, Verbrauch, Statistiken
-
-### 🌊 Marine Data
-- **Pegel Online**: Echtzeit-Wasserstände (WSV API)
-- **Schleusen-Datenbank**: Öffnungszeiten, Dimensionen (SQLite)
-- **Wetter-Warnungen**: DWD Alerts via BrightSky API
-- **Strömungsdaten**: Water Current Service
-
-### 📦 Datenverzeichnisse
-- `data/charts/` - Offline Seekarten (MBTiles, GeoJSON)
-- `data/layouts/` - Dashboard-Konfigurationen
-- `data/logbook/` - Trip-Daten & Sessions
-- `data/crew/` - Crew-Member Informationen
-- `data/fuel/` - Tankungen & Statistiken
-- `data/locks/` - Schleusen-Datenbank (SQLite)
-- `data/osrm/` - Routing-Engine Daten
-
-## Fehlerbehebung
-
-### GPS wird nicht erkannt
+Der Build erfolgt auf dem Entwicklungs-PC (Flutter SDK + flutterpi_tool erforderlich):
 
 ```bash
-# GPS Device prüfen
-ls -la /dev/ttyACM*
-dmesg | grep -i gps
+# Auf dem Entwicklungs-PC:
+cd flutter_app
+dart pub global activate flutterpi_tool
+flutterpi_tool build --arch=arm64 --cpu=pi4 --release
 
-# Direkt vom GPS lesen (Strg+C zum Beenden)
-cat /dev/ttyACM1
-
-# Benutzerrechte prüfen
-groups   # sollte dialout enthalten
-
-# Falls nicht, hinzufügen und neu anmelden:
-sudo usermod -a -G dialout 
+# Deploy auf den Pi:
+scp build/flutter-pi/pi4-64/app.so user@<pi-ip>:/home/<user>/BoatOS/flutter_app/app.so
+scp -r build/flutter-pi/pi4-64/assets user@<pi-ip>:/home/<user>/BoatOS/flutter_app/
 ```
 
-### SignalK empfängt keine GPS-Daten
+### Kiosk via lightdm einrichten
 
 ```bash
-# SignalK Logs prüfen
-sudo journalctl -u signalk -n 50
+sudo apt install -y lightdm
 
-# SignalK API testen
-curl http://localhost:3000/signalk/v1/api/
+# Autologin konfigurieren
+sudo tee /etc/lightdm/lightdm.conf > /dev/null << EOF
+[SeatDefaults]
+autologin-user=$USER
+autologin-user-timeout=0
+user-session=flutter-pi-session
+EOF
 ```
 
-### BoatOS zeigt keine GPS-Daten
-
+Starter-Script erstellen:
 ```bash
-# Backend Logs prüfen
-sudo journalctl -u boatos -n 50
+mkdir -p $HOME/BoatOS/flutter_app
 
-# API testen
-curl http://localhost:8000/api/sensors
+tee $HOME/start-boatos-flutter.sh > /dev/null << EOF
+#!/bin/bash
+cd $HOME/BoatOS/flutter_app
+exec flutter-pi \
+  --release \
+  --input /dev/input/event0 \
+  .
+EOF
+chmod +x $HOME/start-boatos-flutter.sh
 ```
 
-### MQTT Broker funktioniert nicht
+> Nach Deployment: `sudo systemctl restart lightdm`
+
+### Karten-Cache leeren (nach Updates)
 
 ```bash
-# Mosquitto Status prüfen
-sudo systemctl status mosquitto
-
-# Mosquitto Logs
-sudo journalctl -u mosquitto -n 50
-
-# MQTT Topics live überwachen
-mosquitto_sub -h localhost -t '#' -v
-
-# Test-Nachricht senden
-mosquitto_pub -h localhost -t 'test/topic' -m 'Hello MQTT'
-```
-
-### Dashboard wird nicht geladen / alte Version
-
-```bash
-# Browser-Cache leeren
-# Chrome/Firefox: Strg+Shift+R oder Strg+F5
-
-# Nginx Cache leeren
-sudo rm -rf /var/cache/nginx/*
-sudo systemctl restart nginx
-
-# BoatOS neu starten
-sudo systemctl restart boatos
-```
-
-## Updates
-
-### Automatisches Update (Empfohlen)
-
-```bash
-cd /home/$(whoami)/BoatOS
-./scripts/update.sh
-```
-
-Das Update-Skript:
-- Pullt neueste Änderungen von Git
-- Aktualisiert Python Dependencies
-- Updated Frontend Cache Busting
-- Startet alle Services neu
-- Prüft Service-Status
-
-### Manuelles Update
-
-```bash
-cd /home/$(whoami)/BoatOS
-git pull
-
-# Backend Dependencies aktualisieren
-cd backend
-source venv/bin/activate
-pip install --upgrade -r requirements.txt
-
-# Services neu starten
-sudo systemctl restart boatos
-sudo systemctl restart nginx
-
-# Browser-Cache leeren: Strg+Shift+R
-```
-
-## Deinstallation
-
-```bash
-# Services stoppen und deaktivieren
-sudo systemctl stop boatos signalk mosquitto osrm 2>/dev/null
-sudo systemctl disable boatos signalk osrm 2>/dev/null
-
-# Service-Dateien entfernen
-sudo rm -f /etc/systemd/system/boatos.service
-sudo rm -f /etc/systemd/system/signalk.service
-sudo rm -f /etc/systemd/system/osrm.service
-sudo systemctl daemon-reload
-
-# Nginx-Konfiguration entfernen
-sudo rm -f /etc/nginx/sites-enabled/boatos
-sudo rm -f /etc/nginx/sites-available/boatos
-sudo systemctl restart nginx
-
-# BoatOS Dateien entfernen
-rm -rf /home/$(whoami)/BoatOS
-rm -rf /home/$(whoami)/.signalk
-rm -rf /home/$(whoami)/osrm_regions
-rm -rf /home/$(whoami)/osrm-backend
-
-# Optional: Mosquitto deinstallieren (falls nicht anderweitig genutzt)
-# sudo apt remove --purge mosquitto mosquitto-clients
-
-# Optional: SignalK deinstallieren
-# sudo npm uninstall -g signalk-server
+rm -rf /tmp/.vector_map_cache 2>/dev/null || true
 ```
 
 ---
 
-## 📚 Weitere Ressourcen
+## 8. Einstellungen & API-Keys
 
-- **GitHub Repository**: https://github.com/yourusername/BoatOS
-- **Issues & Support**: https://github.com/yourusername/BoatOS/issues
-- **SignalK Dokumentation**: https://signalk.org/
-- **MQTT/Mosquitto**: https://mosquitto.org/
-- **OSRM Routing**: http://project-osrm.org/
-- **Leaflet Maps**: https://leafletjs.com/
+### AIS (optional)
 
-## 🤝 Beitragen
+1. Account bei [AISStream.io](https://aisstream.io/) erstellen (kostenlos)
+2. API Key in BoatOS-Einstellungen eintragen (Settings → AIS)
 
-Contributions sind willkommen! Siehe [CONTRIBUTING.md](CONTRIBUTING.md) für Details.
+### Wetter (optional)
 
-## 📄 Lizenz
+DWD-Warnungen funktionieren ohne Key. Für erweiterte Wetterdaten:
+- Settings → Wetter → API Key eintragen
 
-MIT License - Siehe [LICENSE](LICENSE) für Details.
+### Dashboard-Layout
+
+Das Dashboard-Layout wird in den Settings als DSL-Text gespeichert. Beispiel:
+
+```
+GRID 4
+
+ROW sensoren
+GAUGE boot/sensoren/motor/drehzahl MAX 6000 UNIT "RPM" DECIMALS 0
+GAUGE boot/sensoren/motor/oeldruck MAX 7 UNIT "Bar" STYLE bar DECIMALS 2
+SENSOR boot/sensoren/batterie STYLE hero
+SENSOR boot/sensoren/tank/diesel SIZE 2
+```
+
+Dokumentation: [DASHBOARD_DSL.md](DASHBOARD_DSL.md)
+
+---
+
+## Dienste verwalten
+
+```bash
+# Status aller Dienste
+sudo systemctl status boatos tileserver signalk mosquitto nginx
+
+# Logs verfolgen
+sudo journalctl -u boatos -f
+sudo journalctl -u tileserver -f
+sudo journalctl -u signalk -f
+
+# Alle Dienste neu starten
+sudo systemctl restart boatos tileserver signalk
+```
+
+---
+
+## Updates
+
+```bash
+cd $HOME/BoatOS
+git pull
+
+# Backend-Dependencies aktualisieren
+cd backend
+source venv/bin/activate
+pip install --upgrade -r requirements.txt
+cd ..
+
+# Services neu starten
+sudo systemctl restart boatos
+
+# V2 Flutter-App: neuen Build deployen (auf Entwicklungs-PC)
+# → scp + sudo systemctl restart lightdm
+```
+
+---
+
+## Fehlerbehebung
+
+### GPS keine Daten
+
+```bash
+ls -la /dev/ttyUSB* /dev/ttyACM*
+groups                          # muss dialout enthalten
+sudo systemctl status signalk
+sudo journalctl -u signalk -n 30
+curl http://localhost:3000/signalk/v1/api/vessels/self/navigation/position
+```
+
+### MQTT Sensoren erscheinen nicht
+
+```bash
+sudo systemctl status mosquitto
+mosquitto_sub -h localhost -t '#' -v        # Topics live beobachten
+curl http://localhost:8000/api/mqtt/topics  # Backend-Sicht
+sudo systemctl restart boatos               # MQTT-Client neu verbinden
+```
+
+### Karten laden nicht
+
+```bash
+sudo systemctl status tileserver
+curl http://localhost:8081/catalog
+ls -lh $HOME/BoatOS/maps/*.mbtiles
+```
+
+### Routing funktioniert nicht
+
+```bash
+# OSRM hört nur auf IPv4!
+curl "http://127.0.0.1:5000/route/v1/driving/12.046,51.855;12.1,51.9"
+# NICHT: curl "http://localhost:5000/..."
+```
+
+### V2 Flutter-App startet nicht
+
+```bash
+sudo systemctl status lightdm
+sudo journalctl -u lightdm -n 50
+ls -la $HOME/BoatOS/flutter_app/app.so    # Binary vorhanden?
+```
+
+### Backend startet nicht
+
+```bash
+sudo journalctl -u boatos -n 50
+# Manuell starten zum Debuggen:
+cd $HOME/BoatOS/backend
+source venv/bin/activate
+python app/main.py
+```
+
+---
+
+## Ressourcen
+
+- **GitHub**: https://github.com/bigbrainlabs/BoatOS
+- **Issues**: https://github.com/bigbrainlabs/BoatOS/issues
+- **SignalK**: https://signalk.org/
+- **flutter-pi**: https://github.com/ardera/flutter-pi
+- **Martin Tileserver**: https://martin.maplibre.org/
+- **OSRM**: https://project-osrm.org/
+- **AISStream**: https://aisstream.io/
