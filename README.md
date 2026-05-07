@@ -1,226 +1,221 @@
 # ⚓ BoatOS
 
-> **Modern Marine Navigation System - Open Source, Touch-Optimized, Offline-First**
+> **Modern Marine Navigation System — Open Source, Touch-Optimized, Offline-First**
 
 Ein vollständiges Marine-Navigationssystem für Binnenschifffahrt und Küstennavigation. Gebaut für Raspberry Pi mit Touchscreen, läuft komplett offline, keine Abos, keine Cloud-Zwänge.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Raspberry%20Pi-red.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
-![Status](https://img.shields.io/badge/status-production--ready-green.svg)
+![Flutter](https://img.shields.io/badge/flutter-3.x-blue.svg)
+![Status](https://img.shields.io/badge/status-active-green.svg)
 
 ---
 
 ## 🌟 Highlights
 
-- 🎨 **Visual Dashboard Editor** - Drag & Drop Interface ohne Coding
-- 🗺️ **Binnengewässer-Routing** - Optimiert für Elbe, Kanäle & Schleusen
-- 📡 **Live AIS Integration** - Echtzeit-Schiffsverkehr (Europe Bounding Box)
-- ⚠️ **Wetter & Warnungen** - DWD API mit Unwetter-Alerts
-- 📖 **Digitales Logbuch** - GPS-Tracks, Notizen, Export
-- 🔌 **Sensor-Dashboard** - MQTT Integration für beliebige Sensoren
-- 🏗️ **DSL-based Layout** - Konfigurierbare Dashboards per Text oder Visual Editor
-- 👆 **Touch-optimiert** - 200ms Touch-Delay, große Buttons, perfekt für unterwegs
+- 🗺️ **Zwei UIs** — Web-Frontend (V1, browser-based) + native Flutter-App (V2, flutter-pi)
+- 🧭 **Binnengewässer-Routing** — OSRM-optimiert für Elbe, Kanäle & Schleusen
+- 📡 **Live AIS** — Echtzeit-Schiffsverkehr (Europa), via AISStream.io
+- ⚠️ **Wetter & Warnungen** — DWD API mit Unwetter-Alerts
+- 📖 **Digitales Logbuch** — GPS-Tracks, Crew, Pegelstände, Export
+- 🔌 **Sensor-Dashboard** — MQTT-Integration, DSL-konfigurierbares Layout, animierte Gauges
+- 🛰️ **Satellitenkarten** — ESRI World Imagery mit Offline-Caching
+- 👆 **Touch-optimiert** — Große Targets, kein 300ms-Delay, perfekt für unterwegs
 
 ---
 
 ## 📸 Screenshots
 
-<!-- TODO: Add screenshots here -->
+<!-- TODO: Add screenshots -->
 ```
-Coming soon! Check Instagram @bigbrainlabs for live demos
+Demos: Check Instagram @bigbrainlabs
 ```
-
----
-
-## ✨ Features im Detail
-
-### 🎨 Visual Dashboard Editor (Phase 2 - Complete!)
-- **Drag & Drop** - Widgets aus Palette ziehen, im Canvas verschieben
-- **Multi-Row Layouts** - Hero-Rows, Detail-Rows, beliebig strukturierbar
-- **SHOW/HIDE Filter** - Checkbox-UI für Topic-Filter
-- **Units (Einheiten)** - Input-Felder für °C, %, kn, V, etc.
-- **Undo/Redo** - Ctrl+Z/Y mit 50-Step History
-- **Cross-Row Drag** - Widgets zwischen Rows verschieben
-- **Live Preview** - Vorschau mit echten Sensor-Daten
-- **Bi-direktionale Sync** - Code ↔ Visual Editor
-
-### 🗺️ Navigation & Routing
-- **Interaktive Seekarten** - OpenSeaMap, OSM, Satellite View
-- **Waterway Routing** - Optimierte Routen für Binnenschifffahrt
-- **Schleusen-Datenbank** - OSM-basierte Lock-Informationen
-- **Wegpunkte & Routen** - Speichern, Bearbeiten, Exportieren
-- **Auto-Follow** - Intelligentes GPS-Tracking (respektiert manuelle Interaktion)
-- **Ortssuche** - Nominatim (Häfen, Städte, Koordinaten)
-
-### 📡 Sensoren & Daten
-- **GPS Integration** - SignalK & MQTT Support
-- **AIS Stream** - Live Schiffsverkehr (2% CPU statt 100%!)
-- **MQTT Sensoren** - Beliebige externe Sensoren (Temp, Humidity, Voltage, etc.)
-- **Persistent Topics** - Sensordaten bleiben über Neustarts erhalten
-- **Sensor Aliases** - Eigene Namen für Sensoren vergeben
-- **Zombie Cleanup** - Auto-Remove alter MQTT Topics
-
-### 🌦️ Wetter & Umwelt
-- **DWD Integration** - Deutscher Wetterdienst API
-- **Unwetter-Warnungen** - Live Alerts mit Schweregrad
-- **Pegeldaten** - ELWIS Integration für Wasserstände
-- **Marine Weather** - Wind, Wellen, Sichtweite
-
-### 📓 Logbuch & Tracking
-- **GPS Track Recording** - Automatische Aufzeichnung
-- **Crew Management** - Crew-Mitglieder verwalten
-- **Fuel Tracking** - Tankfüllungen & Verbrauch
-- **Statistics Dashboard** - Trips, Distanz, Durchschnitte
-- **Data Export/Import** - JSON Backup & Restore
-
-### 🎨 UI/UX
-- **Touch-First Design** - Große Buttons, Touch-Delays, Active States
-- **Dark Mode** - Perfekt für Nacht-Navigation
-- **Responsive** - Desktop, Tablet, Mobile
-- **Emoji Icons** - Noto Color Emoji Font
-- **i18n** - Deutsch/Englisch mit Einheiten-Umrechnung
-- **Settings UI** - Card-basierte Settings mit Live-Preview
-
----
-
-## 🚀 Tech Stack
-
-### Backend
-- **FastAPI** - High-Performance Python API
-- **MQTT** - Sensor Data Streaming (Mosquitto)
-- **SignalK** - Marine Data Server
-- **httpx** - Async HTTP Client
-- **uvicorn** - ASGI Server
-
-### Frontend
-- **Vanilla JavaScript** - Kein Framework-Bloat, 100% Native
-- **Leaflet.js** - Interactive Maps
-- **Chart.js** - Statistiken & Graphen
-- **SortableJS** - Drag & Drop Library
-- **WebSocket** - Echtzeit-Updates
-- **CSS Grid/Flexbox** - Modern Responsive Layout
-
-### Infrastruktur
-- **Nginx** - Reverse Proxy & SSL
-- **Raspberry Pi 4** - Hardware Platform
-- **Systemd** - Service Management
-- **Git** - Version Control
-
-### Datenquellen
-- **OpenSeaMap** - Nautische Karten
-- **OpenStreetMap** - Basiskarten & Routing
-- **DWD API** - Deutscher Wetterdienst
-- **ELWIS** - Wasserstraßen & Pegel
-- **AISStream.io** - Live AIS Data
-- **Nominatim** - Geocoding
-
----
-
-## 📋 Systemanforderungen
-
-### Hardware
-- **Raspberry Pi 4** oder höher (min. 2GB RAM, 4GB empfohlen)
-- **GPS Empfänger** - USB (z.B. u-blox, Garmin)
-- **Touchscreen** - 7" Official Raspberry Pi Touch Display
-- **SD Card** - Min. 16GB (32GB empfohlen)
-- **Optional**: MQTT Sensoren (Temp, Voltage, etc.)
-
-### Software
-- **OS**: Raspberry Pi OS (Debian Bookworm) oder Ubuntu
-- **Python**: 3.9+
-- **Node.js**: Optional (nur für SignalK)
-- **Internet**: Für Karten & Wetter (offline nach Init möglich)
-
----
-
-## ⚡ Schnellstart
-
-### 1. Installation
-
-```bash
-# Repository klonen
-git clone https://github.com/bigbrainlabs/BoatOS.git
-cd BoatOS
-
-# Installations-Skript ausführen
-chmod +x install.sh
-./install.sh
-
-# GPS konfigurieren (siehe INSTALL.md)
-
-# System neu starten
-sudo reboot
-```
-
-### 2. Zugriff
-
-```bash
-# Im Browser öffnen:
-https://your-pi-ip/
-
-# Oder auf dem Pi direkt:
-https://localhost/
-```
-
-### 3. Konfiguration
-
-1. **Settings** öffnen
-2. **MQTT Broker** konfigurieren (falls externe Sensoren)
-3. **Dashboard Layout** anpassen (Code oder Visual Editor)
-4. **Weather API** Key eintragen (optional)
-
-Detaillierte Anleitung: [INSTALL.md](INSTALL.md)
-
----
-
-## 🔄 Update bestehender Installation
-
-```bash
-cd ~/BoatOS
-./scripts/update.sh
-```
-
-Das Update-Skript:
-- ✅ Git Pull für neueste Version
-- ✅ Python Dependencies aktualisieren
-- ✅ Frontend Cache Busting
-- ✅ Services neu starten
-- ✅ Status-Prüfung
 
 ---
 
 ## 🏗️ Architektur
 
 ```
-┌─────────────────────────────────────────────────┐
-│              Nginx (Port 80/443)                │
-│   ┌──────────────┐  ┌───────────────┐          │
-│   │   Frontend   │  │  SignalK      │          │
-│   │  (HTML/JS)   │  │   Proxy       │          │
-│   └──────┬───────┘  └───────┬───────┘          │
-└──────────┼──────────────────┼──────────────────┘
-           │                  │
-           ▼                  ▼
-    ┌─────────────┐    ┌─────────────────┐
-    │   BoatOS    │◄───┤ SignalK Server  │
-    │   Backend   │    │   (Port 3000)   │
-    │ (Port 8000) │    │                 │
-    └──────┬──────┘    └────────┬────────┘
-           │                    │
-           ▼                    ▼
-    ┌─────────────┐      ┌─────────────┐
-    │    MQTT     │      │ GPS Module  │
-    │   Broker    │      │/dev/ttyACM* │
-    │(Port 1883)  │      │             │
-    └──────┬──────┘      └─────────────┘
-           │
-           ▼
-    ┌─────────────────────┐
-    │  External Sensors   │
-    │  (Temp, Voltage,..) │
-    └─────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                        Raspberry Pi 4                            │
+│                                                                  │
+│   ┌──────────────────────┐   ┌──────────────────────────────┐   │
+│   │   V1 Web-Frontend    │   │    V2 Flutter-App (flutter-pi)│   │
+│   │   (Nginx + HTTPS)    │   │    Nativer Kiosk, lightdm    │   │
+│   └──────────┬───────────┘   └──────────────┬───────────────┘   │
+│              │  HTTP/WS                      │  HTTP/WS          │
+│              └─────────────┬─────────────────┘                  │
+│                            ▼                                     │
+│                  ┌─────────────────┐                            │
+│                  │  BoatOS Backend │  FastAPI, Port 8000         │
+│                  │   (main.py)     │  WebSocket, REST API        │
+│                  └────┬──────┬─────┘                            │
+│                       │      │                                   │
+│          ┌────────────┘      └──────────────┐                   │
+│          ▼                                  ▼                    │
+│   ┌─────────────┐                  ┌─────────────────┐          │
+│   │  Mosquitto  │◄── ESP32/Sensors │   SignalK       │          │
+│   │   MQTT      │    (boot/+)      │   Port 3000     │          │
+│   │  Port 1883  │                  │   GPS + NMEA    │          │
+│   └─────────────┘                  └────────┬────────┘          │
+│                                             │                    │
+│                                    ┌────────▼────────┐          │
+│                                    │   GPS Receiver  │          │
+│                                    │  /dev/ttyUSB0   │          │
+│                                    └─────────────────┘          │
+│                                                                  │
+│   ┌────────────────────────────┐                                │
+│   │  Martin Tile Server        │  Port 8081, lokale Vektorkarten│
+│   │  OSRM Routing Server       │  Port 5000, Binnengewässer     │
+│   └────────────────────────────┘                                │
+└──────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## ✨ Features im Detail
+
+### 🗺️ Karte & Navigation
+- **Vektor-Seekarten** — OpenMapTiles via Martin (lokal, offline), V1-Light-Style
+- **Seemarken** — OpenSeaMap Overlay
+- **Satellitenkarten** — ESRI World Imagery mit passivem + aktivem Offline-Caching (SW/Cache-API)
+- **AIS** — Live Schiffsverkehr via AISStream.io, gefiltert auf Europa-Bounding-Box
+- **Schleusen-Datenbank** — OSM-basiert, 300m-Deduplizierung, VHF/Zeiten/Maße
+- **Pegeldaten** — PEGELONLINE API, live Wasserstände auf der Karte
+- **Auto-Follow** — EMA-gefiltertes GPS, smooth Marker-Animation (α=0.35, ~4s ease-out)
+- **Routing** — OSRM-Wasserwegrouting, Wegpunkte drag-and-drop, Routen speichern/laden
+- **Routensimulation** — ×1–×1000 Geschwindigkeit, Speed-Slider, GPS-Blocking während Sim
+- **Navigation** — Richtung & Distanz zum nächsten Wegpunkt, automatisches Vorschalten
+
+### 📊 Dashboard
+- **DSL-Layout** — Textbasierte Konfiguration (GRID, GAUGE, SENSOR, ROW)
+- **Gauge-Stile** — arc180, arc270, arc360, bar — alle mit animierter Nadel (500ms ease-out)
+- **SensorCards** — card, hero, compact — mit SHOW/HIDE-Filter, Status-LED
+- **MQTT-Daten** — alle Sensor-Topics automatisch erkannt, String-Werte korrekt geparsed
+- **Visual Editor** (V1) — Drag & Drop, Undo/Redo, Bi-direktionale DSL-Sync
+
+### 📖 Logbuch
+- **GPS-Track-Recording** — Start/Stop, Pause, Pegelstände pro Track-Punkt
+- **Crew Management** — Emoji-Avatare, Rollen (Skipper/Crew/Gast), Kontaktdaten
+- **Archiv** — Alle Fahrten mit Detailansicht: Statistik, Track auf Karte, Wetter, Pegel, Sensoren
+- **Pegel-Tracking** — Alle 15 min werden nächstgelegene Stationen mitgeschrieben
+- **Logbuch-Einträge** — Manuell & automatisch (Fahrtstart/-ende mit Wetter-Snapshot)
+
+### 🔌 Sensoren & MQTT
+- **Auto-Discovery** — Alle MQTT-Topics werden automatisch erkannt und gespeichert
+- **Persistent Topics** — `known_topics.json` — Sensordaten bleiben über Neustarts erhalten
+- **MQTT Auto-Reconnect** — loop_forever()-Thread mit 5s Retry — überlebt Broker-Neustarts
+- **GPS Synthetic Sensors** — Altitude, HDOP, Satelliten als Dashboard-Sensoren
+- **SignalK Bridge** — GPS & Navigationsdaten über SignalK, konfigurierbar in Einstellungen
+
+### 🌦️ Wetter & Umwelt
+- **DWD Integration** — Deutscher Wetterdienst, automatisch nach Bootsposition
+- **Unwetter-Warnungen** — Live Alerts mit Schweregrad, auf Karte
+- **Pegeldaten** — PEGELONLINE, Tracking während der Fahrt für Flachwasseranalyse
+
+---
+
+## 📱 V1 vs V2
+
+| | V1 — Web-Frontend | V2 — Flutter-App |
+|---|---|---|
+| **Basis** | Vanilla JS, MapLibre GL | Flutter 3.x, flutter-pi |
+| **Kiosk** | cog (WPE WebKit) | flutter-pi + lightdm |
+| **Karten** | MapLibre GL JS v4.7.1 | flutter_map + vector_map_tiles |
+| **Status** | ✅ Produktiv, aktiv | ✅ Produktiv, in Entwicklung |
+| **Stärken** | Vollständiger Feature-Set, Visual Editor | Native Performance, animierte Gauges |
+
+Beide UIs teilen dasselbe Backend und die gleiche REST/WebSocket-API.
+
+---
+
+## 🚀 Tech Stack
+
+### Backend
+- **FastAPI** — High-Performance Python API
+- **paho-mqtt** — MQTT-Client mit Auto-Reconnect
+- **SignalK** — Marine Data Server (GPS)
+- **uvicorn** — ASGI Server
+
+### V1 Frontend
+- **Vanilla JavaScript** — ES Modules, kein Framework-Bloat
+- **MapLibre GL JS** v4.7.1 — Vektorkarten (lokal)
+- **WebSocket** — Echtzeit GPS & Sensordaten
+- **Service Worker** — Offline-Caching (Karten, Satellitenkacheln)
+
+### V2 Flutter-App
+- **Flutter** 3.x + **flutter-pi** — Native ARM64 AOT-Build
+- **flutter_map** — Interaktive Karten
+- **vector_map_tiles** — Vektorkacheln aus lokalem Martin
+- **provider** — State Management
+- **web_socket_channel** — WebSocket-Verbindung zum Backend
+
+### Infrastruktur
+- **Nginx** — Reverse Proxy & SSL (V1)
+- **Martin** — Vektortile-Server (Port 8081)
+- **OSRM** — Routing-Engine (Port 5000, IPv4-only)
+- **Mosquitto** — MQTT Broker (Port 1883)
+- **Raspberry Pi 4** — Hardware-Plattform
+
+### Datenquellen
+- **OpenSeaMap** — Seemarken-Overlay
+- **OpenStreetMap / OMT** — Vektorkarten & Routing
+- **ESRI World Imagery** — Satellitenkarten
+- **DWD API** — Deutscher Wetterdienst
+- **PEGELONLINE** — Wasserstandsdaten
+- **AISStream.io** — Live AIS Schiffsdaten
+- **SignalK** — Marine-Datenstandard
+
+---
+
+## 📋 Systemanforderungen
+
+### Hardware
+- **Raspberry Pi 4** (min. 2 GB RAM, 4 GB empfohlen)
+- **GPS Empfänger** — USB, z. B. BU-353N5 (`/dev/ttyUSB0`, 4800 baud)
+- **Touchscreen** — z. B. QDtech MPI1001 10.1" (1280×800)
+- **SD Card** — Min. 32 GB
+- **Optional** — ESP32/Arduino Sensorboard via MQTT
+
+### Software
+- **Raspberry Pi OS** Bookworm (64-bit)
+- **Python** 3.9+
+- **Node.js** (für SignalK)
+- **Flutter SDK** + flutter-pi (nur für V2-Build)
+
+---
+
+## ⚡ Schnellstart
+
+### 1. Repository klonen & installieren
+
+```bash
+git clone https://github.com/bigbrainlabs/BoatOS.git
+cd BoatOS
+chmod +x install.sh
+./install.sh
+```
+
+### 2. V1 Web-Frontend aufrufen
+
+```
+https://<pi-ip>/
+```
+
+### 3. V2 Flutter-App bauen & deployen
+
+```bash
+# Auf dem Entwicklungs-PC (Flutter SDK + flutterpi_tool erforderlich):
+cd flutter_app
+flutterpi_tool build --arch=arm64 --cpu=pi4 --release
+
+# Deploy auf Pi:
+scp build/flutter-pi/pi4-64/app.so arielle@<pi-ip>:/home/arielle/BoatOS/flutter_app/app.so
+ssh arielle@<pi-ip> "sudo systemctl restart lightdm"
+```
+
+Detaillierte Anleitung: [INSTALL.md](INSTALL.md)
 
 ---
 
@@ -230,33 +225,53 @@ Das Update-Skript:
 BoatOS/
 ├── backend/                    # FastAPI Backend
 │   ├── app/
-│   │   ├── main.py            # Haupt-API & WebSocket
-│   │   ├── gps_service.py     # GPS Integration
-│   │   └── dashboard_dsl.py   # DSL Parser
-│   ├── requirements.txt
-│   └── venv/
-├── frontend/                  # Web-Frontend
-│   ├── index.html            # Haupt-UI
-│   ├── app.js                # App Logic
-│   ├── dashboard_renderer.js # Dashboard Engine
-│   ├── dashboard_visual_editor.js  # Visual Editor (Phase 2)
-│   ├── settings_renderer.js  # Settings UI
-│   ├── logbook.js           # Logbuch
-│   ├── water_routing.js     # Routing
-│   ├── weather_alerts.js    # Wetter-Warnungen
-│   ├── locks.js             # Schleusen-Info
-│   ├── i18n.js              # Übersetzungen
-│   └── style.css
-├── data/                     # User Data
+│   │   ├── main.py             # Haupt-API, WebSocket, MQTT
+│   │   ├── gps_service.py      # GPS via SignalK
+│   │   ├── logbook_storage.py  # Logbuch & Tracks
+│   │   ├── locks_storage.py    # Schleusen-Datenbank
+│   │   ├── crew_management.py  # Crew CRUD
+│   │   ├── pegelonline.py      # Pegeldaten
+│   │   ├── ais_service.py      # AIS via AISStream
+│   │   └── ...
+│   └── requirements.txt
+├── frontend/                   # V1 Web-Frontend
+│   ├── index.html
+│   ├── js/
+│   │   ├── main.js             # ES Module Entry
+│   │   ├── map.js              # Karte, Marker, GPS-Smoothing
+│   │   ├── navigation.js       # Routing & Simulation
+│   │   ├── logbook.js          # Logbuch & Crew
+│   │   ├── sensors.js          # GPS Fallbacks
+│   │   ├── ais.js              # AIS-Schiffe
+│   │   └── ...
+│   ├── css/
+│   └── sw.js                   # Service Worker (Offline-Caching)
+├── flutter_app/                # V2 Native Flutter-App
+│   ├── lib/
+│   │   ├── main.dart
+│   │   ├── screens/
+│   │   │   ├── map_screen.dart       # Karte, GPS, Routing, Sim
+│   │   │   ├── dashboard_screen.dart # DSL-Dashboard, Gauges
+│   │   │   ├── logbook_screen.dart   # Logbuch, Crew, Archiv
+│   │   │   └── settings_screen.dart
+│   │   ├── widgets/
+│   │   │   ├── gauge_widget.dart     # Animierte Gauges
+│   │   │   └── route_planner.dart    # Wegpunkte, RoutePanel
+│   │   └── services/
+│   │       ├── websocket_service.dart
+│   │       ├── settings_service.dart
+│   │       └── logbook_service.dart
+│   ├── assets/fonts/NotoColorEmoji.ttf
+│   └── pubspec.yaml
+├── data/                       # Laufzeitdaten (nicht im Repo)
 │   ├── settings.json
 │   ├── known_topics.json
-│   └── dashboard_layout.dsl
+│   └── crew.json
+├── docs/
 ├── scripts/
-│   └── update.sh            # Update Script
-├── INSTALL.md               # Installation Guide
-├── DASHBOARD_DSL.md         # DSL Documentation
-├── README.md                # Diese Datei
-└── install.sh               # Installations-Skript
+├── INSTALL.md
+├── DASHBOARD_DSL.md
+└── README.md
 ```
 
 ---
@@ -265,63 +280,50 @@ BoatOS/
 
 BoatOS nutzt eine eigene **Domain Specific Language** für Dashboards:
 
-```dsl
-GRID 3
+```
+GRID 4
 
-ROW hero
-  SENSOR navigation/position SIZE 2 STYLE hero
-  SENSOR navigation/gnss/satellites SIZE 1
-
-ROW sensors
-  SENSOR arielle/bilge/thermo SHOW temp,hum UNITS "temp:°C,hum:%" STYLE compact
-  SENSOR navigation/gnss STYLE card
-  TEXT "Weitere Sensoren..." STYLE subtitle
+ROW main
+GAUGE boot/sensoren/motor/drehzahl MAX 6000 UNIT "RPM" DECIMALS 0
+GAUGE boot/sensoren/motor/oeldruck MAX 7 UNIT "Bar" STYLE bar DECIMALS 2
+SENSOR boot/sensoren/batterie STYLE hero
+SENSOR boot/sensoren/lage SIZE 2 STYLE hero
+SENSOR boot/sensoren/tank/diesel SIZE 2
 ```
 
-Oder nutze den **Visual Editor** - kein Code nötig! 🎨
+Gauge-Stile: `arc180`, `arc270` (Standard), `arc360`, `bar`
+Sensor-Stile: `card` (Standard), `hero`, `compact`
 
 Dokumentation: [DASHBOARD_DSL.md](DASHBOARD_DSL.md)
 
 ---
 
-## 📡 API Endpoints
+## 📡 API (Auswahl)
 
-Nach Installation verfügbar unter: `http://your-pi-ip:8000/docs`
+Vollständige Dokumentation: `http://<pi-ip>:8000/docs`
 
-### Core Endpoints
-- `GET /api/sensors/list` - Alle Sensoren mit Status
-- `GET /api/sensors/{sensor_id}` - Sensor Details
-- `GET /api/gps` - GPS-Daten (Position, Speed, Course)
-- `GET /api/weather` - Wetterdaten
-- `GET /api/weather/alerts` - DWD Unwetter-Warnungen
-- `WS /ws` - WebSocket für Echtzeit-Updates
-
-### Dashboard
-- `GET /api/dashboard/layout` - Aktuelles Dashboard Layout
-- `POST /api/dashboard/layout` - Layout speichern
-- `POST /api/dashboard/parse` - DSL parsen & validieren
-
-### Navigation
-- `POST /api/route` - Route berechnen (Waterway)
-- `GET /api/locks` - Schleusen-Datenbank
-- `GET /api/waypoints` - Wegpunkte
-- `POST /api/waypoints` - Wegpunkt hinzufügen
-
-### Logbuch
-- `GET /api/logbook/entries` - Logbuch-Einträge
-- `POST /api/logbook/entry` - Eintrag hinzufügen
-- `GET /api/crew` - Crew-Mitglieder
-- `GET /api/fuel` - Tankfüllungen
-
-### Settings
-- `GET /api/settings` - System-Einstellungen
-- `POST /api/settings` - Einstellungen speichern
+| Endpoint | Beschreibung |
+|---|---|
+| `WS /ws` | WebSocket — GPS, Sensoren, Echtzeit |
+| `GET /api/sensors/list` | Alle MQTT-Sensoren mit Status & Werten |
+| `GET /api/mqtt/topics` | Rohe MQTT-Topics mit Timestamps |
+| `POST /api/route` | Route berechnen (OSRM) |
+| `GET /api/locks/bounds` | Schleusen in Bounding Box |
+| `GET /api/gauges` | Pegelstände in Bounding Box |
+| `GET /api/ais/vessels` | AIS-Schiffe in Bounding Box |
+| `GET /api/logbook/trips` | Alle Fahrten |
+| `GET /api/logbook/trips/{id}` | Fahrt-Detail mit Track & Einträgen |
+| `POST /api/logbook/start` | Fahrt starten |
+| `POST /api/logbook/stop` | Fahrt beenden |
+| `GET /api/crew` | Crew-Mitglieder |
+| `GET /api/settings` | Systemeinstellungen |
+| `GET /api/saved-routes` | Gespeicherte Routen |
 
 ---
 
 ## 🛠️ Entwicklung
 
-### Backend entwickeln
+### Backend (auf dem Pi oder lokal)
 
 ```bash
 cd backend
@@ -329,177 +331,125 @@ source venv/bin/activate
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Frontend entwickeln
+### V1 Frontend
 
 ```bash
-cd frontend
-# Einfach Dateien bearbeiten, kein Build nötig!
-# Im Browser: http://localhost/
+# Kein Build nötig — Dateien direkt bearbeiten
+# Browser: https://localhost/ (kiosk) oder https://<pi-ip>/
 ```
 
-### MQTT Testing
+### V2 Flutter (Build auf dem Entwicklungs-PC)
 
 ```bash
-# Subscribe to all topics
+cd flutter_app
+# Build für Pi 4 (ARM64)
+flutterpi_tool build --arch=arm64 --cpu=pi4 --release
+
+# Deploy
+scp build/flutter-pi/pi4-64/app.so arielle@<pi-ip>:/home/arielle/BoatOS/flutter_app/app.so
+ssh arielle@<pi-ip> "sudo systemctl restart lightdm"
+```
+
+### MQTT Debugging
+
+```bash
+# Alle Topics live verfolgen
 mosquitto_sub -h localhost -t '#' -v
 
-# Publish test data
-mosquitto_pub -h localhost -t 'arielle/bilge/thermo' \
-  -m '{"temp": 22.5, "hum": 65.3}'
+# Testdaten senden
+mosquitto_pub -h <pi-ip> -t 'boot/sensoren/motor/drehzahl' -m '2500'
 ```
 
 ---
 
 ## 🗺️ Roadmap
 
-### ✅ Completed (Phase 1 & 2)
-- [x] GPS Integration (SignalK + MQTT)
-- [x] Interactive Maps (Leaflet)
-- [x] Waterway Routing
-- [x] AIS Integration
-- [x] Weather Alerts (DWD)
-- [x] Digital Logbuch
-- [x] Dashboard DSL System
-- [x] Visual Dashboard Editor
-- [x] Touch Optimization
-- [x] Undo/Redo System
-- [x] Multi-Row Layouts
-- [x] SHOW/HIDE & UNITS UI
+### ✅ Abgeschlossen
+- GPS Integration (SignalK, USB, Phone-Fallback)
+- Interaktive Vektorkarten (MapLibre / flutter_map, lokal)
+- Wasserweg-Routing (OSRM)
+- AIS Live-Schiffsverkehr
+- Wetter-Warnungen (DWD)
+- Digitales Logbuch mit Crew & Pegeltracking
+- Dashboard DSL + Visual Editor (V1)
+- Animierte Gauge-Widgets (V2)
+- Schleusen-Datenbank (OSM)
+- Satellitenkarten + Offline-Caching
+- Routensimulation
+- Smooth GPS-Marker (EMA + Interpolation)
+- MQTT Auto-Reconnect
 
-### 🚧 In Progress (Phase 3)
-- [ ] Anker-Alarm mit Geofencing
-- [ ] Tide-Vorhersagen (BSH API)
-- [ ] Offline-Karten (MBTiles)
-- [ ] AIS Target Details & CPA
-- [ ] Route Import/Export (GPX)
+### 🚧 In Arbeit
+- Flutter V2 Feature-Parität mit V1
+- Verteilbares Pi-Image (dd + pishrink)
 
-### 🔮 Future (Phase 4+)
-- [ ] Autopilot Integration
-- [ ] Mobile Companion App
-- [ ] Plugin System
-- [ ] Chart Plotting Tools
-- [ ] Marina Database
-- [ ] MOB (Man Over Board) Alert
+### 🔮 Geplant
+- Anker-Alarm mit Geofencing
+- Tide-Vorhersagen (BSH API)
+- GPX Import/Export
+- AIS Target CPA-Berechnung
+- MOB (Man Over Board) Alert
 
 ---
 
 ## 🤝 Contributing
 
-Pull Requests sind herzlich willkommen! 🎉
+Pull Requests sind willkommen!
 
-### Contribution Guidelines
-
-1. **Fork** das Projekt
-2. **Branch** erstellen (`git checkout -b feature/AmazingFeature`)
-3. **Commit** deine Änderungen (`git commit -m 'Add some AmazingFeature'`)
-4. **Push** zum Branch (`git push origin feature/AmazingFeature`)
-5. **Pull Request** öffnen
-
-### Development Workflow
-
-- Code Style: PEP8 (Python), Standard JS (JavaScript)
-- Commit Messages: Conventional Commits Format
-- PRs: Beschreibe was, warum, wie
-- Tests: Bitte teste auf echtem Pi-Hardware
-
-### Ideen für Contributors
-
-- 🗺️ **Neue Kartenebenen** hinzufügen
-- 🌍 **Übersetzungen** (Französisch, Spanisch, ...)
-- 📊 **Dashboard Widgets** entwickeln
-- 🔌 **Sensor Plugins** für neue Hardware
-- 📖 **Dokumentation** verbessern
-- 🐛 **Bugs** fixen
+1. Fork → Branch → Commit → PR
+2. Code Style: PEP8 (Python), Standard JS / Dart
+3. Commit Messages: Conventional Commits
+4. Bitte auf echter Pi-Hardware testen
 
 ---
 
 ## 🐛 Troubleshooting
 
-### BoatOS Backend startet nicht
+### Backend startet nicht
 ```bash
-# Status prüfen
 sudo systemctl status boatos
-
-# Logs ansehen
 sudo journalctl -u boatos -f
-
-# Neu starten
-sudo systemctl restart boatos
 ```
 
 ### GPS keine Daten
 ```bash
-# GPS Device prüfen
-ls -la /dev/ttyACM*
-ls -la /dev/ttyUSB*
-
-# SignalK prüfen
+ls -la /dev/ttyUSB* /dev/ttyACM*
 curl http://localhost:3000/signalk/v1/api/vessels/self/navigation/position
+sudo systemctl status signalk
 ```
 
 ### MQTT Sensoren erscheinen nicht
 ```bash
-# MQTT Broker Status
 sudo systemctl status mosquitto
-
-# Topics debuggen
 mosquitto_sub -h localhost -t '#' -v
+# Backend-Status:
+curl http://localhost:8000/api/mqtt/topics
 ```
 
-Mehr: [INSTALL.md - Troubleshooting](INSTALL.md#fehlerbehebung)
+### Flutter-App startet nicht
+```bash
+sudo systemctl status lightdm
+# Logs:
+sudo journalctl -u lightdm -f
+```
+
+Mehr: [INSTALL.md](INSTALL.md)
 
 ---
 
 ## 📜 Lizenz
 
-**MIT License** - siehe [LICENSE](LICENSE) Datei
-
-Kurz gesagt: Du darfst alles damit machen! Kommerziell nutzen, modifizieren, verteilen. Einzige Bedingung: Copyright-Notice behalten.
+**MIT License** — frei nutzbar, modifizierbar, verteilbar. Copyright-Notice behalten.
 
 ---
 
-## 👏 Credits & Danksagungen
+## 👏 Credits
 
-### Entwicklung
-- **Hauptentwicklung**: bigbrainlabs
+- **Entwicklung**: bigbrainlabs
 - **AI-Pair-Programming**: Claude Code (Anthropic)
-
-### Open Source Libraries
-- [FastAPI](https://fastapi.tiangolo.com/) - Python Web Framework
-- [Leaflet.js](https://leafletjs.com/) - Interactive Maps
-- [SortableJS](https://sortablejs.github.io/Sortable/) - Drag & Drop
-- [Chart.js](https://www.chartjs.org/) - Graphen & Diagramme
-- [SignalK](https://signalk.org/) - Marine Data Standard
-
-### Datenquellen
-- [OpenSeaMap](https://www.openseamap.org/) - Nautische Karten
-- [OpenStreetMap](https://www.openstreetmap.org/) - Kartendaten
-- [DWD](https://www.dwd.de/) - Deutscher Wetterdienst
-- [AISStream.io](https://aisstream.io/) - Live AIS Data
-- [ELWIS](https://www.elwis.de/) - Wasserstraßen-Informationen
-
-### Community
-- SignalK Community
-- OpenSeaMap Contributors
-- Raspberry Pi Foundation
-- Alle Beta-Tester & Issue-Reporter! 🙌
-
----
-
-## 📞 Support & Community
-
-- **Issues**: [GitHub Issues](https://github.com/bigbrainlabs/BoatOS/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/bigbrainlabs/BoatOS/discussions)
-- **Instagram**: [@your_handle](https://instagram.com/your_handle) - Demos & Updates
-- **Email**: your@email.com
-
----
-
-## 🌟 Star History
-
-Wenn dir BoatOS gefällt, gib uns einen ⭐ auf GitHub!
-
-[![Star History Chart](https://api.star-history.com/svg?repos=bigbrainlabs/BoatOS&type=Date)](https://star-history.com/#bigbrainlabs/BoatOS&Date)
+- **Karten**: OpenSeaMap, OpenStreetMap, ESRI
+- **Daten**: DWD, PEGELONLINE, AISStream.io
+- **Libraries**: FastAPI, flutter_map, MapLibre GL, SignalK, OSRM
 
 ---
 
