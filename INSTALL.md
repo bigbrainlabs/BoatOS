@@ -11,7 +11,7 @@ BoatOS besteht aus mehreren Komponenten, die auf einem Raspberry Pi 4 zusammenar
 | OSRM Routing | 5000 | Wasserweg-Routing (IPv4-only) |
 | SignalK Server | 3000 | GPS / NMEA-Integration |
 | Mosquitto MQTT | 1883 | Sensordaten-Broker |
-| Nginx | 80/443 | Reverse Proxy für V1 Web-Frontend |
+| Nginx | 80/443 | Reverse Proxy für Deck Web-Frontend |
 
 ---
 
@@ -268,7 +268,7 @@ curl "http://127.0.0.1:5000/route/v1/driving/12.046,51.855;12.1,51.9"
 
 ---
 
-## 6. V1 Web-Frontend (Nginx)
+## 6. Deck — Web-Frontend (Nginx)
 
 Das Web-Frontend wird über Nginx mit selbst-signiertem SSL-Zertifikat ausgeliefert.
 
@@ -334,11 +334,11 @@ sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl restart nginx
 ```
 
-V1 öffnen: `https://<pi-ip>/`
+Deck öffnen: `https://<pi-ip>/`
 
 ---
 
-## 7. V2 Flutter-App (flutter-pi)
+## 7. Helm — Flutter-App (flutter-pi)
 
 Die native Flutter-App läuft über flutter-pi direkt auf dem Pi-Framebuffer (kein X11/Wayland nötig).
 
@@ -474,7 +474,7 @@ cd ..
 # Services neu starten
 sudo systemctl restart boatos
 
-# V2 Flutter-App: neuen Build deployen (auf Entwicklungs-PC)
+# Helm: neuen Build deployen (auf Entwicklungs-PC)
 # → scp + sudo systemctl restart lightdm
 ```
 
@@ -517,7 +517,7 @@ curl "http://127.0.0.1:5000/route/v1/driving/12.046,51.855;12.1,51.9"
 # NICHT: curl "http://localhost:5000/..."
 ```
 
-### V2 Flutter-App startet nicht
+### Helm startet nicht
 
 ```bash
 sudo systemctl status lightdm

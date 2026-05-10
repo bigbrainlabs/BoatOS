@@ -14,7 +14,7 @@ Ein vollständiges Marine-Navigationssystem für Binnenschifffahrt und Küstenna
 
 ## 🌟 Highlights
 
-- 🗺️ **Zwei UIs** — Web-Frontend (V1, browser-based) + native Flutter-App (V2, flutter-pi)
+- 🗺️ **Zwei UIs** — Deck (browser-based Web-Frontend) + Helm (native Flutter-App, flutter-pi)
 - 🧭 **Binnengewässer-Routing** — OSRM-optimiert für Elbe, Kanäle & Schleusen
 - 📡 **Live AIS** — Echtzeit-Schiffsverkehr (Europa), via AISStream.io
 - ⚠️ **Wetter & Warnungen** — DWD API mit Unwetter-Alerts
@@ -41,7 +41,7 @@ Demos: Check Instagram @bigbrainlabs
 │                        Raspberry Pi 4                            │
 │                                                                  │
 │   ┌──────────────────────┐   ┌──────────────────────────────┐   │
-│   │   V1 Web-Frontend    │   │    V2 Flutter-App (flutter-pi)│   │
+│   │   Deck Web-Frontend  │   │    Helm Flutter-App (flutter-pi)│  │
 │   │   (Nginx + HTTPS)    │   │    Nativer Kiosk, lightdm    │   │
 │   └──────────┬───────────┘   └──────────────┬───────────────┘   │
 │              │  HTTP/WS                      │  HTTP/WS          │
@@ -77,7 +77,7 @@ Demos: Check Instagram @bigbrainlabs
 ## ✨ Features im Detail
 
 ### 🗺️ Karte & Navigation
-- **Vektor-Seekarten** — OpenMapTiles via Martin (lokal, offline), V1-Light-Style
+- **Vektor-Seekarten** — OpenMapTiles via Martin (lokal, offline), Deck-Light-Style
 - **Seemarken** — OpenSeaMap Overlay
 - **Satellitenkarten** — ESRI World Imagery mit passivem + aktivem Offline-Caching (SW/Cache-API)
 - **AIS** — Live Schiffsverkehr via AISStream.io, gefiltert auf Europa-Bounding-Box
@@ -93,7 +93,7 @@ Demos: Check Instagram @bigbrainlabs
 - **Gauge-Stile** — arc180, arc270, arc360, bar — alle mit animierter Nadel (500ms ease-out)
 - **SensorCards** — card, hero, compact — mit SHOW/HIDE-Filter, Status-LED
 - **MQTT-Daten** — alle Sensor-Topics automatisch erkannt, String-Werte korrekt geparsed
-- **Visual Editor** (V1) — Drag & Drop, Undo/Redo, Bi-direktionale DSL-Sync
+- **Visual Editor** (Deck) — Drag & Drop, Undo/Redo, Bi-direktionale DSL-Sync
 
 ### 📖 Logbuch
 - **GPS-Track-Recording** — Start/Stop, Pause, Pegelstände pro Track-Punkt
@@ -116,9 +116,9 @@ Demos: Check Instagram @bigbrainlabs
 
 ---
 
-## 📱 V1 vs V2
+## 📱 Deck vs Helm
 
-| | V1 — Web-Frontend | V2 — Flutter-App |
+| | Deck — Web-Frontend | Helm — Flutter-App |
 |---|---|---|
 | **Basis** | Vanilla JS, MapLibre GL | Flutter 3.x, flutter-pi |
 | **Kiosk** | cog (WPE WebKit) | flutter-pi + lightdm |
@@ -138,13 +138,13 @@ Beide UIs teilen dasselbe Backend und die gleiche REST/WebSocket-API.
 - **SignalK** — Marine Data Server (GPS)
 - **uvicorn** — ASGI Server
 
-### V1 Frontend
+### Deck Frontend
 - **Vanilla JavaScript** — ES Modules, kein Framework-Bloat
 - **MapLibre GL JS** v4.7.1 — Vektorkarten (lokal)
 - **WebSocket** — Echtzeit GPS & Sensordaten
 - **Service Worker** — Offline-Caching (Karten, Satellitenkacheln)
 
-### V2 Flutter-App
+### Helm Flutter-App
 - **Flutter** 3.x + **flutter-pi** — Native ARM64 AOT-Build
 - **flutter_map** — Interaktive Karten
 - **vector_map_tiles** — Vektorkacheln aus lokalem Martin
@@ -152,7 +152,7 @@ Beide UIs teilen dasselbe Backend und die gleiche REST/WebSocket-API.
 - **web_socket_channel** — WebSocket-Verbindung zum Backend
 
 ### Infrastruktur
-- **Nginx** — Reverse Proxy & SSL (V1)
+- **Nginx** — Reverse Proxy & SSL (Deck)
 - **Martin** — Vektortile-Server (Port 8081)
 - **OSRM** — Routing-Engine (Port 5000, IPv4-only)
 - **Mosquitto** — MQTT Broker (Port 1883)
@@ -182,7 +182,7 @@ Beide UIs teilen dasselbe Backend und die gleiche REST/WebSocket-API.
 - **Raspberry Pi OS** Bookworm (64-bit)
 - **Python** 3.9+
 - **Node.js** (für SignalK)
-- **Flutter SDK** + flutter-pi (nur für V2-Build)
+- **Flutter SDK** + flutter-pi (nur für Helm-Build)
 
 ---
 
@@ -197,13 +197,13 @@ chmod +x install.sh
 ./install.sh
 ```
 
-### 2. V1 Web-Frontend aufrufen
+### 2. Deck aufrufen
 
 ```
 https://<pi-ip>/
 ```
 
-### 3. V2 Flutter-App bauen & deployen
+### 3. Helm bauen & deployen
 
 ```bash
 # Auf dem Entwicklungs-PC (Flutter SDK + flutterpi_tool erforderlich):
@@ -234,7 +234,7 @@ BoatOS/
 │   │   ├── ais_service.py      # AIS via AISStream
 │   │   └── ...
 │   └── requirements.txt
-├── frontend/                   # V1 Web-Frontend
+├── frontend/                   # Deck Web-Frontend
 │   ├── index.html
 │   ├── js/
 │   │   ├── main.js             # ES Module Entry
@@ -246,7 +246,7 @@ BoatOS/
 │   │   └── ...
 │   ├── css/
 │   └── sw.js                   # Service Worker (Offline-Caching)
-├── flutter_app/                # V2 Native Flutter-App
+├── flutter_app/                # Helm Native Flutter-App
 │   ├── lib/
 │   │   ├── main.dart
 │   │   ├── screens/
@@ -331,14 +331,14 @@ source venv/bin/activate
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### V1 Frontend
+### Deck Frontend
 
 ```bash
 # Kein Build nötig — Dateien direkt bearbeiten
 # Browser: https://localhost/ (kiosk) oder https://<pi-ip>/
 ```
 
-### V2 Flutter (Build auf dem Entwicklungs-PC)
+### Helm (Build auf dem Entwicklungs-PC)
 
 ```bash
 cd flutter_app
@@ -371,8 +371,8 @@ mosquitto_pub -h <pi-ip> -t 'boot/sensoren/motor/drehzahl' -m '2500'
 - AIS Live-Schiffsverkehr
 - Wetter-Warnungen (DWD)
 - Digitales Logbuch mit Crew & Pegeltracking
-- Dashboard DSL + Visual Editor (V1)
-- Animierte Gauge-Widgets (V2)
+- Dashboard DSL + Visual Editor (Deck)
+- Animierte Gauge-Widgets (Helm)
 - Schleusen-Datenbank (OSM)
 - Satellitenkarten + Offline-Caching
 - Routensimulation
@@ -380,7 +380,7 @@ mosquitto_pub -h <pi-ip> -t 'boot/sensoren/motor/drehzahl' -m '2500'
 - MQTT Auto-Reconnect
 
 ### 🚧 In Arbeit
-- Flutter V2 Feature-Parität mit V1
+- Helm Feature-Parität mit Deck
 - Verteilbares Pi-Image (dd + pishrink)
 
 ### 🔮 Geplant
