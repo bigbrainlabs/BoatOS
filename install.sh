@@ -1,64 +1,61 @@
 #!/bin/bash
 set -e
 
-echo "🚢 BoatOS Installation Script"
-echo "============================="
+echo "BoatOS Installation Script"
+echo "=========================="
 echo ""
 
-# Farben für Ausgabe
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Funktionen
-error() {
-    echo -e "${RED}❌ Fehler: $1${NC}"
-    exit 1
-}
+error()   { echo -e "${RED}Fehler: $1${NC}"; exit 1; }
+success() { echo -e "${GREEN}OK: $1${NC}"; }
+info()    { echo -e "${YELLOW}Info: $1${NC}"; }
 
-success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
-
-info() {
-    echo -e "${YELLOW}ℹ️  $1${NC}"
-}
-
-# Benutzer prüfen
-if [ "$EUID" -eq 0 ]; then
-   error "Bitte führe dieses Skript NICHT als root aus!"
-fi
+[ "$EUID" -eq 0 ] && error "Bitte fuehre dieses Skript NICHT als root aus!"
 
 INSTALL_USER=$(whoami)
 INSTALL_DIR="/home/$INSTALL_USER/BoatOS"
 
-echo "Installation als Benutzer: $INSTALL_USER"
-echo "Installationsverzeichnis: $INSTALL_DIR"
+echo "Benutzer:  $INSTALL_USER"
+echo "Verzeichnis: $INSTALL_DIR"
 echo ""
 
-# System-Pakete installieren
+[ -d "$INSTALL_DIR" ] || error "BoatOS-Verzeichnis nicht gefunden: $INSTALL_DIR"
+
+# ── 1. System-Pakete ────────────────────────────────────────────────────────
 info "Installiere System-Pakete..."
 sudo apt update
-sudo apt install -y python3 python3-pip python3-venv nginx git curl gdal-bin python3-gdal openssl mosquitto mosquitto-clients sqlite3 || error "System-Pakete konnten nicht installiert werden"
-success "System-Pakete installiert (inkl. GDAL für Kartenkonvertierung, MQTT Broker, SQLite)"
+sudo apt install -y \
+  python3 python3-pip python3-venv \
+  nginx git curl \
+  mosquitto mosquitto-clients \
+  sqlite3 openssl \
+  gdal-bin python3-gdal \
+  || error "System-Pakete konnten nicht installiert werden"
+success "System-Pakete installiert"
 
-# Node.js für SignalK installieren
-info "Installiere Node.js..."
+# ── 2. Benutzergruppen ──────────────────────────────────────────────────────
+info "Fuege $INSTALL_USER zur dialout-Gruppe hinzu (GPS-Zugriff)..."
+sudo usermod -a -G dialout "$INSTALL_USER"
+success "Benutzer zur dialout-Gruppe hinzugefuegt"
+
+# ── 3. Node.js & SignalK ───────────────────────────────────────────────────
+info "Installiere Node.js 20..."
 if ! command -v node &> /dev/null; then
     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
     sudo apt install -y nodejs || error "Node.js Installation fehlgeschlagen"
 fi
-success "Node.js installiert: $(node --version)"
+success "Node.js: $(node --version)"
 
-# SignalK installieren
 info "Installiere SignalK Server..."
 if ! command -v signalk-server &> /dev/null; then
     sudo npm install -g --unsafe-perm signalk-server || error "SignalK Installation fehlgeschlagen"
 fi
 success "SignalK installiert"
 
-# SignalK Service erstellen
 info "Erstelle SignalK Service..."
 sudo tee /etc/systemd/system/signalk.service > /dev/null << SIGNALK
 [Unit]
@@ -81,182 +78,59 @@ sudo systemctl daemon-reload
 sudo systemctl enable signalk
 success "SignalK Service erstellt"
 
-# MQTT Broker konfigurieren
-info "Konfiguriere MQTT Broker (Mosquitto)..."
+# ── 4. MQTT Broker ─────────────────────────────────────────────────────────
+info "Konfiguriere Mosquitto MQTT Broker..."
 sudo tee /etc/mosquitto/conf.d/boatos.conf > /dev/null << MQTT
-# BoatOS MQTT Configuration
 listener 1883
 allow_anonymous true
 MQTT
 
 sudo systemctl enable mosquitto
 sudo systemctl restart mosquitto
-success "MQTT Broker konfiguriert und gestartet"
+success "Mosquitto MQTT konfiguriert und gestartet"
 
-# GPS Berechtigungen
-info "Füge Benutzer zur dialout-Gruppe hinzu..."
-sudo usermod -a -G dialout $INSTALL_USER
-success "Benutzer zur dialout-Gruppe hinzugefügt"
-
-# BoatOS Repository klonen (falls nicht vorhanden)
-if [ ! -d "$INSTALL_DIR" ]; then
-    info "BoatOS Verzeichnis nicht gefunden. Bitte stelle sicher, dass BoatOS unter $INSTALL_DIR liegt."
-    error "BoatOS Verzeichnis fehlt"
-fi
-
-# Backend einrichten
-info "Richte Backend ein..."
-cd $INSTALL_DIR/backend
-
+# ── 5. Python Backend ──────────────────────────────────────────────────────
+info "Richte Python Backend ein..."
+cd "$INSTALL_DIR/backend"
 if [ ! -d "venv" ]; then
-    # Use --system-site-packages to access GDAL Python bindings
-    python3 -m venv --system-site-packages venv || error "Virtual Environment konnte nicht erstellt werden"
-    success "Virtual Environment mit System-Paketen erstellt (für GDAL)"
+    # --system-site-packages fuer GDAL Python-Bindings benoetigt
+    python3 -m venv --system-site-packages venv || error "venv konnte nicht erstellt werden"
 fi
-
 source venv/bin/activate
 pip install --upgrade pip
-pip install -r requirements.txt || error "Python-Abhängigkeiten konnten nicht installiert werden"
+pip install -r requirements.txt || error "Python-Abhaengigkeiten konnten nicht installiert werden"
 success "Backend eingerichtet"
 
-# Datenverzeichnisse erstellen
+# ── 6. Datenverzeichnisse ──────────────────────────────────────────────────
 info "Erstelle Datenverzeichnisse..."
-mkdir -p $INSTALL_DIR/data/charts
-mkdir -p $INSTALL_DIR/data/enc_downloads
-mkdir -p $INSTALL_DIR/data/osrm
-mkdir -p $INSTALL_DIR/data/layouts
-mkdir -p $INSTALL_DIR/data/logbook
-mkdir -p $INSTALL_DIR/data/crew
-mkdir -p $INSTALL_DIR/data/fuel
-mkdir -p $INSTALL_DIR/data/locks
-touch $INSTALL_DIR/data/.gitkeep
+mkdir -p "$INSTALL_DIR/data/charts"
+mkdir -p "$INSTALL_DIR/data/enc_downloads"
+mkdir -p "$INSTALL_DIR/data/osrm"
+mkdir -p "$INSTALL_DIR/data/layouts"
+mkdir -p "$INSTALL_DIR/data/logbook"
+mkdir -p "$INSTALL_DIR/data/crew"
+mkdir -p "$INSTALL_DIR/data/fuel"
+mkdir -p "$INSTALL_DIR/data/locks"
+mkdir -p "$INSTALL_DIR/maps"
+touch "$INSTALL_DIR/data/.gitkeep"
+chmod -R 755 "$INSTALL_DIR/data" "$INSTALL_DIR/maps"
+success "Datenverzeichnisse erstellt (inkl. maps/ fuer MBTiles)"
 
-# Set proper permissions for data directories
-chmod -R 755 $INSTALL_DIR/data
-success "Datenverzeichnisse erstellt (Charts, Layouts, Logbook, Crew, Fuel, Locks)"
-
-# Environment Configuration
+# ── 7. .env Konfiguration ──────────────────────────────────────────────────
 if [ ! -f "$INSTALL_DIR/.env" ]; then
     info "Erstelle .env Konfigurationsdatei..."
-    cp $INSTALL_DIR/.env.example $INSTALL_DIR/.env
-    success ".env Datei erstellt"
-    echo ""
-    echo "⚠️  WICHTIG: Bitte OpenWeather API Key in .env eintragen!"
-    echo "   1. Kostenlosen API Key erstellen: https://home.openweathermap.org/api_keys"
-    echo "   2. In $INSTALL_DIR/.env eintragen"
-    echo ""
+    cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
+    success ".env erstellt"
 else
-    info ".env Datei existiert bereits"
+    info ".env existiert bereits"
 fi
 
-# Waterway Routing Setup
-info "Waterway Routing wird konfiguriert..."
-info "Installiert:"
-info "  ✅ PyRouteLib3 (Overpass API Routing - funktioniert sofort)"
-info ""
-
-# Install pre-compiled OSRM binaries (ARM64 only)
-if [ "$(uname -m)" = "aarch64" ]; then
-    if [ -f "$INSTALL_DIR/osrm-binaries/osrm-arm64-binaries.tar.gz" ]; then
-        info "Installiere vorkompilierte OSRM ARM64 Binaries..."
-        cd /tmp
-        tar xzf "$INSTALL_DIR/osrm-binaries/osrm-arm64-binaries.tar.gz"
-        sudo mv osrm-routed osrm-extract osrm-partition osrm-customize /usr/local/bin/
-        sudo chmod +x /usr/local/bin/osrm-*
-        success "OSRM Binaries installiert"
-
-        # Clone OSRM Backend for profiles
-        if [ ! -d "$HOME/osrm-backend" ]; then
-            info "Clone OSRM Backend Repository für Profiles..."
-            cd $HOME
-            git clone https://github.com/Project-OSRM/osrm-backend.git || error "OSRM Backend Clone fehlgeschlagen"
-            success "OSRM Backend gecloned"
-        fi
-
-        # Copy waterway balanced profile (only navigable waterways for motorboats)
-        info "Kopiere Waterway Balanced Profile..."
-        cp "$INSTALL_DIR/backend/app/waterway_balanced_v2.lua" "$HOME/osrm-backend/profiles/waterway_balanced.lua"
-        success "Waterway Balanced Profile installiert"
-
-        # Download Germany waterways data (pre-filtered, 13MB only waterways)
-        info "Lade Deutschland Wasserwege-Daten herunter..."
-        mkdir -p "$HOME/osrm_regions"
-        cd "$HOME/osrm_regions"
-
-        # Download pre-filtered germany-waterways data if not present
-        if [ ! -f "germany-waterways.osm.pbf" ]; then
-            info "Hinweis: germany-waterways.osm.pbf sollte im BoatOS Repository enthalten sein"
-            info "Falls nicht vorhanden, bitte manuell erstellen mit osmium-tool"
-        else
-            success "Germany-Waterways Daten gefunden"
-        fi
-
-        # Extract OSRM data with waterway balanced profile
-        info "Extrahiere OSRM Motorboot-Routing-Daten (kann einige Minuten dauern)..."
-        if [ -f "$INSTALL_DIR/data/osrm/germany-waterways.osm.pbf" ]; then
-            cp "$INSTALL_DIR/data/osrm/germany-waterways.osm.pbf" .
-        fi
-
-        if [ -f "germany-waterways.osm.pbf" ]; then
-            osrm-extract -p "$HOME/osrm-backend/profiles/waterway_balanced.lua" germany-waterways.osm.pbf || error "OSRM Extract fehlgeschlagen"
-            osrm-partition germany-waterways.osrm || error "OSRM Partition fehlgeschlagen"
-            osrm-customize germany-waterways.osrm || error "OSRM Customize fehlgeschlagen"
-
-            # Copy OSRM data to BoatOS data directory
-            cp germany-waterways.osrm* "$INSTALL_DIR/data/osrm/"
-            success "OSRM Motorboot-Routing-Daten extrahiert"
-        else
-            info "⚠️  germany-waterways.osm.pbf nicht gefunden, OSRM wird nicht konfiguriert"
-        fi
-
-        # Create OSRM Service
-        info "Erstelle OSRM Service..."
-        sudo tee /etc/systemd/system/osrm.service > /dev/null << OSRM
-[Unit]
-Description=OSRM Routing Engine
-After=network.target
-
-[Service]
-Type=simple
-User=$INSTALL_USER
-WorkingDirectory=$INSTALL_DIR/data/osrm
-ExecStart=/usr/local/bin/osrm-routed --algorithm=MLD $INSTALL_DIR/data/osrm/germany-waterways.osrm --port 5000
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-OSRM
-
-        sudo systemctl daemon-reload
-        sudo systemctl enable osrm
-        success "OSRM Service erstellt"
-
-        info "  🚀 OSRM Server konfiguriert für Motorboot-Routing"
-        info "     - Daten: Deutschland (alle befahrbaren Wasserwege)"
-        info "     - Profile: Waterway Balanced (river, canal, fairway, tidal_channel)"
-        info "     - Ausgeschlossen: stream, ditch, drain (nicht befahrbar)"
-    else
-        info "Optional für bessere Performance:"
-        info "  🚀 OSRM Server (lokales, schnelles Routing)"
-        info "     - Erfordert: OSM PBF Datei + Kompilierung von OSRM"
-        info "     - Siehe: https://github.com/Project-OSRM/osrm-backend"
-    fi
-else
-    info "Optional für bessere Performance:"
-    info "  🚀 OSRM Server (lokales, schnelles Routing)"
-    info "     - Erfordert: OSM PBF Datei + Kompilierung von OSRM"
-    info "     - Nur für ARM64/64-bit OS verfügbar"
-fi
-success "Waterway Routing konfiguriert (PyRouteLib3 + OSRM)"
-
-# BoatOS Service erstellen
-info "Erstelle BoatOS Service..."
+# ── 8. BoatOS Backend Service ──────────────────────────────────────────────
+info "Erstelle BoatOS Backend Service..."
 sudo tee /etc/systemd/system/boatos.service > /dev/null << BOATOS
 [Unit]
 Description=BoatOS Backend API
-After=network.target signalk.service
-Requires=signalk.service
+After=network.target signalk.service mosquitto.service
 
 [Service]
 Type=simple
@@ -273,53 +147,149 @@ BOATOS
 
 sudo systemctl daemon-reload
 sudo systemctl enable boatos
-success "BoatOS Service erstellt"
+success "BoatOS Backend Service erstellt"
 
-# SSL-Zertifikat erstellen
+# ── 9. Martin Tile Server ──────────────────────────────────────────────────
+info "Installiere Martin Tile Server..."
+if ! command -v martin &> /dev/null; then
+    MARTIN_URL="https://github.com/maplibre/martin/releases/latest/download/martin-aarch64-unknown-linux-musl.tar.gz"
+    cd /tmp
+    curl -L "$MARTIN_URL" -o martin.tar.gz || error "Martin Download fehlgeschlagen"
+    tar -xzf martin.tar.gz
+    sudo mv martin /usr/local/bin/
+    rm martin.tar.gz
+    success "Martin installiert"
+else
+    success "Martin bereits installiert"
+fi
+
+info "Erstelle Martin Tile Server Service..."
+sudo tee /etc/systemd/system/tileserver.service > /dev/null << TILESERVER
+[Unit]
+Description=Martin Vector Tile Server
+After=network.target
+
+[Service]
+Type=simple
+User=$INSTALL_USER
+ExecStart=/usr/local/bin/martin --listen-addresses 0.0.0.0:8081 $INSTALL_DIR/maps/
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+TILESERVER
+
+sudo systemctl daemon-reload
+sudo systemctl enable tileserver
+success "Martin Tile Server Service erstellt"
+info "MBTiles-Dateien nach $INSTALL_DIR/maps/ kopieren, dann: sudo systemctl start tileserver"
+
+# ── 10. OSRM Routing ───────────────────────────────────────────────────────
+# OSRM laeuft IPv4-only auf Port 5000 — in Settings immer 127.0.0.1 statt localhost verwenden
+if [ "$(uname -m)" = "aarch64" ] && [ -f "$INSTALL_DIR/osrm-binaries/osrm-arm64-binaries.tar.gz" ]; then
+    info "Installiere vorkompilierte OSRM ARM64 Binaries..."
+    cd /tmp
+    tar xzf "$INSTALL_DIR/osrm-binaries/osrm-arm64-binaries.tar.gz"
+    sudo mv osrm-routed osrm-extract osrm-partition osrm-customize /usr/local/bin/
+    sudo chmod +x /usr/local/bin/osrm-*
+    success "OSRM Binaries installiert"
+
+    # Waterway-Profil
+    if [ ! -d "$HOME/osrm-backend" ]; then
+        info "Clone OSRM Backend fuer Profile..."
+        cd "$HOME"
+        git clone https://github.com/Project-OSRM/osrm-backend.git || error "OSRM Backend Clone fehlgeschlagen"
+    fi
+    cp "$INSTALL_DIR/backend/app/waterway_balanced_v2.lua" "$HOME/osrm-backend/profiles/waterway_balanced.lua"
+    success "Waterway-Profil kopiert"
+
+    # Daten verarbeiten falls vorhanden
+    mkdir -p "$HOME/osrm_regions"
+    cd "$HOME/osrm_regions"
+    if [ -f "$INSTALL_DIR/data/osrm/germany-waterways.osm.pbf" ]; then
+        cp "$INSTALL_DIR/data/osrm/germany-waterways.osm.pbf" .
+    fi
+
+    if [ -f "germany-waterways.osm.pbf" ]; then
+        info "Verarbeite OSRM-Daten (kann einige Minuten dauern)..."
+        osrm-extract -p "$HOME/osrm-backend/profiles/waterway_balanced.lua" germany-waterways.osm.pbf \
+            || error "OSRM Extract fehlgeschlagen"
+        osrm-partition germany-waterways.osrm || error "OSRM Partition fehlgeschlagen"
+        osrm-customize germany-waterways.osrm || error "OSRM Customize fehlgeschlagen"
+        cp germany-waterways.osrm* "$INSTALL_DIR/data/osrm/"
+        success "OSRM-Daten verarbeitet"
+    else
+        info "germany-waterways.osm.pbf nicht gefunden — OSRM-Daten manuell vorbereiten (siehe INSTALL.md)"
+    fi
+
+    info "Erstelle OSRM Service..."
+    sudo tee /etc/systemd/system/osrm.service > /dev/null << OSRM
+[Unit]
+Description=OSRM Routing Engine
+After=network.target
+
+[Service]
+Type=simple
+User=$INSTALL_USER
+WorkingDirectory=$INSTALL_DIR/data/osrm
+ExecStart=/usr/local/bin/osrm-routed --algorithm=MLD $INSTALL_DIR/data/osrm/germany-waterways.osrm --port 5000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+OSRM
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable osrm
+    success "OSRM Service erstellt"
+else
+    info "OSRM: Keine vorkompilierten Binaries gefunden."
+    info "       Alternativen: Docker-Image oder offizielles Binary (siehe INSTALL.md Abschnitt 5)."
+fi
+
+# ── 11. SSL-Zertifikat ─────────────────────────────────────────────────────
 info "Erstelle selbstsigniertes SSL-Zertifikat..."
 if [ ! -f "/etc/ssl/certs/boatos-selfsigned.crt" ]; then
     sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
         -keyout /etc/ssl/private/boatos-selfsigned.key \
         -out /etc/ssl/certs/boatos-selfsigned.crt \
-        -subj "/C=DE/ST=State/L=City/O=BoatOS/CN=$(hostname -I | awk '{print $1}')" || error "SSL-Zertifikat konnte nicht erstellt werden"
+        -subj "/C=DE/ST=State/L=City/O=BoatOS/CN=$(hostname -I | awk '{print $1}')" \
+        || error "SSL-Zertifikat konnte nicht erstellt werden"
     success "SSL-Zertifikat erstellt"
 else
     info "SSL-Zertifikat existiert bereits"
 fi
 
-# Nginx konfigurieren
+# ── 12. Nginx ──────────────────────────────────────────────────────────────
 info "Konfiguriere Nginx..."
 sudo tee /etc/nginx/sites-available/boatos > /dev/null << 'NGINX'
-# HTTP Server - Redirect to HTTPS
 server {
     listen 80;
     server_name _;
     return 301 https://$host$request_uri;
 }
 
-# HTTPS Server
 server {
     listen 443 ssl;
     server_name _;
 
-    # SSL Configuration
     ssl_certificate /etc/ssl/certs/boatos-selfsigned.crt;
     ssl_certificate_key /etc/ssl/private/boatos-selfsigned.key;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers on;
 
-    # Allow large file uploads for chart files
     client_max_body_size 2G;
     client_body_timeout 300s;
     proxy_read_timeout 300s;
 
-    # Frontend - NO CACHE for HTML and JS files
+    # Frontend — HTML/JS kein Cache, CSS/Bilder 1h
     location / {
         root /home/INSTALL_USER_PLACEHOLDER/BoatOS/frontend;
         index index.html;
         try_files $uri $uri/ /index.html;
 
-        # Disable caching for HTML and JavaScript files
         location ~* \.(html|js)$ {
             add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0";
             add_header Pragma "no-cache";
@@ -327,7 +297,6 @@ server {
             etag off;
         }
 
-        # Cache static assets (images, fonts, etc) for 1 hour
         location ~* \.(jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot|css)$ {
             expires 1h;
             add_header Cache-Control "public, immutable";
@@ -342,8 +311,6 @@ server {
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_cache_bypass $http_upgrade;
-
-        # Large uploads for chart files
         client_max_body_size 2G;
         client_body_timeout 300s;
         proxy_read_timeout 300s;
@@ -356,12 +323,7 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
-    }
-
-    # Charts directory
-    location /charts/ {
-        alias /home/INSTALL_USER_PLACEHOLDER/BoatOS/data/charts;
-        autoindex off;
+        proxy_read_timeout 3600s;
     }
 
     # SignalK Proxy
@@ -375,73 +337,67 @@ server {
 }
 NGINX
 
-# Replace placeholder with actual user
 sudo sed -i "s/INSTALL_USER_PLACEHOLDER/$INSTALL_USER/g" /etc/nginx/sites-available/boatos
-
 sudo ln -sf /etc/nginx/sites-available/boatos /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t || error "Nginx-Konfiguration ist fehlerhaft"
+sudo nginx -t || error "Nginx-Konfiguration fehlerhaft"
 success "Nginx konfiguriert"
 
-# Services starten
+# ── 13. Services starten ───────────────────────────────────────────────────
 info "Starte Services..."
 sudo systemctl start mosquitto
 sudo systemctl start signalk
 sudo systemctl start boatos
 sudo systemctl restart nginx
+success "Kerndienste gestartet (Mosquitto, SignalK, BoatOS, Nginx)"
 
-# Start OSRM if available
-if systemctl list-unit-files | grep -q osrm.service; then
-    sudo systemctl start osrm
-    success "OSRM Service gestartet"
+# Tileserver nur starten wenn MBTiles vorhanden
+if ls "$INSTALL_DIR/maps/"*.mbtiles &> /dev/null; then
+    sudo systemctl start tileserver
+    success "Martin Tile Server gestartet"
+else
+    info "Tileserver nicht gestartet — keine MBTiles in $INSTALL_DIR/maps/ gefunden"
 fi
 
-success "Services gestartet (MQTT, SignalK, BoatOS, Nginx)"
+# OSRM nur starten wenn Daten vorhanden
+if systemctl list-unit-files | grep -q "^osrm.service"; then
+    if [ -f "$INSTALL_DIR/data/osrm/germany-waterways.osrm" ]; then
+        sudo systemctl start osrm
+        success "OSRM Routing gestartet"
+    else
+        info "OSRM Service erstellt, aber Daten fehlen noch"
+        info "Nach Datenvorbereitung starten: sudo systemctl start osrm"
+    fi
+fi
 
+# ── Abschlussmeldung ───────────────────────────────────────────────────────
 echo ""
-echo "============================="
-echo -e "${GREEN}🎉 BoatOS erfolgreich installiert!${NC}"
+echo "=========================="
+echo -e "${GREEN}BoatOS erfolgreich installiert!${NC}"
 echo ""
 echo "Zugriff:"
-echo "  - BoatOS UI: https://$(hostname -I | awk '{print $1}')/"
-echo "  - SignalK:   http://$(hostname -I | awk '{print $1}'):3000/"
-echo "  - MQTT:      mqtt://$(hostname -I | awk '{print $1}'):1883/"
+echo "  Deck (Web-Frontend): https://$(hostname -I | awk '{print $1}')/"
+echo "  SignalK:             http://$(hostname -I | awk '{print $1}'):3000/"
+echo "  Martin Tile Server:  http://$(hostname -I | awk '{print $1}'):8081/catalog"
+echo "  MQTT:                mqtt://$(hostname -I | awk '{print $1}'):1883/"
 echo ""
-echo -e "${YELLOW}⚠️  Hinweis: Selbstsigniertes SSL-Zertifikat - Browser-Warnung ignorieren${NC}"
+echo -e "${YELLOW}Selbstsigniertes SSL-Zertifikat — Browser-Warnung ignorieren${NC}"
 echo ""
-echo "Installierte Features:"
-echo "  ✅ Drag & Drop Dashboard Editor"
-echo "  ✅ GPS & AIS Tracking"
-echo "  ✅ Digitales Logbuch mit PDF Export"
-echo "  ✅ Crew Management"
-echo "  ✅ Fuel Tracking & Statistiken"
-echo "  ✅ Waterway Routing (Elbe, Kanäle)"
-echo "  ✅ Weather Alerts (DWD)"
-echo "  ✅ Schleusen-Datenbank"
-echo "  ✅ MQTT Sensor Integration"
+echo "Naechste Schritte:"
+echo "  1. GPS-Device pruefen:     ls -la /dev/ttyUSB* /dev/ttyACM*"
+echo "  2. SignalK GPS konfigurieren (~/.signalk/settings.json, siehe INSTALL.md)"
+echo "     BU-353N5: /dev/ttyUSB0 @ 4800 baud"
+echo "     GPS-Maus: /dev/ttyACM0 @ 9600 baud"
+echo "  3. SignalK neu starten:    sudo systemctl restart signalk"
+echo "  4. MBTiles nach $INSTALL_DIR/maps/ kopieren"
+echo "  5. Tileserver starten:     sudo systemctl start tileserver"
 echo ""
-echo "Nächste Schritte:"
-echo "  1. GPS-Device identifizieren: ls -la /dev/ttyACM*"
-echo "  2. SignalK GPS konfigurieren (siehe INSTALL.md)"
-echo "  3. SignalK neu starten: sudo systemctl restart signalk"
-echo "  4. BoatOS neu starten: sudo systemctl restart boatos"
+echo "Helm (Flutter-App) — Build auf Entwicklungs-PC:"
+echo "  flutterpi_tool build --arch=arm64 --cpu=pi4 --release"
+echo "  scp build/flutter-pi/pi4-64/app.so $INSTALL_USER@<pi-ip>:$INSTALL_DIR/flutter_app/app.so"
+echo "  sudo systemctl restart lightdm"
 echo ""
-if systemctl list-unit-files | grep -q osrm.service; then
-echo "OSRM Motorboot-Routing (Deutschland):"
-echo "  - Status: sudo systemctl status osrm"
-echo "  - Daten: Germany Waterways (river, canal, fairway, tidal_channel)"
-echo "  - Performance: ~100ms Routenberechnung (50-300x schneller als PyRouteLib)"
+echo "Status pruefen:"
+echo "  sudo systemctl status boatos tileserver signalk mosquitto nginx"
 echo ""
-fi
-echo "Status prüfen:"
-echo "  sudo systemctl status signalk"
-echo "  sudo systemctl status boatos"
-echo "  sudo systemctl status mosquitto"
-if systemctl list-unit-files | grep -q osrm.service; then
-echo "  sudo systemctl status osrm"
-fi
-echo ""
-echo "MQTT Sensor Topics testen:"
-echo "  mosquitto_sub -h localhost -t '#' -v"
-echo ""
-echo -e "${YELLOW}⚠️  WICHTIG: Bitte melde dich ab und wieder an, damit die dialout-Gruppe wirksam wird!${NC}"
+echo -e "${YELLOW}WICHTIG: Abmelden und neu anmelden damit die dialout-Gruppe wirksam wird!${NC}"
