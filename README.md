@@ -186,7 +186,20 @@ Beide UIs teilen dasselbe Backend und die gleiche REST/WebSocket-API.
 
 ---
 
-## ⚡ Schnellstart
+## 💾 Fertig-Image (empfohlen)
+
+Das schnellste Setup — einfach flashen, fertig:
+
+1. **Image herunterladen**: [archive.org/details/boatos-distri-image](https://archive.org/details/boatos-distri-image) (~15 GB)
+2. **Raspberry Pi Imager** öffnen → *Custom Image* → heruntergeladene Datei wählen
+3. **Zahnrad-Menü** → WiFi + SSH konfigurieren
+4. Flashen → Pi booten → Helm startet automatisch
+
+> Mindestens 32 GB SD-Karte oder USB-SSD. Partition wird beim ersten Boot automatisch auf die volle Größe erweitert.
+
+---
+
+## ⚡ Schnellstart (manuelle Installation)
 
 ### 1. Repository klonen & installieren
 
@@ -381,7 +394,7 @@ mosquitto_pub -h <pi-ip> -t 'boot/sensoren/motor/drehzahl' -m '2500'
 
 ### 🚧 In Arbeit
 - Helm Feature-Parität mit Deck
-- Verteilbares Pi-Image (dd + pishrink)
+- ~~Verteilbares Pi-Image~~ ✅ [Fertig-Image verfügbar](https://archive.org/details/boatos-distri-image)
 
 ### 🔮 Geplant
 - Anker-Alarm mit Geofencing
