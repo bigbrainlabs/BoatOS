@@ -254,7 +254,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => _buildContent(context);
+
+  Widget _buildContent(BuildContext context) {
     final settings = context.watch<SettingsService>();
     final dsl = settings.raw['dashboard_layout'] as String? ?? '';
 
@@ -328,3 +330,4 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 }
+

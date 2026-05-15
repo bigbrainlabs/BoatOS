@@ -1351,10 +1351,13 @@ class _MapScreenState extends State<MapScreen> {
                       fullscreenDialog: true,
                     ),
                   ),
-                  child: Icon(
-                    Icons.settings_outlined,
-                    color: const Color(0xFF666666),
-                    size: sc(18),
+                  child: Padding(
+                    padding: EdgeInsets.all(sc(10)),
+                    child: Icon(
+                      Icons.settings_outlined,
+                      color: const Color(0xFF666666),
+                      size: sc(18),
+                    ),
                   ),
                 ),
               ],

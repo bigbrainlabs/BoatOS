@@ -1,5 +1,7 @@
 # BoatOS Distribution Image
 
+> **Aktuelle Version: v1.5.0** — `boatos_distri_20260514_final.img.gz` (15 GB, flashbar auf ≥ 32 GB)
+
 ## Idee
 
 Ein fertiges, flashbares Raspberry Pi Image das sofort einsatzbereit ist —
