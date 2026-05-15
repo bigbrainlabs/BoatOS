@@ -1295,6 +1295,12 @@ class _MapScreenState extends State<MapScreen> {
                 horizontal: sc(16), vertical: sc(8)),
             child: Row(
               children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => showGpsPanel(context, gps),
+                  child: _satBadge(gps, scale),
+                ),
+                SizedBox(width: sc(20)),
                 _statBox(
                     'SOG',
                     gps?.hasFix == true
@@ -1310,12 +1316,6 @@ class _MapScreenState extends State<MapScreen> {
                         : '--',
                     '°',
                     scale: scale),
-                SizedBox(width: sc(20)),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => showGpsPanel(context, gps),
-                  child: _satBadge(gps, sc),
-                ),
                 if (etaStatusStr != null) ...[
                   SizedBox(width: sc(20)),
                   _statBox('ETA', etaStatusStr, '', scale: scale),
