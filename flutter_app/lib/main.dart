@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -43,7 +45,7 @@ class BoatOSApp extends StatelessWidget {
         cardColor: const Color(0xFF161B22),
         dividerColor: const Color(0xFF30363D),
       ),
-      home: const MainShell(),
+      home: const ScreensaverWrapper(child: MainShell()),
     );
   }
 }
@@ -118,6 +120,104 @@ class _MainShellState extends State<MainShell> {
             icon: Icon(Icons.book_outlined),
             selectedIcon: Icon(Icons.book),
             label: 'Logbuch',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Screensaver ──────────────────────────────────────────────────────────────
+
+class ScreensaverWrapper extends StatefulWidget {
+  final Widget child;
+  const ScreensaverWrapper({required this.child, super.key});
+
+  @override
+  State<ScreensaverWrapper> createState() => _ScreensaverWrapperState();
+}
+
+class _ScreensaverWrapperState extends State<ScreensaverWrapper> {
+  Timer? _overlayTimer;
+  Timer? _hwOffTimer;
+  bool _overlayVisible = false;
+  bool _hwOff = false;
+  SettingsService? _settings;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final s = context.read<SettingsService>();
+    if (_settings != s) {
+      _settings?.removeListener(_onSettingsChanged);
+      _settings = s;
+      s.addListener(_onSettingsChanged);
+      _startTimers();
+    }
+  }
+
+  @override
+  void dispose() {
+    _settings?.removeListener(_onSettingsChanged);
+    _overlayTimer?.cancel();
+    _hwOffTimer?.cancel();
+    super.dispose();
+  }
+
+  void _onSettingsChanged() => _startTimers();
+
+  void _startTimers() {
+    _overlayTimer?.cancel();
+    _hwOffTimer?.cancel();
+    final min = _settings?.screensaverTimeout ?? 15;
+    if (min == 0) return;
+    _overlayTimer = Timer(Duration(minutes: min), _activateOverlay);
+    _hwOffTimer = Timer(
+      Duration(minutes: min) + const Duration(seconds: 60),
+      _activateHwOff,
+    );
+  }
+
+  void _activateOverlay() {
+    if (!mounted) return;
+    setState(() => _overlayVisible = true);
+  }
+
+  void _activateHwOff() {
+    if (!mounted) return;
+    setState(() => _hwOff = true);
+    Process.run('vcgencmd', ['display_power', '0']);
+  }
+
+  void _wake(PointerDownEvent event) {
+    if (_hwOff) {
+      Process.run('vcgencmd', ['display_power', '1']);
+      setState(() => _hwOff = false);
+    }
+    if (_overlayVisible) {
+      setState(() => _overlayVisible = false);
+    }
+    _startTimers();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: _wake,
+      behavior: HitTestBehavior.translucent,
+      child: Stack(
+        children: [
+          widget.child,
+          IgnorePointer(
+            ignoring: !_overlayVisible,
+            child: AnimatedOpacity(
+              opacity: _overlayVisible ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 800),
+              child: const ColoredBox(
+                color: Colors.black,
+                child: SizedBox.expand(),
+              ),
+            ),
           ),
         ],
       ),
