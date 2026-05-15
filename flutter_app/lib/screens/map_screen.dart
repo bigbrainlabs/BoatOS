@@ -16,6 +16,8 @@ import '../services/settings_service.dart';
 import '../services/websocket_service.dart';
 import '../widgets/route_planner.dart';
 import 'settings_screen.dart';
+import '../widgets/wifi_sheet.dart';
+import '../widgets/gps_panel.dart';
 
 // ---------------------------------------------------------------------------
 // Data models
@@ -1295,23 +1297,25 @@ class _MapScreenState extends State<MapScreen> {
               children: [
                 _statBox(
                     'SOG',
-                    gps != null
-                        ? (gps.speed * 1.852).toStringAsFixed(1)
+                    gps?.hasFix == true
+                        ? (gps!.speed * 1.852).toStringAsFixed(1)
                         : '--',
                     'km/h',
                     scale: scale),
                 SizedBox(width: sc(20)),
                 _statBox(
                     'COG',
-                    gps != null
-                        ? gps.heading.toStringAsFixed(0)
+                    gps?.hasFix == true
+                        ? gps!.heading.toStringAsFixed(0)
                         : '--',
                     '°',
                     scale: scale),
                 SizedBox(width: sc(20)),
-                _statBox(
-                    'Sat', gps != null ? '${gps.satellites}' : '--', '',
-                    scale: scale),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => showGpsPanel(context, gps),
+                  child: _satBadge(gps, sc),
+                ),
                 if (etaStatusStr != null) ...[
                   SizedBox(width: sc(20)),
                   _statBox('ETA', etaStatusStr, '', scale: scale),
@@ -1335,15 +1339,22 @@ class _MapScreenState extends State<MapScreen> {
                               color: const Color(0xFF1565C0))),
                     ),
                   ),
-                Icon(
-                  ws.connected ? Icons.wifi : Icons.wifi_off,
-                  color: ws.connected
-                      ? const Color(0xFF1565C0)
-                      : Colors.orange,
-                  size: sc(18),
-                ),
-                SizedBox(width: sc(8)),
                 GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => showWifiSheet(context),
+                  child: Padding(
+                    padding: EdgeInsets.all(sc(10)),
+                    child: Icon(
+                      ws.connected ? Icons.wifi : Icons.wifi_off,
+                      color: ws.connected
+                          ? const Color(0xFF1565C0)
+                          : Colors.orange,
+                      size: sc(18),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -1777,6 +1788,23 @@ class _MapScreenState extends State<MapScreen> {
         ),
       ],
     );
+  }
+
+  Widget _satBadge(GpsData? gps, double sc) {
+    final fix = gps?.hasFix == true;
+    final sat = gps?.satellites ?? 0;
+    final color = fix
+        ? const Color(0xFF4CAF50)
+        : (gps != null ? const Color(0xFFFF9800) : const Color(0xFF888888));
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(Icons.satellite_alt, size: 11 * sc, color: color),
+      SizedBox(width: 3 * sc),
+      Text('$sat',
+          style: TextStyle(
+              fontSize: 15 * sc,
+              fontWeight: FontWeight.bold,
+              color: color)),
+    ]);
   }
 
   // -------------------------------------------------------------------------
