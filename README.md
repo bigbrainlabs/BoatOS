@@ -4,6 +4,18 @@
 
 Ein vollständiges Marine-Navigationssystem für Binnenschifffahrt und Küstennavigation. Gebaut für Raspberry Pi mit Touchscreen, läuft komplett offline, keine Abos, keine Cloud-Zwänge.
 
+<div align="center">
+
+### 💾 Fertig-Image — einfach flashen, sofort lossegeln
+
+**[⬇️ Download v1.5.0 (archive.org, ~15 GB)](https://archive.org/details/boatos-distri-image)**
+
+*Raspberry Pi Imager → Custom Image → WiFi/SSH im Zahnrad-Menü → Flashen → fertig*
+
+</div>
+
+---
+
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Raspberry%20Pi-red.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
