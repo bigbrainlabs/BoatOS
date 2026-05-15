@@ -3885,8 +3885,11 @@ async def connect_wifi(request: Request):
             _run_nmcli("connection", "reload")
             result = _run_nmcli("connection", "up", "id", ssid)
         else:
-            # Use existing saved profile — device wifi connect re-scans first
+            # Connect and ensure autoconnect is saved
             result = _run_nmcli("device", "wifi", "connect", ssid)
+            if result.returncode == 0:
+                _run_nmcli("connection", "modify", "id", ssid,
+                           "connection.autoconnect", "yes")
 
         if result.returncode == 0:
             return {"status": "ok", "message": f"Verbunden mit {ssid}"}
@@ -3961,6 +3964,13 @@ async def startup_event():
         print("⚠️ No settings file found, services not configured")
 
     print("🚢 BoatOS Backend started!")
+
+@app.post("/api/system/shutdown")
+async def system_shutdown():
+    """Pi herunterfahren"""
+    import subprocess, asyncio
+    asyncio.get_event_loop().call_later(1, lambda: subprocess.Popen(['sudo', 'shutdown', '-h', 'now']))
+    return {"status": "shutting_down"}
 
 @app.on_event("shutdown")
 async def shutdown_event():

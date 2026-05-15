@@ -5,10 +5,12 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 class GpsData {
   final double lat;
   final double lon;
-  final double speed;
-  final double heading;
+  final double speed;    // knots
+  final double heading;  // degrees
   final int satellites;
   final bool hasFix;
+  final double altitude; // metres
+  final double? hdop;
 
   const GpsData({
     required this.lat,
@@ -17,16 +19,20 @@ class GpsData {
     required this.heading,
     required this.satellites,
     required this.hasFix,
+    required this.altitude,
+    this.hdop,
   });
 
   factory GpsData.fromJson(Map<String, dynamic> json) {
     return GpsData(
-      lat: (json['lat'] ?? 51.855).toDouble(),
-      lon: (json['lon'] ?? 12.046).toDouble(),
-      speed: (json['speed'] ?? 0.0).toDouble(),
-      heading: (json['heading'] ?? 0.0).toDouble(),
+      lat:        (json['lat']        ?? 51.855).toDouble(),
+      lon:        (json['lon']        ?? 12.046).toDouble(),
+      speed:      (json['speed']      ?? 0.0).toDouble(),
+      heading:    (json['heading']    ?? 0.0).toDouble(),
       satellites: (json['satellites'] ?? 0) as int,
-      hasFix: json['fix'] == true,
+      hasFix:     json['fix'] == true,
+      altitude:   (json['altitude']   ?? 0.0).toDouble(),
+      hdop:       (json['hdop']       as num?)?.toDouble(),
     );
   }
 }
@@ -58,7 +64,9 @@ class WebSocketService extends ChangeNotifier {
   void _onMessage(dynamic raw) {
     try {
       final data = json.decode(raw as String);
-      if (data['type'] == 'gps' && data['data'] != null) {
+      // Backend sends type='gps_update' from gps_service.broadcast_gps_data()
+      if ((data['type'] == 'gps_update' || data['type'] == 'gps') &&
+          data['data'] != null) {
         _gps = GpsData.fromJson(data['data'] as Map<String, dynamic>);
         notifyListeners();
       }

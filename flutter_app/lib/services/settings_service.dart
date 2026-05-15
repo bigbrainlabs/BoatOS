@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -55,16 +56,33 @@ class SettingsService extends ChangeNotifier {
     loading = true;
     error = null;
     notifyListeners();
-    try {
-      final r1 = await http.get(Uri.parse('$_base/api/settings'));
-      if (r1.statusCode == 200) {
-        _s = json.decode(r1.body) as Map<String, dynamic>;
+
+    // Retry until backend is ready — on slow boots the service may not be up yet.
+    const maxAttempts = 10;
+    const retryDelay = Duration(seconds: 3);
+    for (int attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        final r1 = await http
+            .get(Uri.parse('$_base/api/settings'))
+            .timeout(const Duration(seconds: 5));
+        if (r1.statusCode == 200) {
+          _s = json.decode(r1.body) as Map<String, dynamic>;
+          final r2 = await http
+              .get(Uri.parse('$_base/api/gps/config'))
+              .timeout(const Duration(seconds: 5));
+          if (r2.statusCode == 200) {
+            _gpsDevice = json.decode(r2.body) as Map<String, dynamic>;
+          }
+          error = null;
+          break; // success
+        }
+      } catch (_) {
+        if (attempt < maxAttempts - 1) {
+          await Future.delayed(retryDelay);
+        }
       }
-      final r2 = await http.get(Uri.parse('$_base/api/gps/config'));
-      if (r2.statusCode == 200) _gpsDevice = json.decode(r2.body) as Map<String, dynamic>;
-    } catch (e) {
-      error = e.toString();
     }
+
     loading = false;
     notifyListeners();
   }
