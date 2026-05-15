@@ -190,7 +190,7 @@ Beide UIs teilen dasselbe Backend und die gleiche REST/WebSocket-API.
 
 Das schnellste Setup — einfach flashen, fertig:
 
-1. **Image herunterladen**: [archive.org/details/boatos-distri-image](https://archive.org/details/boatos-distri-image) (~15 GB)
+1. **Image herunterladen** (v1.5.0): [archive.org/details/boatos-distri-image](https://archive.org/details/boatos-distri-image) (~15 GB)
 2. **Raspberry Pi Imager** öffnen → *Custom Image* → heruntergeladene Datei wählen
 3. **Zahnrad-Menü** → WiFi + SSH konfigurieren
 4. Flashen → Pi booten → Helm startet automatisch
