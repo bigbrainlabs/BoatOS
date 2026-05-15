@@ -18,6 +18,9 @@ class SettingsService extends ChangeNotifier {
 
   double get uiScale => ((_s['ui'] as Map?)?['scale'] as num?)?.toDouble() ?? 0.85;
 
+  int get screensaverTimeout =>
+      (getNested('ui', 'screensaverTimeout') as num?)?.toInt() ?? 15;
+
   // 'nm' or 'km'
   String get distanceUnit =>
       (getNested('units', 'distance') as String?) ??

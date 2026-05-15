@@ -24,6 +24,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     (Icons.layers_outlined, 'ENC-Karten'),
     (Icons.dashboard_customize, 'Dashboard'),
     (Icons.storage, 'Daten'),
+    (Icons.brightness_2, 'Display'),
   ];
 
   int _sel = 0;
@@ -377,14 +378,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           case 10: inner = _DatenSection(svc: svc);            break;
           default:
             final widgets = switch (_sel) {
-              0 => _schiff(svc),
-              1 => _karte(svc),
-              2 => _navigation(svc),
-              3 => _gps(svc),
-              4 => _ais(svc),
-              5 => _einheiten(svc),
-              6 => _mqtt(svc),
-              _ => <Widget>[],
+              0  => _schiff(svc),
+              1  => _karte(svc),
+              2  => _navigation(svc),
+              3  => _gps(svc),
+              4  => _ais(svc),
+              5  => _einheiten(svc),
+              6  => _mqtt(svc),
+              11 => _display(svc),
+              _  => <Widget>[],
             };
             inner = Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -768,6 +770,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ── Primitive row widgets ────────────────────────────────────────────────────
+
+  // ── Section: Display / Screensaver ──────────────────────────────────────────
+
+  List<Widget> _display(SettingsService s) {
+    return [
+      _header('Bildschirmschoner'),
+      _dropRow<int>(
+        label: 'Timeout',
+        value: s.screensaverTimeout,
+        items: const [0, 5, 10, 15, 30],
+        labels: const ['Aus', '5 Min', '10 Min', '15 Min', '30 Min'],
+        onChanged: (v) {
+          if (v != null) {
+            s.set('ui', 'screensaverTimeout', v);
+            s.save();
+          }
+        },
+      ),
+      const SizedBox(height: 20),
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF161B22),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF30363D)),
+        ),
+        child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.info_outline, size: 14, color: Color(0xFF4FC3F7)),
+            SizedBox(width: 8),
+            Text('Zweistufiger Bildschirmschoner',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFE6EDF3))),
+          ]),
+          SizedBox(height: 8),
+          Text(
+            'Stufe 1: App-Overlay (schwarz) nach dem Timeout.\n'
+            'Stufe 2: Display aus (Hardware) 60 Sekunden später.\n'
+            'Jede Berührung weckt beides wieder auf.',
+            style: TextStyle(fontSize: 12, color: Color(0xFF8B949E), height: 1.6),
+          ),
+        ]),
+      ),
+    ];
+  }
 
   Widget _header(String title) => Padding(
         padding: const EdgeInsets.only(top: 24, bottom: 10),
