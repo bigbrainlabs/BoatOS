@@ -26,6 +26,8 @@ Ein vollständiges Marine-Navigationssystem für Binnenschifffahrt und Küstenna
 
 ## 🌟 Highlights
 
+> **Kein Touchscreen nötig.** BoatOS läuft vollständig über **Deck**, das browser-basierte Web-Frontend — erreichbar von Handy, Tablet oder Laptop im gleichen WLAN. Der Touchscreen mit Helm ist optional und macht die Installation zum vollwertigen Steuerstand.
+
 - 🗺️ **Zwei UIs** — Deck (browser-based Web-Frontend) + Helm (native Flutter-App, flutter-pi)
 - 🧭 **Binnengewässer-Routing** — OSRM-optimiert für Elbe, Kanäle & Schleusen
 - 📡 **Live AIS** — Echtzeit-Schiffsverkehr (Europa), via AISStream.io
