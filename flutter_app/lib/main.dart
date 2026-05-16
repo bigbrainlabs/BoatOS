@@ -8,6 +8,7 @@ import 'screens/map_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/logbook_screen.dart';
 import 'services/api_service.dart';
+import 'services/favorites_service.dart';
 import 'services/logbook_service.dart';
 import 'services/settings_service.dart';
 import 'services/websocket_service.dart';
@@ -20,6 +21,7 @@ void main() {
         Provider(create: (_) => ApiService()),
         ChangeNotifierProvider(create: (_) => SettingsService()..load()),
         ChangeNotifierProvider(create: (_) => LogbookService()..startPolling()),
+        ChangeNotifierProvider(create: (_) => FavoritesService()..fetch()),
       ],
       child: const BoatOSApp(),
     ),

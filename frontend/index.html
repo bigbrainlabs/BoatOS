@@ -637,6 +637,7 @@
             <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('data', this)">Daten</div>
             <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('routing', this)">Routing</div>
             <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('wifi', this)">WLAN</div>
+            <div class="sidebar-tab" onclick="BoatOS.ui.showSettingsTab('system', this); BoatOS.system.checkVersion()">System</div>
         </div>
 
         <div class="sidebar-content">
@@ -1280,6 +1281,52 @@
                 </div>
             </div>
         </div>
+
+            <!-- System / Update -->
+            <div id="settings-system" class="section-hidden">
+                <div class="setting-group">
+                    <h4>Software-Version</h4>
+                    <div id="system-version-card" style="padding:14px; background:var(--bg-card); border-radius:8px; margin-bottom:12px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                            <span style="color:var(--text-dim); font-size:13px;">Installiert</span>
+                            <span id="system-ver-current" style="font-weight:600; color:var(--text);">—</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                            <span style="color:var(--text-dim); font-size:13px;">Verfügbar</span>
+                            <span id="system-ver-latest" style="font-weight:600; color:var(--text);">—</span>
+                        </div>
+                        <div id="system-ver-status" style="font-size:12px; color:var(--text-dim); margin-top:4px;"></div>
+                    </div>
+                    <button onclick="BoatOS.system.checkVersion()"
+                        style="width:100%; padding:10px; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:8px; font-size:14px; cursor:pointer; margin-bottom:8px;">
+                        🔄 Auf Updates prüfen
+                    </button>
+                    <button id="btn-system-update" onclick="BoatOS.system.startUpdate()"
+                        style="display:none; width:100%; padding:12px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-size:15px; font-weight:600; cursor:pointer;">
+                        ⬆️ Jetzt aktualisieren
+                    </button>
+                </div>
+
+                <div class="setting-group" id="system-update-progress" style="display:none;">
+                    <h4>Update-Fortschritt</h4>
+                    <div id="system-update-log"
+                        style="background:#0d1117; border:1px solid var(--border); border-radius:8px; padding:12px;
+                               font-family:monospace; font-size:12px; color:#4fc3f7; max-height:260px;
+                               overflow-y:auto; white-space:pre-wrap; line-height:1.5;">
+                    </div>
+                    <div style="margin-top:8px; font-size:12px; color:var(--text-dim);">
+                        Der Pi startet automatisch neu sobald das Update abgeschlossen ist.
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4>System</h4>
+                    <button onclick="BoatOS.system.shutdown()"
+                        style="width:100%; padding:10px; background:var(--danger); color:#fff; border:none; border-radius:8px; font-size:14px; cursor:pointer;">
+                        🔴 Pi herunterfahren
+                    </button>
+                </div>
+            </div>
 
         <!-- WiFi Password Modal -->
         <div id="wifi-pw-modal" style="display:none; position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,0.7); align-items:center; justify-content:center;">
