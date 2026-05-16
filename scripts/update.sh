@@ -1,22 +1,28 @@
 #!/bin/bash
 # BoatOS System Update — wird vom Backend (/api/system/update) aufgerufen.
-# Output wird live gestreamt und im Log-Endpoint angezeigt.
 set -euo pipefail
 
 REPO_DIR=/home/arielle/BoatOS
 GITHUB_REPO=bigbrainlabs/BoatOS
+GITHUB_URL=https://github.com/$GITHUB_REPO.git
 APP_SO=$REPO_DIR/flutter_app/app.so
 
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
 log "=== BoatOS Update gestartet ==="
 
-# 1. Git pull
-log "[1/5] Lade aktuellen Stand von GitHub..."
+# 1. Git initialisieren falls kein Repo vorhanden
+log "[1/5] Prüfe Git-Repository..."
 cd "$REPO_DIR"
-git fetch origin
-git reset --hard origin/main
-log "       Git-Pull abgeschlossen"
+if [ ! -d ".git" ]; then
+    log "       Kein Git-Repo gefunden — initialisiere..."
+    git init -q
+    git remote add origin "$GITHUB_URL"
+    log "       Git initialisiert"
+fi
+git fetch origin -q --tags
+git reset --hard origin/main -q
+log "       Code aktualisiert"
 
 # 2. Python dependencies
 log "[2/5] Aktualisiere Python-Abhängigkeiten..."
@@ -33,7 +39,7 @@ APP_URL=$(echo "$RELEASE_JSON" | python3 -c \
      if a['name']=='app.so'), ''))" 2>/dev/null || echo "")
 
 if [ -n "$APP_URL" ]; then
-    log "       URL: $APP_URL"
+    log "       Lade von: $APP_URL"
     curl -sfL --max-time 120 -o "${APP_SO}.tmp" "$APP_URL"
     mv "${APP_SO}.tmp" "$APP_SO"
     log "       app.so erfolgreich heruntergeladen"
