@@ -3765,14 +3765,14 @@ async def toggle_onscreen_keyboard(action: str = "show"):
 
 def _run_nmcli(*args) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["sudo", "nmcli", "--terse", "--colors", "no"] + list(args),
+        ["nmcli", "--terse", "--colors", "no"] + list(args),
         capture_output=True, text=True
     )
 
 def _run_nmcli_fields(fields: str, *args) -> subprocess.CompletedProcess:
     """nmcli mit expliziten Feldern und ohne Escape-Zeichen (kein BSSID-Colon-Problem)"""
     return subprocess.run(
-        ["sudo", "nmcli", "--fields", fields, "--escape", "no", "--terse", "--colors", "no"] + list(args),
+        ["nmcli", "--fields", fields, "--escape", "no", "--terse", "--colors", "no"] + list(args),
         capture_output=True, text=True
     )
 
@@ -4025,7 +4025,44 @@ async def system_info():
         hostname = socket.gethostname()
     except Exception:
         pass
-    return {"ips": ips, "hostname": hostname, "mqtt_port": 1883}
+
+    # Active WiFi SSID
+    wifi_ssid = None
+    wifi_ip = None
+    try:
+        out = subprocess.check_output(
+            ["nmcli", "-t", "-f", "active,ssid,signal", "dev", "wifi"],
+            stderr=subprocess.DEVNULL
+        ).decode()
+        for line in out.splitlines():
+            parts = line.split(":")
+            if len(parts) >= 2 and parts[0] == "yes":
+                wifi_ssid = parts[1]
+                break
+    except Exception:
+        pass
+
+    # IP of wlan0 specifically
+    try:
+        out = subprocess.check_output(
+            ["ip", "-4", "addr", "show", "wlan0"],
+            stderr=subprocess.DEVNULL
+        ).decode()
+        for line in out.splitlines():
+            line = line.strip()
+            if line.startswith("inet "):
+                wifi_ip = line.split()[1].split("/")[0]
+                break
+    except Exception:
+        pass
+
+    return {
+        "ips": ips,
+        "hostname": hostname,
+        "mqtt_port": 1883,
+        "wifi_ssid": wifi_ssid,
+        "wifi_ip": wifi_ip,
+    }
 
 @app.post("/api/system/shutdown")
 async def system_shutdown():
