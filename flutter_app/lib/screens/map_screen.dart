@@ -11,9 +11,11 @@ import 'package:provider/provider.dart';
 import 'package:vector_map_tiles/vector_map_tiles.dart';
 import 'package:vector_tile_renderer/vector_tile_renderer.dart' hide TileLayer;
 
+import '../services/favorites_service.dart';
 import '../services/logbook_service.dart';
 import '../services/settings_service.dart';
 import '../services/websocket_service.dart';
+import '../widgets/favorites_sheet.dart';
 import '../widgets/route_planner.dart';
 import 'settings_screen.dart';
 import '../widgets/wifi_sheet.dart';
@@ -167,6 +169,7 @@ class _MapScreenState extends State<MapScreen> {
   bool _showLocks = true;
   bool _showPegel = false;
   bool _showTrack = true;
+  bool _showFavorites = true;
   bool _satelliteMode = false;
 
   // Layer data
@@ -178,6 +181,7 @@ class _MapScreenState extends State<MapScreen> {
   // Polling / throttle
   Timer? _aisTimer;
   Timer? _infraTimer;
+  Timer? _favoritesTimer;
   DateTime? _lastInfraFetch;
   DateTime? _lastPegelFetch;
 
@@ -254,6 +258,7 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     _aisTimer?.cancel();
     _infraTimer?.cancel();
+    _favoritesTimer?.cancel();
     _mapEventSub?.cancel();
     _simTimer?.cancel();
     _boatAnimTimer?.cancel();
@@ -290,12 +295,18 @@ class _MapScreenState extends State<MapScreen> {
       if (_showAIS) _fetchAIS();
       if (_showLocks) _fetchInfra();
       if (_showPegel) _fetchPegel();
+      context.read<FavoritesService>().fetch();
     });
 
     // Periodic refresh for locks and pegel (every 60s).
     _infraTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (_showLocks) _fetchInfra();
       if (_showPegel) _fetchPegel();
+    });
+
+    // Periodic refresh for favorites (every 30s — keeps Deck+Helm in sync).
+    _favoritesTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (_showFavorites) context.read<FavoritesService>().fetch();
     });
   }
 
@@ -635,6 +646,36 @@ class _MapScreenState extends State<MapScreen> {
           borderRadius: BorderRadius.circular(6),
         ),
         child: Icon(icon, color: Colors.white, size: 18),
+      ),
+    );
+  }
+
+  Widget _buildFavoriteMarker(Favorite fav) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => showFavoriteDetailSheet(
+        context,
+        fav,
+        onFlyTo: (lat, lon) => _mapController.move(LatLng(lat, lon), 15),
+        onAddWaypoint: (lat, lon) {
+          if (!_routeMode) setState(() => _routeMode = true);
+          _addWaypoint(LatLng(lat, lon));
+        },
+      ),
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: const Color(0xCCF0A020),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white, width: 1.5),
+          boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 4)],
+        ),
+        child: Center(
+          child: Text(fav.icon,
+              style: const TextStyle(fontSize: 18),
+              textAlign: TextAlign.center),
+        ),
       ),
     );
   }
@@ -1114,6 +1155,9 @@ class _MapScreenState extends State<MapScreen> {
             onLongPress: (tapPos, latLng) {
               if (_routeMode && !_navActive) {
                 _addWaypoint(latLng);
+              } else if (!_navActive) {
+                showAddFavoriteSheet(context,
+                    lat: latLng.latitude, lon: latLng.longitude);
               }
             },
             onMapEvent: (event) {
@@ -1225,7 +1269,22 @@ class _MapScreenState extends State<MapScreen> {
                     .toList(),
               ),
 
-            // 7. AIS vessel markers
+            // 7. Favorites markers
+            if (_showFavorites)
+              Consumer<FavoritesService>(
+                builder: (ctx, svc, _) => MarkerLayer(
+                  markers: svc.favorites
+                      .map((f) => Marker(
+                            point: LatLng(f.lat, f.lon),
+                            width: 36,
+                            height: 36,
+                            child: _buildFavoriteMarker(f),
+                          ))
+                      .toList(),
+                ),
+              ),
+
+            // 8. AIS vessel markers
             if (_showAIS && _aisVessels.isNotEmpty)
               MarkerLayer(
                 markers: _aisVessels
@@ -1341,6 +1400,23 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
+                  onTap: () => showFavoritesSheet(
+                    context,
+                    onFlyTo: (lat, lon) =>
+                        _mapController.move(LatLng(lat, lon), 15),
+                    onAddWaypoint: (lat, lon) {
+                      if (!_routeMode) setState(() => _routeMode = true);
+                      _addWaypoint(LatLng(lat, lon));
+                    },
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(sc(10)),
+                    child: Icon(Icons.star_outline,
+                        color: const Color(0xFFF0C040), size: sc(18)),
+                  ),
+                ),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: () => showWifiSheet(context),
                   child: Padding(
                     padding: EdgeInsets.all(sc(10)),
@@ -1442,6 +1518,10 @@ class _MapScreenState extends State<MapScreen> {
               }, scale: scale),
               _layerBtn(Icons.route, 'Track', _showTrack,
                   (v) => setState(() => _showTrack = v), scale: scale),
+              _layerBtn(Icons.star, 'Favoriten', _showFavorites, (v) {
+                setState(() => _showFavorites = v);
+                if (v) context.read<FavoritesService>().fetch();
+              }, scale: scale),
             ],
           ),
         ),
