@@ -602,6 +602,47 @@ async def test_mqtt_connection(mqtt_config: Dict[str, Any]):
     except Exception as e:
         return {"status": "error", "message": f"Connection failed: {str(e)}"}
 
+@app.post("/api/mqtt/fix-external")
+async def mqtt_fix_external():
+    """Configure Mosquitto to accept connections from external devices (not just localhost)"""
+    conf_path = "/etc/mosquitto/conf.d/boatos.conf"
+    conf_content = "listener 1883 0.0.0.0\nallow_anonymous true\n"
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "sudo", "tee", conf_path,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await proc.communicate(conf_content.encode())
+        if proc.returncode != 0:
+            return {"status": "error", "message": f"Config schreiben fehlgeschlagen: {stderr.decode().strip()}. Sudo-Berechtigung für 'tee {conf_path}' fehlt?"}
+
+        proc2 = await asyncio.create_subprocess_exec(
+            "sudo", "systemctl", "restart", "mosquitto",
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr2 = await proc2.communicate()
+        if proc2.returncode != 0:
+            return {"status": "error", "message": f"Mosquitto restart fehlgeschlagen: {stderr2.decode().strip()}"}
+
+        return {"status": "success", "message": "Mosquitto konfiguriert — externe Verbindungen erlaubt"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/mqtt/external-status")
+async def mqtt_external_status():
+    """Check if Mosquitto is configured for external access"""
+    conf_path = "/etc/mosquitto/conf.d/boatos.conf"
+    try:
+        content = Path(conf_path).read_text()
+        configured = "listener 1883 0.0.0.0" in content
+        return {"configured": configured, "content": content}
+    except FileNotFoundError:
+        return {"configured": False, "content": ""}
+    except Exception as e:
+        return {"configured": False, "content": str(e)}
+
 @app.get("/api/mqtt/topics")
 async def get_mqtt_topics():
     """Get all MQTT topics with their last update timestamps"""

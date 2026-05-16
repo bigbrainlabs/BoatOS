@@ -47,13 +47,24 @@ else
     log "       Kein app.so im aktuellen Release — überspringe"
 fi
 
-# 4. Restart backend services
-log "[4/5] Starte Backend-Services neu..."
+# 4. Ensure Mosquitto accepts external connections
+log "[4/6] Konfiguriere Mosquitto (externe Verbindungen)..."
+MOSQ_CONF=/etc/mosquitto/conf.d/boatos.conf
+if ! grep -q "listener 1883 0.0.0.0" "$MOSQ_CONF" 2>/dev/null; then
+    printf "listener 1883 0.0.0.0\nallow_anonymous true\n" | sudo tee "$MOSQ_CONF" > /dev/null
+    sudo systemctl restart mosquitto || true
+    log "       Mosquitto konfiguriert"
+else
+    log "       Bereits konfiguriert — überspringe"
+fi
+
+# 5. Restart backend services
+log "[5/6] Starte Backend-Services neu..."
 sudo systemctl restart boatos.service boatos-remote.service
 log "       Services neu gestartet"
 
-# 5. Reboot
-log "[5/5] Update abgeschlossen — Neustart in 3 Sekunden..."
+# 6. Reboot
+log "[6/6] Update abgeschlossen — Neustart in 3 Sekunden..."
 log "=== Fertig ==="
 sleep 3
 sudo reboot
