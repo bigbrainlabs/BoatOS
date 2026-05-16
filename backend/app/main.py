@@ -3965,6 +3965,27 @@ async def startup_event():
 
     print("🚢 BoatOS Backend started!")
 
+@app.get("/api/system/info")
+async def system_info():
+    """Pi-Netzwerkinfo für externe Gerätekonfiguration"""
+    import socket
+    ips = []
+    try:
+        for iface_info in subprocess.check_output(
+            ["hostname", "-I"], stderr=subprocess.DEVNULL
+        ).decode().split():
+            ip = iface_info.strip()
+            if ip and not ip.startswith("127.") and ":" not in ip:
+                ips.append(ip)
+    except Exception:
+        pass
+    hostname = ""
+    try:
+        hostname = socket.gethostname()
+    except Exception:
+        pass
+    return {"ips": ips, "hostname": hostname, "mqtt_port": 1883}
+
 @app.post("/api/system/shutdown")
 async def system_shutdown():
     """Pi herunterfahren"""

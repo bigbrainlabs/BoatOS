@@ -33,6 +33,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _saving = false;
   bool _initialized = false;
 
+  // Network info (for MQTT section)
+  List<String> _piIps = [];
+
   // System / Update
   String _verCurrent = '…';
   String _verLatest  = '…';
@@ -315,7 +318,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             final (icon, label) = _sections[i];
             final sel = i == _sel;
             return InkWell(
-              onTap: () { setState(() => _sel = i); if (i == 12) _checkVersion(); },
+              onTap: () { setState(() => _sel = i); if (i == 12) _checkVersion(); if (i == 6) _fetchPiIps(); },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
@@ -357,7 +360,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             return Padding(
               padding: const EdgeInsets.only(right: 4),
               child: GestureDetector(
-                onTap: () { setState(() => _sel = i); if (i == 12) _checkVersion(); },
+                onTap: () { setState(() => _sel = i); if (i == 12) _checkVersion(); if (i == 6) _fetchPiIps(); },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -714,9 +717,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ── Section: MQTT ───────────────────────────────────────────────────────────
 
+  Future<void> _fetchPiIps() async {
+    try {
+      final res = await http
+          .get(Uri.parse('http://localhost:8000/api/system/info'))
+          .timeout(const Duration(seconds: 5));
+      final d = json.decode(res.body) as Map<String, dynamic>;
+      setState(() => _piIps = (d['ips'] as List? ?? []).cast<String>());
+    } catch (_) {}
+  }
+
   List<Widget> _mqtt(SettingsService s) {
     final sensors = s.raw['sensors'] as Map? ?? {};
     return [
+      _header('Externer Zugriff (Sensor-Board)'),
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF161B22),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF30363D)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Row(children: [
+            Icon(Icons.sensors, size: 14, color: Color(0xFF4FC3F7)),
+            SizedBox(width: 8),
+            Text('Sensor-Board Verbindung',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                    color: Color(0xFFE6EDF3))),
+          ]),
+          const SizedBox(height: 10),
+          const Text('Broker-Adresse im Sensor eintragen:',
+              style: TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
+          const SizedBox(height: 6),
+          if (_piIps.isEmpty)
+            const Text('— (MQTT-Tab antippen zum Laden)',
+                style: TextStyle(fontSize: 13, color: Color(0xFF6A737D)))
+          else
+            ...(_piIps.map((ip) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(children: [
+                const Icon(Icons.wifi, size: 12, color: Color(0xFF4CAF50)),
+                const SizedBox(width: 6),
+                Text('$ip  :  1883',
+                    style: const TextStyle(fontSize: 14,
+                        fontWeight: FontWeight.w700, color: Color(0xFFE6EDF3),
+                        fontFamily: 'monospace')),
+              ]),
+            ))),
+        ]),
+      ),
       _header('MQTT-Broker'),
       _textRow('Broker URL',   _mqttUrl),
       _textRow('Benutzername', _mqttUser),
