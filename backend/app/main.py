@@ -3763,11 +3763,9 @@ async def toggle_onscreen_keyboard(action: str = "show"):
 
 # ==================== WIFI MANAGEMENT ====================
 
-def _run_nmcli(*args) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["nmcli", "--terse", "--colors", "no"] + list(args),
-        capture_output=True, text=True
-    )
+def _run_nmcli(*args, use_sudo: bool = False) -> subprocess.CompletedProcess:
+    cmd = (["sudo"] if use_sudo else []) + ["nmcli", "--terse", "--colors", "no"] + list(args)
+    return subprocess.run(cmd, capture_output=True, text=True)
 
 def _run_nmcli_fields(fields: str, *args) -> subprocess.CompletedProcess:
     """nmcli mit expliziten Feldern und ohne Escape-Zeichen (kein BSSID-Colon-Problem)"""
@@ -3913,7 +3911,7 @@ async def connect_wifi(request: Request):
                 "addr-gen-mode=default\n"
             )
             # Delete old profile from NM first (ignore failure)
-            _run_nmcli("connection", "delete", ssid)
+            _run_nmcli("connection", "delete", ssid, use_sudo=True)
             # Write file as root, chmod 600 (required by NM)
             write = subprocess.run(
                 ["sudo", "bash", "-c",
@@ -3923,14 +3921,14 @@ async def connect_wifi(request: Request):
             if write.returncode != 0:
                 return {"status": "error", "message": write.stderr.strip()}
             # Reload connections so NM picks up the new file
-            _run_nmcli("connection", "reload")
-            result = _run_nmcli("connection", "up", "id", ssid)
+            _run_nmcli("connection", "reload", use_sudo=True)
+            result = _run_nmcli("connection", "up", "id", ssid, use_sudo=True)
         else:
             # Connect and ensure autoconnect is saved
-            result = _run_nmcli("device", "wifi", "connect", ssid)
+            result = _run_nmcli("device", "wifi", "connect", ssid, use_sudo=True)
             if result.returncode == 0:
                 _run_nmcli("connection", "modify", "id", ssid,
-                           "connection.autoconnect", "yes")
+                           "connection.autoconnect", "yes", use_sudo=True)
 
         if result.returncode == 0:
             return {"status": "ok", "message": f"Verbunden mit {ssid}"}
@@ -3944,7 +3942,7 @@ async def connect_wifi(request: Request):
 async def delete_wifi_network(uuid: str):
     """Gespeichertes WLAN-Profil löschen"""
     try:
-        result = _run_nmcli("connection", "delete", uuid)
+        result = _run_nmcli("connection", "delete", uuid, use_sudo=True)
         if result.returncode == 0:
             return {"status": "ok"}
         return {"status": "error", "message": result.stderr.strip()}
@@ -3955,7 +3953,7 @@ async def delete_wifi_network(uuid: str):
 async def disconnect_wifi():
     """WLAN trennen"""
     try:
-        result = _run_nmcli("device", "disconnect", "wlan0")
+        result = _run_nmcli("device", "disconnect", "wlan0", use_sudo=True)
         if result.returncode == 0:
             return {"status": "ok"}
         return {"status": "error", "message": result.stderr.strip()}
