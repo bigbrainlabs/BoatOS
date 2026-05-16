@@ -3982,6 +3982,17 @@ _update_log: list[str] = []
 @app.get("/api/system/version")
 async def system_version():
     """Aktuelle und verfügbare Version"""
+    # Fetch tags from remote so local repo is up-to-date
+    try:
+        subprocess.run(
+            ["git", "fetch", "--tags", "-q"],
+            cwd="/home/arielle/BoatOS",
+            timeout=8,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
     try:
         current = subprocess.check_output(
             ["git", "describe", "--tags", "--abbrev=0"],
@@ -3991,20 +4002,22 @@ async def system_version():
     except Exception:
         current = "unbekannt"
 
+    # Use tags API (not releases/latest) — works without explicit GitHub releases
     latest = "unbekannt"
-    release_url = ""
     published_at = ""
+    release_url = ""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                "https://api.github.com/repos/bigbrainlabs/BoatOS/releases/latest",
+                "https://api.github.com/repos/bigbrainlabs/BoatOS/tags",
+                headers={"Accept": "application/vnd.github+json"},
                 timeout=aiohttp.ClientTimeout(total=6),
             ) as resp:
                 if resp.status == 200:
-                    data = await resp.json()
-                    latest = data.get("tag_name", "unbekannt")
-                    release_url = data.get("html_url", "")
-                    published_at = data.get("published_at", "")
+                    tags = await resp.json()
+                    if tags:
+                        latest = tags[0].get("name", "unbekannt")
+                        release_url = f"https://github.com/bigbrainlabs/BoatOS/releases/tag/{latest}"
     except Exception:
         pass
 
