@@ -3982,23 +3982,9 @@ _update_log: list[str] = []
 @app.get("/api/system/version")
 async def system_version():
     """Aktuelle und verfügbare Version"""
-    # Fetch tags from remote so local repo is up-to-date
+    # Read version from VERSION file (updated by update.sh / git pull)
     try:
-        subprocess.run(
-            ["git", "fetch", "--tags", "-q"],
-            cwd="/home/arielle/BoatOS",
-            timeout=8,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        pass
-
-    try:
-        current = subprocess.check_output(
-            ["git", "describe", "--tags", "--abbrev=0"],
-            cwd="/home/arielle/BoatOS",
-            stderr=subprocess.DEVNULL,
-        ).decode().strip()
+        current = Path("/home/arielle/BoatOS/VERSION").read_text().strip()
     except Exception:
         current = "unbekannt"
 
