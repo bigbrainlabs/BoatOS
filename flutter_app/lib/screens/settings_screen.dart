@@ -783,7 +783,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             icon: const Icon(Icons.wifi_tethering, size: 16),
             label: const Text('Verbindung testen'),
-            onPressed: () => _mqttAction('/api/mqtt/test', null, 'MQTT-Test'),
+            onPressed: () {
+              var urlText = _mqttUrl.text.trim();
+              if (urlText.startsWith('mqtt://'))  urlText = urlText.substring(7);
+              else if (urlText.startsWith('http://')) urlText = urlText.substring(7);
+              String host = urlText;
+              int port = 1883;
+              if (urlText.contains(':')) {
+                final parts = urlText.split(':');
+                host = parts[0];
+                port = int.tryParse(parts[1]) ?? 1883;
+              }
+              _mqttAction('/api/mqtt/test', {
+                'host': host,
+                'port': port,
+                'username': _mqttUser.text,
+                'password': _mqttPass.text,
+              }, 'MQTT-Test');
+            },
           ),
         ),
         const SizedBox(width: 12),
@@ -801,6 +818,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ]),
+      const SizedBox(height: 8),
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF4CAF50),
+            side: const BorderSide(color: Color(0xFF30363D)),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          icon: const Icon(Icons.settings_ethernet, size: 16),
+          label: const Text('Externen Zugriff aktivieren'),
+          onPressed: _fixMqttExternal,
+        ),
+      ),
       _header('Tiefen-Alarm'),
       _textRow('Alarm bei < (m)', _depthAlarm, numeric: true),
       _switchRow('Tiefenalarm aktiv',
@@ -829,6 +861,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('$label: Verbindungsfehler'),
           backgroundColor: const Color(0xFF7D1A1A),
+        ));
+      }
+    }
+  }
+
+  Future<void> _fixMqttExternal() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        title: const Text('Externen MQTT-Zugriff aktivieren?',
+            style: TextStyle(color: Color(0xFFE6EDF3))),
+        content: const Text(
+          'Mosquitto wird so konfiguriert, dass externe Geräte (z.B. Sensorboard) '
+          'sich auf Port 1883 verbinden können.\n\n'
+          'Sudo-Berechtigung muss einmalig per SSH eingerichtet sein.',
+          style: TextStyle(color: Color(0xFF8B949E))),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Abbrechen')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4CAF50)),
+              child: const Text('Aktivieren')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final res = await http.post(Uri.parse('http://localhost:8000/api/mqtt/fix-external'));
+      final data = json.decode(res.body);
+      final ok = data['status'] == 'success';
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(data['message'] ?? (ok ? 'Erfolg' : 'Fehlgeschlagen')),
+          duration: const Duration(seconds: 5),
+          backgroundColor: ok ? const Color(0xFF1A472A) : const Color(0xFF7D1A1A),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Verbindungsfehler'),
+          backgroundColor: Color(0xFF7D1A1A),
         ));
       }
     }
