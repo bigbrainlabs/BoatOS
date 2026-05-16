@@ -315,7 +315,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             final (icon, label) = _sections[i];
             final sel = i == _sel;
             return InkWell(
-              onTap: () => setState(() => _sel = i),
+              onTap: () { setState(() => _sel = i); if (i == 12) _checkVersion(); },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
@@ -357,7 +357,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             return Padding(
               padding: const EdgeInsets.only(right: 4),
               child: GestureDetector(
-                onTap: () => setState(() => _sel = i),
+                onTap: () { setState(() => _sel = i); if (i == 12) _checkVersion(); },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
