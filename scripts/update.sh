@@ -1,175 +1,53 @@
 #!/bin/bash
-set -e
+# BoatOS System Update — wird vom Backend (/api/system/update) aufgerufen.
+# Output wird live gestreamt und im Log-Endpoint angezeigt.
+set -euo pipefail
 
-echo "🔄 BoatOS Update Script"
-echo "======================="
-echo ""
+REPO_DIR=/home/arielle/BoatOS
+GITHUB_REPO=bigbrainlabs/BoatOS
+APP_SO=$REPO_DIR/flutter_app/app.so
 
-# Farben für Ausgabe
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;36m'
-NC='\033[0m' # No Color
+log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
-# Funktionen
-error() {
-    echo -e "${RED}❌ Fehler: $1${NC}"
-    exit 1
-}
+log "=== BoatOS Update gestartet ==="
 
-success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
-
-info() {
-    echo -e "${YELLOW}ℹ️  $1${NC}"
-}
-
-step() {
-    echo -e "${BLUE}▶ $1${NC}"
-}
-
-# Benutzer prüfen
-if [ "$EUID" -eq 0 ]; then
-   error "Bitte führe dieses Skript NICHT als root aus!"
-fi
-
-INSTALL_USER=$(whoami)
-INSTALL_DIR="/home/$INSTALL_USER/BoatOS"
-
-# Prüfe ob BoatOS installiert ist
-if [ ! -d "$INSTALL_DIR" ]; then
-    error "BoatOS ist nicht installiert in $INSTALL_DIR"
-fi
-
-echo "Update für Benutzer: $INSTALL_USER"
-echo "Installationsverzeichnis: $INSTALL_DIR"
-echo ""
-
-# 1. Git Pull
-step "Aktualisiere BoatOS Repository..."
-cd $INSTALL_DIR
+# 1. Git pull
+log "[1/5] Lade aktuellen Stand von GitHub..."
+cd "$REPO_DIR"
 git fetch origin
-LOCAL=$(git rev-parse @)
-REMOTE=$(git rev-parse @{u})
+git reset --hard origin/main
+log "       Git-Pull abgeschlossen"
 
-if [ $LOCAL = $REMOTE ]; then
-    info "Repository ist bereits auf dem neuesten Stand"
+# 2. Python dependencies
+log "[2/5] Aktualisiere Python-Abhängigkeiten..."
+pip install -q -r backend/requirements.txt
+log "       Fertig"
+
+# 3. Download latest app.so from GitHub Releases
+log "[3/5] Lade aktuelle Helm-App (app.so)..."
+RELEASE_JSON=$(curl -sf --max-time 15 \
+    "https://api.github.com/repos/$GITHUB_REPO/releases/latest" || echo "{}")
+APP_URL=$(echo "$RELEASE_JSON" | python3 -c \
+    "import sys,json; d=json.load(sys.stdin); \
+     print(next((a['browser_download_url'] for a in d.get('assets',[]) \
+     if a['name']=='app.so'), ''))" 2>/dev/null || echo "")
+
+if [ -n "$APP_URL" ]; then
+    log "       URL: $APP_URL"
+    curl -sfL --max-time 120 -o "${APP_SO}.tmp" "$APP_URL"
+    mv "${APP_SO}.tmp" "$APP_SO"
+    log "       app.so erfolgreich heruntergeladen"
 else
-    info "Neue Version verfügbar, aktualisiere..."
-    git pull origin main || error "Git Pull fehlgeschlagen"
-    success "Repository aktualisiert"
+    log "       Kein app.so im aktuellen Release — überspringe"
 fi
 
-# 2. Backend Dependencies
-step "Aktualisiere Backend Dependencies..."
-cd $INSTALL_DIR/backend
-if [ -f "venv/bin/activate" ]; then
-    source venv/bin/activate
-    pip install --upgrade pip
-    pip install -r requirements.txt || error "Backend Dependencies konnten nicht aktualisiert werden"
-    success "Backend Dependencies aktualisiert"
-else
-    error "Virtual Environment nicht gefunden. Bitte führe install.sh aus."
-fi
+# 4. Restart backend services
+log "[4/5] Starte Backend-Services neu..."
+sudo systemctl restart boatos.service boatos-remote.service
+log "       Services neu gestartet"
 
-# 3. Frontend Cache Busting
-step "Aktualisiere Frontend Cache Busting..."
-cd $INSTALL_DIR/frontend
-TIMESTAMP=$(date +%s)
-if [ -f "index.html" ]; then
-    # Update all script version tags to current timestamp
-    sed -i "s/\\.js?v=[0-9]*/\\.js?v=$TIMESTAMP/g" index.html
-    success "Frontend Cache Busting aktualisiert (v=$TIMESTAMP)"
-fi
-
-# 4. Services neu starten
-step "Starte Services neu..."
-
-# Stop services
-info "Stoppe Services..."
-sudo systemctl stop boatos
-if systemctl list-unit-files | grep -q osrm.service; then
-    sudo systemctl stop osrm
-fi
-
-# Start services
-info "Starte Services..."
-sudo systemctl start boatos
-if systemctl list-unit-files | grep -q osrm.service; then
-    sudo systemctl start osrm
-fi
-
-# Reload nginx (nur Config, kein Restart)
-sudo nginx -t && sudo systemctl reload nginx
-
-success "Services neu gestartet"
-
-# 5. Status prüfen
-step "Prüfe Service Status..."
-sleep 2
-
-if systemctl is-active --quiet mosquitto; then
-    success "MQTT Broker (Mosquitto) läuft"
-else
-    echo -e "${RED}❌ MQTT Broker läuft nicht${NC}"
-fi
-
-if systemctl is-active --quiet signalk; then
-    success "SignalK läuft"
-else
-    echo -e "${RED}❌ SignalK läuft nicht${NC}"
-fi
-
-if systemctl is-active --quiet boatos; then
-    success "BoatOS Backend läuft"
-else
-    echo -e "${RED}❌ BoatOS Backend läuft nicht${NC}"
-fi
-
-if systemctl list-unit-files | grep -q osrm.service; then
-    if systemctl is-active --quiet osrm; then
-        success "OSRM läuft"
-    else
-        echo -e "${RED}❌ OSRM läuft nicht${NC}"
-    fi
-fi
-
-if systemctl is-active --quiet nginx; then
-    success "Nginx läuft"
-else
-    echo -e "${RED}❌ Nginx läuft nicht${NC}"
-fi
-
-echo ""
-echo "============================="
-echo -e "${GREEN}🎉 BoatOS erfolgreich aktualisiert!${NC}"
-echo ""
-echo "Aktuelle BoatOS Features:"
-echo "  ✅ Drag & Drop Dashboard Editor mit Undo/Redo"
-echo "  ✅ GPS & AIS Tracking (SignalK + AISStream)"
-echo "  ✅ Digitales Logbuch mit PDF Export"
-echo "  ✅ Crew Management & Fuel Tracking"
-echo "  ✅ Waterway Routing (OSRM + PyRouteLib3)"
-echo "  ✅ Weather Alerts (DWD/BrightSky API)"
-echo "  ✅ Schleusen-Datenbank (SQLite)"
-echo "  ✅ MQTT Sensor Integration"
-echo "  ✅ Touch-optimiertes UI"
-echo ""
-echo "Zugriff:"
-echo "  - BoatOS UI: https://$(hostname -I | awk '{print $1}')/"
-echo ""
-echo -e "${YELLOW}⚠️  Browser Cache leeren: Strg+Shift+R (oder Strg+F5)${NC}"
-echo ""
-echo "Logs ansehen:"
-echo "  sudo journalctl -u boatos -f"
-echo "  sudo journalctl -u signalk -f"
-echo "  sudo journalctl -u mosquitto -f"
-if systemctl list-unit-files | grep -q osrm.service; then
-echo "  sudo journalctl -u osrm -f"
-fi
-echo ""
-echo "MQTT Topics testen:"
-echo "  mosquitto_sub -h localhost -t '#' -v"
-echo ""
+# 5. Reboot
+log "[5/5] Update abgeschlossen — Neustart in 3 Sekunden..."
+log "=== Fertig ==="
+sleep 3
+sudo reboot

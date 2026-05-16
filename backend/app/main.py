@@ -3972,6 +3972,83 @@ async def system_shutdown():
     asyncio.get_event_loop().call_later(1, lambda: subprocess.Popen(['sudo', 'shutdown', '-h', 'now']))
     return {"status": "shutting_down"}
 
+# ---------------------------------------------------------------------------
+# System update
+# ---------------------------------------------------------------------------
+
+_update_running = False
+_update_log: list[str] = []
+
+@app.get("/api/system/version")
+async def system_version():
+    """Aktuelle und verfügbare Version"""
+    try:
+        current = subprocess.check_output(
+            ["git", "describe", "--tags", "--abbrev=0"],
+            cwd="/home/arielle/BoatOS",
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+    except Exception:
+        current = "unbekannt"
+
+    latest = "unbekannt"
+    release_url = ""
+    published_at = ""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://api.github.com/repos/bigbrainlabs/BoatOS/releases/latest",
+                timeout=aiohttp.ClientTimeout(total=6),
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    latest = data.get("tag_name", "unbekannt")
+                    release_url = data.get("html_url", "")
+                    published_at = data.get("published_at", "")
+    except Exception:
+        pass
+
+    return {
+        "current": current,
+        "latest": latest,
+        "up_to_date": current == latest and current != "unbekannt",
+        "release_url": release_url,
+        "published_at": published_at,
+    }
+
+@app.get("/api/system/update/status")
+async def update_status():
+    """Update-Fortschritt abfragen (Polling)"""
+    return {"running": _update_running, "log": _update_log[-100:]}
+
+@app.post("/api/system/update")
+async def start_update(background_tasks: BackgroundTasks):
+    """Update-Skript starten"""
+    global _update_running, _update_log
+    if _update_running:
+        return {"status": "already_running"}
+    _update_running = True
+    _update_log = ["[System] Update wird gestartet…"]
+    background_tasks.add_task(_run_update)
+    return {"status": "started"}
+
+async def _run_update():
+    global _update_running, _update_log
+    script = "/home/arielle/BoatOS/scripts/update.sh"
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "bash", script,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        async for line in proc.stdout:
+            _update_log.append(line.decode().rstrip())
+        await proc.wait()
+    except Exception as e:
+        _update_log.append(f"[Fehler] {e}")
+    finally:
+        _update_running = False
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Save known topics on shutdown"""

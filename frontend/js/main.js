@@ -17,6 +17,7 @@ import * as ais from './ais.js';
 import * as logbook from './logbook.js';
 import * as settings from './settings.js';
 import * as wifi from './wifi.js';
+import * as system from './system.js';
 import { initKeyboard } from './keyboard.js';
 
 // ==================== UNIT SYSTEM ====================
@@ -360,6 +361,7 @@ window.BoatOS = {
     logbook,
     settings,
     wifi,
+    system,
 
     // Context (wird bei Init gesetzt)
     context: null,
