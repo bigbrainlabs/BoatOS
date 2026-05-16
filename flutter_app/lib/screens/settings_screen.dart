@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -25,11 +26,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     (Icons.dashboard_customize, 'Dashboard'),
     (Icons.storage, 'Daten'),
     (Icons.brightness_2, 'Display'),
+    (Icons.system_update_alt, 'System'),
   ];
 
   int _sel = 0;
   bool _saving = false;
   bool _initialized = false;
+
+  // System / Update
+  String _verCurrent = '…';
+  String _verLatest  = '…';
+  bool _verUpToDate  = false;
+  bool _verLoading   = false;
+  bool _updateRunning = false;
+  List<String> _updateLog = [];
+  Timer? _updatePollTimer;
+  final _updateScrollCtrl = ScrollController();
 
   // Schiff
   late TextEditingController _boatName, _boatLength, _boatBeam, _boatDraft,
@@ -149,6 +161,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ]) c.dispose();
     for (final c in _riverCtrl.values)     c.dispose();
     for (final c in _riverTypeCtrl.values) c.dispose();
+    _updatePollTimer?.cancel();
+    _updateScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -386,6 +400,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               5  => _einheiten(svc),
               6  => _mqtt(svc),
               11 => _display(svc),
+              12 => _system(),
               _  => <Widget>[],
             };
             inner = Column(
@@ -813,6 +828,242 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ]),
       ),
     ];
+  }
+
+  // ── Section: System / Update ────────────────────────────────────────────────
+
+  List<Widget> _system() {
+    return [
+      _header('Software-Version'),
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF161B22),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF30363D)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _verRow('Installiert', _verCurrent),
+          const SizedBox(height: 8),
+          _verRow('Verfügbar',   _verLatest),
+          if (!_verLoading) ...[
+            const SizedBox(height: 10),
+            Text(
+              _verUpToDate
+                  ? '✅ System ist aktuell'
+                  : (_verLatest == '…' ? '' : '🆕 Update verfügbar'),
+              style: TextStyle(
+                fontSize: 12,
+                color: _verUpToDate
+                    ? const Color(0xFF4CAF50)
+                    : const Color(0xFF4FC3F7),
+              ),
+            ),
+          ],
+        ]),
+      ),
+      const SizedBox(height: 12),
+      _sysBtn(
+        icon: Icons.refresh,
+        label: _verLoading ? 'Prüfe…' : 'Auf Updates prüfen',
+        color: const Color(0xFF21262D),
+        textColor: const Color(0xFFE6EDF3),
+        onTap: _verLoading ? null : _checkVersion,
+      ),
+      if (!_verUpToDate && _verLatest != '…' && !_updateRunning) ...[
+        const SizedBox(height: 10),
+        _sysBtn(
+          icon: Icons.system_update_alt,
+          label: 'Jetzt aktualisieren',
+          color: const Color(0xFF1565C0),
+          textColor: Colors.white,
+          onTap: _startUpdate,
+        ),
+      ],
+
+      if (_updateRunning || _updateLog.isNotEmpty) ...[
+        _header('Update-Fortschritt'),
+        Container(
+          height: 220,
+          decoration: BoxDecoration(
+            color: const Color(0xFF0D1117),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFF30363D)),
+          ),
+          child: ListView.builder(
+            controller: _updateScrollCtrl,
+            padding: const EdgeInsets.all(10),
+            itemCount: _updateLog.length,
+            itemBuilder: (_, i) => Text(
+              _updateLog[i],
+              style: const TextStyle(
+                  fontSize: 11, color: Color(0xFF4FC3F7),
+                  fontFamily: 'monospace', height: 1.5),
+            ),
+          ),
+        ),
+        if (_updateRunning)
+          const Padding(
+            padding: EdgeInsets.only(top: 10),
+            child: Row(children: [
+              SizedBox(width: 14, height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2)),
+              SizedBox(width: 10),
+              Text('Update läuft…',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF8B949E))),
+            ]),
+          ),
+      ],
+
+      _header('System'),
+      _sysBtn(
+        icon: Icons.power_settings_new,
+        label: 'Pi herunterfahren',
+        color: const Color(0xFF6B1A1A),
+        textColor: Colors.white,
+        onTap: _shutdown,
+      ),
+    ];
+  }
+
+  Widget _verRow(String label, String value) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: const TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w600,
+                  color: Color(0xFFE6EDF3))),
+        ],
+      );
+
+  Widget _sysBtn({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required Color textColor,
+    required VoidCallback? onTap,
+  }) =>
+      GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(children: [
+            Icon(icon, color: textColor, size: 18),
+            const SizedBox(width: 12),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w600,
+                    color: textColor)),
+          ]),
+        ),
+      );
+
+  Future<void> _checkVersion() async {
+    setState(() { _verLoading = true; _verCurrent = '…'; _verLatest = '…'; });
+    try {
+      final res = await http
+          .get(Uri.parse('http://localhost:8000/api/system/version'))
+          .timeout(const Duration(seconds: 8));
+      final d = json.decode(res.body) as Map<String, dynamic>;
+      setState(() {
+        _verCurrent  = d['current'] as String? ?? '—';
+        _verLatest   = d['latest']  as String? ?? '—';
+        _verUpToDate = d['up_to_date'] as bool? ?? false;
+      });
+    } catch (_) {
+      setState(() { _verCurrent = '—'; _verLatest = '—'; });
+    } finally {
+      setState(() => _verLoading = false);
+    }
+  }
+
+  Future<void> _startUpdate() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        title: const Text('System aktualisieren',
+            style: TextStyle(color: Color(0xFFE6EDF3))),
+        content: const Text(
+            'Der Pi lädt alle Änderungen und startet danach automatisch neu.',
+            style: TextStyle(color: Color(0xFF8B949E))),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false),
+              child: const Text('Abbrechen')),
+          TextButton(onPressed: () => Navigator.pop(context, true),
+              child: const Text('Aktualisieren',
+                  style: TextStyle(color: Color(0xFF4FC3F7)))),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() { _updateRunning = true; _updateLog = ['[System] Update wird gestartet…']; });
+    try {
+      await http.post(Uri.parse('http://localhost:8000/api/system/update'));
+    } catch (_) {}
+    _updatePollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _pollUpdate());
+  }
+
+  Future<void> _pollUpdate() async {
+    try {
+      final res = await http
+          .get(Uri.parse('http://localhost:8000/api/system/update/status'))
+          .timeout(const Duration(seconds: 5));
+      final d = json.decode(res.body) as Map<String, dynamic>;
+      final log = (d['log'] as List).cast<String>();
+      setState(() {
+        _updateLog    = log;
+        _updateRunning = d['running'] as bool? ?? false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_updateScrollCtrl.hasClients) {
+          _updateScrollCtrl.jumpTo(_updateScrollCtrl.position.maxScrollExtent);
+        }
+      });
+      if (!_updateRunning) _updatePollTimer?.cancel();
+    } catch (_) {
+      // Pi neugestartet
+      if (mounted) {
+        setState(() {
+          _updateLog.add('[System] Verbindung getrennt — Pi startet neu…');
+          _updateRunning = false;
+        });
+      }
+      _updatePollTimer?.cancel();
+    }
+  }
+
+  Future<void> _shutdown() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        title: const Text('Pi herunterfahren',
+            style: TextStyle(color: Color(0xFFE6EDF3))),
+        content: const Text('Jetzt herunterfahren?',
+            style: TextStyle(color: Color(0xFF8B949E))),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false),
+              child: const Text('Abbrechen')),
+          TextButton(onPressed: () => Navigator.pop(context, true),
+              child: const Text('Herunterfahren',
+                  style: TextStyle(color: Color(0xFFEF5350)))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await http.post(Uri.parse('http://localhost:8000/api/system/shutdown'));
+    } catch (_) {}
   }
 
   Widget _header(String title) => Padding(
