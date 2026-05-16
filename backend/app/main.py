@@ -3805,7 +3805,7 @@ async def get_wifi_status():
                         pass
                     break
 
-        connected = "100" in state or "connected" in state.lower()
+        connected = state.startswith("100")
         return {
             "connected": connected,
             "ssid": ssid if ssid != "--" else "",
