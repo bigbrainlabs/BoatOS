@@ -4065,9 +4065,14 @@ async def system_info():
 @app.post("/api/system/shutdown")
 async def system_shutdown():
     """Pi herunterfahren"""
-    import subprocess, asyncio
     asyncio.get_event_loop().call_later(1, lambda: subprocess.Popen(['sudo', 'shutdown', '-h', 'now']))
     return {"status": "shutting_down"}
+
+@app.post("/api/system/reboot")
+async def system_reboot():
+    """Pi neu starten"""
+    asyncio.get_event_loop().call_later(1, lambda: subprocess.Popen(['sudo', '/sbin/reboot']))
+    return {"status": "rebooting"}
 
 # ---------------------------------------------------------------------------
 # System update

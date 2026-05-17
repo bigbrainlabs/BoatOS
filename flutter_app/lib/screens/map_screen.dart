@@ -246,16 +246,25 @@ class _MapScreenState extends State<MapScreen> {
   RouteWaypoint? _draggingWp;
   LatLng? _draggingLatLng;
 
+  SettingsService? _settingsSvc;
+
   @override
   void initState() {
     super.initState();
     _boatAnimTimer = Timer.periodic(const Duration(milliseconds: 60), _boatAnimTick);
     _buildStyle();
     _loadSettings();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _settingsSvc = context.read<SettingsService>();
+      _settingsSvc!.addListener(_onSettingsChanged);
+    });
   }
+
+  void _onSettingsChanged() => _loadSettings();
 
   @override
   void dispose() {
+    _settingsSvc?.removeListener(_onSettingsChanged);
     _aisTimer?.cancel();
     _infraTimer?.cancel();
     _favoritesTimer?.cancel();

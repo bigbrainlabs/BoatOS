@@ -10,6 +10,7 @@ class SettingsService extends ChangeNotifier {
   Map<String, dynamic> _gpsDevice = {};
   bool loading = false;
   String? error;
+  Timer? _pollTimer;
 
   Map<String, dynamic> get raw => _s;
 
@@ -52,6 +53,11 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setRaw(String key, dynamic value) {
+    _s[key] = value;
+    notifyListeners();
+  }
+
   Future<void> load() async {
     loading = true;
     error = null;
@@ -74,6 +80,10 @@ class SettingsService extends ChangeNotifier {
             _gpsDevice = json.decode(r2.body) as Map<String, dynamic>;
           }
           error = null;
+          _pollTimer ??= Timer.periodic(
+            const Duration(seconds: 60),
+            (_) => load(),
+          );
           break; // success
         }
       } catch (_) {
@@ -85,6 +95,12 @@ class SettingsService extends ChangeNotifier {
 
     loading = false;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
   }
 
   Future<bool> save() async {

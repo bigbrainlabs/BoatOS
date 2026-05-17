@@ -104,7 +104,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final s = context.read<SettingsService>();
-      if (s.raw.isEmpty) await s.load();
+      await s.load();
       _populate(s);
       if (mounted) setState(() => _initialized = true);
     });
@@ -1423,8 +1423,9 @@ class _TrackSensorsSectionState extends State<_TrackSensorsSection> {
 
       // Build name/unit lookup from sensor list
       if (results[1].statusCode == 200) {
-        final list = json.decode(results[1].body) as List;
-        for (final e in list.cast<Map<String, dynamic>>()) {
+        final body = json.decode(results[1].body) as Map<String, dynamic>;
+        final list = (body['sensors'] as List? ?? []).cast<Map<String, dynamic>>();
+        for (final e in list) {
           final base = e['base_name'] as String?;
           if (base != null) {
             _sensorNames[base] = (e['name'] as String?) ?? base;
@@ -1471,6 +1472,10 @@ class _TrackSensorsSectionState extends State<_TrackSensorsSection> {
         headers: {'Content-Type': 'application/json'},
         body: json.encode(settings),
       );
+      // Keep SettingsService cache in sync so other saves don't overwrite
+      if (mounted) {
+        context.read<SettingsService>().setRaw('trackSensors', _selected.toList());
+      }
     } catch (_) {}
   }
 
