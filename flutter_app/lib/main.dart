@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -63,12 +64,34 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
   LogbookService? _logbookSvc;
+  bool _updateAvailable = false;
+  Timer? _updateCheckTimer;
 
   final List<Widget> _screens = const [
     MapScreen(),
     DashboardScreen(),
     LogbookScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _checkForUpdate();
+    _updateCheckTimer = Timer.periodic(const Duration(hours: 6), (_) => _checkForUpdate());
+  }
+
+  Future<void> _checkForUpdate() async {
+    try {
+      final res = await http
+          .get(Uri.parse('http://localhost:8000/api/system/version'))
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final d = json.decode(res.body) as Map<String, dynamic>;
+        final upToDate = d['up_to_date'] as bool? ?? true;
+        if (mounted) setState(() => _updateAvailable = !upToDate);
+      }
+    } catch (_) {}
+  }
 
   @override
   void didChangeDependencies() {
@@ -92,6 +115,7 @@ class _MainShellState extends State<MainShell> {
 
   @override
   void dispose() {
+    _updateCheckTimer?.cancel();
     _logbookSvc?.removeListener(_onLogbook);
     super.dispose();
   }
@@ -129,6 +153,33 @@ class _MainShellState extends State<MainShell> {
               ),
             ],
           ),
+          if (_updateAvailable)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B),
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.system_update_alt, size: 12, color: Color(0xFF1A1200)),
+                      SizedBox(width: 5),
+                      Text('Update verfügbar',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1A1200))),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           if (_currentIndex == 1 && Platform.isLinux)
             const Positioned.fill(
               child: Align(
@@ -157,8 +208,8 @@ class _ShutdownNavButton extends StatefulWidget {
 class _ShutdownNavButtonState extends State<_ShutdownNavButton> {
   bool _busy = false;
 
-  Future<void> _confirmAndShutdown() async {
-    final ok = await showDialog<bool>(
+  Future<void> _confirmAction() async {
+    final action = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
@@ -166,19 +217,28 @@ class _ShutdownNavButtonState extends State<_ShutdownNavButton> {
         title: const Row(children: [
           Icon(Icons.power_settings_new, color: Color(0xFFEF5350), size: 20),
           SizedBox(width: 10),
-          Text('Pi herunterfahren?',
-              style: TextStyle(fontSize: 16, color: Color(0xFFE6EDF3))),
+          Text('System', style: TextStyle(fontSize: 16, color: Color(0xFFE6EDF3))),
         ]),
         content: const Text(
-          'Der Raspberry Pi wird vollständig heruntergefahren.\n'
-          'Nach dem Ausschalten ist keine Verbindung mehr möglich.',
+          'Was soll das BoatOS-System jetzt tun?',
           style: TextStyle(fontSize: 13, color: Color(0xFF8B949E), height: 1.5),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(context, null),
             child: const Text('Abbrechen',
                 style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1A3A5C),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            icon: const Icon(Icons.restart_alt, size: 16),
+            label: const Text('Neu starten'),
+            onPressed: () => Navigator.pop(context, 'reboot'),
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
@@ -189,16 +249,17 @@ class _ShutdownNavButtonState extends State<_ShutdownNavButton> {
             ),
             icon: const Icon(Icons.power_settings_new, size: 16),
             label: const Text('Herunterfahren'),
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(context, 'shutdown'),
           ),
         ],
       ),
     );
 
-    if (ok != true || !mounted) return;
+    if (action == null || !mounted) return;
     setState(() => _busy = true);
     try {
-      await http.post(Uri.parse('http://localhost:8000/api/system/shutdown'));
+      final endpoint = action == 'reboot' ? 'reboot' : 'shutdown';
+      await http.post(Uri.parse('http://localhost:8000/api/system/$endpoint'));
     } catch (_) {}
     if (mounted) setState(() => _busy = false);
   }
@@ -206,7 +267,7 @@ class _ShutdownNavButtonState extends State<_ShutdownNavButton> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: _busy ? null : _confirmAndShutdown,
+      onTap: _busy ? null : _confirmAction,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
