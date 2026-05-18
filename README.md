@@ -16,6 +16,25 @@ Ein vollständiges Marine-Navigationssystem für Binnenschifffahrt und Küstenna
 
 ---
 
+<div align="center">
+
+## 📚 Logbuch ohne Pose — Buchserie & Bauserie
+
+**BoatOS ist Teil einer vollständigen Open-Source-Bauserie zur Bootstechnik-Optimierung.**  
+Dokumentiert als lebendiges Projekt — zum Nachbauen, Verstehen und Weiterentwickeln.
+
+[![GitHub](https://img.shields.io/badge/Bauserie-logbuch--ohne--pose-181717?style=for-the-badge&logo=github)](https://github.com/bigbrainlabs/logbuch-ohne-pose)
+&nbsp;
+[![Amazon DE](https://img.shields.io/badge/Buch_🇩🇪-Amazon-FF9900?style=for-the-badge&logo=amazon)](https://www.amazon.de/dp/B0GLXGD8LB?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
+&nbsp;
+[![Amazon EN](https://img.shields.io/badge/Buch_🇬🇧-Amazon-FF9900?style=for-the-badge&logo=amazon)](https://www.amazon.de/dp/B0GMD5JH28?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
+
+*Schritt-für-Schritt Dokumentation · Schaltpläne · Code · Erfahrungsberichte*
+
+</div>
+
+---
+
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Raspberry%20Pi-red.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
@@ -470,9 +489,19 @@ Mehr: [INSTALL.md](INSTALL.md)
 
 ---
 
+## 📚 Buchserie
+
+BoatOS entsteht als Teil der **„Logbuch ohne Pose"**-Reihe — einer Bauserie rund um Bootstechnik, Sensorik und Selbstbau-Elektronik.
+
+- 🔧 **Bauserie auf GitHub**: [github.com/bigbrainlabs/logbuch-ohne-pose](https://github.com/bigbrainlabs/logbuch-ohne-pose)
+- 📖 **Buch auf Amazon** (🇩🇪): [Logbuch ohne Pose — Deutsch](https://www.amazon.de/dp/B0GLXGD8LB?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
+- 📖 **Buch auf Amazon** (🇬🇧): [Logbuch ohne Pose — English](https://www.amazon.de/dp/B0GMD5JH28?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
+
+---
+
 ## 👏 Credits
 
-- **Entwicklung**: bigbrainlabs
+- **Entwicklung**: bigbrainlabs — [Logbuch ohne Pose](https://github.com/bigbrainlabs/logbuch-ohne-pose)
 - **AI-Pair-Programming**: Claude Code (Anthropic)
 - **Karten**: OpenSeaMap, OpenStreetMap, ESRI
 - **Daten**: DWD, PEGELONLINE, AISStream.io

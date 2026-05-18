@@ -304,6 +304,7 @@ class _ScreensaverWrapperState extends State<ScreensaverWrapper> {
   bool _overlayVisible = false;
   bool _hwOff = false;
   SettingsService? _settings;
+  int _cachedTimeout = -1;
 
   @override
   void didChangeDependencies() {
@@ -325,7 +326,13 @@ class _ScreensaverWrapperState extends State<ScreensaverWrapper> {
     super.dispose();
   }
 
-  void _onSettingsChanged() => _startTimers();
+  void _onSettingsChanged() {
+    final newTimeout = _settings?.screensaverTimeout ?? 15;
+    if (newTimeout != _cachedTimeout) {
+      _cachedTimeout = newTimeout;
+      _startTimers();
+    }
+  }
 
   void _startTimers() {
     _overlayTimer?.cancel();
