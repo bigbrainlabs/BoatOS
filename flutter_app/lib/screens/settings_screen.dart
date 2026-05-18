@@ -2008,7 +2008,8 @@ class _DashboardSectionState extends State<_DashboardSection> {
         _parseDslToState(dsl);
       }
       if (results[1].statusCode == 200) {
-        _availSensors = (json.decode(results[1].body) as List)
+        final body = json.decode(results[1].body) as Map<String, dynamic>;
+        _availSensors = ((body['sensors'] as List?) ?? [])
             .cast<Map<String, dynamic>>()
             .where((e) => e['base_name'] != null)
             .toList();
