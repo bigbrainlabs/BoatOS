@@ -4090,21 +4090,31 @@ async def system_version():
     except Exception:
         current = "unbekannt"
 
-    # Use tags API (not releases/latest) — works without explicit GitHub releases
+    # Use git refs API — reflects the actual git database, not the cached tags list
     latest = "unbekannt"
     published_at = ""
     release_url = ""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                "https://api.github.com/repos/bigbrainlabs/BoatOS/tags",
+                "https://api.github.com/repos/bigbrainlabs/BoatOS/git/refs/tags",
                 headers={"Accept": "application/vnd.github+json"},
                 timeout=aiohttp.ClientTimeout(total=6),
             ) as resp:
                 if resp.status == 200:
-                    tags = await resp.json()
-                    if tags:
-                        latest = tags[0].get("name", "unbekannt")
+                    refs = await resp.json()
+                    tag_names = [
+                        r["ref"].split("/")[-1] for r in refs
+                        if r.get("ref", "").startswith("refs/tags/v")
+                    ]
+                    def _semver(t):
+                        try:
+                            parts = t.lstrip("v").split(".")
+                            return tuple(int(x) for x in parts)
+                        except Exception:
+                            return (0, 0, 0)
+                    if tag_names:
+                        latest = max(tag_names, key=_semver)
                         release_url = f"https://github.com/bigbrainlabs/BoatOS/releases/tag/{latest}"
     except Exception:
         pass

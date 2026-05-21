@@ -680,6 +680,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Theme initialisieren
     theme.initTheme();
 
+    // Version im Hintergrund prüfen (Badge + alle 6h)
+    system.autoCheck();
+
     // Apply dark selects immediately and whenever settings panel opens
     applyDarkSelects();
     document.addEventListener('settingsPanelOpened', applyDarkSelects);

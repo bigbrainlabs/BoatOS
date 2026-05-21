@@ -46,6 +46,14 @@
         </div>
 
         <div class="top-bar-right">
+            <div id="update-badge"
+                onclick="BoatOS.ui.showSettingsTab('system', null); BoatOS.system.checkVersion()"
+                title="Update verfügbar — klicken für Details"
+                style="display:none; align-items:center; gap:5px; background:#F59E0B; color:#1A1200;
+                       padding:4px 10px; border-radius:6px; font-size:12px; font-weight:700;
+                       cursor:pointer; white-space:nowrap;">
+                &#x2B06; Update
+            </div>
             <button class="icon-btn" id="trackBtn" onclick="BoatOS.sensors.toggleTrack()" title="Track">⏺️</button>
             <button class="icon-btn" id="themeToggle" onclick="BoatOS.theme.toggleTheme()" title="Dark Mode">🌙</button>
             <button class="icon-btn" id="modeToggle" onclick="BoatOS.ui.toggleMode()" title="Karte">🗺️</button>
@@ -1321,6 +1329,10 @@
 
                 <div class="setting-group">
                     <h4>System</h4>
+                    <button onclick="BoatOS.system.reboot()"
+                        style="width:100%; padding:10px; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:8px; font-size:14px; cursor:pointer; margin-bottom:8px;">
+                        🔄 Pi neu starten
+                    </button>
                     <button onclick="BoatOS.system.shutdown()"
                         style="width:100%; padding:10px; background:var(--danger); color:#fff; border:none; border-radius:8px; font-size:14px; cursor:pointer;">
                         🔴 Pi herunterfahren

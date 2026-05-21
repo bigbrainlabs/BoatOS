@@ -67,4 +67,4 @@ log "       Services neu gestartet"
 log "[6/6] Update abgeschlossen — Neustart in 3 Sekunden..."
 log "=== Fertig ==="
 sleep 3
-sudo reboot
+sudo /sbin/reboot
