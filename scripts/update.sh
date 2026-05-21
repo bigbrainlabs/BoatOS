@@ -12,7 +12,7 @@ log() { echo "[$(date '+%H:%M:%S')] $*"; }
 log "=== BoatOS Update gestartet ==="
 
 # 1. Git initialisieren falls kein Repo vorhanden
-log "[1/5] Prüfe Git-Repository..."
+log "[1/6] Prüfe Git-Repository..."
 cd "$REPO_DIR"
 if [ ! -d ".git" ]; then
     log "       Kein Git-Repo gefunden — initialisiere..."
@@ -25,12 +25,12 @@ git reset --hard origin/main -q
 log "       Code aktualisiert"
 
 # 2. Python dependencies
-log "[2/5] Aktualisiere Python-Abhängigkeiten..."
+log "[2/6] Aktualisiere Python-Abhängigkeiten..."
 pip install -q -r backend/requirements.txt
 log "       Fertig"
 
 # 3. Download latest app.so from GitHub Releases
-log "[3/5] Lade aktuelle Helm-App (app.so)..."
+log "[3/6] Lade aktuelle Helm-App (app.so)..."
 RELEASE_JSON=$(curl -sf --max-time 15 \
     "https://api.github.com/repos/$GITHUB_REPO/releases/latest" || echo "{}")
 APP_URL=$(echo "$RELEASE_JSON" | python3 -c \
@@ -47,8 +47,21 @@ else
     log "       Kein app.so im aktuellen Release — überspringe"
 fi
 
-# 4. Ensure Mosquitto accepts external connections
-log "[4/6] Konfiguriere Mosquitto (externe Verbindungen)..."
+# 4. WiFi Fallback Hotspot Service installieren
+log "[4/6] Installiere WiFi-Fallback-Service..."
+SERVICE_SRC="$REPO_DIR/scripts/wifi-fallback.service"
+SERVICE_DST="/etc/systemd/system/wifi-fallback.service"
+# Pfad im Service an aktuellen REPO_DIR anpassen
+sed "s|/home/arielle/BoatOS|$REPO_DIR|g" "$SERVICE_SRC" | sudo tee "$SERVICE_DST" > /dev/null
+sudo chmod 644 "$SERVICE_DST"
+sudo chmod +x "$REPO_DIR/scripts/wifi_fallback.sh"
+sudo systemctl daemon-reload
+sudo systemctl enable wifi-fallback.service
+sudo systemctl restart wifi-fallback.service || true
+log "       WiFi-Fallback aktiv"
+
+# 5. Ensure Mosquitto accepts external connections
+log "[5/6] Konfiguriere Mosquitto (externe Verbindungen)..."
 MOSQ_CONF=/etc/mosquitto/conf.d/boatos.conf
 if ! grep -q "listener 1883 0.0.0.0" "$MOSQ_CONF" 2>/dev/null; then
     printf "listener 1883 0.0.0.0\nallow_anonymous true\n" | sudo tee "$MOSQ_CONF" > /dev/null
@@ -58,13 +71,9 @@ else
     log "       Bereits konfiguriert — überspringe"
 fi
 
-# 5. Restart backend services
-log "[5/6] Starte Backend-Services neu..."
-sudo systemctl restart boatos.service boatos-remote.service
-log "       Services neu gestartet"
-
-# 6. Reboot
-log "[6/6] Update abgeschlossen — Neustart in 3 Sekunden..."
-log "=== Fertig ==="
+# 6. Restart backend + reboot
+log "[6/6] Starte Backend neu und reboote..."
+sudo systemctl restart boatos.service boatos-remote.service || true
+log "=== Fertig — Neustart in 3 Sekunden ==="
 sleep 3
 sudo /sbin/reboot

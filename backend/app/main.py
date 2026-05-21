@@ -3763,9 +3763,12 @@ async def toggle_onscreen_keyboard(action: str = "show"):
 
 # ==================== WIFI MANAGEMENT ====================
 
-def _run_nmcli(*args, use_sudo: bool = False) -> subprocess.CompletedProcess:
+def _run_nmcli(*args, use_sudo: bool = False, timeout: int = 30) -> subprocess.CompletedProcess:
     cmd = (["sudo"] if use_sudo else []) + ["nmcli", "--terse", "--colors", "no"] + list(args)
-    return subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(cmd, 1, "", f"nmcli timeout after {timeout}s")
 
 def _run_nmcli_fields(fields: str, *args) -> subprocess.CompletedProcess:
     """nmcli mit expliziten Feldern und ohne Escape-Zeichen (kein BSSID-Colon-Problem)"""
@@ -3885,6 +3888,19 @@ async def connect_wifi(request: Request):
         if not ssid:
             return {"status": "error", "message": "SSID fehlt"}
 
+        # Detect WiFi interface
+        iface_res = subprocess.run(
+            ["nmcli", "-t", "-f", "DEVICE,TYPE", "device"],
+            capture_output=True, text=True, timeout=5
+        )
+        iface = next(
+            (l.split(":")[0] for l in iface_res.stdout.splitlines() if l.endswith(":wifi")),
+            "wlan0"
+        )
+
+        # Disconnect hotspot / broken connection first so NM isn't stuck
+        _run_nmcli("device", "disconnect", iface, use_sudo=True, timeout=8)
+
         if password:
             # Write .nmconnection file directly to /etc/ to bypass the netplan
             # plugin, which routes `nmcli connection add` into /run/ (volatile,
@@ -3910,25 +3926,25 @@ async def connect_wifi(request: Request):
                 "method=auto\n"
                 "addr-gen-mode=default\n"
             )
-            # Delete old profile from NM first (ignore failure)
-            _run_nmcli("connection", "delete", ssid, use_sudo=True)
-            # Write file as root, chmod 600 (required by NM)
+            # Delete old profile and write fresh file
+            _run_nmcli("connection", "delete", ssid, use_sudo=True, timeout=8)
             write = subprocess.run(
                 ["sudo", "bash", "-c",
                  f"cat > {conn_path} && chmod 600 {conn_path}"],
-                input=nm_conf, text=True, capture_output=True
+                input=nm_conf, text=True, capture_output=True, timeout=8
             )
             if write.returncode != 0:
                 return {"status": "error", "message": write.stderr.strip()}
-            # Reload connections so NM picks up the new file
-            _run_nmcli("connection", "reload", use_sudo=True)
-            result = _run_nmcli("connection", "up", "id", ssid, use_sudo=True)
+            _run_nmcli("connection", "reload", use_sudo=True, timeout=8)
+            result = _run_nmcli("connection", "up", "id", ssid, use_sudo=True, timeout=30)
         else:
-            # Connect and ensure autoconnect is saved
-            result = _run_nmcli("device", "wifi", "connect", ssid, use_sudo=True)
+            # Rescan so NM has fresh BSSID info, then connect
+            _run_nmcli("device", "wifi", "rescan", "ifname", iface, use_sudo=True, timeout=10)
+            result = _run_nmcli("device", "wifi", "connect", ssid,
+                                "ifname", iface, use_sudo=True, timeout=30)
             if result.returncode == 0:
                 _run_nmcli("connection", "modify", "id", ssid,
-                           "connection.autoconnect", "yes", use_sudo=True)
+                           "connection.autoconnect", "yes", use_sudo=True, timeout=8)
 
         if result.returncode == 0:
             return {"status": "ok", "message": f"Verbunden mit {ssid}"}
@@ -3937,6 +3953,20 @@ async def connect_wifi(request: Request):
             return {"status": "error", "message": err}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+@app.get("/api/wifi/hotspot")
+async def get_hotspot_status():
+    """Ob der Fallback-Hotspot gerade aktiv ist"""
+    try:
+        res = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME,STATE", "con", "show", "--active"],
+            capture_output=True, text=True, timeout=5
+        )
+        active = any("BoatOS-Hotspot:activated" in l for l in res.stdout.splitlines())
+        return {"active": active, "ssid": "BoatOS-Setup", "password": "boatos1234",
+                "ip": "192.168.4.1"}
+    except Exception as e:
+        return {"active": False, "error": str(e)}
 
 @app.delete("/api/wifi/networks/{uuid}")
 async def delete_wifi_network(uuid: str):

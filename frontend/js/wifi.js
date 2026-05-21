@@ -16,12 +16,32 @@ function attrJson(val) {
 
 export async function loadStatus() {
     try {
-        const res = await fetch('/api/wifi/status');
-        const data = await res.json();
+        const [statusRes, hotspotRes] = await Promise.all([
+            fetch('/api/wifi/status'),
+            fetch('/api/wifi/hotspot'),
+        ]);
+        const data    = await statusRes.json();
+        const hotspot = await hotspotRes.json();
         renderStatus(data);
+        _renderHotspotBanner(hotspot);
     } catch (e) {
         renderStatus({ connected: false, ssid: '', ip: '', signal: null });
     }
+}
+
+function _renderHotspotBanner(hotspot) {
+    const existing = document.getElementById('hotspot-banner');
+    if (!hotspot?.active) { if (existing) existing.remove(); return; }
+    if (existing) return;
+    const banner = document.createElement('div');
+    banner.id = 'hotspot-banner';
+    banner.style.cssText = 'background:#F59E0B;color:#1A1200;padding:10px 16px;border-radius:8px;' +
+        'margin-bottom:12px;font-size:13px;font-weight:600;line-height:1.5;';
+    banner.innerHTML = `⚠️ Kein WLAN gefunden — Fallback-Hotspot aktiv<br>` +
+        `<span style="font-weight:400">SSID: <b>${hotspot.ssid}</b> &nbsp;·&nbsp; ` +
+        `Passwort: <b>${hotspot.password}</b> &nbsp;·&nbsp; BoatOS: <b>${hotspot.ip}</b></span>`;
+    const group = document.querySelector('#settings-wifi .setting-group');
+    if (group) group.prepend(banner);
 }
 
 function renderStatus(data) {
