@@ -47,8 +47,8 @@ else
     log "       Kein app.so im aktuellen Release — überspringe"
 fi
 
-# 4. WiFi Fallback Hotspot Service installieren
-log "[4/6] Installiere WiFi-Fallback-Service..."
+# 4. WiFi Fallback Hotspot Service + Power Management
+log "[4/6] Installiere WiFi-Fallback-Service + deaktiviere Power Management..."
 SERVICE_SRC="$REPO_DIR/scripts/wifi-fallback.service"
 SERVICE_DST="/etc/systemd/system/wifi-fallback.service"
 # Pfad im Service an aktuellen REPO_DIR anpassen
@@ -59,6 +59,14 @@ sudo systemctl daemon-reload
 sudo systemctl enable wifi-fallback.service
 sudo systemctl restart wifi-fallback.service || true
 log "       WiFi-Fallback aktiv"
+
+# WiFi Power Management dauerhaft deaktivieren (BCM43xx schläft sich sonst weg)
+sudo mkdir -p /etc/NetworkManager/conf.d
+sudo cp "$REPO_DIR/scripts/wifi-powersave-off.conf" /etc/NetworkManager/conf.d/wifi-powersave-off.conf
+IFACE=$(nmcli -t -f DEVICE,TYPE device 2>/dev/null | grep ':wifi$' | head -1 | cut -d: -f1 || echo wlan0)
+sudo iw dev "${IFACE:-wlan0}" set power_save off 2>/dev/null || true
+sudo systemctl reload NetworkManager 2>/dev/null || true
+log "       WiFi Power Management deaktiviert"
 
 # 5. Ensure Mosquitto accepts external connections
 log "[5/6] Konfiguriere Mosquitto (externe Verbindungen)..."

@@ -12,6 +12,10 @@ LOCK_FILE="/tmp/boatos_wifi_connecting"
 IFACE=$(nmcli -t -f DEVICE,TYPE device 2>/dev/null | grep ':wifi$' | head -1 | cut -d: -f1)
 IFACE=${IFACE:-wlan0}
 
+# Power Management deaktivieren — verhindert BCM43xx-Spontanabbrüche
+iw dev "$IFACE" set power_save off 2>/dev/null || true
+logger -t wifi-fallback "Power Management deaktiviert auf ${IFACE}"
+
 _real_connected() {
     nmcli -t -f NAME,DEVICE,STATE con show --active 2>/dev/null \
         | grep ":${IFACE}:activated" \
