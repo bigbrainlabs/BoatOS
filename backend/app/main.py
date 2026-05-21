@@ -3937,7 +3937,7 @@ async def connect_wifi(request: Request):
         )
 
         # Disconnect hotspot / broken connection first so NM isn't stuck
-        _run_nmcli("device", "disconnect", iface, use_sudo=True, timeout=8)
+        _run_nmcli("device", "disconnect", iface, use_sudo=True, timeout=5)
 
         if password:
             # Write .nmconnection file directly to /etc/ to bypass the netplan
@@ -3976,13 +3976,19 @@ async def connect_wifi(request: Request):
             _run_nmcli("connection", "reload", use_sudo=True, timeout=8)
             result = _run_nmcli("connection", "up", "id", ssid, use_sudo=True, timeout=30)
         else:
-            # Rescan so NM has fresh BSSID info, then connect
-            _run_nmcli("device", "wifi", "rescan", "ifname", iface, use_sudo=True, timeout=10)
-            result = _run_nmcli("device", "wifi", "connect", ssid,
-                                "ifname", iface, use_sudo=True, timeout=30)
-            if result.returncode == 0:
-                _run_nmcli("connection", "modify", "id", ssid,
-                           "connection.autoconnect", "yes", use_sudo=True, timeout=8)
+            # Gespeichertes Profil vorhanden? → connection up (kein Rescan nötig,
+            # schlägt bei falschem Passwort in ~10s fehl statt nach 30s zu hängen)
+            has_profile = _run_nmcli("connection", "show", "id", ssid, timeout=3)
+            if has_profile.returncode == 0:
+                result = _run_nmcli("connection", "up", "id", ssid, use_sudo=True, timeout=25)
+            else:
+                # Kein Profil → scan + connect
+                _run_nmcli("device", "wifi", "rescan", "ifname", iface, use_sudo=True, timeout=10)
+                result = _run_nmcli("device", "wifi", "connect", ssid,
+                                    "ifname", iface, use_sudo=True, timeout=25)
+                if result.returncode == 0:
+                    _run_nmcli("connection", "modify", "id", ssid,
+                               "connection.autoconnect", "yes", use_sudo=True, timeout=5)
 
         if result.returncode == 0:
             return {"status": "ok", "message": f"Verbunden mit {ssid}"}
