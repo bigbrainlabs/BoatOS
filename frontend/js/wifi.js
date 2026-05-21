@@ -110,18 +110,29 @@ function renderScanList(networks) {
     }
 
     list.innerHTML = networks.map(n => {
-        const bars     = signalBars(n.signal);
-        const lock     = n.security === 'wpa' ? '🔒 ' : '';
-        const active   = n.in_use ? ' style="border-color:var(--accent)"' : '';
-        const activeTag = n.in_use ? '<span style="color:var(--accent);font-size:11px;margin-left:6px;">verbunden</span>' : '';
+        const bars      = signalBars(n.signal);
+        const lock      = n.security === 'wpa' && !n.saved ? ' 🔒' : '';
+        const savedTag  = n.saved ? ' <span style="color:var(--accent);font-size:10px;">💾 gespeichert</span>' : '';
+        const activeTag = n.in_use ? ' <span style="color:#2ecc71;font-size:11px;">● verbunden</span>' : '';
+        const border    = n.in_use ? 'border-color:#2ecc71' : n.saved ? 'border-color:var(--accent)' : '';
+        const forgetBtn = n.saved ? `
+            <button onclick='BoatOS.wifi.forgetNetwork(${attrJson(n.uuid)}, ${attrJson(n.ssid)})'
+                title="Gespeichertes Profil löschen"
+                style="padding:6px 10px;background:transparent;color:var(--danger);border:1px solid var(--danger);
+                       border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap;">
+                Vergessen
+            </button>` : '';
         return `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;
-                    background:var(--bg-card);border-radius:8px;border:1px solid var(--border)"${active}>
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;
+                    background:var(--bg-card);border-radius:8px;border:1px solid var(--border);${border}">
             <div style="flex:1;min-width:0;">
-                <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(n.ssid)}${activeTag}</div>
-                <div style="font-size:11px;color:var(--text-dim);">${lock}${bars}  CH${n.channel}</div>
+                <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                    ${escHtml(n.ssid)}${activeTag}${savedTag}
+                </div>
+                <div style="font-size:11px;color:var(--text-dim);">${bars}${lock}  CH${n.channel}</div>
             </div>
-            <button onclick='BoatOS.wifi.startConnect(${attrJson(n.ssid)}, ${attrJson(n.security)})'
+            ${forgetBtn}
+            <button onclick='BoatOS.wifi.startConnect(${attrJson(n.ssid)}, ${attrJson(n.security)}, ${!!n.saved})'
                 style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap;">
                 ${n.in_use ? 'Erneut' : 'Verbinden'}
             </button>
@@ -131,17 +142,17 @@ function renderScanList(networks) {
 
 // ==================== CONNECT ====================
 
-export function startConnect(ssid, security) {
+export function startConnect(ssid, security, saved = false) {
     _pendingSsid     = ssid;
     _pendingSecurity = security;
 
-    if (security === 'open') {
-        // open network — connect directly
+    // Kein Passwort nötig: offenes Netz oder Profil bereits gespeichert
+    if (security === 'open' || saved) {
         doConnect(ssid, '');
         return;
     }
 
-    // show password modal
+    // Passwort-Modal zeigen
     const modal = document.getElementById('wifi-pw-modal');
     const label = document.getElementById('wifi-pw-ssid-label');
     const input = document.getElementById('wifi-pw-input');
@@ -185,8 +196,7 @@ async function doConnect(ssid, password) {
         if (data.status === 'ok') {
             msg.style.color = '#2ecc71';
             msg.textContent = `Verbunden mit ${ssid}`;
-            await loadStatus();
-            await loadSaved();
+            await Promise.all([loadStatus(), loadSaved(), scan()]);
         } else {
             msg.style.color = 'var(--danger)';
             msg.textContent = `Fehler: ${data.message}`;
@@ -273,12 +283,15 @@ export async function connectSaved(name) {
 }
 
 export async function forgetNetwork(uuid, name) {
+    if (!confirm(`Gespeichertes Profil "${name}" wirklich löschen?`)) return;
     try {
-        const res  = await fetch(`/api/wifi/networks/${encodeURIComponent(uuid)}`, { method: 'DELETE' });
+        const url = uuid
+            ? `/api/wifi/networks/${encodeURIComponent(uuid)}`
+            : `/api/wifi/networks/by-ssid/${encodeURIComponent(name)}`;
+        const res  = await fetch(url, { method: 'DELETE' });
         const data = await res.json();
         if (data.status === 'ok') {
-            await loadSaved();
-            await loadStatus();
+            await Promise.all([loadSaved(), loadStatus(), scan()]);
         }
     } catch (e) {
         // ignore
