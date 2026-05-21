@@ -421,8 +421,10 @@ class _WifiSheetState extends State<_WifiSheet> {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: inUse
-                ? const Color(0xFF1565C0).withValues(alpha: 0.4)
-                : const Color(0xFF30363D),
+                ? const Color(0xFF4CAF50).withValues(alpha: 0.5)
+                : saved
+                    ? const Color(0xFF4FC3F7).withValues(alpha: 0.4)
+                    : const Color(0xFF30363D),
           ),
         ),
         child: Row(children: [
@@ -436,8 +438,8 @@ class _WifiSheetState extends State<_WifiSheet> {
                       fontWeight: inUse ? FontWeight.w600 : FontWeight.normal,
                       color: const Color(0xFFE6EDF3))),
               if (saved && !inUse)
-                const Text('Gespeichert · Gedrückt halten zum Vergessen',
-                    style: TextStyle(fontSize: 10, color: Color(0xFF8B949E))),
+                const Text('Gespeichert',
+                    style: TextStyle(fontSize: 10, color: Color(0xFF4FC3F7))),
             ]),
           ),
           if (security == 'wpa' && !saved)
@@ -445,11 +447,21 @@ class _WifiSheetState extends State<_WifiSheet> {
               padding: EdgeInsets.only(right: 8),
               child: Icon(Icons.lock_outline, size: 14, color: Color(0xFF8B949E)),
             ),
-          if (saved && !inUse)
-            const Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: Icon(Icons.bookmark, size: 14, color: Color(0xFF4FC3F7)),
+          if (saved && !inUse) ...[
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFEF5350),
+                side: const BorderSide(color: Color(0xFF5C1A1A)),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ),
+              onPressed: () => _forgetNetwork(ssid, uuid),
+              child: const Text('Vergessen', style: TextStyle(fontSize: 11)),
             ),
+            const SizedBox(width: 6),
+          ],
           if (inUse)
             const Icon(Icons.check_circle, size: 18, color: Color(0xFF4CAF50))
           else if (isConnecting)
