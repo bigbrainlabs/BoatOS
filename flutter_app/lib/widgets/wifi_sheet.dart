@@ -73,9 +73,10 @@ class _WifiSheetState extends State<_WifiSheet> {
     if (mounted) setState(() => _scanning = false);
   }
 
-  Future<void> _connect(String ssid, String security) async {
+  Future<void> _connect(String ssid, String security, {bool saved = false}) async {
     String password = '';
-    if (security == 'wpa') {
+    // Kein Passwort-Dialog wenn NM das Netz schon kennt
+    if (security == 'wpa' && !saved) {
       final pw = await _showPasswordDialog(ssid);
       if (pw == null || !mounted) return;
       password = pw;
@@ -101,6 +102,44 @@ class _WifiSheetState extends State<_WifiSheet> {
       if (mounted) setState(() => _error = e.toString());
     }
     if (mounted) setState(() => _connecting = null);
+  }
+
+  Future<void> _forgetNetwork(String ssid, String uuid) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text('"$ssid" vergessen?',
+            style: const TextStyle(fontSize: 15, color: Color(0xFFE6EDF3))),
+        content: const Text('Das gespeicherte Profil wird gelöscht.',
+            style: TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen',
+                style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF5350),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Vergessen'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final url = uuid.isNotEmpty
+        ? '$_base/api/wifi/networks/$uuid'
+        : '$_base/api/wifi/networks/by-ssid/$ssid';
+    try {
+      await http.delete(Uri.parse(url)).timeout(const Duration(seconds: 8));
+    } catch (_) {}
+    await _scan();
+    await _loadStatus();
   }
 
   Future<void> _disconnect() async {
@@ -360,15 +399,18 @@ class _WifiSheetState extends State<_WifiSheet> {
   }
 
   Widget _buildNetworkTile(Map<String, dynamic> n) {
-    final ssid     = n['ssid']     as String;
-    final signal   = (n['signal']  as num?)?.toInt() ?? 0;
-    final security = (n['security'] as String?) ?? 'open';
-    final inUse    = n['in_use']   == true;
+    final ssid         = n['ssid']     as String;
+    final signal       = (n['signal']  as num?)?.toInt() ?? 0;
+    final security     = (n['security'] as String?) ?? 'open';
+    final inUse        = n['in_use']   == true;
+    final saved        = n['saved']    == true;
+    final uuid         = (n['uuid']    as String?) ?? '';
     final isConnecting = _connecting == ssid;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: isConnecting ? null : () => _connect(ssid, security),
+      onTap: isConnecting ? null : () => _connect(ssid, security, saved: saved),
+      onLongPress: saved ? () => _forgetNetwork(ssid, uuid) : null,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         margin: const EdgeInsets.only(bottom: 4),
@@ -387,30 +429,36 @@ class _WifiSheetState extends State<_WifiSheet> {
           Icon(_signalIcon(signal), size: 20, color: _signalColor(signal)),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(ssid,
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight:
-                        inUse ? FontWeight.w600 : FontWeight.normal,
-                    color: const Color(0xFFE6EDF3))),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(ssid,
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: inUse ? FontWeight.w600 : FontWeight.normal,
+                      color: const Color(0xFFE6EDF3))),
+              if (saved && !inUse)
+                const Text('Gespeichert · Gedrückt halten zum Vergessen',
+                    style: TextStyle(fontSize: 10, color: Color(0xFF8B949E))),
+            ]),
           ),
-          if (security == 'wpa')
+          if (security == 'wpa' && !saved)
             const Padding(
               padding: EdgeInsets.only(right: 8),
-              child: Icon(Icons.lock_outline,
-                  size: 14, color: Color(0xFF8B949E)),
+              child: Icon(Icons.lock_outline, size: 14, color: Color(0xFF8B949E)),
+            ),
+          if (saved && !inUse)
+            const Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: Icon(Icons.bookmark, size: 14, color: Color(0xFF4FC3F7)),
             ),
           if (inUse)
-            const Icon(Icons.check_circle,
-                size: 18, color: Color(0xFF4CAF50))
+            const Icon(Icons.check_circle, size: 18, color: Color(0xFF4CAF50))
           else if (isConnecting)
             const SizedBox(
                 width: 18, height: 18,
                 child: CircularProgressIndicator(
                     strokeWidth: 2, color: Color(0xFF4FC3F7)))
           else
-            const Icon(Icons.chevron_right,
-                size: 18, color: Color(0xFF8B949E)),
+            const Icon(Icons.chevron_right, size: 18, color: Color(0xFF8B949E)),
         ]),
       ),
     );

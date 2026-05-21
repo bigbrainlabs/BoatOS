@@ -3819,10 +3819,30 @@ async def get_wifi_status():
     except Exception as e:
         return {"connected": False, "ssid": "", "ip": "", "signal": None, "state": str(e)}
 
+def _parse_nmcli_error(stderr: str, stdout: str) -> str:
+    raw = (stderr.strip() or stdout.strip()).lower()
+    if "secrets" in raw or "password" in raw or "psk" in raw:
+        return "Falsches Passwort"
+    if "no network" in raw or "not found" in raw or "could not find" in raw:
+        return "Netzwerk nicht gefunden (außer Reichweite?)"
+    if "timeout" in raw:
+        return "Zeitüberschreitung — Netzwerk zu schwach oder Passwort falsch"
+    if "already" in raw:
+        return "Bereits verbunden"
+    return stderr.strip() or stdout.strip()
+
 @app.get("/api/wifi/scan")
 async def scan_wifi():
-    """WLAN-Netzwerke scannen (mit rescan)"""
+    """WLAN-Netzwerke scannen (mit rescan) — liefert saved+uuid für bekannte Profile"""
     try:
+        # Gespeicherte Profile laden: Name → UUID
+        saved_profiles: dict[str, str] = {}
+        saved_res = _run_nmcli("connection", "show")
+        for line in saved_res.stdout.splitlines():
+            parts = line.split(":")
+            if len(parts) >= 3 and "wifi" in parts[2].lower() and parts[0] != "BoatOS-Hotspot":
+                saved_profiles[parts[0]] = parts[1]  # name (= SSID) → uuid
+
         # fields: IN-USE,SSID,SIGNAL,CHAN,SECURITY — kein BSSID, kein Colon-Problem
         result = _run_nmcli_fields(
             "IN-USE,SSID,SIGNAL,CHAN,SECURITY",
@@ -3856,7 +3876,9 @@ async def scan_wifi():
                 "signal": signal,
                 "security": "open" if not security or security == "--" else "wpa",
                 "in_use": in_use,
-                "channel": chan
+                "channel": chan,
+                "saved": ssid in saved_profiles,
+                "uuid": saved_profiles.get(ssid, ""),
             })
         networks.sort(key=lambda x: x["signal"], reverse=True)
         return {"networks": networks}
@@ -3965,7 +3987,7 @@ async def connect_wifi(request: Request):
         if result.returncode == 0:
             return {"status": "ok", "message": f"Verbunden mit {ssid}"}
         else:
-            err = result.stderr.strip() or result.stdout.strip()
+            err = _parse_nmcli_error(result.stderr, result.stdout)
             # Verbindung fehlgeschlagen → Hotspot sofort neu starten wenn er vorher lief
             if hotspot_was_active:
                 subprocess.run(
@@ -4043,6 +4065,17 @@ async def delete_wifi_network(uuid: str):
     """Gespeichertes WLAN-Profil löschen"""
     try:
         result = _run_nmcli("connection", "delete", uuid, use_sudo=True)
+        if result.returncode == 0:
+            return {"status": "ok"}
+        return {"status": "error", "message": result.stderr.strip()}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.delete("/api/wifi/networks/by-ssid/{ssid}")
+async def delete_wifi_network_by_ssid(ssid: str):
+    """Gespeichertes WLAN-Profil per SSID löschen"""
+    try:
+        result = _run_nmcli("connection", "delete", ssid, use_sudo=True)
         if result.returncode == 0:
             return {"status": "ok"}
         return {"status": "error", "message": result.stderr.strip()}
