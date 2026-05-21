@@ -3763,6 +3763,8 @@ async def toggle_onscreen_keyboard(action: str = "show"):
 
 # ==================== WIFI MANAGEMENT ====================
 
+_WIFI_LOCK = "/tmp/boatos_wifi_connecting"
+
 def _run_nmcli(*args, use_sudo: bool = False, timeout: int = 30) -> subprocess.CompletedProcess:
     cmd = (["sudo"] if use_sudo else []) + ["nmcli", "--terse", "--colors", "no"] + list(args)
     try:
@@ -3881,7 +3883,21 @@ async def get_saved_networks():
 @app.post("/api/wifi/connect")
 async def connect_wifi(request: Request):
     """Mit WLAN-Netzwerk verbinden (neu oder bekannt)"""
+    hotspot_was_active = False
     try:
+        # Merken ob Hotspot vorher aktiv war (für Recovery bei Fehler)
+        hs_check = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME,STATE", "con", "show", "--active"],
+            capture_output=True, text=True, timeout=5
+        )
+        hotspot_was_active = any("BoatOS-Hotspot:activated" in l for l in hs_check.stdout.splitlines())
+
+        # Fallback-Script signalisieren: nicht stören
+        try:
+            open(_WIFI_LOCK, 'w').close()
+        except Exception:
+            pass
+
         body = await request.json()
         ssid     = body.get("ssid", "").strip()
         password = body.get("password", "").strip()
@@ -3950,9 +3966,28 @@ async def connect_wifi(request: Request):
             return {"status": "ok", "message": f"Verbunden mit {ssid}"}
         else:
             err = result.stderr.strip() or result.stdout.strip()
+            # Verbindung fehlgeschlagen → Hotspot sofort neu starten wenn er vorher lief
+            if hotspot_was_active:
+                subprocess.run(
+                    ["nmcli", "connection", "up", "BoatOS-Hotspot"],
+                    capture_output=True, timeout=15
+                )
             return {"status": "error", "message": err}
     except Exception as e:
+        if hotspot_was_active:
+            try:
+                subprocess.run(
+                    ["nmcli", "connection", "up", "BoatOS-Hotspot"],
+                    capture_output=True, timeout=15
+                )
+            except Exception:
+                pass
         return {"status": "error", "message": str(e)}
+    finally:
+        try:
+            os.unlink(_WIFI_LOCK)
+        except Exception:
+            pass
 
 @app.get("/api/wifi/hotspot")
 async def get_hotspot_status():
@@ -3967,6 +4002,41 @@ async def get_hotspot_status():
                 "ip": "192.168.4.1"}
     except Exception as e:
         return {"active": False, "error": str(e)}
+
+@app.post("/api/wifi/hotspot/start")
+async def start_hotspot():
+    """Hotspot manuell starten"""
+    try:
+        # Profil anlegen falls nicht vorhanden
+        iface_res = subprocess.run(
+            ["nmcli", "-t", "-f", "DEVICE,TYPE", "device"],
+            capture_output=True, text=True, timeout=5
+        )
+        iface = next(
+            (l.split(":")[0] for l in iface_res.stdout.splitlines() if l.endswith(":wifi")),
+            "wlan0"
+        )
+        # Sauberer Start: alten Zustand bereinigen
+        _run_nmcli("connection", "down", "BoatOS-Hotspot", use_sudo=True, timeout=5)
+        _run_nmcli("device", "disconnect", iface, use_sudo=True, timeout=8)
+        import time; time.sleep(2)
+        result = _run_nmcli("connection", "up", "BoatOS-Hotspot", use_sudo=True, timeout=20)
+        if result.returncode == 0:
+            return {"status": "ok", "ssid": "BoatOS-Setup", "password": "boatos1234", "ip": "192.168.4.1"}
+        return {"status": "error", "message": result.stderr.strip() or result.stdout.strip()}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/wifi/hotspot/stop")
+async def stop_hotspot():
+    """Hotspot manuell stoppen"""
+    try:
+        result = _run_nmcli("connection", "down", "BoatOS-Hotspot", use_sudo=True, timeout=10)
+        if result.returncode == 0:
+            return {"status": "ok"}
+        return {"status": "error", "message": result.stderr.strip()}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @app.delete("/api/wifi/networks/{uuid}")
 async def delete_wifi_network(uuid: str):

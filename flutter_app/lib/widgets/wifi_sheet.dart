@@ -24,6 +24,7 @@ class _WifiSheet extends StatefulWidget {
 
 class _WifiSheetState extends State<_WifiSheet> {
   Map<String, dynamic>? _status;
+  Map<String, dynamic>? _hotspot;
   List<Map<String, dynamic>> _networks = [];
   bool _loadingStatus = true;
   bool _scanning = false;
@@ -41,12 +42,14 @@ class _WifiSheetState extends State<_WifiSheet> {
   Future<void> _loadStatus() async {
     if (mounted) setState(() => _loadingStatus = true);
     try {
-      final r = await http
-          .get(Uri.parse('$_base/api/wifi/status'))
-          .timeout(const Duration(seconds: 5));
-      if (mounted && r.statusCode == 200) {
+      final results = await Future.wait([
+        http.get(Uri.parse('$_base/api/wifi/status')).timeout(const Duration(seconds: 5)),
+        http.get(Uri.parse('$_base/api/wifi/hotspot')).timeout(const Duration(seconds: 5)),
+      ]);
+      if (mounted) {
         setState(() {
-          _status = json.decode(r.body) as Map<String, dynamic>;
+          if (results[0].statusCode == 200) _status = json.decode(results[0].body) as Map<String, dynamic>;
+          if (results[1].statusCode == 200) _hotspot = json.decode(results[1].body) as Map<String, dynamic>;
         });
       }
     } catch (_) {}
@@ -85,7 +88,7 @@ class _WifiSheetState extends State<_WifiSheet> {
             headers: {'Content-Type': 'application/json'},
             body: json.encode({'ssid': ssid, 'password': password}),
           )
-          .timeout(const Duration(seconds: 25));
+          .timeout(const Duration(seconds: 40));
       if (!mounted) return;
       final data = json.decode(r.body) as Map<String, dynamic>;
       if (data['status'] == 'ok') {
@@ -248,6 +251,8 @@ class _WifiSheetState extends State<_WifiSheet> {
       ));
     }
     final connected = _status?['connected'] == true;
+    final hotspotActive = _hotspot?['active'] == true;
+
     // SSID from status API; fallback to in_use network from scan list
     String ssid = (_status?['ssid'] as String?) ?? '';
     if (ssid.isEmpty && connected) {
@@ -256,68 +261,101 @@ class _WifiSheetState extends State<_WifiSheet> {
         orElse: () => {},
       )['ssid'] as String?) ?? '';
     }
-    final ip       = (_status?['ip']     as String?) ?? '';
-    final signal   = (_status?['signal'] as int?);
+    final ip     = (_status?['ip']     as String?) ?? '';
+    final signal = (_status?['signal'] as int?);
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: connected
-              ? const Color(0xFF1565C0).withValues(alpha: 0.5)
-              : const Color(0xFF30363D),
-        ),
-      ),
-      child: Row(children: [
-        Icon(
-          connected ? Icons.wifi : Icons.wifi_off,
-          color: connected
-              ? const Color(0xFF4FC3F7)
-              : const Color(0xFF8B949E),
-          size: 28,
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: connected
-              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(ssid.isNotEmpty ? ssid : 'Verbunden',
-                      style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w600,
-                          color: Color(0xFFE6EDF3))),
-                  if (ip.isNotEmpty)
-                    Text(ip,
-                        style: const TextStyle(
-                            fontSize: 12, color: Color(0xFF8B949E))),
-                  if (signal != null)
-                    Text('Signal: $signal%',
-                        style: TextStyle(
-                            fontSize: 12, color: _signalColor(signal))),
-                ])
-              : const Text('Nicht verbunden',
-                  style: TextStyle(fontSize: 14, color: Color(0xFF8B949E))),
-        ),
-        if (connected)
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFFEF5350),
-              side: const BorderSide(color: Color(0xFF5C1A1A)),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF161B22),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: connected
+                  ? const Color(0xFF1565C0).withValues(alpha: 0.5)
+                  : hotspotActive
+                      ? const Color(0xFFFF9800).withValues(alpha: 0.5)
+                      : const Color(0xFF30363D),
             ),
-            onPressed: _disconnecting ? null : _disconnect,
-            child: _disconnecting
-                ? const SizedBox(
-                    width: 14, height: 14,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Color(0xFFEF5350)))
-                : const Text('Trennen', style: TextStyle(fontSize: 12)),
           ),
-      ]),
+          child: Row(children: [
+            Icon(
+              connected ? Icons.wifi : Icons.wifi_off,
+              color: connected
+                  ? const Color(0xFF4FC3F7)
+                  : const Color(0xFF8B949E),
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: connected
+                  ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(ssid.isNotEmpty ? ssid : 'Verbunden',
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600,
+                              color: Color(0xFFE6EDF3))),
+                      if (ip.isNotEmpty)
+                        Text(ip,
+                            style: const TextStyle(
+                                fontSize: 12, color: Color(0xFF8B949E))),
+                      if (signal != null)
+                        Text('Signal: $signal%',
+                            style: TextStyle(
+                                fontSize: 12, color: _signalColor(signal))),
+                    ])
+                  : const Text('Nicht verbunden',
+                      style: TextStyle(fontSize: 14, color: Color(0xFF8B949E))),
+            ),
+            if (connected)
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFEF5350),
+                  side: const BorderSide(color: Color(0xFF5C1A1A)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
+                ),
+                onPressed: _disconnecting ? null : _disconnect,
+                child: _disconnecting
+                    ? const SizedBox(
+                        width: 14, height: 14,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Color(0xFFEF5350)))
+                    : const Text('Trennen', style: TextStyle(fontSize: 12)),
+              ),
+          ]),
+        ),
+        // Hotspot-Banner wenn offline + Hotspot aktiv
+        if (!connected && hotspotActive) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2D1E00),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFFF9800).withValues(alpha: 0.4)),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Row(children: [
+                Icon(Icons.wifi_tethering, size: 14, color: Color(0xFFFF9800)),
+                SizedBox(width: 6),
+                Text('Fallback-Hotspot aktiv',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                        color: Color(0xFFFF9800))),
+              ]),
+              const SizedBox(height: 4),
+              Text(
+                'SSID: ${_hotspot!['ssid']}  ·  Passwort: ${_hotspot!['password']}  ·  IP: ${_hotspot!['ip']}',
+                style: const TextStyle(fontSize: 11, color: Color(0xFFCCCCCC)),
+              ),
+            ]),
+          ),
+        ],
+      ],
     );
   }
 
