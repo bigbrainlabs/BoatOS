@@ -3840,13 +3840,15 @@ async def scan_wifi():
         saved_res = _run_nmcli("connection", "show")
         for line in saved_res.stdout.splitlines():
             parts = line.split(":")
-            if len(parts) >= 3 and "wifi" in parts[2].lower() and parts[0] != "BoatOS-Hotspot":
+            if len(parts) >= 3 and "wireless" in parts[2].lower() and parts[0] != "BoatOS-Hotspot":
                 saved_profiles[parts[0]] = parts[1]  # name (= SSID) → uuid
 
-        # fields: IN-USE,SSID,SIGNAL,CHAN,SECURITY — kein BSSID, kein Colon-Problem
+        # Rescan braucht sudo; danach ohne --rescan listen
+        _run_nmcli("device", "wifi", "rescan", "ifname", "wlan0", use_sudo=True, timeout=8)
+        await asyncio.sleep(2)
         result = _run_nmcli_fields(
             "IN-USE,SSID,SIGNAL,CHAN,SECURITY",
-            "device", "wifi", "list", "ifname", "wlan0", "--rescan", "yes"
+            "device", "wifi", "list", "ifname", "wlan0"
         )
         networks = []
         seen_ssids = set()
