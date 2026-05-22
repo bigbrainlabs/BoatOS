@@ -565,24 +565,30 @@ class _WifiSheetState extends State<_WifiSheet> {
 
 // ── Password dialog ───────────────────────────────────────────────────────────
 
-class _PasswordDialog extends StatelessWidget {
+class _PasswordDialog extends StatefulWidget {
   final String ssid;
   final TextEditingController ctrl;
   const _PasswordDialog({required this.ssid, required this.ctrl});
+  @override
+  State<_PasswordDialog> createState() => _PasswordDialogState();
+}
+
+class _PasswordDialogState extends State<_PasswordDialog> {
+  bool _obscure = true;
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: const Color(0xFF161B22),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      title: Text('Verbinden mit "$ssid"',
+      title: Text('Verbinden mit "${widget.ssid}"',
           style: const TextStyle(fontSize: 15, color: Color(0xFFE6EDF3))),
       content: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => showKeyboard(context, ctrl,
-            obscure: true, label: 'WLAN-Passwort'),
+        onTap: () => showKeyboard(context, widget.ctrl,
+            obscure: _obscure, label: 'WLAN-Passwort'),
         child: ValueListenableBuilder<TextEditingValue>(
-          valueListenable: ctrl,
+          valueListenable: widget.ctrl,
           builder: (_, v, __) => Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
@@ -593,7 +599,9 @@ class _PasswordDialog extends StatelessWidget {
             child: Row(children: [
               Expanded(
                 child: Text(
-                  v.text.isEmpty ? 'Passwort eingeben…' : '•' * v.text.length,
+                  v.text.isEmpty
+                      ? 'Passwort eingeben…'
+                      : _obscure ? '•' * v.text.length : v.text,
                   style: TextStyle(
                       fontSize: 14,
                       color: v.text.isEmpty
@@ -601,8 +609,14 @@ class _PasswordDialog extends StatelessWidget {
                           : const Color(0xFFE6EDF3)),
                 ),
               ),
-              const Icon(Icons.keyboard,
-                  size: 16, color: Color(0xFF8B949E)),
+              GestureDetector(
+                onTap: () => setState(() => _obscure = !_obscure),
+                child: Icon(
+                  _obscure ? Icons.visibility_off : Icons.visibility,
+                  size: 18, color: const Color(0xFF8B949E)),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.keyboard, size: 16, color: Color(0xFF8B949E)),
             ]),
           ),
         ),
@@ -619,7 +633,7 @@ class _PasswordDialog extends StatelessWidget {
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8)),
           ),
-          onPressed: () => Navigator.pop(context, ctrl.text),
+          onPressed: () => Navigator.pop(context, widget.ctrl.text),
           child: const Text('Verbinden'),
         ),
       ],

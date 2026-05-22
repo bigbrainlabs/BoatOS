@@ -3942,15 +3942,16 @@ async def connect_wifi(request: Request):
         _run_nmcli("device", "disconnect", iface, use_sudo=True, timeout=5)
 
         if password:
-            # Write .nmconnection file directly to /etc/ to bypass the netplan
-            # plugin, which routes `nmcli connection add` into /run/ (volatile,
-            # read-only for NM) and causes psk-flags to be ignored → NM asks
-            # for secrets again at activation time even though they're stored.
+            import uuid as _uuid
             safe_name = ssid.replace("/", "_").replace("\x00", "")
             conn_path = f"/etc/NetworkManager/system-connections/{safe_name}.nmconnection"
+            # Frischer UUID verhindert dass NM den alten State-Cache recycelt
+            # und dabei psk-flags=1 (ask) aus dem Cache übernimmt → PSK wird ignoriert
+            fresh_uuid = str(_uuid.uuid4())
             nm_conf = (
                 "[connection]\n"
                 f"id={ssid}\n"
+                f"uuid={fresh_uuid}\n"
                 "type=wifi\n"
                 "autoconnect=true\n\n"
                 "[wifi]\n"
@@ -3966,8 +3967,10 @@ async def connect_wifi(request: Request):
                 "method=auto\n"
                 "addr-gen-mode=default\n"
             )
-            # Delete old profile and write fresh file
+            # Altes Profil + NM-State-Cache löschen, dann frische Datei
             _run_nmcli("connection", "delete", ssid, use_sudo=True, timeout=8)
+            subprocess.run(["sudo", "rm", "-f",
+                f"/var/lib/NetworkManager/seen-bssids"], capture_output=True)
             write = subprocess.run(
                 ["sudo", "bash", "-c",
                  f"cat > {conn_path} && chmod 600 {conn_path}"],
@@ -3976,6 +3979,7 @@ async def connect_wifi(request: Request):
             if write.returncode != 0:
                 return {"status": "error", "message": write.stderr.strip()}
             _run_nmcli("connection", "reload", use_sudo=True, timeout=8)
+            await asyncio.sleep(1)
             result = _run_nmcli("connection", "up", "id", ssid, use_sudo=True, timeout=30)
         else:
             # Gespeichertes Profil vorhanden? → connection up (kein Rescan nötig,
