@@ -66,6 +66,9 @@ class _MainShellState extends State<MainShell> {
   LogbookService? _logbookSvc;
   bool _updateAvailable = false;
   Timer? _updateCheckTimer;
+  Map<String, dynamic>? _hotspotInfo;
+  bool _hotspotDismissed = false;
+  Timer? _hotspotTimer;
 
   final List<Widget> _screens = const [
     MapScreen(),
@@ -78,6 +81,24 @@ class _MainShellState extends State<MainShell> {
     super.initState();
     _checkForUpdate();
     _updateCheckTimer = Timer.periodic(const Duration(hours: 6), (_) => _checkForUpdate());
+    _checkHotspot();
+    _hotspotTimer = Timer.periodic(const Duration(seconds: 30), (_) => _checkHotspot());
+  }
+
+  Future<void> _checkHotspot() async {
+    try {
+      final res = await http
+          .get(Uri.parse('http://localhost:8000/api/wifi/hotspot'))
+          .timeout(const Duration(seconds: 5));
+      if (res.statusCode == 200 && mounted) {
+        final d = json.decode(res.body) as Map<String, dynamic>;
+        final active = d['active'] == true;
+        setState(() {
+          _hotspotInfo = active ? d : null;
+          if (!active) _hotspotDismissed = false;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _checkForUpdate() async {
@@ -116,16 +137,72 @@ class _MainShellState extends State<MainShell> {
   @override
   void dispose() {
     _updateCheckTimer?.cancel();
+    _hotspotTimer?.cancel();
     _logbookSvc?.removeListener(_onLogbook);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final hotspot = _hotspotInfo;
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: _currentIndex,
+            children: _screens,
+          ),
+          if (hotspot != null && !_hotspotDismissed)
+            Positioned(
+              top: 16,
+              left: 16,
+              right: 16,
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 12, 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1200),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFF9800).withValues(alpha: 0.7)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        const Icon(Icons.wifi_tethering, size: 16, color: Color(0xFFFF9800)),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text('Fallback-Hotspot aktiv',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFFF9800))),
+                        ),
+                        GestureDetector(
+                          onTap: () => setState(() => _hotspotDismissed = true),
+                          child: const Icon(Icons.close, size: 18, color: Color(0xFF8B949E)),
+                        ),
+                      ]),
+                      const SizedBox(height: 10),
+                      _HotspotInfoRow(label: 'SSID', value: hotspot['ssid'] as String? ?? ''),
+                      const SizedBox(height: 4),
+                      _HotspotInfoRow(label: 'Passwort', value: hotspot['password'] as String? ?? ''),
+                      const SizedBox(height: 4),
+                      _HotspotInfoRow(label: 'IP', value: hotspot['ip'] as String? ?? '192.168.4.1'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       bottomNavigationBar: Stack(
         clipBehavior: Clip.none,
@@ -285,6 +362,33 @@ class _ShutdownNavButtonState extends State<_ShutdownNavButton> {
                 size: 20, color: Color(0xFFEF5350)),
       ),
     );
+  }
+}
+
+// ── Hotspot info row ─────────────────────────────────────────────────────────
+
+class _HotspotInfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _HotspotInfoRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      SizedBox(
+        width: 72,
+        child: Text(label,
+            style: const TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
+      ),
+      Expanded(
+        child: Text(value,
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFE6EDF3),
+                fontFamily: 'monospace')),
+      ),
+    ]);
   }
 }
 

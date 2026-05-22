@@ -30,6 +30,7 @@ class _WifiSheetState extends State<_WifiSheet> {
   bool _scanning = false;
   String? _connecting;
   bool _disconnecting = false;
+  bool _reiniting = false;
   String? _error;
 
   @override
@@ -142,6 +143,20 @@ class _WifiSheetState extends State<_WifiSheet> {
     await _loadStatus();
   }
 
+  Future<void> _reinitAdapter() async {
+    setState(() { _reiniting = true; _error = null; });
+    try {
+      await http
+          .post(Uri.parse('$_base/api/wifi/reinit'))
+          .timeout(const Duration(seconds: 15));
+      await _loadStatus();
+      await _scan();
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    }
+    if (mounted) setState(() => _reiniting = false);
+  }
+
   Future<void> _disconnect() async {
     setState(() { _disconnecting = true; _error = null; });
     try {
@@ -207,6 +222,18 @@ class _WifiSheetState extends State<_WifiSheet> {
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
                       color: Color(0xFFE6EDF3))),
               const Spacer(),
+              Tooltip(
+                message: 'Adapter neu starten',
+                child: IconButton(
+                  icon: _reiniting
+                      ? const SizedBox(
+                          width: 18, height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Color(0xFF8B949E)))
+                      : const Icon(Icons.restart_alt, color: Color(0xFF8B949E)),
+                  onPressed: _reiniting ? null : _reinitAdapter,
+                ),
+              ),
               IconButton(
                 icon: const Icon(Icons.close, color: Color(0xFF8B949E)),
                 onPressed: () => Navigator.pop(context),

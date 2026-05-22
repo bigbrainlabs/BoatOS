@@ -298,6 +298,22 @@ export async function forgetNetwork(uuid, name) {
     }
 }
 
+// ==================== REINIT ====================
+
+export async function reinitAdapter() {
+    const btn = document.getElementById('btn-wifi-reinit');
+    if (btn) { btn.disabled = true; btn.textContent = 'Adapter wird neu gestartet…'; }
+    try {
+        await fetch('/api/wifi/reinit', { method: 'POST' });
+        await loadStatus();
+        await scan();
+    } catch (e) {
+        // ignore
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '↺ Adapter neu starten'; }
+    }
+}
+
 // ==================== DISCONNECT ====================
 
 export async function disconnect() {

@@ -4090,6 +4090,18 @@ async def delete_wifi_network_by_ssid(ssid: str):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+@app.post("/api/wifi/reinit")
+async def reinit_wifi():
+    """WLAN-Adapter neu initialisieren (radio off/on) — hilft bei BCM43xx-Hängern"""
+    try:
+        _run_nmcli("radio", "wifi", "off", use_sudo=True, timeout=6)
+        await asyncio.sleep(2)
+        _run_nmcli("radio", "wifi", "on", use_sudo=True, timeout=6)
+        await asyncio.sleep(3)
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.post("/api/wifi/disconnect")
 async def disconnect_wifi():
     """WLAN trennen"""
