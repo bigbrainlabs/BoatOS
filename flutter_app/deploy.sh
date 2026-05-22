@@ -6,10 +6,10 @@ FLUTTERPI_TOOL="$LOCALAPPDATA/Pub/Cache/bin/flutterpi_tool.bat"
 PI_HOST="arielle@192.168.2.222"
 PI_KEY="$HOME/.ssh/id_rsa_boatos"
 PI_DEST="/home/arielle/BoatOS/flutter_app"
-BUILD_DIR="build/flutter-pi/pi4-64"
+BUILD_DIR="build/flutter-pi/aarch64-generic"
 
-echo "==> Building for Pi4 ARM64 (release)..."
-"$FLUTTERPI_TOOL" build --arch=arm64 --cpu=pi4 --release
+echo "==> Building for ARM64 generic (Pi3/Pi4/Pi5/Zero2W)..."
+"$FLUTTERPI_TOOL" build --arch=arm64 --cpu=generic --release
 
 echo "==> Deploying to Pi..."
 ssh -i "$PI_KEY" "$PI_HOST" "mkdir -p $PI_DEST"
