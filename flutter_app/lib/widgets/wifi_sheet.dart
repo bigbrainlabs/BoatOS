@@ -437,9 +437,9 @@ class _WifiSheetState extends State<_WifiSheet> {
                       fontSize: 14,
                       fontWeight: inUse ? FontWeight.w600 : FontWeight.normal,
                       color: const Color(0xFFE6EDF3))),
-              if (saved && !inUse)
-                const Text('Gespeichert',
-                    style: TextStyle(fontSize: 10, color: Color(0xFF4FC3F7))),
+              if (saved)
+                Text(inUse ? 'Verbunden · Gespeichert' : 'Gespeichert',
+                    style: const TextStyle(fontSize: 10, color: Color(0xFF4FC3F7))),
             ]),
           ),
           if (security == 'wpa' && !saved)
@@ -447,7 +447,7 @@ class _WifiSheetState extends State<_WifiSheet> {
               padding: EdgeInsets.only(right: 8),
               child: Icon(Icons.lock_outline, size: 14, color: Color(0xFF8B949E)),
             ),
-          if (saved && !inUse) ...[
+          if (saved) ...[
             OutlinedButton(
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFFEF5350),
