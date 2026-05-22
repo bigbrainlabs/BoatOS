@@ -180,12 +180,27 @@ class _MainShellState extends State<MainShell> {
                         const Icon(Icons.wifi_tethering, size: 16, color: Color(0xFFFF9800)),
                         const SizedBox(width: 8),
                         const Expanded(
-                          child: Text('Fallback-Hotspot aktiv',
+                          child: Text('Hotspot aktiv',
                               style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
                                   color: Color(0xFFFF9800))),
                         ),
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF8B949E),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed: () async {
+                            await http.post(Uri.parse('http://localhost:8000/api/wifi/hotspot/stop'))
+                                .timeout(const Duration(seconds: 10));
+                            if (mounted) setState(() { _hotspotInfo = null; _hotspotDismissed = false; });
+                          },
+                          child: const Text('Stoppen', style: TextStyle(fontSize: 12)),
+                        ),
+                        const SizedBox(width: 4),
                         GestureDetector(
                           onTap: () => setState(() => _hotspotDismissed = true),
                           child: const Icon(Icons.close, size: 18, color: Color(0xFF8B949E)),

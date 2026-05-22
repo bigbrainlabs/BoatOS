@@ -1268,10 +1268,20 @@
                         style="display:none; width:100%; padding:10px; background:var(--danger); color:#fff; border:none; border-radius:8px; font-size:14px; cursor:pointer;">
                         Trennen
                     </button>
-                    <button onclick="BoatOS.wifi.reinitAdapter()" id="btn-wifi-reinit"
-                        style="width:100%; padding:10px; background:transparent; color:var(--text-dim); border:1px solid var(--border); border-radius:8px; font-size:13px; cursor:pointer; margin-top:8px;">
-                        ↺ Adapter neu starten
-                    </button>
+                    <div style="display:flex; gap:8px; margin-top:8px;">
+                        <button onclick="BoatOS.wifi.startHotspot()" id="btn-hotspot-start"
+                            style="flex:1; padding:10px; background:transparent; color:#FF9800; border:1px solid #5C2D00; border-radius:8px; font-size:13px; cursor:pointer;">
+                            📡 Hotspot starten
+                        </button>
+                        <button onclick="BoatOS.wifi.stopHotspot()" id="btn-hotspot-stop"
+                            style="display:none; flex:1; padding:10px; background:transparent; color:var(--text-dim); border:1px solid var(--border); border-radius:8px; font-size:13px; cursor:pointer;">
+                            Stoppen
+                        </button>
+                        <button onclick="BoatOS.wifi.reinitAdapter()" id="btn-wifi-reinit"
+                            style="flex:1; padding:10px; background:transparent; color:var(--text-dim); border:1px solid var(--border); border-radius:8px; font-size:13px; cursor:pointer;">
+                            ↺ Adapter neu starten
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Scan -->

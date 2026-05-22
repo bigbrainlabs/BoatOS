@@ -31,6 +31,7 @@ class _WifiSheetState extends State<_WifiSheet> {
   String? _connecting;
   bool _disconnecting = false;
   bool _reiniting = false;
+  bool _hotspotBusy = false;
   String? _error;
 
   @override
@@ -141,6 +142,19 @@ class _WifiSheetState extends State<_WifiSheet> {
     } catch (_) {}
     await _scan();
     await _loadStatus();
+  }
+
+  Future<void> _toggleHotspot(bool start) async {
+    setState(() { _hotspotBusy = true; _error = null; });
+    try {
+      await http
+          .post(Uri.parse('$_base/api/wifi/hotspot/${start ? "start" : "stop"}'))
+          .timeout(const Duration(seconds: 15));
+      await _loadStatus();
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    }
+    if (mounted) setState(() => _hotspotBusy = false);
   }
 
   Future<void> _reinitAdapter() async {
@@ -374,6 +388,22 @@ class _WifiSheetState extends State<_WifiSheet> {
                   : const Text('Nicht verbunden',
                       style: TextStyle(fontSize: 14, color: Color(0xFF8B949E))),
             ),
+            if (!connected && !hotspotActive)
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFFF9800),
+                  side: const BorderSide(color: Color(0xFF5C2D00)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+                onPressed: _hotspotBusy ? null : () => _toggleHotspot(true),
+                child: _hotspotBusy
+                    ? const SizedBox(width: 14, height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF9800)))
+                    : const Text('Hotspot starten', style: TextStyle(fontSize: 12)),
+              ),
             if (connected)
               OutlinedButton(
                 style: OutlinedButton.styleFrom(
@@ -399,25 +429,41 @@ class _WifiSheetState extends State<_WifiSheet> {
         if (!connected && hotspotActive) ...[
           const SizedBox(height: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
             decoration: BoxDecoration(
               color: const Color(0xFF2D1E00),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: const Color(0xFFFF9800).withValues(alpha: 0.4)),
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Row(children: [
-                Icon(Icons.wifi_tethering, size: 14, color: Color(0xFFFF9800)),
-                SizedBox(width: 6),
-                Text('Fallback-Hotspot aktiv',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-                        color: Color(0xFFFF9800))),
+              Row(children: [
+                const Icon(Icons.wifi_tethering, size: 14, color: Color(0xFFFF9800)),
+                const SizedBox(width: 6),
+                const Expanded(
+                  child: Text('Hotspot aktiv',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                          color: Color(0xFFFF9800))),
+                ),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF8B949E),
+                    side: const BorderSide(color: Color(0xFF30363D)),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                  onPressed: _hotspotBusy ? null : () => _toggleHotspot(false),
+                  child: const Text('Stoppen', style: TextStyle(fontSize: 11)),
+                ),
               ]),
-              const SizedBox(height: 4),
-              Text(
-                'SSID: ${_hotspot!['ssid']}  ·  Passwort: ${_hotspot!['password']}  ·  IP: ${_hotspot!['ip']}',
-                style: const TextStyle(fontSize: 11, color: Color(0xFFCCCCCC)),
-              ),
+              const SizedBox(height: 6),
+              Text('SSID: ${_hotspot!['ssid']}',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFFCCCCCC))),
+              Text('Passwort: ${_hotspot!['password']}',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFFCCCCCC))),
+              Text('IP: ${_hotspot!['ip']}',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFFCCCCCC))),
             ]),
           ),
         ],

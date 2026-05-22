@@ -31,17 +31,40 @@ export async function loadStatus() {
 
 function _renderHotspotBanner(hotspot) {
     const existing = document.getElementById('hotspot-banner');
-    if (!hotspot?.active) { if (existing) existing.remove(); return; }
-    if (existing) return;
+    if (!hotspot?.active) {
+        if (existing) existing.remove();
+        const startBtn = document.getElementById('btn-hotspot-start');
+        if (startBtn) startBtn.style.display = 'block';
+        const stopBtn  = document.getElementById('btn-hotspot-stop');
+        if (stopBtn)  stopBtn.style.display = 'none';
+        return;
+    }
+    // Hotspot aktiv — Start-Button verstecken, Stop zeigen
+    const startBtn = document.getElementById('btn-hotspot-start');
+    if (startBtn) startBtn.style.display = 'none';
+    const stopBtn = document.getElementById('btn-hotspot-stop');
+    if (stopBtn) stopBtn.style.display = 'block';
+
+    if (existing) {
+        // Infos aktualisieren ohne neu zu bauen
+        const info = existing.querySelector('.hotspot-info');
+        if (info) info.innerHTML = _hotspotInfoHtml(hotspot);
+        return;
+    }
     const banner = document.createElement('div');
     banner.id = 'hotspot-banner';
-    banner.style.cssText = 'background:#F59E0B;color:#1A1200;padding:10px 16px;border-radius:8px;' +
-        'margin-bottom:12px;font-size:13px;font-weight:600;line-height:1.5;';
-    banner.innerHTML = `⚠️ Kein WLAN gefunden — Fallback-Hotspot aktiv<br>` +
-        `<span style="font-weight:400">SSID: <b>${hotspot.ssid}</b> &nbsp;·&nbsp; ` +
-        `Passwort: <b>${hotspot.password}</b> &nbsp;·&nbsp; BoatOS: <b>${hotspot.ip}</b></span>`;
+    banner.style.cssText = 'background:#2D1E00;border:1px solid rgba(255,152,0,0.5);color:#E6EDF3;' +
+        'padding:12px 14px;border-radius:8px;margin-bottom:12px;font-size:13px;line-height:1.6;';
+    banner.innerHTML =
+        `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">` +
+        `<span style="color:#FF9800;font-weight:700;">📡 Hotspot aktiv</span></div>` +
+        `<div class="hotspot-info" style="font-size:12px;color:#CCC;">${_hotspotInfoHtml(hotspot)}</div>`;
     const group = document.querySelector('#settings-wifi .setting-group');
     if (group) group.prepend(banner);
+}
+
+function _hotspotInfoHtml(h) {
+    return `SSID: <b>${h.ssid}</b><br>Passwort: <b>${h.password}</b><br>IP: <b>${h.ip}</b>`;
 }
 
 function renderStatus(data) {
@@ -295,6 +318,32 @@ export async function forgetNetwork(uuid, name) {
         }
     } catch (e) {
         // ignore
+    }
+}
+
+// ==================== HOTSPOT ====================
+
+export async function startHotspot() {
+    const btn = document.getElementById('btn-hotspot-start');
+    if (btn) { btn.disabled = true; btn.textContent = 'Starte…'; }
+    try {
+        await fetch('/api/wifi/hotspot/start', { method: 'POST' });
+        await loadStatus();
+    } catch (e) { /* ignore */ }
+    finally {
+        if (btn) { btn.disabled = false; btn.textContent = '📡 Hotspot starten'; }
+    }
+}
+
+export async function stopHotspot() {
+    const btn = document.getElementById('btn-hotspot-stop');
+    if (btn) { btn.disabled = true; btn.textContent = 'Stoppe…'; }
+    try {
+        await fetch('/api/wifi/hotspot/stop', { method: 'POST' });
+        await loadStatus();
+    } catch (e) { /* ignore */ }
+    finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Stoppen'; }
     }
 }
 
