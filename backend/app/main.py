@@ -3984,13 +3984,8 @@ async def connect_wifi(request: Request):
             if has_profile.returncode == 0:
                 result = _run_nmcli("connection", "up", "id", ssid, use_sudo=True, timeout=25)
             else:
-                # Kein Profil → scan + connect
-                _run_nmcli("device", "wifi", "rescan", "ifname", iface, use_sudo=True, timeout=10)
-                result = _run_nmcli("device", "wifi", "connect", ssid,
-                                    "ifname", iface, use_sudo=True, timeout=25)
-                if result.returncode == 0:
-                    _run_nmcli("connection", "modify", "id", ssid,
-                               "connection.autoconnect", "yes", use_sudo=True, timeout=5)
+                # Kein Profil + kein Passwort → Client muss Passwort nachliefern
+                return {"status": "error", "message": "Passwort erforderlich", "needs_password": True}
 
         if result.returncode == 0:
             return {"status": "ok", "message": f"Verbunden mit {ssid}"}

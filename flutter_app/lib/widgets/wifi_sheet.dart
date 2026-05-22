@@ -97,6 +97,13 @@ class _WifiSheetState extends State<_WifiSheet> {
       if (data['status'] == 'ok') {
         await _loadStatus();
         await _scan();
+      } else if (data['needs_password'] == true) {
+        // Backend sagt: kein Profil, Passwort nötig → Dialog nachträglich zeigen
+        if (mounted) setState(() => _connecting = null);
+        final pw = await _showPasswordDialog(ssid);
+        if (pw == null || !mounted) return;
+        await _connect(ssid, security, saved: false);
+        return;
       } else {
         setState(() => _error = data['message'] as String?);
       }
@@ -134,6 +141,12 @@ class _WifiSheetState extends State<_WifiSheet> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    // Sofort lokal als "nicht gespeichert" markieren — verhindert Race beim Scan
+    setState(() {
+      _networks = _networks.map((n) =>
+          n['ssid'] == ssid ? {...n, 'saved': false, 'uuid': ''} : n
+      ).toList();
+    });
     final url = uuid.isNotEmpty
         ? '$_base/api/wifi/networks/$uuid'
         : '$_base/api/wifi/networks/by-ssid/$ssid';
