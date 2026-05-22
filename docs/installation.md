@@ -143,7 +143,7 @@ sudo systemctl enable --now signalk
 sudo systemctl enable --now mosquitto
 ```
 
-**Tileserver** (Karten) und **OSRM** (Routing) sind für vollständige Offline-Navigation nötig — Anleitung folgt.
+**Tileserver** (Karten) und **OSRM** (Routing) sind für vollständige Offline-Navigation nötig — siehe [tileserver.md](tileserver.md) und [osrm.md](osrm.md).
 
 > **Online-Betrieb ohne Tileserver:** Das Satellitenbild (ESRI) und die nautischen Overlays (OpenSeaMap) laden aus dem Internet. Die Basiskarte (Flüsse, Straßen, Küsten) und das OSRM-Routing funktionieren **nur lokal** — ohne Tileserver/OSRM erscheint nur ein grauer Hintergrund, kein Routing.
 
