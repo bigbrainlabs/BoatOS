@@ -28,6 +28,8 @@ Dokumentiert als lebendiges Projekt — zum Nachbauen, Verstehen und Weiterentwi
 [![Amazon DE](https://img.shields.io/badge/Buch_🇩🇪-Amazon-FF9900?style=for-the-badge&logo=amazon)](https://www.amazon.de/dp/B0GLXGD8LB?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
 &nbsp;
 [![Amazon EN](https://img.shields.io/badge/Buch_🇬🇧-Amazon-FF9900?style=for-the-badge&logo=amazon)](https://www.amazon.de/dp/B0GMD5JH28?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
+&nbsp;
+[![Facebook](https://img.shields.io/badge/Auf_dem_Laufenden_bleiben-Facebook-1877F2?style=for-the-badge&logo=facebook)](https://www.facebook.com/profile.php?id=61590360750363)
 
 *Schritt-für-Schritt Dokumentation · Schaltpläne · Code · Erfahrungsberichte*
 
