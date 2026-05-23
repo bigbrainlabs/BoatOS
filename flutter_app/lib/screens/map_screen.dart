@@ -162,6 +162,7 @@ class _MapScreenState extends State<MapScreen> {
   bool _autoFollow = true;
   Style? _mapStyle;
   String? _styleError;
+  bool _usingOnlineFallback = false;
 
   // Layer toggles
   bool _showSeamarks = true;
@@ -323,7 +324,27 @@ class _MapScreenState extends State<MapScreen> {
   // Style
   // -------------------------------------------------------------------------
 
-  void _buildStyle() {
+  Future<void> _buildStyle() async {
+    bool tileserverOk = false;
+    try {
+      final resp = await http
+          .head(Uri.parse('http://localhost:8081/germany'))
+          .timeout(const Duration(seconds: 2));
+      tileserverOk = resp.statusCode < 500;
+    } catch (_) {
+      tileserverOk = false;
+    }
+
+    if (!tileserverOk) {
+      if (mounted) {
+        setState(() {
+          _styleError = 'offline';
+          _usingOnlineFallback = true;
+        });
+      }
+      return;
+    }
+
     try {
       final theme = ThemeReader().read(_v1Style());
       final providers = TileProviders({
@@ -333,12 +354,15 @@ class _MapScreenState extends State<MapScreen> {
           minimumZoom: 0,
         ),
       });
-      setState(() {
-        _mapStyle = Style(theme: theme, providers: providers);
-        _styleError = null;
-      });
+      if (mounted) {
+        setState(() {
+          _mapStyle = Style(theme: theme, providers: providers);
+          _styleError = null;
+          _usingOnlineFallback = false;
+        });
+      }
     } catch (e) {
-      setState(() => _styleError = e.toString());
+      if (mounted) setState(() => _styleError = e.toString());
       debugPrint('Style error: $e');
     }
   }
@@ -1184,15 +1208,14 @@ class _MapScreenState extends State<MapScreen> {
                 theme: _mapStyle!.theme,
                 layerMode: VectorTileLayerMode.raster,
               )
-            else if (!_satelliteMode && _styleError != null)
-              ColoredBox(
-                color: const Color(0xFFE0E0E0),
-                child: Center(
-                  child: Text(_styleError!,
-                      style:
-                          const TextStyle(color: Colors.red, fontSize: 12)),
-                ),
+            else if (!_satelliteMode && _usingOnlineFallback)
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'de.boatos.ui',
+                tileDimension: 256,
               )
+            else if (!_satelliteMode && _styleError != null)
+              const ColoredBox(color: Color(0xFFE0E0E0))
             else if (!_satelliteMode)
               const ColoredBox(color: Color(0xFFE0E0E0)),
 
@@ -1534,6 +1557,28 @@ class _MapScreenState extends State<MapScreen> {
             ],
           ),
         ),
+
+        // Online-Fallback badge (shown when tileserver is unavailable)
+        if (_usingOnlineFallback)
+          Positioned(
+            top: sc(8),
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: sc(10), vertical: sc(4)),
+                decoration: BoxDecoration(
+                  color: const Color(0xDD1A1A1A),
+                  borderRadius: BorderRadius.circular(sc(6)),
+                  border: Border.all(color: const Color(0x55FFB74D)),
+                ),
+                child: Text(
+                  '⚠ Offline-Karten nicht verfügbar · Online-Fallback (OpenStreetMap)',
+                  style: TextStyle(color: const Color(0xFFFFB74D), fontSize: sc(11)),
+                ),
+              ),
+            ),
+          ),
 
         // ----------------------------------------------------------------
         // Bottom-right FAB stack: satellite toggle + auto-follow

@@ -791,7 +791,7 @@ export async function calculateRoute(context) {
                 const routingType = routeData.properties?.routing_type || 'waterway';
 
                 if (routingType === 'direct' || !isWaterwayRouted) {
-                    console.log('Verwende direkte Route (ENC-Routing nicht verfügbar)');
+                    if (showNotification) showNotification('Wasserweg-Routing nicht verfügbar — Luftlinie wird verwendet', 'warning');
                     drawDirectRoute(context);
                     if (hideRoutingLoader) hideRoutingLoader();
                     return;

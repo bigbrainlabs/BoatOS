@@ -692,8 +692,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         initKeyboard();
     }
 
-    // Karte initialisieren
-    const mapInstance = mapModule.initMap({
+    // Karte initialisieren (async — prüft Tileserver-Verfügbarkeit)
+    const mapInstance = await mapModule.initMap({
         container: 'map',
         center: { lat: 51.855, lon: 12.046 },
         zoom: 13
