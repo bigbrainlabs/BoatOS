@@ -109,7 +109,104 @@ let displayedTrackSourceAdded = false;
  * @param {Object} options - Optionale Konfiguration
  * @returns {Object} Map-Instanz
  */
-export function initMap(options = {}) {
+async function _checkTileserver() {
+    try {
+        const r = await fetch(window.location.origin + '/tiles/germany', {
+            method: 'HEAD',
+            signal: AbortSignal.timeout(2000)
+        });
+        return r.ok;
+    } catch {
+        return false;
+    }
+}
+
+function _showTileserverBanner() {
+    const existing = document.getElementById('tileserver-banner');
+    if (existing) return;
+    const banner = document.createElement('div');
+    banner.id = 'tileserver-banner';
+    banner.style.cssText = [
+        'position:absolute', 'top:8px', 'left:50%', 'transform:translateX(-50%)',
+        'z-index:900', 'background:rgba(30,30,30,0.88)', 'color:#FFB74D',
+        'font-size:12px', 'padding:5px 12px', 'border-radius:6px',
+        'pointer-events:none', 'white-space:nowrap',
+        'border:1px solid rgba(255,183,77,0.35)'
+    ].join(';');
+    banner.textContent = '⚠ Offline-Karten nicht verfügbar · Online-Fallback (OpenStreetMap)';
+    document.getElementById('map')?.appendChild(banner);
+}
+
+function _vectorStyle() {
+    return {
+        version: 8,
+        sources: {
+            'germany': {
+                type: 'vector',
+                tiles: [window.location.origin + '/tiles/germany/{z}/{x}/{y}'],
+                minzoom: 0,
+                maxzoom: 14
+            },
+            'track-history': { type: 'geojson', data: { type: 'LineString', coordinates: [] } },
+            'route': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+            'route-shadow': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+            'completed-segments': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+            'current-segment': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+            'remaining-segments': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
+        },
+        layers: [
+            { id: 'background', type: 'background', paint: { 'background-color': '#e0e0e0' } },
+            { id: 'water', type: 'fill', source: 'germany', 'source-layer': 'water', paint: { 'fill-color': '#80b0d0' } },
+            { id: 'waterway', type: 'line', source: 'germany', 'source-layer': 'waterway', paint: { 'line-color': '#80b0d0', 'line-width': 2 } },
+            { id: 'landcover', type: 'fill', source: 'germany', 'source-layer': 'landcover', paint: { 'fill-color': '#c0e0c0', 'fill-opacity': 0.5 } },
+            { id: 'park', type: 'fill', source: 'germany', 'source-layer': 'park', paint: { 'fill-color': '#a0d0a0', 'fill-opacity': 0.5 } },
+            { id: 'landuse', type: 'fill', source: 'germany', 'source-layer': 'landuse', paint: { 'fill-color': '#f0f0e0', 'fill-opacity': 0.3 } },
+            { id: 'building', type: 'fill', source: 'germany', 'source-layer': 'building', minzoom: 13, paint: { 'fill-color': '#d0d0d0' } },
+            { id: 'roads', type: 'line', source: 'germany', 'source-layer': 'transportation', paint: { 'line-color': '#ffffff', 'line-width': 1 } },
+            { id: 'roads-major', type: 'line', source: 'germany', 'source-layer': 'transportation', filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary']]], paint: { 'line-color': '#ffcc80', 'line-width': 3 } },
+            { id: 'boundary', type: 'line', source: 'germany', 'source-layer': 'boundary', paint: { 'line-color': '#808080', 'line-width': 1, 'line-dasharray': [2, 2] } },
+            { id: 'route-shadow-line', type: 'line', source: 'route-shadow', paint: { 'line-color': 'white', 'line-width': 8, 'line-opacity': 0.4 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+            { id: 'completed-segments-line', type: 'line', source: 'completed-segments', paint: { 'line-color': '#666', 'line-width': 4, 'line-opacity': 0.3 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+            { id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#2ecc71', 'line-width': 5, 'line-opacity': 0.9 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+            { id: 'current-segment-line', type: 'line', source: 'current-segment', paint: { 'line-color': '#ffd700', 'line-width': 6, 'line-opacity': 1.0 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+            { id: 'remaining-segments-line', type: 'line', source: 'remaining-segments', paint: { 'line-color': '#3498db', 'line-width': 5, 'line-opacity': 0.9 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+            { id: 'track-line', type: 'line', source: 'track-history', paint: { 'line-color': '#4CAF50', 'line-width': 3 } }
+        ]
+    };
+}
+
+function _rasterFallbackStyle() {
+    return {
+        version: 8,
+        sources: {
+            'osm': {
+                type: 'raster',
+                tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                tileSize: 256,
+                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                maxzoom: 19
+            },
+            'track-history': { type: 'geojson', data: { type: 'LineString', coordinates: [] } },
+            'route': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+            'route-shadow': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+            'completed-segments': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+            'current-segment': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+            'remaining-segments': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
+        },
+        layers: [
+            { id: 'background', type: 'background', paint: { 'background-color': '#e0e0e0' } },
+            { id: 'osm-tiles', type: 'raster', source: 'osm' },
+            { id: 'route-shadow-line', type: 'line', source: 'route-shadow', paint: { 'line-color': 'white', 'line-width': 8, 'line-opacity': 0.4 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+            { id: 'completed-segments-line', type: 'line', source: 'completed-segments', paint: { 'line-color': '#666', 'line-width': 4, 'line-opacity': 0.3 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+            { id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#2ecc71', 'line-width': 5, 'line-opacity': 0.9 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+            { id: 'current-segment-line', type: 'line', source: 'current-segment', paint: { 'line-color': '#ffd700', 'line-width': 6, 'line-opacity': 1.0 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+            { id: 'remaining-segments-line', type: 'line', source: 'remaining-segments', paint: { 'line-color': '#3498db', 'line-width': 5, 'line-opacity': 0.9 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+            { id: 'track-line', type: 'line', source: 'track-history', paint: { 'line-color': '#4CAF50', 'line-width': 3 } }
+        ]
+    };
+}
+
+export async function initMap(options = {}) {
     console.log('Karte wird initialisiert...');
 
     // Container pruefen
@@ -125,76 +222,14 @@ export function initMap(options = {}) {
     // Standard-Position (Aken/Elbe)
     const defaultPosition = options.center || { lat: 51.855, lon: 12.046 };
 
-    // MapLibre GL Map erstellen mit lokalem Vector-Tiles Style
+    // Tileserver-Verfügbarkeit prüfen, ggf. Online-Fallback nutzen
+    const tileserverOk = await _checkTileserver();
+    window._tileserverAvailable = tileserverOk;
+    console.log(tileserverOk ? 'Tileserver verfügbar' : 'Tileserver nicht verfügbar — Online-Fallback aktiv');
+
     map = new maplibregl.Map({
         container: 'map',
-        style: {
-            version: 8,
-            sources: {
-                'germany': {
-                    type: 'vector',
-                    tiles: [window.location.origin + '/tiles/germany/{z}/{x}/{y}'],
-                    minzoom: 0,
-                    maxzoom: 14
-                },
-                // GeoJSON Quellen fuer dynamische Daten
-                'track-history': {
-                    type: 'geojson',
-                    data: { type: 'LineString', coordinates: [] }
-                },
-                'route': {
-                    type: 'geojson',
-                    data: { type: 'FeatureCollection', features: [] }
-                },
-                'route-shadow': {
-                    type: 'geojson',
-                    data: { type: 'FeatureCollection', features: [] }
-                },
-                'completed-segments': {
-                    type: 'geojson',
-                    data: { type: 'FeatureCollection', features: [] }
-                },
-                'current-segment': {
-                    type: 'geojson',
-                    data: { type: 'FeatureCollection', features: [] }
-                },
-                'remaining-segments': {
-                    type: 'geojson',
-                    data: { type: 'FeatureCollection', features: [] }
-                }
-            },
-            layers: [
-                // Basis-Layer
-                { id: 'background', type: 'background', paint: { 'background-color': '#e0e0e0' } },
-                { id: 'water', type: 'fill', source: 'germany', 'source-layer': 'water', paint: { 'fill-color': '#80b0d0' } },
-                { id: 'waterway', type: 'line', source: 'germany', 'source-layer': 'waterway', paint: { 'line-color': '#80b0d0', 'line-width': 2 } },
-                { id: 'landcover', type: 'fill', source: 'germany', 'source-layer': 'landcover', paint: { 'fill-color': '#c0e0c0', 'fill-opacity': 0.5 } },
-                { id: 'park', type: 'fill', source: 'germany', 'source-layer': 'park', paint: { 'fill-color': '#a0d0a0', 'fill-opacity': 0.5 } },
-                { id: 'landuse', type: 'fill', source: 'germany', 'source-layer': 'landuse', paint: { 'fill-color': '#f0f0e0', 'fill-opacity': 0.3 } },
-                { id: 'building', type: 'fill', source: 'germany', 'source-layer': 'building', minzoom: 13, paint: { 'fill-color': '#d0d0d0' } },
-                { id: 'roads', type: 'line', source: 'germany', 'source-layer': 'transportation', paint: { 'line-color': '#ffffff', 'line-width': 1 } },
-                { id: 'roads-major', type: 'line', source: 'germany', 'source-layer': 'transportation', filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary']]], paint: { 'line-color': '#ffcc80', 'line-width': 3 } },
-                { id: 'boundary', type: 'line', source: 'germany', 'source-layer': 'boundary', paint: { 'line-color': '#808080', 'line-width': 1, 'line-dasharray': [2, 2] } },
-
-                // Routen-Layer (Schatten/Outline)
-                { id: 'route-shadow-line', type: 'line', source: 'route-shadow', paint: { 'line-color': 'white', 'line-width': 8, 'line-opacity': 0.4 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
-
-                // Abgeschlossene Segmente (verblasst)
-                { id: 'completed-segments-line', type: 'line', source: 'completed-segments', paint: { 'line-color': '#666', 'line-width': 4, 'line-opacity': 0.3 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
-
-                // Haupt-Routen-Layer
-                { id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#2ecc71', 'line-width': 5, 'line-opacity': 0.9 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
-
-                // Aktuelles Segment (hervorgehoben)
-                { id: 'current-segment-line', type: 'line', source: 'current-segment', paint: { 'line-color': '#ffd700', 'line-width': 6, 'line-opacity': 1.0 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
-
-                // Verbleibende Segmente
-                { id: 'remaining-segments-line', type: 'line', source: 'remaining-segments', paint: { 'line-color': '#3498db', 'line-width': 5, 'line-opacity': 0.9 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
-
-                // Track-History Layer
-                { id: 'track-line', type: 'line', source: 'track-history', paint: { 'line-color': '#4CAF50', 'line-width': 3 } }
-            ]
-        },
+        style: tileserverOk ? _vectorStyle() : _rasterFallbackStyle(),
         center: [defaultPosition.lon, defaultPosition.lat],
         zoom: options.zoom || 13,
         attributionControl: false
@@ -219,7 +254,11 @@ export function initMap(options = {}) {
     // Nach vollstaendigem Laden weitere Layer hinzufuegen
     map.on('load', () => {
         console.log('Karte geladen');
-        addLabelsLayer();
+        if (tileserverOk) {
+            addLabelsLayer();
+        } else {
+            _showTileserverBanner();
+        }
         addOpenSeaMapOverlays();
 
         // Satelliten-Source und -Layer vorinitialisieren (standardmaessig versteckt)
