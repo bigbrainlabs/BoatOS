@@ -12,7 +12,7 @@ import '../widgets/gauge_widget.dart';
 // DSL data models
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum _WidgetType { gauge, sensor }
+enum _WidgetType { gauge, sensor, text, clock, spacer, compass }
 
 class _GaugeCfg {
   final String path;
@@ -43,15 +43,30 @@ class _SensorCfg {
   });
 }
 
+class _SimpleCfg {
+  final int size;
+  final String text;
+  const _SimpleCfg({this.size = 1, this.text = ''});
+}
+
 class _DashWidget {
   final _WidgetType type;
   final _GaugeCfg? gauge;
   final _SensorCfg? sensor;
+  final _SimpleCfg? simple;
 
-  int get size => type == _WidgetType.gauge ? gauge!.size : sensor!.size;
+  int get size {
+    if (type == _WidgetType.gauge)  return gauge!.size;
+    if (type == _WidgetType.sensor) return sensor!.size;
+    return simple?.size ?? 1;
+  }
 
-  const _DashWidget.gauge(_GaugeCfg cfg) : type = _WidgetType.gauge, gauge = cfg, sensor = null;
-  const _DashWidget.sensor(_SensorCfg cfg) : type = _WidgetType.sensor, gauge = null, sensor = cfg;
+  const _DashWidget.gauge(_GaugeCfg cfg)
+      : type = _WidgetType.gauge, gauge = cfg, sensor = null, simple = null;
+  const _DashWidget.sensor(_SensorCfg cfg)
+      : type = _WidgetType.sensor, gauge = null, sensor = cfg, simple = null;
+  const _DashWidget.simple(_WidgetType t, _SimpleCfg cfg)
+      : type = t, gauge = null, sensor = null, simple = cfg;
 }
 
 class _Layout {
@@ -82,6 +97,26 @@ _Layout _parseDSL(String dsl) {
         if (tokens.length > 1) widgets.add(_DashWidget.gauge(_parseGauge(tokens)));
       case 'SENSOR':
         if (tokens.length > 1) widgets.add(_DashWidget.sensor(_parseSensor(tokens)));
+      case 'TEXT':
+        final text = tokens.length > 1 ? tokens[1] : '';
+        int tSize = 1;
+        for (int i = 2; i < tokens.length - 1; i += 2) {
+          if (tokens[i].toUpperCase() == 'SIZE') tSize = int.tryParse(tokens[i + 1]) ?? 1;
+        }
+        widgets.add(_DashWidget.simple(_WidgetType.text, _SimpleCfg(text: text, size: tSize)));
+      case 'CLOCK':
+      case 'SPACER':
+      case 'COMPASS':
+        int sSize = 1;
+        for (int i = 1; i < tokens.length - 1; i += 2) {
+          if (tokens[i].toUpperCase() == 'SIZE') sSize = int.tryParse(tokens[i + 1]) ?? 1;
+        }
+        final sType = switch (tokens[0].toUpperCase()) {
+          'CLOCK'   => _WidgetType.clock,
+          'SPACER'  => _WidgetType.spacer,
+          _         => _WidgetType.compass,
+        };
+        widgets.add(_DashWidget.simple(sType, _SimpleCfg(size: sSize)));
     }
   }
   return _Layout(columns: columns, widgets: widgets);
@@ -148,6 +183,7 @@ _SensorCfg _parseSensor(List<String> t) {
     final k = t[i].toUpperCase();
     final v = t[i + 1];
     switch (k) {
+      case 'AS':
       case 'ALIAS': alias = v;
       case 'SIZE':  size  = int.tryParse(v) ?? 1;
       case 'COLOR': color = parseDashColor(v);
@@ -303,31 +339,87 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildWidget(_DashWidget w) {
-    if (w.type == _WidgetType.gauge) {
-      final cfg = w.gauge!;
-      final value = _getValue(_sensors, cfg.path);
-      final autoLabel = cfg.label.isNotEmpty
-          ? cfg.label
-          : _getSensorLabel(_sensors, cfg.path);
-      return GaugeWidget(
-        value: value,
-        min: cfg.min, max: cfg.max,
-        unit: cfg.unit, label: autoLabel,
-        style: cfg.style, color: cfg.color,
-        decimals: cfg.decimals,
-      );
-    } else {
-      final cfg = w.sensor!;
-      return SensorCard(
-        path: cfg.path,
-        alias: cfg.alias,
-        cardStyle: cfg.style,
-        color: cfg.color,
-        showFields: cfg.show,
-        hideFields: cfg.hide,
-        sensorData: _sensors[cfg.path],
-      );
+    switch (w.type) {
+      case _WidgetType.gauge:
+        final cfg = w.gauge!;
+        final value = _getValue(_sensors, cfg.path);
+        final autoLabel = cfg.label.isNotEmpty
+            ? cfg.label
+            : _getSensorLabel(_sensors, cfg.path);
+        return GaugeWidget(
+          value: value,
+          min: cfg.min, max: cfg.max,
+          unit: cfg.unit, label: autoLabel,
+          style: cfg.style, color: cfg.color,
+          decimals: cfg.decimals,
+        );
+      case _WidgetType.sensor:
+        final scfg = w.sensor!;
+        return SensorCard(
+          path: scfg.path,
+          alias: scfg.alias,
+          cardStyle: scfg.style,
+          color: scfg.color,
+          showFields: scfg.show,
+          hideFields: scfg.hide,
+          sensorData: _sensors[scfg.path],
+        );
+      case _WidgetType.text:
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Text(w.simple!.text,
+              style: const TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w600,
+                  color: Color(0xFF4FC3F7))),
+        );
+      case _WidgetType.clock:
+        final now = DateTime.now();
+        final hm = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+        final sec = now.second.toString().padLeft(2, '0');
+        final date = '${_weekday(now.weekday)}, ${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}.${now.year}';
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0D2040), Color(0xFF0A1828)],
+              begin: Alignment.topLeft, end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF1E3A5F)),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center, children: [
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text(hm, style: const TextStyle(
+                  fontSize: 36, fontWeight: FontWeight.w700,
+                  color: Color(0xFF4FC3F7), fontFamily: 'monospace',
+                  letterSpacing: 3)),
+              Text(':$sec', style: const TextStyle(
+                  fontSize: 24, fontWeight: FontWeight.w400,
+                  color: Color(0xFF1E6FA0), fontFamily: 'monospace',
+                  letterSpacing: 2)),
+            ]),
+            const SizedBox(height: 4),
+            Text(date, style: const TextStyle(
+                fontSize: 11, color: Color(0xFF8B949E))),
+          ]),
+        );
+      case _WidgetType.spacer:
+        return const SizedBox(height: 8);
+      case _WidgetType.compass:
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFF161B22),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF30363D)),
+          ),
+          child: const Icon(Icons.explore, size: 48, color: Color(0xFF4FC3F7)),
+        );
     }
   }
+
+  String _weekday(int d) => const ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][d - 1];
 }
 

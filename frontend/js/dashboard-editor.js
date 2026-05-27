@@ -8,6 +8,7 @@ class DashboardEditor {
     constructor() {
         this.widgets = [];
         this.sensors = [];
+        this.sensorGroupsPalette = [];
         this.gridColumns = 3;
         this.rows = ['main'];
         this.selectedWidget = null;
@@ -33,7 +34,7 @@ class DashboardEditor {
         overlay.style.display = 'flex';
 
         // Load data
-        await this.loadSensors();
+        await Promise.all([this.loadSensors(), this.loadSensorGroupsPalette()]);
         await this.loadLayout();
 
         // Render editor
@@ -157,6 +158,17 @@ class DashboardEditor {
         return units[name.toLowerCase()] || '';
     }
 
+    async loadSensorGroupsPalette() {
+        try {
+            const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
+            const resp = await fetch(`${apiUrl}/api/sensors/grouped`);
+            const data = await resp.json();
+            this.sensorGroupsPalette = data.groups || [];
+        } catch (_) {
+            this.sensorGroupsPalette = [];
+        }
+    }
+
     /**
      * Load current dashboard layout
      */
@@ -254,34 +266,150 @@ ROW main
             <!-- Mode Toggle -->
             <div style="display: flex; gap: 10px; margin-bottom: 15px;">
                 <button onclick="window.dashboardEditor.setMode('visual')" style="
-                    flex: 1;
-                    padding: 12px 20px;
+                    flex: 1; padding: 12px 20px;
                     background: ${this.mode === 'visual' ? 'var(--accent)' : 'var(--bg-card)'};
                     color: ${this.mode === 'visual' ? 'white' : 'var(--text)'};
                     border: 1px solid ${this.mode === 'visual' ? 'var(--accent)' : 'var(--border)'};
-                    border-radius: 10px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    cursor: pointer;
+                    border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
                 ">🎨 Visuell</button>
                 <button onclick="window.dashboardEditor.setMode('code')" style="
-                    flex: 1;
-                    padding: 12px 20px;
+                    flex: 1; padding: 12px 20px;
                     background: ${this.mode === 'code' ? 'var(--accent)' : 'var(--bg-card)'};
                     color: ${this.mode === 'code' ? 'white' : 'var(--text)'};
                     border: 1px solid ${this.mode === 'code' ? 'var(--accent)' : 'var(--border)'};
-                    border-radius: 10px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    cursor: pointer;
+                    border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
                 ">📝 Code</button>
+                <button onclick="window.dashboardEditor.setMode('sensors')" style="
+                    flex: 1; padding: 12px 20px;
+                    background: ${this.mode === 'sensors' ? 'var(--accent)' : 'var(--bg-card)'};
+                    color: ${this.mode === 'sensors' ? 'white' : 'var(--text)'};
+                    border: 1px solid ${this.mode === 'sensors' ? 'var(--accent)' : 'var(--border)'};
+                    border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
+                ">📡 Sensoren</button>
             </div>
 
-            ${this.mode === 'code' ? this.renderCodeEditor() : this.renderVisualEditor()}
+            ${this.mode === 'code' ? this.renderCodeEditor() : this.mode === 'sensors' ? this.renderSensorManager() : this.renderVisualEditor()}
         `;
 
         if (this.mode === 'visual') {
             this.initDragDrop();
+        }
+        if (this.mode === 'sensors') {
+            this.loadSensorGroups();
+        }
+    }
+
+    async loadSensorGroups() {
+        const container = document.getElementById('sensor-mgmt-list');
+        if (!container) return;
+        try {
+            const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
+            const resp = await fetch(`${apiUrl}/api/sensors/grouped`);
+            const data = await resp.json();
+            if (!data.groups?.length) {
+                container.innerHTML = '<div style="color:var(--text-dim);padding:16px">Keine Sensoren bekannt.</div>';
+                return;
+            }
+            container.innerHTML = data.groups.map(g => `
+                <details style="margin-bottom:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+                    <summary style="padding:10px 14px;cursor:pointer;background:var(--bg-card);display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;list-style:none;user-select:none">
+                        <span>${g.icon}</span>
+                        <span>${g.label}</span>
+                        <span style="color:var(--text-dim);font-weight:400;margin-left:auto;font-size:11px">${g.source} · ${g.sensors.length}</span>
+                    </summary>
+                    <div>
+                        ${g.sensors.map(s => `
+                            <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-top:1px solid var(--border);font-size:12px">
+                                <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:${s.status==='online'?'#3fb950':s.status==='offline'?'#ef5350':'#8b949e'}"></span>
+                                <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.topic}"><strong>${s.label}</strong></span>
+                                <span style="color:var(--text-dim);min-width:60px;text-align:right">${s.value||'—'} ${s.unit}</span>
+                                <button onclick="window.dashboardEditor.showWidgetTypePicker('${s.topic.replace(/'/g,"\\'")}','${s.label.replace(/'/g,"\\'")}','${(s.unit||'').replace(/'/g,"\\'")}', true)"
+                                    title="Als Widget hinzufügen"
+                                    style="background:none;border:none;cursor:pointer;color:#4fc3f7;font-size:15px;padding:2px 4px;flex-shrink:0;line-height:1">➕</button>
+                                <button onclick="window.dashboardEditor.deleteSensorTopic('${s.topic.replace(/'/g,"\\'")}', this)"
+                                    title="Topic entfernen"
+                                    style="background:none;border:none;cursor:pointer;color:#ef5350;font-size:15px;padding:2px 4px;flex-shrink:0;line-height:1">🗑</button>
+                            </div>`).join('')}
+                    </div>
+                </details>`).join('');
+        } catch(e) {
+            container.innerHTML = `<div style="color:#ef5350;padding:16px">Fehler: ${e.message}</div>`;
+        }
+    }
+
+    renderSensorManager() {
+        return `
+            <div style="height:calc(100% - 60px);overflow-y:auto">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                    <span style="font-size:13px;color:var(--text-dim)">Alle bekannten MQTT-Topics. Veraltete Einträge hier entfernen.</span>
+                    <button onclick="window.dashboardEditor.loadSensorGroups()" style="
+                        background:var(--bg-card);border:1px solid var(--border);border-radius:6px;
+                        padding:6px 12px;cursor:pointer;font-size:12px;color:var(--text)">🔄 Aktualisieren</button>
+                </div>
+                <div id="sensor-mgmt-list">
+                    <div style="color:var(--text-dim);padding:16px">Wird geladen…</div>
+                </div>
+            </div>`;
+    }
+
+    async deleteSensorTopic(topic, btn) {
+        if (!confirm(`Topic entfernen?\n${topic}`)) return;
+        try {
+            const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
+            const resp = await fetch(`${apiUrl}/api/sensors/topic?topic=${encodeURIComponent(topic)}`, { method: 'DELETE' });
+            const data = await resp.json();
+            if (data.removed) {
+                const row = btn.closest('div[style*="display:flex"]');
+                if (row) { row.style.opacity = '0'; row.style.transition = 'opacity 0.3s'; setTimeout(() => row.remove(), 300); }
+            }
+        } catch(e) { alert(`Fehler: ${e.message}`); }
+    }
+
+    showWidgetTypePicker(sensorPath, sensorName, unit, fromSensorsTab = false) {
+        const existing = document.getElementById('widget-type-picker');
+        if (existing) existing.remove();
+
+        const esc = s => s.replace(/'/g, "\\'");
+        const overlay = document.createElement('div');
+        overlay.id = 'widget-type-picker';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;z-index:10000';
+        overlay.innerHTML = `
+            <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:24px;min-width:300px;max-width:380px;box-shadow:0 8px 32px rgba(0,0,0,0.5)">
+                <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">Widget-Typ wählen</div>
+                <div style="font-size:11px;color:var(--text-dim);margin-bottom:18px;word-break:break-all">${sensorName || sensorPath}</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                    <button onclick="window.dashboardEditor._addFromPicker('sensor','${esc(sensorPath)}','${esc(unit)}',${fromSensorsTab});document.getElementById('widget-type-picker').remove()" style="
+                        padding:12px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;
+                        color:var(--text);font-size:13px;cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px;
+                        transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+                        <span style="font-size:22px">📊</span>
+                        <span><strong>Sensor-Karte</strong><br><span style="font-size:11px;color:var(--text-dim)">Zeigt den aktuellen Wert als Karte</span></span>
+                    </button>
+                    <button onclick="window.dashboardEditor._addFromPicker('gauge','${esc(sensorPath)}','${esc(unit)}',${fromSensorsTab});document.getElementById('widget-type-picker').remove()" style="
+                        padding:12px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;
+                        color:var(--text);font-size:13px;cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px;
+                        transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+                        <span style="font-size:22px">🎯</span>
+                        <span><strong>Gauge</strong><br><span style="font-size:11px;color:var(--text-dim)">Zeiger- oder Bogenanzeige</span></span>
+                    </button>
+                </div>
+                <button onclick="document.getElementById('widget-type-picker').remove()" style="
+                    margin-top:14px;width:100%;padding:10px;background:none;border:1px solid var(--border);
+                    border-radius:8px;color:var(--text-dim);cursor:pointer;font-size:12px">Abbrechen</button>
+            </div>`;
+        overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+        document.body.appendChild(overlay);
+    }
+
+    _addFromPicker(type, sensorPath, unit, switchToVisual = false) {
+        if (type === 'gauge') {
+            this.addGauge(sensorPath, unit);
+        } else {
+            this.addWidget('sensor', sensorPath);
+        }
+        if (switchToVisual) {
+            this.mode = 'visual';
+            this.render();
         }
     }
 
@@ -448,116 +576,51 @@ ROW weather
                     background: var(--bg-panel);
                     border: 1px solid var(--border);
                     border-radius: 16px;
-                    padding: 20px;
+                    padding: 16px;
                     overflow-y: auto;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0;
                 ">
-                    <h3 style="color: var(--accent); margin: 0 0 15px 0; font-size: 16px;">
-                        📦 Verfügbare Widgets
-                    </h3>
-                    <p style="color: var(--text-dim); font-size: 12px; margin-bottom: 15px;">
-                        Klicke um hinzuzufügen
-                    </p>
-
-                    <!-- Sensor Cards -->
-                    <div style="margin-bottom: 15px;">
-                        <h4 style="color: var(--text-dim); margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">📊 Sensoren</h4>
-                        <div class="sensor-list" style="max-height: 200px; overflow-y: auto;">
-                            ${this.sensors.map(sensor => `
-                                <div class="palette-item" onclick="window.dashboardEditor.addWidget('sensor', '${sensor.full_path || sensor.base_name}')" style="
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 10px;
-                                    padding: 10px;
-                                    background: var(--bg-card);
-                                    border: 1px solid var(--border);
-                                    border-radius: 10px;
-                                    margin-bottom: 6px;
-                                    cursor: pointer;
-                                    transition: all 0.2s;
-                                " onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-                                    <span style="font-size: 20px;">${sensor.icon}</span>
-                                    <div style="flex: 1; min-width: 0;">
-                                        <div style="color: var(--text); font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${sensor.name}</div>
-                                        <div style="color: var(--text-dim); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${sensor.full_path || sensor.base_name}</div>
-                                    </div>
-                                    ${sensor.current_value !== undefined ? `<span style="color: var(--accent); font-size: 11px; font-family: monospace;">${sensor.current_value}${sensor.unit || ''}</span>` : ''}
+                    <!-- Grouped Sensors -->
+                    <div style="flex:1;overflow-y:auto;margin-bottom:12px">
+                        ${this.sensorGroupsPalette.length === 0 ? `
+                            <div style="color:var(--text-dim);font-size:12px;padding:8px 0">Keine Sensoren — öffne den Sensoren-Tab zum Laden.</div>
+                        ` : this.sensorGroupsPalette.map(g => `
+                            <details style="margin-bottom:6px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+                                <summary style="padding:8px 12px;cursor:pointer;background:var(--bg-card);display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;list-style:none;user-select:none"
+                                    onmouseover="this.style.background='var(--bg-panel)'" onmouseout="this.style.background='var(--bg-card)'">
+                                    <span>${g.icon}</span>
+                                    <span style="flex:1">${g.label}</span>
+                                    <span style="color:var(--text-dim);font-weight:400;font-size:10px">${g.sensors.length}</span>
+                                </summary>
+                                <div>
+                                    ${g.sensors.map(s => `
+                                        <div onclick="window.dashboardEditor.showWidgetTypePicker('${s.topic.replace(/'/g,"\\'")}','${s.label.replace(/'/g,"\\'")}','${(s.unit||'').replace(/'/g,"\\'")}',false)"
+                                            style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-top:1px solid var(--border);font-size:11px;cursor:pointer;transition:background .15s"
+                                            onmouseover="this.style.background='rgba(79,195,247,0.07)'" onmouseout="this.style.background=''">
+                                            <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:${s.status==='online'?'#3fb950':s.status==='offline'?'#ef5350':'#8b949e'}"></span>
+                                            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${s.label}</span>
+                                            <span style="color:var(--text-dim);font-size:10px;font-family:monospace">${s.value||''} ${s.unit||''}</span>
+                                        </div>`).join('')}
                                 </div>
-                            `).join('')}
-                        </div>
-                    </div>
-
-                    <!-- Gauge Widgets -->
-                    <div style="margin-bottom: 15px; padding-top: 15px; border-top: 1px solid var(--border);">
-                        <h4 style="color: var(--text-dim); margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">🎯 Gauges</h4>
-                        <div class="sensor-list" style="max-height: 150px; overflow-y: auto;">
-                            ${this.sensors.map(sensor => `
-                                <div class="palette-item" onclick="window.dashboardEditor.addGauge('${sensor.full_path || sensor.base_name}', '${sensor.unit || ''}')" style="
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 10px;
-                                    padding: 10px;
-                                    background: linear-gradient(135deg, var(--bg-card), rgba(100, 255, 218, 0.05));
-                                    border: 1px solid rgba(100, 255, 218, 0.2);
-                                    border-radius: 10px;
-                                    margin-bottom: 6px;
-                                    cursor: pointer;
-                                    transition: all 0.2s;
-                                " onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='rgba(100, 255, 218, 0.2)'">
-                                    <span style="font-size: 18px;">🎯</span>
-                                    <div style="flex: 1; min-width: 0;">
-                                        <div style="color: var(--accent); font-weight: 600; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${sensor.name}</div>
-                                        <div style="color: var(--text-dim); font-size: 10px;">Gauge-Anzeige</div>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
+                            </details>`).join('')}
                     </div>
 
                     <!-- Special Widgets -->
-                    <div style="padding-top: 15px; border-top: 1px solid var(--border);">
-                        <h4 style="color: var(--text-dim); margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">➕ Spezial</h4>
-                        <div class="palette-item" onclick="window.dashboardEditor.addWidget('spacer')" style="
-                            display: flex;
-                            align-items: center;
-                            gap: 12px;
-                            padding: 10px;
-                            background: var(--bg-card);
-                            border: 1px solid var(--border);
-                            border-radius: 10px;
-                            margin-bottom: 6px;
-                            cursor: pointer;
-                        ">
-                            <span style="font-size: 20px;">⬜</span>
-                            <div style="color: var(--text); font-size: 12px;">Spacer</div>
-                        </div>
-                        <div class="palette-item" onclick="window.dashboardEditor.addWidget('clock')" style="
-                            display: flex;
-                            align-items: center;
-                            gap: 12px;
-                            padding: 10px;
-                            background: var(--bg-card);
-                            border: 1px solid var(--border);
-                            border-radius: 10px;
-                            margin-bottom: 6px;
-                            cursor: pointer;
-                        ">
-                            <span style="font-size: 20px;">🕐</span>
-                            <div style="color: var(--text); font-size: 12px;">Uhr</div>
-                        </div>
-                        <div class="palette-item" onclick="window.dashboardEditor.addWidget('text')" style="
-                            display: flex;
-                            align-items: center;
-                            gap: 12px;
-                            padding: 10px;
-                            background: var(--bg-card);
-                            border: 1px solid var(--border);
-                            border-radius: 10px;
-                            margin-bottom: 6px;
-                            cursor: pointer;
-                        ">
-                            <span style="font-size: 20px;">📝</span>
-                            <div style="color: var(--text); font-size: 12px;">Text</div>
-                        </div>
+                    <div style="border-top:1px solid var(--border);padding-top:12px">
+                        <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Spezial</div>
+                        ${[
+                            ['window.dashboardEditor.addWidget(\'spacer\')', '⬜', 'Spacer'],
+                            ['window.dashboardEditor.addWidget(\'clock\')',  '🕐', 'Uhr'],
+                            ['window.dashboardEditor.addWidget(\'text\')',   '📝', 'Text'],
+                            ['window.dashboardEditor.addWidget(\'compass\')', '🧭', 'Kompass'],
+                        ].map(([fn, icon, label]) => `
+                            <div onclick="${fn}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;margin-bottom:5px;cursor:pointer;font-size:12px;transition:border-color .15s"
+                                onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+                                <span style="font-size:16px">${icon}</span>
+                                <span style="color:var(--text)">${label}</span>
+                            </div>`).join('')}
                     </div>
                 </div>
 
