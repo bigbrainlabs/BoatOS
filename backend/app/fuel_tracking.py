@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
 
-FUEL_FILE = Path("/home/arielle/BoatOS/data/fuel.json")
+FUEL_FILE = Path("/home/boatos/BoatOS/data/fuel.json")
 FUEL_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 def load_fuel_entries() -> List[Dict]:

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
 
-CREW_FILE = Path("/home/arielle/BoatOS/data/crew.json")
+CREW_FILE = Path("/home/boatos/BoatOS/data/crew.json")
 CREW_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 def load_crew() -> List[Dict]:

@@ -35,7 +35,7 @@ app = FastAPI(title="BoatOS API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 # Charts directory
-CHARTS_DIR = Path("/home/arielle/BoatOS/data/charts")
+CHARTS_DIR = Path("/home/boatos/BoatOS/data/charts")
 CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Mount charts directory for static serving
@@ -353,7 +353,7 @@ async def get_sensors_list():
 async def set_gps_config(config: Dict[str, Any]):
     """Update GPS device config in SignalK settings and restart SignalK"""
     import subprocess, json as _json
-    signalk_settings = Path("/home/arielle/.signalk/settings.json")
+    signalk_settings = Path("/home/boatos/.signalk/settings.json")
     try:
         with open(signalk_settings, 'r') as f:
             sk = _json.load(f)
@@ -376,7 +376,7 @@ async def set_gps_config(config: Dict[str, Any]):
 async def get_gps_config():
     """Get current GPS device config from SignalK settings"""
     import json as _json
-    signalk_settings = Path("/home/arielle/.signalk/settings.json")
+    signalk_settings = Path("/home/boatos/.signalk/settings.json")
     try:
         with open(signalk_settings, 'r') as f:
             sk = _json.load(f)
@@ -3071,7 +3071,7 @@ def init_waterway_router():
             # OSRM only binds IPv4 — replace localhost with 127.0.0.1 to avoid IPv6 resolution
             osrm_url = osrm_url.replace('//localhost:', '//127.0.0.1:')
             routing_provider = routing_config.get('provider', 'osrm')
-            osm_file = routing_config.get('osmFile', '/home/arielle/osrm_data/germany-latest.osm.pbf')
+            osm_file = routing_config.get('osmFile', '/home/boatos/osrm_data/germany-latest.osm.pbf')
     except:
         pass
 
@@ -3255,7 +3255,7 @@ async def get_available_regions():
     Returns:
         List of region names that are available for routing
     """
-    osrm_dir = Path("/home/arielle/BoatOS/data/osrm")
+    osrm_dir = Path("/home/boatos/BoatOS/data/osrm")
 
     # Find all .osrm.properties files
     properties_files = list(osrm_dir.glob("*-latest.osrm.properties"))
@@ -3340,13 +3340,13 @@ async def switch_region(request: dict):
         return {"success": False, "error": "Region name required"}
 
     # Check if region files exist (use .osrm.properties as indicator)
-    osrm_properties = Path(f"/home/arielle/BoatOS/data/osrm/{region}-latest.osrm.properties")
+    osrm_properties = Path(f"/home/boatos/BoatOS/data/osrm/{region}-latest.osrm.properties")
 
     if not osrm_properties.exists():
         return {"success": False, "error": f"Region '{region}' not found"}
 
     # osrm-routed needs the base path without extension
-    osrm_file = Path(f"/home/arielle/BoatOS/data/osrm/{region}-latest.osrm")
+    osrm_file = Path(f"/home/boatos/BoatOS/data/osrm/{region}-latest.osrm")
 
     try:
         # Kill current osrm-routed process
@@ -3736,8 +3736,8 @@ async def toggle_onscreen_keyboard(action: str = "show"):
                 # Show onboard keyboard with full X11 environment
                 env = os.environ.copy()
                 env['DISPLAY'] = ':0'
-                env['XAUTHORITY'] = '/home/arielle/.Xauthority'
-                env['HOME'] = '/home/arielle'
+                env['XAUTHORITY'] = '/home/boatos/.Xauthority'
+                env['HOME'] = '/home/boatos'
 
                 subprocess.Popen(
                     ["onboard", "--size", "1024x400"],
@@ -4238,7 +4238,7 @@ async def system_version():
     """Aktuelle und verfügbare Version"""
     # Read version from VERSION file (updated by update.sh / git pull)
     try:
-        current = Path("/home/arielle/BoatOS/VERSION").read_text().strip()
+        current = Path("/home/boatos/BoatOS/VERSION").read_text().strip()
     except Exception:
         current = "unbekannt"
 
@@ -4297,7 +4297,7 @@ async def start_update(background_tasks: BackgroundTasks):
 
 async def _run_update():
     global _update_running, _update_log
-    script = "/home/arielle/BoatOS/scripts/update.sh"
+    script = "/home/boatos/BoatOS/scripts/update.sh"
     try:
         proc = await asyncio.create_subprocess_exec(
             "bash", script,

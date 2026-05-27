@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional
 
-LOGBOOK_DIR = Path("/home/arielle/BoatOS/data/logbook")
+LOGBOOK_DIR = Path("/home/boatos/BoatOS/data/logbook")
 
 def save_logbook_entry(entry: Dict) -> str:
     """Save a logbook entry (trip or individual entry) to a JSON file.
