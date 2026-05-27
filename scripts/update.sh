@@ -2,7 +2,7 @@
 # BoatOS System Update — wird vom Backend (/api/system/update) aufgerufen.
 set -euo pipefail
 
-REPO_DIR=/home/arielle/BoatOS
+REPO_DIR=/home/boatos/BoatOS
 GITHUB_REPO=bigbrainlabs/BoatOS
 GITHUB_URL=https://github.com/$GITHUB_REPO.git
 APP_SO=$REPO_DIR/flutter_app/app.so
@@ -21,8 +21,14 @@ if [ ! -d ".git" ]; then
     log "       Git initialisiert"
 fi
 git fetch origin -q --tags
-git reset --hard origin/main -q
-log "       Code aktualisiert"
+LATEST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.' | head -1)
+if [ -n "$LATEST_TAG" ]; then
+    git reset --hard "$LATEST_TAG" -q
+    log "       Code aktualisiert auf Tag: $LATEST_TAG"
+else
+    git reset --hard origin/main -q
+    log "       Kein Tag gefunden — Fallback auf main"
+fi
 
 # 2. Python dependencies
 log "[2/6] Aktualisiere Python-Abhängigkeiten..."
@@ -52,7 +58,7 @@ log "[4/6] Installiere WiFi-Fallback-Service + deaktiviere Power Management..."
 SERVICE_SRC="$REPO_DIR/scripts/wifi-fallback.service"
 SERVICE_DST="/etc/systemd/system/wifi-fallback.service"
 # Pfad im Service an aktuellen REPO_DIR anpassen
-sed "s|/home/arielle/BoatOS|$REPO_DIR|g" "$SERVICE_SRC" | sudo tee "$SERVICE_DST" > /dev/null
+sed "s|/home/boatos/BoatOS|$REPO_DIR|g" "$SERVICE_SRC" | sudo tee "$SERVICE_DST" > /dev/null
 sudo chmod 644 "$SERVICE_DST"
 sudo chmod +x "$REPO_DIR/scripts/wifi_fallback.sh"
 sudo systemctl daemon-reload
