@@ -4298,6 +4298,22 @@ async def start_update(background_tasks: BackgroundTasks):
 async def _run_update():
     global _update_running, _update_log
     script = "/home/boatos/BoatOS/scripts/update.sh"
+
+    # Bootstrap: update.sh von GitHub laden falls nicht vorhanden
+    if not os.path.exists(script):
+        _update_log.append("[Bootstrap] update.sh nicht gefunden — lade von GitHub...")
+        try:
+            import urllib.request
+            os.makedirs(os.path.dirname(script), exist_ok=True)
+            url = "https://raw.githubusercontent.com/bigbrainlabs/BoatOS/main/scripts/update.sh"
+            urllib.request.urlretrieve(url, script)
+            os.chmod(script, 0o755)
+            _update_log.append("[Bootstrap] update.sh heruntergeladen")
+        except Exception as e:
+            _update_log.append(f"[Bootstrap Fehler] {e}")
+            _update_running = False
+            return
+
     try:
         proc = await asyncio.create_subprocess_exec(
             "bash", script,
