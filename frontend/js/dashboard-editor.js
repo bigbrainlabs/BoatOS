@@ -8,8 +8,10 @@ class DashboardEditor {
     constructor() {
         this.widgets = [];
         this.sensors = [];
+        this.sensorGroupsPalette = [];
         this.gridColumns = 3;
         this.rows = ['main'];
+        this.rowHeights = { main: 1 };
         this.selectedWidget = null;
         this.container = null;
         this.mode = 'visual'; // 'visual' or 'code'
@@ -33,7 +35,7 @@ class DashboardEditor {
         overlay.style.display = 'flex';
 
         // Load data
-        await this.loadSensors();
+        await Promise.all([this.loadSensors(), this.loadSensorGroupsPalette()]);
         await this.loadLayout();
 
         // Render editor
@@ -157,6 +159,17 @@ class DashboardEditor {
         return units[name.toLowerCase()] || '';
     }
 
+    async loadSensorGroupsPalette() {
+        try {
+            const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
+            const resp = await fetch(`${apiUrl}/api/sensors/grouped`);
+            const data = await resp.json();
+            this.sensorGroupsPalette = data.groups || [];
+        } catch (_) {
+            this.sensorGroupsPalette = [];
+        }
+    }
+
     /**
      * Load current dashboard layout
      */
@@ -219,12 +232,14 @@ ROW main
             this.gridColumns = parsed.grid || 3;
             this.widgets = [];
             this.rows = [];
+            this.rowHeights = {};
 
             if (parsed.rows) {
                 parsed.rows.forEach(row => {
                     if (!this.rows.includes(row.name)) {
                         this.rows.push(row.name);
                     }
+                    this.rowHeights[row.name] = row.height || 1;
                     row.widgets.forEach(widget => {
                         this.widgets.push({ ...widget, rowName: row.name });
                     });
@@ -233,6 +248,7 @@ ROW main
 
             if (!this.rows.includes('main')) {
                 this.rows.push('main');
+                this.rowHeights['main'] = this.rowHeights['main'] || 1;
             }
         } catch (error) {
             console.error('Error parsing layout:', error);
@@ -254,34 +270,150 @@ ROW main
             <!-- Mode Toggle -->
             <div style="display: flex; gap: 10px; margin-bottom: 15px;">
                 <button onclick="window.dashboardEditor.setMode('visual')" style="
-                    flex: 1;
-                    padding: 12px 20px;
+                    flex: 1; padding: 12px 20px;
                     background: ${this.mode === 'visual' ? 'var(--accent)' : 'var(--bg-card)'};
                     color: ${this.mode === 'visual' ? 'white' : 'var(--text)'};
                     border: 1px solid ${this.mode === 'visual' ? 'var(--accent)' : 'var(--border)'};
-                    border-radius: 10px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    cursor: pointer;
+                    border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
                 ">🎨 Visuell</button>
                 <button onclick="window.dashboardEditor.setMode('code')" style="
-                    flex: 1;
-                    padding: 12px 20px;
+                    flex: 1; padding: 12px 20px;
                     background: ${this.mode === 'code' ? 'var(--accent)' : 'var(--bg-card)'};
                     color: ${this.mode === 'code' ? 'white' : 'var(--text)'};
                     border: 1px solid ${this.mode === 'code' ? 'var(--accent)' : 'var(--border)'};
-                    border-radius: 10px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    cursor: pointer;
+                    border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
                 ">📝 Code</button>
+                <button onclick="window.dashboardEditor.setMode('sensors')" style="
+                    flex: 1; padding: 12px 20px;
+                    background: ${this.mode === 'sensors' ? 'var(--accent)' : 'var(--bg-card)'};
+                    color: ${this.mode === 'sensors' ? 'white' : 'var(--text)'};
+                    border: 1px solid ${this.mode === 'sensors' ? 'var(--accent)' : 'var(--border)'};
+                    border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
+                ">📡 Sensoren</button>
             </div>
 
-            ${this.mode === 'code' ? this.renderCodeEditor() : this.renderVisualEditor()}
+            ${this.mode === 'code' ? this.renderCodeEditor() : this.mode === 'sensors' ? this.renderSensorManager() : this.renderVisualEditor()}
         `;
 
         if (this.mode === 'visual') {
             this.initDragDrop();
+        }
+        if (this.mode === 'sensors') {
+            this.loadSensorGroups();
+        }
+    }
+
+    async loadSensorGroups() {
+        const container = document.getElementById('sensor-mgmt-list');
+        if (!container) return;
+        try {
+            const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
+            const resp = await fetch(`${apiUrl}/api/sensors/grouped`);
+            const data = await resp.json();
+            if (!data.groups?.length) {
+                container.innerHTML = '<div style="color:var(--text-dim);padding:16px">Keine Sensoren bekannt.</div>';
+                return;
+            }
+            container.innerHTML = data.groups.map(g => `
+                <details style="margin-bottom:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+                    <summary style="padding:10px 14px;cursor:pointer;background:var(--bg-card);display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;list-style:none;user-select:none">
+                        <span>${g.icon}</span>
+                        <span>${g.label}</span>
+                        <span style="color:var(--text-dim);font-weight:400;margin-left:auto;font-size:11px">${g.source} · ${g.sensors.length}</span>
+                    </summary>
+                    <div>
+                        ${g.sensors.map(s => `
+                            <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-top:1px solid var(--border);font-size:12px">
+                                <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:${s.status==='online'?'#3fb950':s.status==='offline'?'#ef5350':'#8b949e'}"></span>
+                                <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.topic}"><strong>${s.label}</strong></span>
+                                <span style="color:var(--text-dim);min-width:60px;text-align:right">${s.value||'—'} ${s.unit}</span>
+                                <button onclick="window.dashboardEditor.showWidgetTypePicker('${s.topic.replace(/'/g,"\\'")}','${s.label.replace(/'/g,"\\'")}','${(s.unit||'').replace(/'/g,"\\'")}', true)"
+                                    title="Als Widget hinzufügen"
+                                    style="background:none;border:none;cursor:pointer;color:#4fc3f7;font-size:15px;padding:2px 4px;flex-shrink:0;line-height:1">➕</button>
+                                <button onclick="window.dashboardEditor.deleteSensorTopic('${s.topic.replace(/'/g,"\\'")}', this)"
+                                    title="Topic entfernen"
+                                    style="background:none;border:none;cursor:pointer;color:#ef5350;font-size:15px;padding:2px 4px;flex-shrink:0;line-height:1">🗑</button>
+                            </div>`).join('')}
+                    </div>
+                </details>`).join('');
+        } catch(e) {
+            container.innerHTML = `<div style="color:#ef5350;padding:16px">Fehler: ${e.message}</div>`;
+        }
+    }
+
+    renderSensorManager() {
+        return `
+            <div style="height:calc(100% - 60px);overflow-y:auto">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                    <span style="font-size:13px;color:var(--text-dim)">Alle bekannten MQTT-Topics. Veraltete Einträge hier entfernen.</span>
+                    <button onclick="window.dashboardEditor.loadSensorGroups()" style="
+                        background:var(--bg-card);border:1px solid var(--border);border-radius:6px;
+                        padding:6px 12px;cursor:pointer;font-size:12px;color:var(--text)">🔄 Aktualisieren</button>
+                </div>
+                <div id="sensor-mgmt-list">
+                    <div style="color:var(--text-dim);padding:16px">Wird geladen…</div>
+                </div>
+            </div>`;
+    }
+
+    async deleteSensorTopic(topic, btn) {
+        if (!confirm(`Topic entfernen?\n${topic}`)) return;
+        try {
+            const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
+            const resp = await fetch(`${apiUrl}/api/sensors/topic?topic=${encodeURIComponent(topic)}`, { method: 'DELETE' });
+            const data = await resp.json();
+            if (data.removed) {
+                const row = btn.closest('div[style*="display:flex"]');
+                if (row) { row.style.opacity = '0'; row.style.transition = 'opacity 0.3s'; setTimeout(() => row.remove(), 300); }
+            }
+        } catch(e) { alert(`Fehler: ${e.message}`); }
+    }
+
+    showWidgetTypePicker(sensorPath, sensorName, unit, fromSensorsTab = false) {
+        const existing = document.getElementById('widget-type-picker');
+        if (existing) existing.remove();
+
+        const esc = s => s.replace(/'/g, "\\'");
+        const overlay = document.createElement('div');
+        overlay.id = 'widget-type-picker';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;z-index:10000';
+        overlay.innerHTML = `
+            <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:24px;min-width:300px;max-width:380px;box-shadow:0 8px 32px rgba(0,0,0,0.5)">
+                <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">Widget-Typ wählen</div>
+                <div style="font-size:11px;color:var(--text-dim);margin-bottom:18px;word-break:break-all">${sensorName || sensorPath}</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                    <button onclick="window.dashboardEditor._addFromPicker('sensor','${esc(sensorPath)}','${esc(unit)}',${fromSensorsTab});document.getElementById('widget-type-picker').remove()" style="
+                        padding:12px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;
+                        color:var(--text);font-size:13px;cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px;
+                        transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+                        <span style="font-size:22px">📊</span>
+                        <span><strong>Sensor-Karte</strong><br><span style="font-size:11px;color:var(--text-dim)">Zeigt den aktuellen Wert als Karte</span></span>
+                    </button>
+                    <button onclick="window.dashboardEditor._addFromPicker('gauge','${esc(sensorPath)}','${esc(unit)}',${fromSensorsTab});document.getElementById('widget-type-picker').remove()" style="
+                        padding:12px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;
+                        color:var(--text);font-size:13px;cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px;
+                        transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+                        <span style="font-size:22px">🎯</span>
+                        <span><strong>Gauge</strong><br><span style="font-size:11px;color:var(--text-dim)">Zeiger- oder Bogenanzeige</span></span>
+                    </button>
+                </div>
+                <button onclick="document.getElementById('widget-type-picker').remove()" style="
+                    margin-top:14px;width:100%;padding:10px;background:none;border:1px solid var(--border);
+                    border-radius:8px;color:var(--text-dim);cursor:pointer;font-size:12px">Abbrechen</button>
+            </div>`;
+        overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+        document.body.appendChild(overlay);
+    }
+
+    _addFromPicker(type, sensorPath, unit, switchToVisual = false) {
+        if (type === 'gauge') {
+            this.addGauge(sensorPath, unit);
+        } else {
+            this.addWidget('sensor', sensorPath);
+        }
+        if (switchToVisual) {
+            this.mode = 'visual';
+            this.render();
         }
     }
 
@@ -448,116 +580,51 @@ ROW weather
                     background: var(--bg-panel);
                     border: 1px solid var(--border);
                     border-radius: 16px;
-                    padding: 20px;
+                    padding: 16px;
                     overflow-y: auto;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0;
                 ">
-                    <h3 style="color: var(--accent); margin: 0 0 15px 0; font-size: 16px;">
-                        📦 Verfügbare Widgets
-                    </h3>
-                    <p style="color: var(--text-dim); font-size: 12px; margin-bottom: 15px;">
-                        Klicke um hinzuzufügen
-                    </p>
-
-                    <!-- Sensor Cards -->
-                    <div style="margin-bottom: 15px;">
-                        <h4 style="color: var(--text-dim); margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">📊 Sensoren</h4>
-                        <div class="sensor-list" style="max-height: 200px; overflow-y: auto;">
-                            ${this.sensors.map(sensor => `
-                                <div class="palette-item" onclick="window.dashboardEditor.addWidget('sensor', '${sensor.full_path || sensor.base_name}')" style="
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 10px;
-                                    padding: 10px;
-                                    background: var(--bg-card);
-                                    border: 1px solid var(--border);
-                                    border-radius: 10px;
-                                    margin-bottom: 6px;
-                                    cursor: pointer;
-                                    transition: all 0.2s;
-                                " onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-                                    <span style="font-size: 20px;">${sensor.icon}</span>
-                                    <div style="flex: 1; min-width: 0;">
-                                        <div style="color: var(--text); font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${sensor.name}</div>
-                                        <div style="color: var(--text-dim); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${sensor.full_path || sensor.base_name}</div>
-                                    </div>
-                                    ${sensor.current_value !== undefined ? `<span style="color: var(--accent); font-size: 11px; font-family: monospace;">${sensor.current_value}${sensor.unit || ''}</span>` : ''}
+                    <!-- Grouped Sensors -->
+                    <div style="flex:1;overflow-y:auto;margin-bottom:12px">
+                        ${this.sensorGroupsPalette.length === 0 ? `
+                            <div style="color:var(--text-dim);font-size:12px;padding:8px 0">Keine Sensoren — öffne den Sensoren-Tab zum Laden.</div>
+                        ` : this.sensorGroupsPalette.map(g => `
+                            <details style="margin-bottom:6px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+                                <summary style="padding:8px 12px;cursor:pointer;background:var(--bg-card);display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;list-style:none;user-select:none"
+                                    onmouseover="this.style.background='var(--bg-panel)'" onmouseout="this.style.background='var(--bg-card)'">
+                                    <span>${g.icon}</span>
+                                    <span style="flex:1">${g.label}</span>
+                                    <span style="color:var(--text-dim);font-weight:400;font-size:10px">${g.sensors.length}</span>
+                                </summary>
+                                <div>
+                                    ${g.sensors.map(s => `
+                                        <div onclick="window.dashboardEditor.showWidgetTypePicker('${s.topic.replace(/'/g,"\\'")}','${s.label.replace(/'/g,"\\'")}','${(s.unit||'').replace(/'/g,"\\'")}',false)"
+                                            style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-top:1px solid var(--border);font-size:11px;cursor:pointer;transition:background .15s"
+                                            onmouseover="this.style.background='rgba(79,195,247,0.07)'" onmouseout="this.style.background=''">
+                                            <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:${s.status==='online'?'#3fb950':s.status==='offline'?'#ef5350':'#8b949e'}"></span>
+                                            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${s.label}</span>
+                                            <span style="color:var(--text-dim);font-size:10px;font-family:monospace">${s.value||''} ${s.unit||''}</span>
+                                        </div>`).join('')}
                                 </div>
-                            `).join('')}
-                        </div>
-                    </div>
-
-                    <!-- Gauge Widgets -->
-                    <div style="margin-bottom: 15px; padding-top: 15px; border-top: 1px solid var(--border);">
-                        <h4 style="color: var(--text-dim); margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">🎯 Gauges</h4>
-                        <div class="sensor-list" style="max-height: 150px; overflow-y: auto;">
-                            ${this.sensors.map(sensor => `
-                                <div class="palette-item" onclick="window.dashboardEditor.addGauge('${sensor.full_path || sensor.base_name}', '${sensor.unit || ''}')" style="
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 10px;
-                                    padding: 10px;
-                                    background: linear-gradient(135deg, var(--bg-card), rgba(100, 255, 218, 0.05));
-                                    border: 1px solid rgba(100, 255, 218, 0.2);
-                                    border-radius: 10px;
-                                    margin-bottom: 6px;
-                                    cursor: pointer;
-                                    transition: all 0.2s;
-                                " onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='rgba(100, 255, 218, 0.2)'">
-                                    <span style="font-size: 18px;">🎯</span>
-                                    <div style="flex: 1; min-width: 0;">
-                                        <div style="color: var(--accent); font-weight: 600; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${sensor.name}</div>
-                                        <div style="color: var(--text-dim); font-size: 10px;">Gauge-Anzeige</div>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
+                            </details>`).join('')}
                     </div>
 
                     <!-- Special Widgets -->
-                    <div style="padding-top: 15px; border-top: 1px solid var(--border);">
-                        <h4 style="color: var(--text-dim); margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">➕ Spezial</h4>
-                        <div class="palette-item" onclick="window.dashboardEditor.addWidget('spacer')" style="
-                            display: flex;
-                            align-items: center;
-                            gap: 12px;
-                            padding: 10px;
-                            background: var(--bg-card);
-                            border: 1px solid var(--border);
-                            border-radius: 10px;
-                            margin-bottom: 6px;
-                            cursor: pointer;
-                        ">
-                            <span style="font-size: 20px;">⬜</span>
-                            <div style="color: var(--text); font-size: 12px;">Spacer</div>
-                        </div>
-                        <div class="palette-item" onclick="window.dashboardEditor.addWidget('clock')" style="
-                            display: flex;
-                            align-items: center;
-                            gap: 12px;
-                            padding: 10px;
-                            background: var(--bg-card);
-                            border: 1px solid var(--border);
-                            border-radius: 10px;
-                            margin-bottom: 6px;
-                            cursor: pointer;
-                        ">
-                            <span style="font-size: 20px;">🕐</span>
-                            <div style="color: var(--text); font-size: 12px;">Uhr</div>
-                        </div>
-                        <div class="palette-item" onclick="window.dashboardEditor.addWidget('text')" style="
-                            display: flex;
-                            align-items: center;
-                            gap: 12px;
-                            padding: 10px;
-                            background: var(--bg-card);
-                            border: 1px solid var(--border);
-                            border-radius: 10px;
-                            margin-bottom: 6px;
-                            cursor: pointer;
-                        ">
-                            <span style="font-size: 20px;">📝</span>
-                            <div style="color: var(--text); font-size: 12px;">Text</div>
-                        </div>
+                    <div style="border-top:1px solid var(--border);padding-top:12px">
+                        <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Spezial</div>
+                        ${[
+                            ['window.dashboardEditor.addWidget(\'spacer\')', '⬜', 'Spacer'],
+                            ['window.dashboardEditor.addWidget(\'clock\')',  '🕐', 'Uhr'],
+                            ['window.dashboardEditor.addWidget(\'text\')',   '📝', 'Text'],
+                            ['window.dashboardEditor.addWidget(\'compass\')', '🧭', 'Kompass'],
+                        ].map(([fn, icon, label]) => `
+                            <div onclick="${fn}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;margin-bottom:5px;cursor:pointer;font-size:12px;transition:border-color .15s"
+                                onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+                                <span style="font-size:16px">${icon}</span>
+                                <span style="color:var(--text)">${label}</span>
+                            </div>`).join('')}
                     </div>
                 </div>
 
@@ -588,6 +655,16 @@ ROW weather
                                     ${[1,2,3,4].map(n => `<option value="${n}" ${this.gridColumns === n ? 'selected' : ''}>${n}</option>`).join('')}
                                 </select>
                             </label>
+                            <button onclick="window.dashboardEditor.addRow()" style="
+                                padding: 6px 14px;
+                                background: var(--bg-card);
+                                color: var(--accent);
+                                border: 1px solid var(--accent);
+                                border-radius: 8px;
+                                font-size: 12px;
+                                font-weight: 600;
+                                cursor: pointer;
+                            ">➕ Neue Reihe</button>
                         </div>
                     </div>
 
@@ -673,12 +750,14 @@ ROW weather
             this.gridColumns = parsed.grid || 3;
             this.widgets = [];
             this.rows = [];
+            this.rowHeights = {};
 
             if (parsed.rows) {
                 parsed.rows.forEach(row => {
                     if (!this.rows.includes(row.name)) {
                         this.rows.push(row.name);
                     }
+                    this.rowHeights[row.name] = row.height || 1;
                     row.widgets.forEach(widget => {
                         this.widgets.push({ ...widget, rowName: row.name });
                     });
@@ -716,62 +795,168 @@ ROW weather
     }
 
     /**
-     * Render widgets on canvas
+     * Render widgets on canvas grouped by row with height controls
      */
     renderWidgets() {
-        if (this.widgets.length === 0) {
+        if (this.widgets.length === 0 && this.rows.length <= 1 && (this.rows.length === 0 || this.rows[0] === 'main')) {
             return `
-                <div style="
-                    grid-column: 1 / -1;
-                    text-align: center;
-                    padding: 40px;
-                    color: var(--text-dim);
-                ">
+                <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-dim);">
                     Keine Widgets.<br>
                     <small>Klicke links auf ein Widget um es hinzuzufügen.</small>
                 </div>
             `;
         }
 
-        return this.widgets.map((widget, index) => `
-            <div class="canvas-widget ${this.selectedWidget === index ? 'selected' : ''}"
-                 data-index="${index}"
-                 onclick="window.dashboardEditor.selectWidget(${index})"
-                 style="
-                    grid-column: span ${widget.size || 1};
-                    background: var(--bg-panel);
-                    border: 2px solid ${this.selectedWidget === index ? 'var(--accent)' : 'var(--border)'};
-                    border-radius: 12px;
-                    padding: 15px;
-                    cursor: move;
-                    position: relative;
-                    transition: all 0.2s;
+        // Use this.rows as canonical order, append any widget rows not in list
+        const seen = new Set(this.rows);
+        const rowOrder = [...this.rows];
+        this.widgets.forEach(w => {
+            const rn = w.rowName || 'main';
+            if (!seen.has(rn)) { seen.add(rn); rowOrder.push(rn); }
+        });
+
+        // Group widgets by row preserving global index
+        const byRow = {};
+        this.widgets.forEach((w, idx) => {
+            const rn = w.rowName || 'main';
+            if (!byRow[rn]) byRow[rn] = [];
+            byRow[rn].push({ widget: w, idx });
+        });
+
+        let html = '';
+        rowOrder.forEach(rowName => {
+            const h = this.rowHeights[rowName] || 1;
+            const cellH = 140 * h;
+            const rowWidgets = byRow[rowName] || [];
+
+            // Row header (spans all columns)
+            html += `
+                <div data-drop-row="${rowName}" style="
+                    grid-column: 1 / -1;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 5px 10px;
+                    background: rgba(79,195,247,0.07);
+                    border-radius: 8px;
+                    border: 1px solid rgba(79,195,247,0.15);
                 ">
-                <div style="display: flex; justify-content: space-between; align-items: start;">
-                    <div>
-                        <div style="font-size: 24px; margin-bottom: 5px;">
-                            ${this.getWidgetIcon(widget)}
-                        </div>
-                        <div style="color: var(--text); font-weight: 600; font-size: 13px;">
-                            ${widget.alias || this.getWidgetName(widget)}
-                        </div>
-                        <div style="color: var(--text-dim); font-size: 11px;">
-                            ${widget.type} | Größe: ${widget.size || 1}
+                    <span style="color: var(--accent); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; flex: 1;">
+                        ▸ ROW ${rowName}
+                    </span>
+                    <span style="color: var(--text-dim); font-size: 11px;">Höhe:</span>
+                    ${[1,2,3,4].map(n => `
+                        <button onclick="event.stopPropagation(); window.dashboardEditor.setRowHeight('${rowName}', ${n})" style="
+                            width: 26px; height: 26px;
+                            background: ${h === n ? 'var(--accent)' : 'var(--bg-card)'};
+                            color: ${h === n ? 'white' : 'var(--text-dim)'};
+                            border: 1px solid ${h === n ? 'var(--accent)' : 'var(--border)'};
+                            border-radius: 5px; cursor: pointer; font-size: 11px; font-weight: 700;
+                        ">H${n}</button>
+                    `).join('')}
+                    <button onclick="event.stopPropagation(); window.dashboardEditor.deleteRow('${rowName}')" title="Reihe löschen" style="
+                        width: 26px; height: 26px; margin-left: 4px;
+                        background: none; color: #ef5350;
+                        border: 1px solid rgba(239,83,80,0.4);
+                        border-radius: 5px; cursor: pointer; font-size: 13px; line-height: 1;
+                    ">🗑</button>
+                </div>
+            `;
+
+            // Empty row placeholder
+            if (rowWidgets.length === 0) {
+                html += `
+                    <div data-drop-row="${rowName}" style="
+                        grid-column: 1 / -1;
+                        height: 60px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: var(--text-dim);
+                        font-size: 12px;
+                        border: 1px dashed var(--border);
+                        border-radius: 8px;
+                        opacity: 0.6;
+                    ">Keine Widgets — ziehe oder klicke einen Sensor hinein</div>
+                `;
+            }
+
+            // Row's widgets
+            rowWidgets.forEach(({ widget, idx }) => {
+                html += `
+                    <div class="canvas-widget ${this.selectedWidget === idx ? 'selected' : ''}"
+                         data-index="${idx}"
+                         data-row="${widget.rowName || 'main'}"
+                         onclick="window.dashboardEditor.selectWidget(${idx})"
+                         style="
+                            grid-column: span ${widget.size || 1};
+                            height: ${cellH}px;
+                            background: var(--bg-panel);
+                            border: 2px solid ${this.selectedWidget === idx ? 'var(--accent)' : 'var(--border)'};
+                            border-radius: 12px;
+                            padding: 12px;
+                            cursor: pointer;
+                            position: relative;
+                            transition: border-color 0.2s;
+                            box-sizing: border-box;
+                            overflow: hidden;
+                         ">
+                        <div style="display: flex; justify-content: space-between; align-items: start; height: 100%;">
+                            <div>
+                                <div style="font-size: 20px; margin-bottom: 4px;">${this.getWidgetIcon(widget)}</div>
+                                <div style="color: var(--text); font-weight: 600; font-size: 12px;">${widget.alias || this.getWidgetName(widget)}</div>
+                                <div style="color: var(--text-dim); font-size: 10px;">${widget.type} | ×${widget.size || 1}</div>
+                            </div>
+                            <button onclick="event.stopPropagation(); window.dashboardEditor.deleteWidget(${idx})" style="
+                                background: var(--danger); color: white; border: none;
+                                width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 14px; flex-shrink: 0;
+                            ">×</button>
                         </div>
                     </div>
-                    <button onclick="event.stopPropagation(); window.dashboardEditor.deleteWidget(${index})" style="
-                        background: var(--danger);
-                        color: white;
-                        border: none;
-                        width: 28px;
-                        height: 28px;
-                        border-radius: 50%;
-                        cursor: pointer;
-                        font-size: 16px;
-                    ">×</button>
-                </div>
-            </div>
-        `).join('');
+                `;
+            });
+        });
+
+        return html;
+    }
+
+    /**
+     * Add a new row
+     */
+    addRow() {
+        let name = prompt('Reihen-Name:', `row${this.rows.length + 1}`);
+        if (!name) return;
+        name = name.trim().replace(/\s+/g, '_');
+        if (!name || this.rows.includes(name)) return;
+        this.rows.push(name);
+        this.rowHeights[name] = 1;
+        this.render();
+    }
+
+    /**
+     * Delete a row
+     */
+    deleteRow(rowName) {
+        const widgetsInRow = this.widgets.filter(w => (w.rowName || 'main') === rowName);
+        if (widgetsInRow.length > 0) {
+            if (!confirm(`Reihe "${rowName}" löschen?\n${widgetsInRow.length} Widget(s) werden nach "main" verschoben.`)) return;
+            this.widgets.forEach(w => { if ((w.rowName || 'main') === rowName) w.rowName = 'main'; });
+        } else {
+            if (!confirm(`Reihe "${rowName}" löschen?`)) return;
+        }
+        this.rows = this.rows.filter(r => r !== rowName);
+        if (!this.rows.includes('main')) this.rows.unshift('main');
+        delete this.rowHeights[rowName];
+        this.selectedWidget = null;
+        this.render();
+    }
+
+    /**
+     * Set height for a row (1-4)
+     */
+    setRowHeight(rowName, height) {
+        this.rowHeights[rowName] = Math.max(1, Math.min(4, height));
+        this.render();
     }
 
     /**
@@ -850,6 +1035,15 @@ ROW weather
                            style="width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                 </div>
                 ` : ''}
+
+                <!-- Row -->
+                <div>
+                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Reihe</label>
+                    <select onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'rowName', this.value)" style="
+                        width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
+                        ${this.rows.map(r => `<option value="${r}" ${widget.rowName === r ? 'selected' : ''}>${r}</option>`).join('')}
+                    </select>
+                </div>
 
                 <!-- Size -->
                 <div>
@@ -960,12 +1154,13 @@ ROW weather
      * Add a new widget
      */
     addWidget(type, sensor = null) {
+        const targetRow = this.rows[this.rows.length - 1] || 'main';
         const widget = {
             type: type,
             size: 1,
             style: 'card',
             color: 'cyan',
-            rowName: 'main'
+            rowName: targetRow
         };
 
         if (type === 'sensor' && sensor) {
@@ -985,6 +1180,7 @@ ROW weather
      * Add a gauge widget
      */
     addGauge(sensor, unit = '') {
+        const targetRow = this.rows[this.rows.length - 1] || 'main';
         const widget = {
             type: 'gauge',
             sensor: sensor,
@@ -996,7 +1192,7 @@ ROW weather
             unit: unit,
             label: '',
             decimals: 1,
-            rowName: 'main'
+            rowName: targetRow
         };
 
         this.widgets.push(widget);
@@ -1053,40 +1249,76 @@ ROW weather
     }
 
     /**
-     * Initialize drag & drop (simplified)
+     * Initialize drag & drop with cross-row support
      */
     initDragDrop() {
         const grid = document.getElementById('canvas-grid');
         if (!grid) return;
 
-        const widgets = grid.querySelectorAll('.canvas-widget');
-        widgets.forEach(widget => {
-            widget.draggable = true;
+        const highlight = (el, on) => {
+            el.style.outline = on ? '2px solid var(--accent)' : '';
+            el.style.outlineOffset = on ? '-2px' : '';
+        };
 
-            widget.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('text/plain', widget.dataset.index);
-                widget.style.opacity = '0.5';
+        // Widget cards — draggable + drop target
+        grid.querySelectorAll('.canvas-widget').forEach(card => {
+            card.draggable = true;
+
+            card.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', card.dataset.index);
+                setTimeout(() => card.style.opacity = '0.4', 0);
             });
 
-            widget.addEventListener('dragend', () => {
-                widget.style.opacity = '1';
+            card.addEventListener('dragend', () => {
+                card.style.opacity = '1';
             });
 
-            widget.addEventListener('dragover', (e) => {
+            card.addEventListener('dragover', (e) => {
                 e.preventDefault();
+                highlight(card, true);
             });
 
-            widget.addEventListener('drop', (e) => {
+            card.addEventListener('dragleave', () => highlight(card, false));
+
+            card.addEventListener('drop', (e) => {
                 e.preventDefault();
+                e.stopPropagation();
+                highlight(card, false);
+
                 const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
-                const toIndex = parseInt(widget.dataset.index);
+                const toIndex = parseInt(card.dataset.index);
+                if (isNaN(fromIndex) || fromIndex === toIndex) return;
 
-                if (fromIndex !== toIndex) {
-                    const movedWidget = this.widgets.splice(fromIndex, 1)[0];
-                    this.widgets.splice(toIndex, 0, movedWidget);
-                    this.selectedWidget = toIndex;
-                    this.render();
-                }
+                const targetRow = card.dataset.row;
+                const moved = this.widgets.splice(fromIndex, 1)[0];
+                moved.rowName = targetRow;
+                const adjustedTo = toIndex > fromIndex ? toIndex - 1 : toIndex;
+                this.widgets.splice(adjustedTo, 0, moved);
+                this.selectedWidget = adjustedTo;
+                this.render();
+            });
+        });
+
+        // Row headers + empty placeholders — drop zone to move widget into that row
+        grid.querySelectorAll('[data-drop-row]').forEach(zone => {
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                highlight(zone, true);
+            });
+
+            zone.addEventListener('dragleave', () => highlight(zone, false));
+
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                highlight(zone, false);
+
+                const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                if (isNaN(fromIndex)) return;
+                const targetRow = zone.dataset.dropRow;
+                this.widgets[fromIndex].rowName = targetRow;
+                this.selectedWidget = fromIndex;
+                this.render();
             });
         });
     }
@@ -1106,7 +1338,8 @@ ROW weather
         });
 
         Object.entries(byRow).forEach(([rowName, widgets]) => {
-            dsl += `ROW ${rowName}\n`;
+            const h = this.rowHeights[rowName] || 1;
+            dsl += `ROW ${rowName}${h > 1 ? ` HEIGHT ${h}` : ''}\n`;
             widgets.forEach(w => {
                 if (w.type === 'sensor') {
                     dsl += `  SENSOR ${w.sensor}`;

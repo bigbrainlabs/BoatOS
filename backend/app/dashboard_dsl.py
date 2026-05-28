@@ -149,11 +149,22 @@ class DashboardDSLParser:
         return 3  # Default
 
     def _parse_row(self, line: str) -> Dict[str, Any]:
-        """Parse ROW command"""
-        match = re.search(r'ROW\s+(\w+)?', line, re.IGNORECASE)
-        name = match.group(1) if match and match.group(1) else ""
+        """Parse ROW command — supports ROW [name] [HEIGHT n]"""
+        tokens = line.split()
+        name = ""
+        height = 1
+        i = 1  # skip "ROW"
+        if i < len(tokens) and tokens[i].upper() not in ('HEIGHT',):
+            name = tokens[i]
+            i += 1
+        if i < len(tokens) - 1 and tokens[i].upper() == 'HEIGHT':
+            try:
+                height = max(1, min(4, int(tokens[i + 1])))
+            except (ValueError, IndexError):
+                height = 1
         return {
             "name": name,
+            "height": height,
             "widgets": []
         }
 

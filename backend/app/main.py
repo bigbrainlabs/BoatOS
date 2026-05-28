@@ -182,6 +182,179 @@ def generate_sensor_name(topic_base: str) -> str:
     # Join with › separator
     return ' › '.join(cleaned_parts)
 
+# ==================== SENSOR GROUPING ====================
+
+# Praefix -> (group_id, label, icon, source) — Reihenfolge bestimmt Prioritaet
+_SENSOR_GROUP_RULES = [
+    ("boot/sensoren/motor",             "motor",      "Motor",          "⚙️",  "ESP32"),
+    ("boot/sensoren/batterie",          "batterie",   "Batterie",       "\U0001f50b", "ESP32"),
+    ("boot/sensoren/tank/diesel",       "diesel",     "Dieseltank",     "⛽", "ESP32"),
+    ("boot/sensoren/tank",              "tank",       "Tank",           "⛽", "ESP32"),
+    ("boot/sensoren/lage",              "lage",       "Lage",           "\U0001f4d0", "ESP32"),
+    ("boot/sensoren/durchfluss",        "durchfluss", "Durchfluss",     "\U0001f4a7", "ESP32"),
+    ("boat/navigation/gnss",            "gnss",       "GPS / GNSS",     "\U0001f4e1", "SignalK"),
+    ("boat/navigation/position",        "position",   "GPS Position",   "\U0001f5fa️", "SignalK"),
+    ("boat/navigation",                 "navigation", "Navigation",     "\U0001f9ed", "SignalK"),
+    ("signalk/vessels/self/electrical", "elektrik",   "Elektrik",       "⚡", "SignalK"),
+    ("signalk/vessels/self/propulsion", "antrieb",    "Antrieb",        "⚙️",  "SignalK"),
+    ("signalk/vessels/self/tanks",      "tanks_sk",   "Tanks",          "⛽", "SignalK"),
+    ("signalk/vessels/self/navigation", "nav_sk",     "Navigation",     "\U0001f9ed", "SignalK"),
+    ("arielle/bilge",                   "bilge",      "Bilge",          "\U0001f321️", "Bilge-Sensor"),
+    ("boatos/bilge",                    "bilge",      "Bilge",          "\U0001f321️", "Bilge-Sensor"),
+]
+
+# Topics/Praefixe komplett ignorieren
+_SENSOR_IGNORE_PREFIXES = [
+    "boot/status",
+    "boat/notifications",
+    "test/",
+    "boatos/test",
+    "test/boatos",
+]
+
+# Letzte Topic-Segmente die keine Sensorwerte sind
+_SENSOR_IGNORE_SUFFIXES = {
+    "online", "status", "uptime", "wifi_rssi", "mode", "sensors_ok",
+    "datetime", "methodquality", "differentialreference",
+    "magneticvariationageofservice", "differentialage",
+    "satellitesinview",
+}
+
+# Einheiten-Mapping: letztes Topic-Segment (lowercase) -> Einheit
+_SENSOR_UNIT_MAP = {
+    "temperature": "°C", "temperatur": "°C", "temp": "°C",
+    "humidity": "%",    "hum": "%",
+    "voltage": "V",     "battv": "V",
+    "current": "A",
+    "revolutions": "rpm", "drehzahl": "rpm",
+    "oilpressure": "bar", "oeldruck": "bar",
+    "percent": "%",    "prozent": "%",  "batpercent": "%", "currentlevel": "%",
+    "speedoverground": "kn",
+    "liter": "L",
+    "latitude": "°",  "longitude": "°",
+    "pitch": "°",     "roll": "°",  "neigung": "°", "schlagseite": "°",
+    "batmah": "mAh",
+    "horizontaldilution": "",
+    "antennaaltitude": "m",
+    "courseovergroundtrue": "°",
+    "rate": "L/h",
+    "count": "",
+    "satellites": "",
+}
+
+# Lesbare Labels fuer bekannte letzte Topic-Segmente
+_SENSOR_LABEL_MAP = {
+    "drehzahl": "Drehzahl",
+    "oeldruck": "Öldruck",
+    "temperatur": "Temperatur",      "temperature": "Temperatur",  "temp": "Temperatur",
+    "neigung": "Neigung (Pitch)",    "pitch": "Neigung (Pitch)",
+    "schlagseite": "Schlagseite (Roll)", "roll": "Schlagseite (Roll)",
+    "starter": "Batterie Starter",
+    "verbraucher": "Batterie Verbraucher",
+    "rate": "Durchflussrate",
+    "liter": "Diesel (Liter)",
+    "prozent": "Diesel (%)",         "percent": "Füllstand (%)",
+    "revolutions": "Drehzahl",
+    "oilpressure": "Öldruck",
+    "speedoverground": "Fahrt übers Grund (SOG)",
+    "courseovergroundtrue": "Kurs über Grund (COG)",
+    "horizontaldilution": "GPS-Genauigkeit (HDOP)",
+    "antennaaltitude": "Antennenhöhe",
+    "count": "Anzahl Satelliten",
+    "latitude": "Breitengrad",       "longitude": "Längengrad",
+    "voltage": "Spannung",
+    "currentlevel": "Füllstand",
+    "batpercent": "Akkustand (%)",   "batmah": "Akkustand (mAh)",
+    "battv": "Akkuspannung",
+    "hum": "Luftfeuchtigkeit",       "humidity": "Luftfeuchtigkeit",
+}
+
+def _group_for_topic(topic: str):
+    """Gibt (group_id, label, icon, source) zurueck oder None wenn ignoriert."""
+    t = topic.lower()
+    for prefix in _SENSOR_IGNORE_PREFIXES:
+        if t.startswith(prefix.lower()):
+            return None
+    last = t.split("/")[-1]
+    if last in _SENSOR_IGNORE_SUFFIXES:
+        return None
+    if "satellitesinview" in t:
+        return None
+    for prefix, gid, glabel, icon, source in _SENSOR_GROUP_RULES:
+        if t.startswith(prefix.lower()):
+            return (gid, glabel, icon, source)
+    return ("sonstige", "Sonstige", "\U0001f4ca", "unbekannt")
+
+def _label_for_topic(topic: str) -> str:
+    last = topic.split("/")[-1].lower()
+    return _SENSOR_LABEL_MAP.get(last, last.replace("_", " ").title())
+
+def _unit_for_topic(topic: str) -> str:
+    last = topic.split("/")[-1].lower()
+    return _SENSOR_UNIT_MAP.get(last, "")
+
+@app.get("/api/sensors/grouped")
+async def get_sensors_grouped():
+    """Sensoren gruppiert nach Kategorie/Quelle. Loest langfristig /api/sensors/list ab."""
+    import time
+    current_time = time.time()
+
+    all_topics: Dict[str, Any] = {}
+    for topic, info in known_topics.items():
+        all_topics[topic] = {
+            "value": info.get("last_value", ""),
+            "last_seen": info.get("last_seen", 0),
+        }
+    for topic, ts in sensor_timestamps.items():
+        if topic not in all_topics:
+            all_topics[topic] = {"value": topic_values.get(topic, ""), "last_seen": ts}
+        else:
+            if ts > all_topics[topic]["last_seen"]:
+                all_topics[topic]["value"] = topic_values.get(topic, all_topics[topic]["value"])
+                all_topics[topic]["last_seen"] = ts
+
+    groups: Dict[str, Any] = {}
+    for topic, data in sorted(all_topics.items()):
+        group_info = _group_for_topic(topic)
+        if group_info is None:
+            continue
+        gid, glabel, icon, source = group_info
+        if gid not in groups:
+            groups[gid] = {"id": gid, "label": glabel, "icon": icon, "source": source, "sensors": []}
+        age = current_time - data["last_seen"]
+        status = "online" if age < 120 else ("offline" if data["last_seen"] > 0 else "unknown")
+        groups[gid]["sensors"].append({
+            "topic": topic,
+            "label": _label_for_topic(topic),
+            "value": data["value"],
+            "unit": _unit_for_topic(topic),
+            "status": status,
+            "age_seconds": round(age),
+        })
+
+    order = [gid for _, gid, _, _, _ in _SENSOR_GROUP_RULES] + ["sonstige"]
+    seen: set = set()
+    sorted_groups = []
+    for gid in order:
+        if gid in groups and gid not in seen:
+            sorted_groups.append(groups[gid])
+            seen.add(gid)
+
+    return {"groups": sorted_groups, "total": sum(len(g["sensors"]) for g in sorted_groups)}
+
+@app.delete("/api/sensors/topic")
+async def delete_sensor_topic(topic: str):
+    """Einzelnes Topic aus known_topics entfernen (persistent)."""
+    removed = False
+    if topic in known_topics:
+        del known_topics[topic]
+        removed = True
+    sensor_timestamps.pop(topic, None)
+    topic_values.pop(topic, None)
+    if removed:
+        save_known_topics()
+    return {"removed": removed, "topic": topic}
+
 @app.get("/api/sensors/list")
 async def get_sensors_list():
     """Get a structured list of all detected sensors with their status - fully dynamic from MQTT topics"""
@@ -3599,6 +3772,22 @@ async def export_all_data():
         except FileNotFoundError:
             pass
 
+        # Load GPS device config
+        try:
+            signalk_path = Path("/home/boatos/.signalk/settings.json")
+            with open(signalk_path, 'r') as f:
+                sk = json.load(f)
+            for provider in sk.get("pipedProviders", []):
+                if provider.get("id") == "gps-usb":
+                    for el in provider.get("pipeElements", []):
+                        if "serialport" in el.get("type", ""):
+                            export_data["gps_device"] = {
+                                "device":   el["options"].get("device",   "/dev/ttyUSB0"),
+                                "baudrate": el["options"].get("baudrate", 4800)
+                            }
+        except Exception:
+            pass
+
         # Create JSON response
         json_data = json.dumps(export_data, indent=2, ensure_ascii=False)
 
@@ -3632,7 +3821,8 @@ async def import_all_data(request: Request):
                 "logbook_trips": 0,
                 "crew_members": 0,
                 "fuel_entries": 0,
-                "settings": False
+                "settings": False,
+                "gps_device": False
             },
             "errors": []
         }
@@ -3691,19 +3881,57 @@ async def import_all_data(request: Request):
                     json.dump(import_data["settings"], f, indent=2)
                 results["imported"]["settings"] = True
 
-                # Apply settings (AIS, routing, etc.)
                 settings = import_data["settings"]
                 if 'ais' in settings:
-                    provider = settings['ais'].get('provider', 'aishub')
-                    enabled = settings["ais"].get("enabled", False)
-                    api_key = settings['ais'].get('apiKey', '')
-                    ais_service.configure(provider=provider, api_key=api_key, enabled=enabled)
-
+                    ais_service.configure(
+                        provider=settings['ais'].get('provider', 'aishub'),
+                        api_key=settings['ais'].get('apiKey', ''),
+                        enabled=settings['ais'].get('enabled', False)
+                    )
                 if 'waterCurrent' in settings:
                     water_current_service.configure(settings['waterCurrent'])
+                if 'routing' in settings:
+                    try:
+                        init_waterway_router()
+                    except Exception:
+                        pass
+                if 'boat' in settings:
+                    boat = settings['boat']
+                    draft = float(boat.get('draft', 0) or 0)
+                    height = float(boat.get('height', 0) or 0)
+                    beam = float(boat.get('beam', 0) or 0)
+                    if draft > 0 or height > 0 or beam > 0:
+                        try:
+                            generate_lua_profile(draft, height, beam)
+                        except Exception:
+                            pass
+                if 'trackSensors' in settings:
+                    global track_sensors_config
+                    track_sensors_config = settings['trackSensors']
 
             except Exception as e:
                 results["errors"].append(f"Settings: {str(e)}")
+
+        # Import GPS device config
+        if "gps_device" in import_data and import_data["gps_device"]:
+            try:
+                device = import_data["gps_device"].get("device", "/dev/ttyUSB0")
+                baudrate = import_data["gps_device"].get("baudrate", 4800)
+                signalk_path = Path("/home/boatos/.signalk/settings.json")
+                if signalk_path.exists():
+                    with open(signalk_path, 'r') as f:
+                        sk = json.load(f)
+                    for provider in sk.get("pipedProviders", []):
+                        if provider.get("id") == "gps-usb":
+                            for el in provider.get("pipeElements", []):
+                                if "serialport" in el.get("type", ""):
+                                    el["options"]["device"] = device
+                                    el["options"]["baudrate"] = baudrate
+                    with open(signalk_path, 'w') as f:
+                        json.dump(sk, f, indent=2)
+                    results["imported"]["gps_device"] = True
+            except Exception as e:
+                results["errors"].append(f"GPS config: {str(e)}")
 
         print(f"✅ Import completed: {results['imported']}")
 
@@ -3942,45 +4170,17 @@ async def connect_wifi(request: Request):
         _run_nmcli("device", "disconnect", iface, use_sudo=True, timeout=5)
 
         if password:
-            import uuid as _uuid
-            safe_name = ssid.replace("/", "_").replace("\x00", "")
-            conn_path = f"/etc/NetworkManager/system-connections/{safe_name}.nmconnection"
-            # Frischer UUID verhindert dass NM den alten State-Cache recycelt
-            # und dabei psk-flags=1 (ask) aus dem Cache übernimmt → PSK wird ignoriert
-            fresh_uuid = str(_uuid.uuid4())
-            nm_conf = (
-                "[connection]\n"
-                f"id={ssid}\n"
-                f"uuid={fresh_uuid}\n"
-                "type=wifi\n"
-                "autoconnect=true\n\n"
-                "[wifi]\n"
-                f"ssid={ssid}\n"
-                "mode=infrastructure\n\n"
-                "[wifi-security]\n"
-                "key-mgmt=wpa-psk\n"
-                f"psk={password}\n"
-                "psk-flags=0\n\n"
-                "[ipv4]\n"
-                "method=auto\n\n"
-                "[ipv6]\n"
-                "method=auto\n"
-                "addr-gen-mode=default\n"
-            )
-            # Altes Profil + NM-State-Cache löschen, dann frische Datei
+            # Altes Profil löschen damit kein State-Cache mit psk-flags=1 recycelt wird
             _run_nmcli("connection", "delete", ssid, use_sudo=True, timeout=8)
-            subprocess.run(["sudo", "rm", "-f",
-                f"/var/lib/NetworkManager/seen-bssids"], capture_output=True)
-            write = subprocess.run(
-                ["sudo", "bash", "-c",
-                 f"cat > {conn_path} && chmod 600 {conn_path}"],
-                input=nm_conf, text=True, capture_output=True, timeout=8
+            await asyncio.sleep(0.5)
+            # PSK direkt übergeben → kein Secret-Agent nötig, NM legt Profil
+            # intern im eigenen Store an (autoconnect=yes by default)
+            result = _run_nmcli(
+                "device", "wifi", "connect", ssid,
+                "password", password,
+                "ifname", iface,
+                use_sudo=True, timeout=30
             )
-            if write.returncode != 0:
-                return {"status": "error", "message": write.stderr.strip()}
-            _run_nmcli("connection", "reload", use_sudo=True, timeout=8)
-            await asyncio.sleep(1)
-            result = _run_nmcli("connection", "up", "id", ssid, use_sudo=True, timeout=30)
         else:
             # Gespeichertes Profil vorhanden? → connection up (kein Rescan nötig,
             # schlägt bei falschem Passwort in ~10s fehl statt nach 30s zu hängen)
@@ -4274,7 +4474,7 @@ async def system_version():
     return {
         "current": current,
         "latest": latest,
-        "up_to_date": current == latest and current != "unbekannt",
+        "up_to_date": latest == "unbekannt" or current == latest,
         "release_url": release_url,
         "published_at": published_at,
     }

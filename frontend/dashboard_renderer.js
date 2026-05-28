@@ -136,6 +136,12 @@ class DashboardRenderer {
                 background: linear-gradient(180deg, rgba(255,255,255,0.25) 0%, transparent 60%);
                 border-radius: inherit;
             }
+            .dash-pager { display: flex; flex-direction: column; height: 100%; }
+            .dash-track { flex: 1; display: flex; min-height: 0; transition: transform 300ms ease; }
+            .dash-page { min-width: 100%; flex-shrink: 0; overflow: hidden; padding: 12px; box-sizing: border-box; }
+            .dash-dots { display: flex; justify-content: center; align-items: center; gap: 8px; padding: 10px 0 6px; flex-shrink: 0; }
+            .dash-dot { width: 8px; height: 8px; border-radius: 4px; background: rgba(80,100,140,0.5); cursor: pointer; transition: all 200ms ease; flex-shrink: 0; }
+            .dash-dot.active { width: 20px; background: #4FC3F7; }
         `;
         document.head.appendChild(style);
     }
@@ -440,7 +446,7 @@ class DashboardRenderer {
     }
 
     /**
-     * Render dashboard from parsed layout
+     * Render dashboard from parsed layout — with automatic paging when content overflows
      */
     render() {
         const container = document.getElementById('sensor-dashboard');
@@ -448,13 +454,99 @@ class DashboardRenderer {
             console.warn('Dashboard container not found');
             return;
         }
-
         this.widgetCounter = 0;
-        container.innerHTML = this.renderToHTML();
+        const pages = this._buildPages();
+        if (pages.length <= 1) {
+            container.innerHTML = this.renderToHTML();
+        } else {
+            container.innerHTML = this._renderPager(pages);
+            this._setupPager(container);
+        }
     }
 
+    // ─── Paging helpers ────────────────────────────────────────────────────────
+
+    _buildPages() {
+        const kRowH = 160, kGap = 16;
+        const pageH = Math.max(400, (window.innerHeight || 800) - 120);
+        const gridCols = this.layout.grid || 3;
+
+        // Flatten DSL rows → visual lines (same split logic as Helm)
+        const visualLines = [];
+        for (const row of this.layout.rows) {
+            const rh = row.height || 1;
+            const lineH = rh * kRowH;
+            let cur = [], used = 0;
+            for (const w of row.widgets) {
+                const span = Math.min(w.size || 1, gridCols);
+                if (used + span > gridCols && cur.length > 0) {
+                    visualLines.push({ widgets: [...cur], lineHeight: lineH, rowHeight: rh });
+                    cur = [w]; used = span;
+                } else { cur.push(w); used += span; }
+            }
+            if (cur.length > 0) visualLines.push({ widgets: cur, lineHeight: lineH, rowHeight: rh });
+        }
+
+        // Group into pages
+        const pages = [];
+        let curPage = [], usedH = 0;
+        for (const line of visualLines) {
+            const next = curPage.length === 0 ? line.lineHeight : usedH + kGap + line.lineHeight;
+            if (next > pageH && curPage.length > 0) {
+                pages.push(curPage);
+                curPage = [line]; usedH = line.lineHeight;
+            } else { curPage.push(line); usedH = next; }
+        }
+        if (curPage.length > 0) pages.push(curPage);
+        return pages;
+    }
+
+    _renderPageGrid(lines, gridColumns) {
+        let html = `<div class="dashboard-grid" style="display:grid;grid-template-columns:repeat(${gridColumns},1fr);grid-auto-rows:160px;gap:var(--space-2xl);max-width:1400px;margin:0 auto;">`;
+        for (const line of lines) {
+            for (const widget of line.widgets) {
+                html += this.renderWidget(widget, gridColumns, line.rowHeight);
+            }
+        }
+        return html + '</div>';
+    }
+
+    _renderPager(pages) {
+        const gridCols = this.layout.grid || 3;
+        let html = '<div class="dash-pager"><div class="dash-track">';
+        pages.forEach((lines, p) => {
+            html += `<div class="dash-page" data-page="${p}">${this._renderPageGrid(lines, gridCols)}</div>`;
+        });
+        html += '</div><div class="dash-dots">';
+        pages.forEach((_, p) => {
+            html += `<span class="dash-dot${p === 0 ? ' active' : ''}" data-page="${p}"></span>`;
+        });
+        return html + '</div></div>';
+    }
+
+    _setupPager(container) {
+        const track = container.querySelector('.dash-track');
+        const allDots = container.querySelectorAll('.dash-dot');
+        const pageCount = allDots.length;
+        let cur = 0;
+        const goTo = (p) => {
+            cur = Math.max(0, Math.min(p, pageCount - 1));
+            track.style.transform = `translateX(-${cur * 100}%)`;
+            allDots.forEach((d, i) => d.classList.toggle('active', i === cur));
+        };
+        allDots.forEach((dot, i) => dot.addEventListener('click', () => goTo(i)));
+        let touchX = 0;
+        track.addEventListener('touchstart', e => { touchX = e.touches[0].clientX; }, { passive: true });
+        track.addEventListener('touchend', e => {
+            const dx = e.changedTouches[0].clientX - touchX;
+            if (Math.abs(dx) > 50) goTo(cur + (dx < 0 ? 1 : -1));
+        });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+
     /**
-     * Render dashboard to HTML string (for preview mode)
+     * Render dashboard to HTML string (for preview mode / editor use)
      */
     renderToHTML() {
         // Show errors if any
@@ -467,6 +559,7 @@ class DashboardRenderer {
         let html = `<div class="dashboard-grid" style="
             display: grid;
             grid-template-columns: repeat(${gridColumns}, 1fr);
+            grid-auto-rows: 160px;
             gap: var(--space-2xl);
             max-width: 1400px;
             margin: 0 auto;
@@ -474,8 +567,9 @@ class DashboardRenderer {
 
         // Render each row
         this.layout.rows.forEach(row => {
+            const rowHeight = row.height || 1;
             row.widgets.forEach(widget => {
-                html += this.renderWidget(widget, gridColumns);
+                html += this.renderWidget(widget, gridColumns, rowHeight);
             });
         });
 
@@ -487,27 +581,25 @@ class DashboardRenderer {
     /**
      * Render a single widget
      */
-    renderWidget(widget, gridColumns) {
+    renderWidget(widget, gridColumns, rowHeight = 1) {
         const size = widget.size || 1;
+        const rh = rowHeight || 1;
 
+        let html;
         switch (widget.type) {
-            case 'sensor':
-                return this.renderSensorWidget(widget, size);
-            case 'gauge':
-                return this.renderGaugeWidget(widget, size);
-            case 'chart':
-                return this.renderChartWidget(widget, size);
-            case 'text':
-                return this.renderTextWidget(widget, size);
-            case 'spacer':
-                return this.renderSpacerWidget(widget, size);
-            case 'clock':
-                return this.renderClockWidget(widget, size);
-            case 'compass':
-                return `<div style="grid-column: span ${size}; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:var(--fs-4xl); padding:var(--space-3xl);">🧭</div>`;
-            default:
-                return '';
+            case 'sensor':  html = this.renderSensorWidget(widget, size); break;
+            case 'gauge':   html = this.renderGaugeWidget(widget, size); break;
+            case 'chart':   html = this.renderChartWidget(widget, size); break;
+            case 'text':    html = this.renderTextWidget(widget, size); break;
+            case 'spacer':  html = this.renderSpacerWidget(widget, size); break;
+            case 'clock':   html = this.renderClockWidget(widget, size); break;
+            case 'compass': html = `<div style="grid-column: span ${size}; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:var(--fs-4xl); padding:var(--space-3xl);">🧭</div>`; break;
+            default: return '';
         }
+        if (rh > 1 && html) {
+            html = html.replace(/grid-column: span \d+/, `$&; grid-row: span ${rh}`);
+        }
+        return html || '';
     }
 
     /**

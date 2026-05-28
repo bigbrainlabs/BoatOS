@@ -8,9 +8,9 @@ Ein vollständiges Marine-Navigationssystem für Binnenschifffahrt und Küstenna
 
 ### 💾 Fertig-Image — einfach flashen, sofort lossegeln
 
-**[⬇️ Download v1.5.11 (~15 GB)](https://archive.org/download/boatos-distri-image/boatos_v1.5.11.img.gz)**
+**[⬇️ Download v1.5.21 (~7,5 GB)](https://archive.org/download/boatos-distri-image/boatos_v1.5.21.img.gz)**
 
-*Raspberry Pi Imager → Custom Image → WiFi/SSH im Zahnrad-Menü → Flashen → fertig*
+*balenaEtcher oder Raspberry Pi Imager → ISO-Image auswählen → Flashen → fertig*
 
 </div>
 
@@ -227,10 +227,9 @@ Beide UIs teilen dasselbe Backend und die gleiche REST/WebSocket-API.
 
 Das schnellste Setup — einfach flashen, fertig:
 
-1. **Image herunterladen** (v1.5.11): [boatos_v1.5.11.img.gz](https://archive.org/download/boatos-distri-image/boatos_v1.5.11.img.gz) (~15 GB)
-2. **Raspberry Pi Imager** öffnen → *Custom Image* → heruntergeladene Datei wählen
-3. **Zahnrad-Menü** → WiFi + SSH konfigurieren
-4. Flashen → Pi booten → Helm startet automatisch
+1. **Image herunterladen** (v1.5.21): [boatos_v1.5.21.img.gz](https://archive.org/download/boatos-distri-image/boatos_v1.5.21.img.gz) (~7,5 GB)
+2. **balenaEtcher** oder **Raspberry Pi Imager** öffnen → ISO-Image auswählen
+3. Flashen → Pi booten → Helm startet automatisch
 
 > Mindestens 32 GB SD-Karte oder USB-SSD. Partition wird beim ersten Boot automatisch auf die volle Größe erweitert.
 
@@ -431,7 +430,7 @@ mosquitto_pub -h <pi-ip> -t 'boot/sensoren/motor/drehzahl' -m '2500'
 
 ### 🚧 In Arbeit
 - Helm Feature-Parität mit Deck
-- ~~Verteilbares Pi-Image~~ ✅ [Fertig-Image verfügbar](https://archive.org/download/boatos-distri-image/boatos_v1.5.11.img.gz)
+- ~~Verteilbares Pi-Image~~ ✅ [Fertig-Image verfügbar](https://archive.org/download/boatos-distri-image/boatos_v1.5.21.img.gz)
 
 ### 🔮 Geplant
 - Anker-Alarm mit Geofencing

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../services/settings_service.dart';
 import '../widgets/onscreen_keyboard.dart';
+import '../main.dart' show MainShellState;
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -1131,6 +1132,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (ok != true || !mounted) return;
 
+    // Badge sofort ausblenden — wird nach Reboot ohnehin neu geprüft
+    context.findAncestorStateOfType<MainShellState>()?.dismissUpdateBadge();
+
     setState(() { _updateRunning = true; _updateLog = ['[System] Update wird gestartet…']; });
     try {
       await http.post(Uri.parse('http://localhost:8000/api/system/update'));
@@ -1951,7 +1955,8 @@ class _DashWidget {
 class _DashRow {
   String name;
   List<_DashWidget> widgets;
-  _DashRow({required this.name, required this.widgets});
+  int height;
+  _DashRow({required this.name, required this.widgets, this.height = 1});
 }
 
 // ── Dashboard Section ─────────────────────────────────────────────────────────
@@ -1965,7 +1970,7 @@ class _DashboardSection extends StatefulWidget {
 class _DashboardSectionState extends State<_DashboardSection> {
   static const _base = 'http://localhost:8000';
 
-  int  _tab     = 0;   // 0 = visual, 1 = DSL
+  int  _tab     = 0;   // 0 = visual, 1 = DSL, 2 = sensors
   int  _gridCols = 2;
   List<_DashRow> _rows = [];
   late TextEditingController _dslCtrl;
@@ -1979,6 +1984,14 @@ class _DashboardSectionState extends State<_DashboardSection> {
 
   // sensor metadata from /api/sensors/list
   List<Map<String, dynamic>> _availSensors = [];
+
+  // grouped sensors for add-widget palette
+  List<Map<String, dynamic>> _sensorGroupsPalette = [];
+
+  // sensor management (tab 2)
+  List<Map<String, dynamic>> _sensorGroups = [];
+  bool _sensorsLoading = false;
+  String? _sensorsError;
 
   @override
   void initState() {
@@ -2000,6 +2013,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
       final results = await Future.wait([
         http.get(Uri.parse('$_base/api/dashboard/layout')),
         http.get(Uri.parse('$_base/api/sensors/list')),
+        http.get(Uri.parse('$_base/api/sensors/grouped')),
       ]);
       if (results[0].statusCode == 200) {
         final body = json.decode(results[0].body) as Map<String, dynamic>;
@@ -2014,8 +2028,69 @@ class _DashboardSectionState extends State<_DashboardSection> {
             .where((e) => e['base_name'] != null)
             .toList();
       }
+      if (results[2].statusCode == 200) {
+        final body = json.decode(results[2].body) as Map<String, dynamic>;
+        _sensorGroupsPalette = ((body['groups'] as List?) ?? [])
+            .cast<Map<String, dynamic>>();
+      }
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
+  }
+
+  // ── Sensor Management ─────────────────────────────────────────────────────
+
+  Future<void> _loadSensorGroups() async {
+    if (_sensorsLoading) return;
+    setState(() { _sensorsLoading = true; _sensorsError = null; });
+    try {
+      final r = await http.get(Uri.parse('$_base/api/sensors/grouped'));
+      if (r.statusCode == 200) {
+        final body = json.decode(r.body) as Map<String, dynamic>;
+        final groups = (body['groups'] as List?) ?? [];
+        setState(() {
+          _sensorGroups = groups.cast<Map<String, dynamic>>();
+          _sensorsLoading = false;
+        });
+      } else {
+        setState(() { _sensorsError = 'Fehler ${r.statusCode}'; _sensorsLoading = false; });
+      }
+    } catch (e) {
+      if (mounted) setState(() { _sensorsError = 'Fehler: $e'; _sensorsLoading = false; });
+    }
+  }
+
+  Future<void> _deleteSensorTopic(String topic, int groupIdx, int sensorIdx) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        title: const Text('Sensor löschen', style: TextStyle(color: Color(0xFFE6EDF3), fontSize: 16)),
+        content: Text('Topic "$topic" wirklich entfernen?',
+            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Abbrechen', style: TextStyle(color: Color(0xFF8B949E)))),
+          ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB71C1C)),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Löschen')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final r = await http.delete(
+          Uri.parse('$_base/api/sensors/topic').replace(queryParameters: {'topic': topic}));
+      if (r.statusCode == 200 && mounted) {
+        setState(() {
+          _sensorGroups[groupIdx]['sensors'].removeAt(sensorIdx);
+          if ((_sensorGroups[groupIdx]['sensors'] as List).isEmpty) {
+            _sensorGroups.removeAt(groupIdx);
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   // ── DSL Parse ─────────────────────────────────────────────────────────────
@@ -2034,8 +2109,16 @@ class _DashboardSectionState extends State<_DashboardSection> {
         continue;
       }
       if (line.startsWith('ROW')) {
-        final name = line.length > 3 ? line.substring(3).trim() : '';
-        cur = _DashRow(name: name, widgets: []);
+        final parts = line.split(RegExp(r'\s+'));
+        String name = '';
+        int h = 1;
+        if (parts.length > 1 && parts[1].toUpperCase() != 'HEIGHT') name = parts[1];
+        for (int pi = 1; pi < parts.length - 1; pi++) {
+          if (parts[pi].toUpperCase() == 'HEIGHT') {
+            h = int.tryParse(parts[pi + 1]) ?? 1;
+          }
+        }
+        cur = _DashRow(name: name, widgets: [], height: h.clamp(1, 4));
         rows.add(cur);
         continue;
       }
@@ -2147,7 +2230,8 @@ class _DashboardSectionState extends State<_DashboardSection> {
   String _toFullDsl() {
     final buf = StringBuffer('GRID $_gridCols\n');
     for (final row in _rows) {
-      buf.write('\nROW ${row.name}\n');
+      final hSuffix = row.height > 1 ? ' HEIGHT ${row.height}' : '';
+      buf.write('\nROW ${row.name}$hSuffix\n');
       for (final w in row.widgets) {
         buf.write('${_toWidgetDsl(w)}\n');
       }
@@ -2211,27 +2295,38 @@ class _DashboardSectionState extends State<_DashboardSection> {
           _tabBtn(0, Icons.grid_view, 'Visuell'),
           const SizedBox(width: 8),
           _tabBtn(1, Icons.code, 'DSL-Code'),
+          const SizedBox(width: 8),
+          _tabBtn(2, Icons.sensors, 'Sensoren'),
           const Spacer(),
-          if (_saving)
-            const SizedBox(width: 20, height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4FC3F7)))
-          else
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1565C0),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          if (_tab != 2) ...[
+            if (_saving)
+              const SizedBox(width: 20, height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4FC3F7)))
+            else
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1565C0),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.save_outlined, size: 16),
+                label: const Text('Speichern'),
+                onPressed: _saveLayout,
               ),
-              icon: const Icon(Icons.save_outlined, size: 16),
-              label: const Text('Speichern'),
-              onPressed: _saveLayout,
+          ] else
+            IconButton(
+              icon: const Icon(Icons.refresh, color: Color(0xFF4FC3F7)),
+              tooltip: 'Neu laden',
+              onPressed: _loadSensorGroups,
             ),
         ]),
         const SizedBox(height: 4),
-        if (_saveMsg != null) _statusBanner(_saveMsg!, _saveOk),
+        if (_saveMsg != null && _tab != 2) _statusBanner(_saveMsg!, _saveOk),
         const SizedBox(height: 12),
-        if (_tab == 0) _buildVisual() else _buildDsl(),
+        if (_tab == 0) _buildVisual()
+        else if (_tab == 1) _buildDsl()
+        else _buildSensors(),
       ],
     ]);
   }
@@ -2239,13 +2334,14 @@ class _DashboardSectionState extends State<_DashboardSection> {
   Widget _tabBtn(int idx, IconData icon, String label) => GestureDetector(
         onTap: () {
           if (_tab == 0 && idx == 1) {
-            // switching to DSL: regenerate
             _dslCtrl.text = _toFullDsl();
           } else if (_tab == 1 && idx == 0) {
-            // switching to visual: parse DSL
             _parseDslToState(_dslCtrl.text);
           }
           setState(() => _tab = idx);
+          if (idx == 2 && _sensorGroups.isEmpty && !_sensorsLoading) {
+            _loadSensorGroups();
+          }
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
@@ -2360,6 +2456,31 @@ class _DashboardSectionState extends State<_DashboardSection> {
                 ),
               ),
             ),
+            // Height selector H1-H4
+            ...List.generate(4, (i) {
+              final n = i + 1;
+              final sel = row.height == n;
+              return GestureDetector(
+                onTap: () => setState(() => _rows[rowIdx].height = n),
+                child: Container(
+                  width: 26, height: 26,
+                  margin: const EdgeInsets.only(left: 4),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: sel ? const Color(0xFF1565C0) : const Color(0xFF0D1117),
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(
+                      color: sel ? const Color(0xFF4FC3F7) : const Color(0xFF30363D),
+                    ),
+                  ),
+                  child: Text('H$n', style: TextStyle(
+                    fontSize: 9, fontWeight: FontWeight.w700,
+                    color: sel ? Colors.white : const Color(0xFF8B949E),
+                  )),
+                ),
+              );
+            }),
+            const SizedBox(width: 6),
             // Add widget button
             GestureDetector(
               onTap: () => _addWidget(rowIdx),
@@ -2411,6 +2532,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
   Widget _buildWidgetChip(int rowIdx, int wIdx, _DashWidget w) {
     final (icon, color) = _widgetMeta(w.type);
     final label = _widgetChipLabel(w);
+    final widgets = _rows[rowIdx].widgets;
     return GestureDetector(
       onTap: () => _editWidget(rowIdx, wIdx),
       child: Container(
@@ -2428,7 +2550,29 @@ class _DashboardSectionState extends State<_DashboardSection> {
             const SizedBox(width: 4),
             Text(w.type, style: TextStyle(fontSize: 10, color: color,
                 fontWeight: FontWeight.w700)),
+            if (w.size > 1) ...[
+              const SizedBox(width: 4),
+              Text('×${w.size}', style: const TextStyle(
+                  fontSize: 10, color: Color(0xFF8B949E))),
+            ],
             const SizedBox(width: 4),
+            if (wIdx > 0)
+              GestureDetector(
+                onTap: () => setState(() {
+                  final tmp = widgets.removeAt(wIdx);
+                  widgets.insert(wIdx - 1, tmp);
+                }),
+                child: const Icon(Icons.arrow_back_ios, size: 11, color: Color(0xFF8B949E)),
+              ),
+            if (wIdx < widgets.length - 1)
+              GestureDetector(
+                onTap: () => setState(() {
+                  final tmp = widgets.removeAt(wIdx);
+                  widgets.insert(wIdx + 1, tmp);
+                }),
+                child: const Icon(Icons.arrow_forward_ios, size: 11, color: Color(0xFF8B949E)),
+              ),
+            const SizedBox(width: 2),
             GestureDetector(
               onTap: () => setState(() => _rows[rowIdx].widgets.removeAt(wIdx)),
               child: const Icon(Icons.close, size: 13, color: Color(0xFF8B949E)),
@@ -2483,13 +2627,21 @@ class _DashboardSectionState extends State<_DashboardSection> {
     if (result != null) setState(() => _rows[rowIdx].name = result);
   }
 
-  void _addWidget(int rowIdx) async {
-    final w = _DashWidget(type: 'SENSOR');
-    final saved = await showDialog<_DashWidget>(
+  void _addWidget(int rowIdx) {
+    showModalBottomSheet<void>(
       context: context,
-      builder: (_) => _WidgetEditDialog(widget: w, sensors: _availSensors),
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF0D1117),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (sheetCtx) => _AddWidgetSheet(
+        sensorGroups: _sensorGroupsPalette,
+        onAdd: (w) {
+          setState(() => _rows[rowIdx].widgets.add(w));
+          Navigator.pop(sheetCtx);
+        },
+      ),
     );
-    if (saved != null) setState(() => _rows[rowIdx].widgets.add(saved));
   }
 
   void _editWidget(int rowIdx, int wIdx) async {
@@ -2552,6 +2704,107 @@ class _DashboardSectionState extends State<_DashboardSection> {
         _statusBanner(_parseMsg!, _parseOk),
       ],
     ]);
+  }
+
+  // ── Sensors Tab ───────────────────────────────────────────────────────────
+
+  Widget _buildSensors() {
+    if (_sensorsLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: CircularProgressIndicator(color: Color(0xFF4FC3F7), strokeWidth: 2),
+        ),
+      );
+    }
+    if (_sensorsError != null) {
+      return _statusBanner(_sensorsError!, false);
+    }
+    if (_sensorGroups.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Text('Keine Sensoren gefunden.',
+            style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: _sensorGroups.asMap().entries.map((groupEntry) {
+        final groupIdx = groupEntry.key;
+        final group = groupEntry.value;
+        final groupName = group['label'] as String? ?? 'Unbekannt';
+        final sensors = (group['sensors'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF161B22),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF30363D)),
+          ),
+          child: Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+              childrenPadding: EdgeInsets.zero,
+              collapsedIconColor: const Color(0xFF8B949E),
+              iconColor: const Color(0xFF4FC3F7),
+              title: Row(children: [
+                const Icon(Icons.folder_outlined, size: 16, color: Color(0xFF4FC3F7)),
+                const SizedBox(width: 8),
+                Text(groupName, style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFE6EDF3))),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1565C0).withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text('${sensors.length}',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF4FC3F7))),
+                ),
+              ]),
+              children: sensors.asMap().entries.map((sEntry) {
+                final sIdx = sEntry.key;
+                final s = sEntry.value;
+                final topic = s['topic'] as String? ?? '';
+                final label = s['label'] as String? ?? topic.split('/').last;
+                final unit  = s['unit']  as String? ?? '';
+                final value = s['value'];
+                return Container(
+                  decoration: const BoxDecoration(
+                    border: Border(top: BorderSide(color: Color(0xFF30363D))),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  child: Row(children: [
+                    const Icon(Icons.sensors_outlined, size: 14, color: Color(0xFF8B949E)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(label, style: const TextStyle(
+                            fontSize: 13, color: Color(0xFFE6EDF3))),
+                        Text(topic, style: const TextStyle(
+                            fontSize: 10, color: Color(0xFF8B949E)),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ]),
+                    ),
+                    if (value != null) ...[
+                      Text('$value${unit.isNotEmpty ? ' $unit' : ''}',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF4FC3F7))),
+                      const SizedBox(width: 8),
+                    ],
+                    GestureDetector(
+                      onTap: () => _deleteSensorTopic(topic, groupIdx, sIdx),
+                      child: const Icon(Icons.delete_outline, size: 18, color: Color(0xFF8B949E)),
+                    ),
+                  ]),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      }).toList(),
+    );
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -2622,6 +2875,239 @@ class _SimpleInputDialog extends StatelessWidget {
             onPressed: onSave,
             child: const Text('OK')),
       ],
+    );
+  }
+}
+
+// ── Add Widget Sheet ──────────────────────────────────────────────────────────
+
+class _AddWidgetSheet extends StatelessWidget {
+  final List<Map<String, dynamic>> sensorGroups;
+  final void Function(_DashWidget) onAdd;
+  const _AddWidgetSheet({required this.sensorGroups, required this.onAdd});
+
+  Future<void> _pickType(BuildContext ctx, String topic, String label, String unit) async {
+    final type = await showDialog<String>(
+      context: ctx,
+      builder: (dCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        title: Text(label,
+            style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 15),
+            maxLines: 2, overflow: TextOverflow.ellipsis),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          _typeOption(dCtx, 'SENSOR', Icons.bar_chart, 'Sensor-Karte',
+              'Zeigt den aktuellen Wert'),
+          const SizedBox(height: 8),
+          _typeOption(dCtx, 'GAUGE', Icons.speed, 'Gauge',
+              'Zeiger- oder Bogenanzeige'),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dCtx),
+              child: const Text('Abbrechen',
+                  style: TextStyle(color: Color(0xFF8B949E)))),
+        ],
+      ),
+    );
+    if (type == null) return;
+    final w = _DashWidget(type: type, sensor: topic);
+    if (type == 'GAUGE') {
+      w.label = label;
+      w.unit = unit.isEmpty ? null : unit;
+      w.min = 0;
+      w.max = 100;
+    } else {
+      w.alias = label;
+    }
+    onAdd(w);
+  }
+
+  Widget _typeOption(BuildContext ctx, String type, IconData icon,
+      String title, String subtitle) {
+    return GestureDetector(
+      onTap: () => Navigator.pop(ctx, type),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0D1117),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF30363D)),
+        ),
+        child: Row(children: [
+          Icon(icon, size: 22, color: const Color(0xFF4FC3F7)),
+          const SizedBox(width: 12),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: const TextStyle(
+                color: Color(0xFFE6EDF3), fontSize: 13,
+                fontWeight: FontWeight.w600)),
+            Text(subtitle, style: const TextStyle(
+                color: Color(0xFF8B949E), fontSize: 11)),
+          ]),
+        ]),
+      ),
+    );
+  }
+
+  Widget _specialBtn(BuildContext ctx, String type, IconData icon, String label) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          final w = _DashWidget(type: type);
+          if (type == 'TEXT') w.text = 'Text';
+          onAdd(w);
+        },
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF161B22),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFF30363D)),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 18, color: const Color(0xFF8B949E)),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(
+                fontSize: 10, color: Color(0xFF8B949E))),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      maxChildSize: 0.95,
+      minChildSize: 0.45,
+      expand: false,
+      builder: (ctx, scrollCtrl) => Column(children: [
+        // Drag handle
+        Container(
+          margin: const EdgeInsets.only(top: 10, bottom: 12),
+          width: 40, height: 4,
+          decoration: BoxDecoration(
+            color: const Color(0xFF30363D),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        // Special widgets
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(children: [
+            _specialBtn(ctx, 'SPACER',  Icons.space_bar,    'Spacer'),
+            _specialBtn(ctx, 'CLOCK',   Icons.access_time,  'Uhr'),
+            _specialBtn(ctx, 'TEXT',    Icons.title,        'Text'),
+            _specialBtn(ctx, 'COMPASS', Icons.explore,      'Kompass'),
+          ]),
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Divider(color: Color(0xFF30363D), height: 1),
+        ),
+        // Sensor groups
+        Expanded(
+          child: sensorGroups.isEmpty
+              ? const Center(
+                  child: Text('Keine Sensoren geladen.',
+                      style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)))
+              : ListView(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  children: sensorGroups.map((group) {
+                    final groupName = group['label'] as String? ?? 'Unbekannt';
+                    final icon = group['icon'] as String? ?? '📡';
+                    final sensors = (group['sensors'] as List?)
+                            ?.cast<Map<String, dynamic>>() ??
+                        [];
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF161B22),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF30363D)),
+                      ),
+                      child: Theme(
+                        data: Theme.of(ctx).copyWith(
+                            dividerColor: Colors.transparent),
+                        child: ExpansionTile(
+                          tilePadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 0),
+                          childrenPadding: EdgeInsets.zero,
+                          collapsedIconColor: const Color(0xFF8B949E),
+                          iconColor: const Color(0xFF4FC3F7),
+                          title: Row(children: [
+                            Text(icon,
+                                style: const TextStyle(fontSize: 15)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(groupName,
+                                  style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFFE6EDF3))),
+                            ),
+                            Text('${sensors.length}',
+                                style: const TextStyle(
+                                    fontSize: 11, color: Color(0xFF8B949E))),
+                          ]),
+                          children: sensors.map((s) {
+                            final topic = s['topic'] as String? ?? '';
+                            final label = s['label'] as String? ??
+                                topic.split('/').last;
+                            final unit = s['unit'] as String? ?? '';
+                            final value = s['value'];
+                            return InkWell(
+                              onTap: () => _pickType(ctx, topic, label, unit),
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  border: Border(
+                                      top: BorderSide(
+                                          color: Color(0xFF30363D))),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 10),
+                                child: Row(children: [
+                                  const Icon(Icons.sensors_outlined,
+                                      size: 14, color: Color(0xFF8B949E)),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(label,
+                                              style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Color(0xFFE6EDF3))),
+                                          Text(topic,
+                                              style: const TextStyle(
+                                                  fontSize: 10,
+                                                  color: Color(0xFF8B949E)),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis),
+                                        ]),
+                                  ),
+                                  if (value != null)
+                                    Text(
+                                        '$value${unit.isNotEmpty ? ' $unit' : ''}',
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF4FC3F7))),
+                                ]),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+        const SizedBox(height: 12),
+      ]),
     );
   }
 }
@@ -2776,6 +3262,10 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                   _label('Stil'),
                   const SizedBox(height: 6),
                   _stylePicker(_sensorStyles),
+                  const SizedBox(height: 10),
+                  _label('Breite (Spalten)'),
+                  const SizedBox(height: 6),
+                  _sizePicker(),
                 ],
                 if (_w.type == 'GAUGE') ...[
                   Row(children: [
@@ -2795,9 +3285,22 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                   _label('Dezimalstellen'),
                   const SizedBox(height: 6),
                   _decimalsPicker(),
+                  const SizedBox(height: 10),
+                  _label('Breite (Spalten)'),
+                  const SizedBox(height: 6),
+                  _sizePicker(),
                 ],
                 if (_w.type == 'TEXT') ...[
                   _inputRow('Text', _textCtrl),
+                  const SizedBox(height: 10),
+                  _label('Breite (Spalten)'),
+                  const SizedBox(height: 6),
+                  _sizePicker(),
+                ],
+                if (_w.type == 'CLOCK' || _w.type == 'COMPASS' || _w.type == 'SPACER') ...[
+                  _label('Breite (Spalten)'),
+                  const SizedBox(height: 6),
+                  _sizePicker(),
                 ],
               ]),
             ),
@@ -2977,6 +3480,35 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                     color: sel ? const Color(0xFF4FC3F7) : const Color(0xFF30363D)),
               ),
               child: Text('$i', style: TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w600,
+                  color: sel ? Colors.white : const Color(0xFF8B949E))),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _sizePicker() {
+    return Row(
+      children: List.generate(4, (i) {
+        final n = i + 1;
+        final sel = _w.size == n;
+        return Padding(
+          padding: const EdgeInsets.only(right: 6),
+          child: GestureDetector(
+            onTap: () => setState(() => _w.size = n),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              width: 44, height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: sel ? const Color(0xFF1565C0) : const Color(0xFF0D1117),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: sel ? const Color(0xFF4FC3F7) : const Color(0xFF30363D)),
+              ),
+              child: Text('$n', style: TextStyle(
                   fontSize: 14, fontWeight: FontWeight.w600,
                   color: sel ? Colors.white : const Color(0xFF8B949E))),
             ),

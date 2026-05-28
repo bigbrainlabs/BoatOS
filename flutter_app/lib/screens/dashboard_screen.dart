@@ -12,7 +12,7 @@ import '../widgets/gauge_widget.dart';
 // DSL data models
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum _WidgetType { gauge, sensor }
+enum _WidgetType { gauge, sensor, text, clock, spacer, compass }
 
 class _GaugeCfg {
   final String path;
@@ -43,21 +43,42 @@ class _SensorCfg {
   });
 }
 
+class _SimpleCfg {
+  final int size;
+  final String text;
+  const _SimpleCfg({this.size = 1, this.text = ''});
+}
+
 class _DashWidget {
   final _WidgetType type;
   final _GaugeCfg? gauge;
   final _SensorCfg? sensor;
+  final _SimpleCfg? simple;
 
-  int get size => type == _WidgetType.gauge ? gauge!.size : sensor!.size;
+  int get size {
+    if (type == _WidgetType.gauge)  return gauge!.size;
+    if (type == _WidgetType.sensor) return sensor!.size;
+    return simple?.size ?? 1;
+  }
 
-  const _DashWidget.gauge(_GaugeCfg cfg) : type = _WidgetType.gauge, gauge = cfg, sensor = null;
-  const _DashWidget.sensor(_SensorCfg cfg) : type = _WidgetType.sensor, gauge = null, sensor = cfg;
+  const _DashWidget.gauge(_GaugeCfg cfg)
+      : type = _WidgetType.gauge, gauge = cfg, sensor = null, simple = null;
+  const _DashWidget.sensor(_SensorCfg cfg)
+      : type = _WidgetType.sensor, gauge = null, sensor = cfg, simple = null;
+  const _DashWidget.simple(_WidgetType t, _SimpleCfg cfg)
+      : type = t, gauge = null, sensor = null, simple = cfg;
+}
+
+class _LayoutRow {
+  final int height;
+  final List<_DashWidget> widgets;
+  const _LayoutRow({this.height = 1, required this.widgets});
 }
 
 class _Layout {
   final int columns;
-  final List<_DashWidget> widgets;
-  const _Layout({required this.columns, required this.widgets});
+  final List<_LayoutRow> rows;
+  const _Layout({required this.columns, required this.rows});
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,11 +87,19 @@ class _Layout {
 
 _Layout _parseDSL(String dsl) {
   int columns = 3;
-  final widgets = <_DashWidget>[];
+  final rows = <_LayoutRow>[];
+  int currentHeight = 1;
+  List<_DashWidget>? currentWidgets;
+
+  void flushRow() {
+    if (currentWidgets != null && currentWidgets.isNotEmpty) {
+      rows.add(_LayoutRow(height: currentHeight, widgets: currentWidgets));
+    }
+  }
 
   for (final rawLine in dsl.split('\n')) {
     final line = rawLine.trim();
-    if (line.isEmpty || line.startsWith('ROW') || line.startsWith('#')) continue;
+    if (line.isEmpty || line.startsWith('#')) continue;
 
     final tokens = _tokenize(line);
     if (tokens.isEmpty) continue;
@@ -78,13 +107,47 @@ _Layout _parseDSL(String dsl) {
     switch (tokens[0].toUpperCase()) {
       case 'GRID':
         if (tokens.length > 1) columns = int.tryParse(tokens[1]) ?? 3;
+      case 'ROW':
+        flushRow();
+        currentHeight = 1;
+        currentWidgets = [];
+        for (int i = 1; i < tokens.length - 1; i++) {
+          if (tokens[i].toUpperCase() == 'HEIGHT') {
+            currentHeight = int.tryParse(tokens[i + 1]) ?? 1;
+          }
+        }
       case 'GAUGE':
-        if (tokens.length > 1) widgets.add(_DashWidget.gauge(_parseGauge(tokens)));
+        currentWidgets ??= [];
+        if (tokens.length > 1) currentWidgets.add(_DashWidget.gauge(_parseGauge(tokens)));
       case 'SENSOR':
-        if (tokens.length > 1) widgets.add(_DashWidget.sensor(_parseSensor(tokens)));
+        currentWidgets ??= [];
+        if (tokens.length > 1) currentWidgets.add(_DashWidget.sensor(_parseSensor(tokens)));
+      case 'TEXT':
+        currentWidgets ??= [];
+        final text = tokens.length > 1 ? tokens[1] : '';
+        int tSize = 1;
+        for (int i = 2; i < tokens.length - 1; i += 2) {
+          if (tokens[i].toUpperCase() == 'SIZE') tSize = int.tryParse(tokens[i + 1]) ?? 1;
+        }
+        currentWidgets.add(_DashWidget.simple(_WidgetType.text, _SimpleCfg(text: text, size: tSize)));
+      case 'CLOCK':
+      case 'SPACER':
+      case 'COMPASS':
+        currentWidgets ??= [];
+        int sSize = 1;
+        for (int i = 1; i < tokens.length - 1; i += 2) {
+          if (tokens[i].toUpperCase() == 'SIZE') sSize = int.tryParse(tokens[i + 1]) ?? 1;
+        }
+        final sType = switch (tokens[0].toUpperCase()) {
+          'CLOCK'   => _WidgetType.clock,
+          'SPACER'  => _WidgetType.spacer,
+          _         => _WidgetType.compass,
+        };
+        currentWidgets.add(_DashWidget.simple(sType, _SimpleCfg(size: sSize)));
     }
   }
-  return _Layout(columns: columns, widgets: widgets);
+  flushRow();
+  return _Layout(columns: columns, rows: rows);
 }
 
 List<String> _tokenize(String line) {
@@ -148,6 +211,7 @@ _SensorCfg _parseSensor(List<String> t) {
     final k = t[i].toUpperCase();
     final v = t[i + 1];
     switch (k) {
+      case 'AS':
       case 'ALIAS': alias = v;
       case 'SIZE':  size  = int.tryParse(v) ?? 1;
       case 'COLOR': color = parseDashColor(v);
@@ -181,7 +245,7 @@ double _getValue(Map<String, dynamic> sensors, String path) {
   }
   // base_name/field match
   for (final entry in sensors.entries) {
-    final base = entry.key as String;
+    final base = entry.key;
     if (path.startsWith('$base/')) {
       final field = path.substring(base.length + 1);
       final values = entry.value['values'] as Map<String, dynamic>? ?? {};
@@ -219,6 +283,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Timer? _timer;
   Map<String, dynamic> _sensors = {};
   bool _firstLoad = true;
+  final PageController _pageCtrl = PageController();
+  int _currentPage = 0;
 
   @override
   void initState() {
@@ -230,6 +296,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _pageCtrl.dispose();
     super.dispose();
   }
 
@@ -272,62 +339,225 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     final layout = _parseDSL(dsl);
-    if (layout.widgets.isEmpty) {
+    if (layout.rows.isEmpty || layout.rows.every((r) => r.widgets.isEmpty)) {
       return const Center(
         child: Text('Keine Widgets im Layout.',
             style: TextStyle(color: Color(0xFF8B949E))),
       );
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
-      child: LayoutBuilder(builder: (ctx, constraints) {
-        final gap = 10.0;
-        final totalW = constraints.maxWidth;
-        final colW = (totalW - gap * (layout.columns - 1)) / layout.columns;
+    const double kBaseRowH = 160.0;
+    const double gap = 10.0;
+    const double kDotsH = 28.0;
 
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: layout.widgets.map((w) {
-            final span = w.size.clamp(1, layout.columns);
-            final itemW = colW * span + gap * (span - 1);
-            return SizedBox(
-              width: itemW,
-              child: _buildWidget(w),
-            );
-          }).toList(),
+    return LayoutBuilder(builder: (ctx, constraints) {
+      final totalW = constraints.maxWidth - 24.0;
+      final colW = (totalW - gap * (layout.columns - 1)) / layout.columns;
+
+      // Flatten DSL rows into visual lines (each line = one row of widgets at a fixed height)
+      final lineWidgets = <List<_DashWidget>>[];
+      final lineHeights = <double>[];
+      for (final row in layout.rows) {
+        final rowH = kBaseRowH * row.height;
+        var cur = <_DashWidget>[];
+        var used = 0;
+        for (final w in row.widgets) {
+          final span = w.size.clamp(1, layout.columns);
+          if (used + span > layout.columns && cur.isNotEmpty) {
+            lineWidgets.add(cur); lineHeights.add(rowH);
+            cur = [w]; used = span;
+          } else { cur.add(w); used += span; }
+        }
+        if (cur.isNotEmpty) { lineWidgets.add(cur); lineHeights.add(rowH); }
+      }
+
+      // Group lines into pages — each page fits within available height
+      final pageH = constraints.maxHeight - 24.0 - kDotsH;
+      final pageStarts = <int>[];
+      final pageEnds = <int>[];
+      var si = 0;
+      while (si < lineWidgets.length) {
+        var usedH = 0.0;
+        var ei = si;
+        while (ei < lineWidgets.length) {
+          final next = ei == si ? lineHeights[ei] : usedH + gap + lineHeights[ei];
+          if (next > pageH && ei > si) break;
+          usedH = next; ei++;
+        }
+        pageStarts.add(si);
+        pageEnds.add(ei == si ? si + 1 : ei);
+        si = pageEnds.last;
+      }
+      final pageCount = pageStarts.length;
+
+      Widget buildLine(int li, bool isLast) => Padding(
+        padding: EdgeInsets.only(bottom: isLast ? 0 : gap),
+        child: SizedBox(
+          height: lineHeights[li],
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: lineWidgets[li].asMap().entries.map((e) {
+              final i = e.key;
+              final w = e.value;
+              final span = w.size.clamp(1, layout.columns);
+              return Padding(
+                padding: EdgeInsets.only(left: i > 0 ? gap : 0),
+                child: SizedBox(
+                  width: colW * span + gap * (span - 1),
+                  child: _buildWidget(w),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      );
+
+      Widget buildPage(int p) {
+        final s = pageStarts[p];
+        final e = pageEnds[p];
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: List.generate(e - s, (i) => buildLine(s + i, i == e - s - 1)),
+          ),
         );
-      }),
+      }
+
+      if (pageCount <= 1) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 80),
+          child: pageCount == 0 ? const SizedBox() : buildPage(0),
+        );
+      }
+
+      // Reset page index if DSL changed and pages decreased
+      if (_currentPage >= pageCount) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) { _pageCtrl.jumpToPage(0); setState(() => _currentPage = 0); }
+        });
+      }
+
+      return Column(
+        children: [
+          Expanded(
+            child: PageView.builder(
+              controller: _pageCtrl,
+              itemCount: pageCount,
+              onPageChanged: (p) => setState(() => _currentPage = p),
+              itemBuilder: (_, p) => buildPage(p),
+            ),
+          ),
+          _buildDots(pageCount, _currentPage.clamp(0, pageCount - 1)),
+        ],
+      );
+    });
+  }
+
+  Widget _buildDots(int count, int current) {
+    return SizedBox(
+      height: 28,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(count, (i) {
+          final active = i == current;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: active ? 20.0 : 8.0,
+            height: 8.0,
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            decoration: BoxDecoration(
+              color: active ? const Color(0xFF4FC3F7) : const Color(0xFF30363D),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          );
+        }),
+      ),
     );
   }
 
   Widget _buildWidget(_DashWidget w) {
-    if (w.type == _WidgetType.gauge) {
-      final cfg = w.gauge!;
-      final value = _getValue(_sensors, cfg.path);
-      final autoLabel = cfg.label.isNotEmpty
-          ? cfg.label
-          : _getSensorLabel(_sensors, cfg.path);
-      return GaugeWidget(
-        value: value,
-        min: cfg.min, max: cfg.max,
-        unit: cfg.unit, label: autoLabel,
-        style: cfg.style, color: cfg.color,
-        decimals: cfg.decimals,
-      );
-    } else {
-      final cfg = w.sensor!;
-      return SensorCard(
-        path: cfg.path,
-        alias: cfg.alias,
-        cardStyle: cfg.style,
-        color: cfg.color,
-        showFields: cfg.show,
-        hideFields: cfg.hide,
-        sensorData: _sensors[cfg.path],
-      );
+    switch (w.type) {
+      case _WidgetType.gauge:
+        final cfg = w.gauge!;
+        final value = _getValue(_sensors, cfg.path);
+        final autoLabel = cfg.label.isNotEmpty
+            ? cfg.label
+            : _getSensorLabel(_sensors, cfg.path);
+        return GaugeWidget(
+          value: value,
+          min: cfg.min, max: cfg.max,
+          unit: cfg.unit, label: autoLabel,
+          style: cfg.style, color: cfg.color,
+          decimals: cfg.decimals,
+        );
+      case _WidgetType.sensor:
+        final scfg = w.sensor!;
+        return SensorCard(
+          path: scfg.path,
+          alias: scfg.alias,
+          cardStyle: scfg.style,
+          color: scfg.color,
+          showFields: scfg.show,
+          hideFields: scfg.hide,
+          sensorData: _sensors[scfg.path],
+        );
+      case _WidgetType.text:
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Text(w.simple!.text,
+              style: const TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w600,
+                  color: Color(0xFF4FC3F7))),
+        );
+      case _WidgetType.clock:
+        final now = DateTime.now();
+        final hm = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+        final sec = now.second.toString().padLeft(2, '0');
+        final date = '${_weekday(now.weekday)}, ${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}.${now.year}';
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0D2040), Color(0xFF0A1828)],
+              begin: Alignment.topLeft, end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF1E3A5F)),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center, children: [
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Text(hm, style: const TextStyle(
+                  fontSize: 36, fontWeight: FontWeight.w700,
+                  color: Color(0xFF4FC3F7), fontFamily: 'monospace',
+                  letterSpacing: 3)),
+              Text(':$sec', style: const TextStyle(
+                  fontSize: 24, fontWeight: FontWeight.w400,
+                  color: Color(0xFF1E6FA0), fontFamily: 'monospace',
+                  letterSpacing: 2)),
+            ]),
+            const SizedBox(height: 4),
+            Text(date, style: const TextStyle(
+                fontSize: 11, color: Color(0xFF8B949E))),
+          ]),
+        );
+      case _WidgetType.spacer:
+        return const SizedBox(height: 8);
+      case _WidgetType.compass:
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFF161B22),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF30363D)),
+          ),
+          child: const Icon(Icons.explore, size: 48, color: Color(0xFF4FC3F7)),
+        );
     }
   }
+
+  String _weekday(int d) => const ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][d - 1];
 }
 
