@@ -522,25 +522,30 @@ export function resetSettings() {
 }
 
 /**
- * Einstellungen als JSON exportieren
+ * Einstellungen als JSON exportieren (kompletter Backend-Export)
  */
-export function exportSettings() {
-    const ui = getUI();
-    const settings = ui?.loadSettings ? ui.loadSettings() : JSON.parse(localStorage.getItem('boatos_settings') || '{}');
-
-    const dataStr = JSON.stringify(settings, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `boatos-settings-${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    showMsg('📥 Einstellungen exportiert');
+export async function exportSettings() {
+    showMsg('⏳ Export wird erstellt…');
+    try {
+        const res = await fetch(`${API_URL}/api/data/export`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const cd = res.headers.get('Content-Disposition') || '';
+        const match = cd.match(/filename=([^;]+)/);
+        link.download = match ? match[1] : `boatos_export_${new Date().toISOString().slice(0,10)}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        showMsg('✅ Export heruntergeladen');
+    } catch (e) {
+        showMsg(`❌ Export fehlgeschlagen: ${e.message}`);
+    }
 }
 
 /**
- * Einstellungen aus JSON importieren
+ * Einstellungen aus JSON importieren (kompletter Backend-Import)
  */
 export function importSettings() {
     const input = document.createElement('input');
@@ -551,20 +556,39 @@ export function importSettings() {
         const file = event.target.files[0];
         if (!file) return;
 
+        showMsg('⏳ Import läuft…');
         try {
             const text = await file.text();
-            const importedSettings = JSON.parse(text);
+            const data = JSON.parse(text);
 
-            // Speichern
-            localStorage.setItem('boatos_settings', JSON.stringify(importedSettings));
+            const res = await fetch(`${API_URL}/api/data/import`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
 
-            showMsg('✅ Einstellungen importiert');
+            if (result.status === 'error') throw new Error(result.error);
+
+            const imp = result.imported || {};
+            const parts = [];
+            if (imp.settings)          parts.push('Einstellungen');
+            if (imp.gps_device)        parts.push('GPS-Gerät');
+            if (imp.logbook_trips > 0) parts.push(`${imp.logbook_trips} Logbuch-Einträge`);
+            if (imp.crew_members > 0)  parts.push(`${imp.crew_members} Crewmitglieder`);
+            if (imp.fuel_entries > 0)  parts.push(`${imp.fuel_entries} Tankeinträge`);
+
+            showMsg(`✅ Importiert: ${parts.join(', ') || 'nichts'}`);
+
+            if (result.errors?.length) {
+                console.warn('Import-Warnungen:', result.errors);
+            }
 
             // Einstellungen neu laden
-            setTimeout(() => location.reload(), 1000);
+            setTimeout(() => location.reload(), 1500);
         } catch (error) {
             console.error('Import error:', error);
-            showMsg('❌ Fehler beim Importieren');
+            showMsg(`❌ Import fehlgeschlagen: ${error.message}`);
         }
     };
 

@@ -3772,6 +3772,22 @@ async def export_all_data():
         except FileNotFoundError:
             pass
 
+        # Load GPS device config
+        try:
+            signalk_path = Path("/home/boatos/.signalk/settings.json")
+            with open(signalk_path, 'r') as f:
+                sk = json.load(f)
+            for provider in sk.get("pipedProviders", []):
+                if provider.get("id") == "gps-usb":
+                    for el in provider.get("pipeElements", []):
+                        if "serialport" in el.get("type", ""):
+                            export_data["gps_device"] = {
+                                "device":   el["options"].get("device",   "/dev/ttyUSB0"),
+                                "baudrate": el["options"].get("baudrate", 4800)
+                            }
+        except Exception:
+            pass
+
         # Create JSON response
         json_data = json.dumps(export_data, indent=2, ensure_ascii=False)
 
@@ -3805,7 +3821,8 @@ async def import_all_data(request: Request):
                 "logbook_trips": 0,
                 "crew_members": 0,
                 "fuel_entries": 0,
-                "settings": False
+                "settings": False,
+                "gps_device": False
             },
             "errors": []
         }
@@ -3864,19 +3881,57 @@ async def import_all_data(request: Request):
                     json.dump(import_data["settings"], f, indent=2)
                 results["imported"]["settings"] = True
 
-                # Apply settings (AIS, routing, etc.)
                 settings = import_data["settings"]
                 if 'ais' in settings:
-                    provider = settings['ais'].get('provider', 'aishub')
-                    enabled = settings["ais"].get("enabled", False)
-                    api_key = settings['ais'].get('apiKey', '')
-                    ais_service.configure(provider=provider, api_key=api_key, enabled=enabled)
-
+                    ais_service.configure(
+                        provider=settings['ais'].get('provider', 'aishub'),
+                        api_key=settings['ais'].get('apiKey', ''),
+                        enabled=settings['ais'].get('enabled', False)
+                    )
                 if 'waterCurrent' in settings:
                     water_current_service.configure(settings['waterCurrent'])
+                if 'routing' in settings:
+                    try:
+                        init_waterway_router()
+                    except Exception:
+                        pass
+                if 'boat' in settings:
+                    boat = settings['boat']
+                    draft = float(boat.get('draft', 0) or 0)
+                    height = float(boat.get('height', 0) or 0)
+                    beam = float(boat.get('beam', 0) or 0)
+                    if draft > 0 or height > 0 or beam > 0:
+                        try:
+                            generate_lua_profile(draft, height, beam)
+                        except Exception:
+                            pass
+                if 'trackSensors' in settings:
+                    global track_sensors_config
+                    track_sensors_config = settings['trackSensors']
 
             except Exception as e:
                 results["errors"].append(f"Settings: {str(e)}")
+
+        # Import GPS device config
+        if "gps_device" in import_data and import_data["gps_device"]:
+            try:
+                device = import_data["gps_device"].get("device", "/dev/ttyUSB0")
+                baudrate = import_data["gps_device"].get("baudrate", 4800)
+                signalk_path = Path("/home/boatos/.signalk/settings.json")
+                if signalk_path.exists():
+                    with open(signalk_path, 'r') as f:
+                        sk = json.load(f)
+                    for provider in sk.get("pipedProviders", []):
+                        if provider.get("id") == "gps-usb":
+                            for el in provider.get("pipeElements", []):
+                                if "serialport" in el.get("type", ""):
+                                    el["options"]["device"] = device
+                                    el["options"]["baudrate"] = baudrate
+                    with open(signalk_path, 'w') as f:
+                        json.dump(sk, f, indent=2)
+                    results["imported"]["gps_device"] = True
+            except Exception as e:
+                results["errors"].append(f"GPS config: {str(e)}")
 
         print(f"✅ Import completed: {results['imported']}")
 
@@ -4419,7 +4474,7 @@ async def system_version():
     return {
         "current": current,
         "latest": latest,
-        "up_to_date": current == latest and current != "unbekannt",
+        "up_to_date": latest == "unbekannt" or current == latest,
         "release_url": release_url,
         "published_at": published_at,
     }

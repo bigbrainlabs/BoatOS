@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../services/settings_service.dart';
 import '../widgets/onscreen_keyboard.dart';
+import '../main.dart' show MainShellState;
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -1130,6 +1131,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (ok != true || !mounted) return;
+
+    // Badge sofort ausblenden — wird nach Reboot ohnehin neu geprüft
+    context.findAncestorStateOfType<MainShellState>()?.dismissUpdateBadge();
 
     setState(() { _updateRunning = true; _updateLog = ['[System] Update wird gestartet…']; });
     try {
