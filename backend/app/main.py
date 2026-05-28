@@ -4115,45 +4115,17 @@ async def connect_wifi(request: Request):
         _run_nmcli("device", "disconnect", iface, use_sudo=True, timeout=5)
 
         if password:
-            import uuid as _uuid
-            safe_name = ssid.replace("/", "_").replace("\x00", "")
-            conn_path = f"/etc/NetworkManager/system-connections/{safe_name}.nmconnection"
-            # Frischer UUID verhindert dass NM den alten State-Cache recycelt
-            # und dabei psk-flags=1 (ask) aus dem Cache übernimmt → PSK wird ignoriert
-            fresh_uuid = str(_uuid.uuid4())
-            nm_conf = (
-                "[connection]\n"
-                f"id={ssid}\n"
-                f"uuid={fresh_uuid}\n"
-                "type=wifi\n"
-                "autoconnect=true\n\n"
-                "[wifi]\n"
-                f"ssid={ssid}\n"
-                "mode=infrastructure\n\n"
-                "[wifi-security]\n"
-                "key-mgmt=wpa-psk\n"
-                f"psk={password}\n"
-                "psk-flags=0\n\n"
-                "[ipv4]\n"
-                "method=auto\n\n"
-                "[ipv6]\n"
-                "method=auto\n"
-                "addr-gen-mode=default\n"
-            )
-            # Altes Profil + NM-State-Cache löschen, dann frische Datei
+            # Altes Profil löschen damit kein State-Cache mit psk-flags=1 recycelt wird
             _run_nmcli("connection", "delete", ssid, use_sudo=True, timeout=8)
-            subprocess.run(["sudo", "rm", "-f",
-                f"/var/lib/NetworkManager/seen-bssids"], capture_output=True)
-            write = subprocess.run(
-                ["sudo", "bash", "-c",
-                 f"cat > {conn_path} && chmod 600 {conn_path}"],
-                input=nm_conf, text=True, capture_output=True, timeout=8
+            await asyncio.sleep(0.5)
+            # PSK direkt übergeben → kein Secret-Agent nötig, NM legt Profil
+            # intern im eigenen Store an (autoconnect=yes by default)
+            result = _run_nmcli(
+                "device", "wifi", "connect", ssid,
+                "password", password,
+                "ifname", iface,
+                use_sudo=True, timeout=30
             )
-            if write.returncode != 0:
-                return {"status": "error", "message": write.stderr.strip()}
-            _run_nmcli("connection", "reload", use_sudo=True, timeout=8)
-            await asyncio.sleep(1)
-            result = _run_nmcli("connection", "up", "id", ssid, use_sudo=True, timeout=30)
         else:
             # Gespeichertes Profil vorhanden? → connection up (kein Rescan nötig,
             # schlägt bei falschem Passwort in ~10s fehl statt nach 30s zu hängen)
