@@ -131,7 +131,6 @@ class _ArcGauge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final valueStr = value.toStringAsFixed(decimals);
-    final double aspectRatio = style == GaugeStyle.arc180 ? 1.8 : 1.05;
 
     return Container(
       decoration: BoxDecoration(
@@ -145,7 +144,6 @@ class _ArcGauge extends StatelessWidget {
       ),
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
           if (label.isNotEmpty)
             Padding(
@@ -158,15 +156,24 @@ class _ArcGauge extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
             ),
-          AspectRatio(
-            aspectRatio: aspectRatio,
-            child: CustomPaint(
-              painter: _ArcPainter(
-                percentage: pct,
-                style: style,
-                accentColor: color,
-                min: min, max: max,
-              ),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (_, bc) {
+                final s = math.min(bc.maxWidth, bc.maxHeight);
+                return Center(
+                  child: SizedBox.square(
+                    dimension: s,
+                    child: CustomPaint(
+                      painter: _ArcPainter(
+                        percentage: pct,
+                        style: style,
+                        accentColor: color,
+                        min: min, max: max,
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
           const SizedBox(height: 4),
@@ -225,10 +232,10 @@ class _ArcPainter extends CustomPainter {
 
   (Offset center, double radius) _layout(Size size) {
     if (style == GaugeStyle.arc180) {
-      final r = size.width * 0.37;
-      return (Offset(size.width / 2, size.height * 0.90), r);
+      final r = math.max(math.min(size.width * 0.42, size.height * 0.80), 10.0);
+      return (Offset(size.width / 2, size.height - r * 0.15), r);
     }
-    final r = math.min(size.width, size.height) * 0.37;
+    final r = math.max(math.min(size.width, size.height) * 0.42, 10.0);
     return (Offset(size.width / 2, size.height / 2), r);
   }
 
@@ -236,6 +243,7 @@ class _ArcPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final (center, radius) = _layout(size);
     final (startAngle, sweepAngle) = _angles;
+    final canvasHalf = math.min(size.width, size.height) / 2;
 
     _drawBezel(canvas, center, radius);
     _drawTrack(canvas, center, radius, startAngle, sweepAngle);
@@ -243,7 +251,7 @@ class _ArcPainter extends CustomPainter {
       _drawGlow(canvas, center, radius, startAngle, sweepAngle);
       _drawValueArc(canvas, center, radius, startAngle, sweepAngle);
     }
-    _drawTicks(canvas, center, radius, startAngle, sweepAngle);
+    _drawTicks(canvas, center, radius, startAngle, sweepAngle, canvasHalf);
     _drawNeedle(canvas, center, radius, startAngle, sweepAngle);
     _drawCap(canvas, center);
   }
@@ -288,7 +296,7 @@ class _ArcPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round);
   }
 
-  void _drawTicks(Canvas canvas, Offset center, double radius, double startAngle, double sweepAngle) {
+  void _drawTicks(Canvas canvas, Offset center, double radius, double startAngle, double sweepAngle, double canvasHalf) {
     const numMajor = 5;
     const numMinor = 4;
     final total = numMajor * (numMinor + 1);
@@ -307,7 +315,7 @@ class _ArcPainter extends CustomPainter {
           ..strokeWidth = isMajor ? 1.5 : 1.0,
       );
 
-      if (isMajor && style != GaugeStyle.arc180) {
+      if (isMajor && style != GaugeStyle.arc180 && radius >= 60 && radius + 33 < canvasHalf) {
         final tickVal = min + (i / total) * (max - min);
         _drawLabel(canvas, center, radius, angle, _fmtTick(tickVal));
       }
@@ -395,7 +403,7 @@ class _BarGauge extends StatelessWidget {
       ),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(

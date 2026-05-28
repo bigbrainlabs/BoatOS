@@ -1951,7 +1951,8 @@ class _DashWidget {
 class _DashRow {
   String name;
   List<_DashWidget> widgets;
-  _DashRow({required this.name, required this.widgets});
+  int height;
+  _DashRow({required this.name, required this.widgets, this.height = 1});
 }
 
 // ── Dashboard Section ─────────────────────────────────────────────────────────
@@ -2104,8 +2105,16 @@ class _DashboardSectionState extends State<_DashboardSection> {
         continue;
       }
       if (line.startsWith('ROW')) {
-        final name = line.length > 3 ? line.substring(3).trim() : '';
-        cur = _DashRow(name: name, widgets: []);
+        final parts = line.split(RegExp(r'\s+'));
+        String name = '';
+        int h = 1;
+        if (parts.length > 1 && parts[1].toUpperCase() != 'HEIGHT') name = parts[1];
+        for (int pi = 1; pi < parts.length - 1; pi++) {
+          if (parts[pi].toUpperCase() == 'HEIGHT') {
+            h = int.tryParse(parts[pi + 1]) ?? 1;
+          }
+        }
+        cur = _DashRow(name: name, widgets: [], height: h.clamp(1, 4));
         rows.add(cur);
         continue;
       }
@@ -2217,7 +2226,8 @@ class _DashboardSectionState extends State<_DashboardSection> {
   String _toFullDsl() {
     final buf = StringBuffer('GRID $_gridCols\n');
     for (final row in _rows) {
-      buf.write('\nROW ${row.name}\n');
+      final hSuffix = row.height > 1 ? ' HEIGHT ${row.height}' : '';
+      buf.write('\nROW ${row.name}$hSuffix\n');
       for (final w in row.widgets) {
         buf.write('${_toWidgetDsl(w)}\n');
       }
@@ -2442,6 +2452,31 @@ class _DashboardSectionState extends State<_DashboardSection> {
                 ),
               ),
             ),
+            // Height selector H1-H4
+            ...List.generate(4, (i) {
+              final n = i + 1;
+              final sel = row.height == n;
+              return GestureDetector(
+                onTap: () => setState(() => _rows[rowIdx].height = n),
+                child: Container(
+                  width: 26, height: 26,
+                  margin: const EdgeInsets.only(left: 4),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: sel ? const Color(0xFF1565C0) : const Color(0xFF0D1117),
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(
+                      color: sel ? const Color(0xFF4FC3F7) : const Color(0xFF30363D),
+                    ),
+                  ),
+                  child: Text('H$n', style: TextStyle(
+                    fontSize: 9, fontWeight: FontWeight.w700,
+                    color: sel ? Colors.white : const Color(0xFF8B949E),
+                  )),
+                ),
+              );
+            }),
+            const SizedBox(width: 6),
             // Add widget button
             GestureDetector(
               onTap: () => _addWidget(rowIdx),
@@ -2493,6 +2528,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
   Widget _buildWidgetChip(int rowIdx, int wIdx, _DashWidget w) {
     final (icon, color) = _widgetMeta(w.type);
     final label = _widgetChipLabel(w);
+    final widgets = _rows[rowIdx].widgets;
     return GestureDetector(
       onTap: () => _editWidget(rowIdx, wIdx),
       child: Container(
@@ -2510,7 +2546,29 @@ class _DashboardSectionState extends State<_DashboardSection> {
             const SizedBox(width: 4),
             Text(w.type, style: TextStyle(fontSize: 10, color: color,
                 fontWeight: FontWeight.w700)),
+            if (w.size > 1) ...[
+              const SizedBox(width: 4),
+              Text('×${w.size}', style: const TextStyle(
+                  fontSize: 10, color: Color(0xFF8B949E))),
+            ],
             const SizedBox(width: 4),
+            if (wIdx > 0)
+              GestureDetector(
+                onTap: () => setState(() {
+                  final tmp = widgets.removeAt(wIdx);
+                  widgets.insert(wIdx - 1, tmp);
+                }),
+                child: const Icon(Icons.arrow_back_ios, size: 11, color: Color(0xFF8B949E)),
+              ),
+            if (wIdx < widgets.length - 1)
+              GestureDetector(
+                onTap: () => setState(() {
+                  final tmp = widgets.removeAt(wIdx);
+                  widgets.insert(wIdx + 1, tmp);
+                }),
+                child: const Icon(Icons.arrow_forward_ios, size: 11, color: Color(0xFF8B949E)),
+              ),
+            const SizedBox(width: 2),
             GestureDetector(
               onTap: () => setState(() => _rows[rowIdx].widgets.removeAt(wIdx)),
               child: const Icon(Icons.close, size: 13, color: Color(0xFF8B949E)),
@@ -3200,6 +3258,10 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                   _label('Stil'),
                   const SizedBox(height: 6),
                   _stylePicker(_sensorStyles),
+                  const SizedBox(height: 10),
+                  _label('Breite (Spalten)'),
+                  const SizedBox(height: 6),
+                  _sizePicker(),
                 ],
                 if (_w.type == 'GAUGE') ...[
                   Row(children: [
@@ -3219,9 +3281,22 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                   _label('Dezimalstellen'),
                   const SizedBox(height: 6),
                   _decimalsPicker(),
+                  const SizedBox(height: 10),
+                  _label('Breite (Spalten)'),
+                  const SizedBox(height: 6),
+                  _sizePicker(),
                 ],
                 if (_w.type == 'TEXT') ...[
                   _inputRow('Text', _textCtrl),
+                  const SizedBox(height: 10),
+                  _label('Breite (Spalten)'),
+                  const SizedBox(height: 6),
+                  _sizePicker(),
+                ],
+                if (_w.type == 'CLOCK' || _w.type == 'COMPASS' || _w.type == 'SPACER') ...[
+                  _label('Breite (Spalten)'),
+                  const SizedBox(height: 6),
+                  _sizePicker(),
                 ],
               ]),
             ),
@@ -3401,6 +3476,35 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                     color: sel ? const Color(0xFF4FC3F7) : const Color(0xFF30363D)),
               ),
               child: Text('$i', style: TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w600,
+                  color: sel ? Colors.white : const Color(0xFF8B949E))),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _sizePicker() {
+    return Row(
+      children: List.generate(4, (i) {
+        final n = i + 1;
+        final sel = _w.size == n;
+        return Padding(
+          padding: const EdgeInsets.only(right: 6),
+          child: GestureDetector(
+            onTap: () => setState(() => _w.size = n),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              width: 44, height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: sel ? const Color(0xFF1565C0) : const Color(0xFF0D1117),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: sel ? const Color(0xFF4FC3F7) : const Color(0xFF30363D)),
+              ),
+              child: Text('$n', style: TextStyle(
                   fontSize: 14, fontWeight: FontWeight.w600,
                   color: sel ? Colors.white : const Color(0xFF8B949E))),
             ),

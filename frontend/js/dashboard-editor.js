@@ -11,6 +11,7 @@ class DashboardEditor {
         this.sensorGroupsPalette = [];
         this.gridColumns = 3;
         this.rows = ['main'];
+        this.rowHeights = { main: 1 };
         this.selectedWidget = null;
         this.container = null;
         this.mode = 'visual'; // 'visual' or 'code'
@@ -231,12 +232,14 @@ ROW main
             this.gridColumns = parsed.grid || 3;
             this.widgets = [];
             this.rows = [];
+            this.rowHeights = {};
 
             if (parsed.rows) {
                 parsed.rows.forEach(row => {
                     if (!this.rows.includes(row.name)) {
                         this.rows.push(row.name);
                     }
+                    this.rowHeights[row.name] = row.height || 1;
                     row.widgets.forEach(widget => {
                         this.widgets.push({ ...widget, rowName: row.name });
                     });
@@ -245,6 +248,7 @@ ROW main
 
             if (!this.rows.includes('main')) {
                 this.rows.push('main');
+                this.rowHeights['main'] = this.rowHeights['main'] || 1;
             }
         } catch (error) {
             console.error('Error parsing layout:', error);
@@ -651,6 +655,16 @@ ROW weather
                                     ${[1,2,3,4].map(n => `<option value="${n}" ${this.gridColumns === n ? 'selected' : ''}>${n}</option>`).join('')}
                                 </select>
                             </label>
+                            <button onclick="window.dashboardEditor.addRow()" style="
+                                padding: 6px 14px;
+                                background: var(--bg-card);
+                                color: var(--accent);
+                                border: 1px solid var(--accent);
+                                border-radius: 8px;
+                                font-size: 12px;
+                                font-weight: 600;
+                                cursor: pointer;
+                            ">➕ Neue Reihe</button>
                         </div>
                     </div>
 
@@ -736,12 +750,14 @@ ROW weather
             this.gridColumns = parsed.grid || 3;
             this.widgets = [];
             this.rows = [];
+            this.rowHeights = {};
 
             if (parsed.rows) {
                 parsed.rows.forEach(row => {
                     if (!this.rows.includes(row.name)) {
                         this.rows.push(row.name);
                     }
+                    this.rowHeights[row.name] = row.height || 1;
                     row.widgets.forEach(widget => {
                         this.widgets.push({ ...widget, rowName: row.name });
                     });
@@ -779,62 +795,168 @@ ROW weather
     }
 
     /**
-     * Render widgets on canvas
+     * Render widgets on canvas grouped by row with height controls
      */
     renderWidgets() {
-        if (this.widgets.length === 0) {
+        if (this.widgets.length === 0 && this.rows.length <= 1 && (this.rows.length === 0 || this.rows[0] === 'main')) {
             return `
-                <div style="
-                    grid-column: 1 / -1;
-                    text-align: center;
-                    padding: 40px;
-                    color: var(--text-dim);
-                ">
+                <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-dim);">
                     Keine Widgets.<br>
                     <small>Klicke links auf ein Widget um es hinzuzufügen.</small>
                 </div>
             `;
         }
 
-        return this.widgets.map((widget, index) => `
-            <div class="canvas-widget ${this.selectedWidget === index ? 'selected' : ''}"
-                 data-index="${index}"
-                 onclick="window.dashboardEditor.selectWidget(${index})"
-                 style="
-                    grid-column: span ${widget.size || 1};
-                    background: var(--bg-panel);
-                    border: 2px solid ${this.selectedWidget === index ? 'var(--accent)' : 'var(--border)'};
-                    border-radius: 12px;
-                    padding: 15px;
-                    cursor: move;
-                    position: relative;
-                    transition: all 0.2s;
+        // Use this.rows as canonical order, append any widget rows not in list
+        const seen = new Set(this.rows);
+        const rowOrder = [...this.rows];
+        this.widgets.forEach(w => {
+            const rn = w.rowName || 'main';
+            if (!seen.has(rn)) { seen.add(rn); rowOrder.push(rn); }
+        });
+
+        // Group widgets by row preserving global index
+        const byRow = {};
+        this.widgets.forEach((w, idx) => {
+            const rn = w.rowName || 'main';
+            if (!byRow[rn]) byRow[rn] = [];
+            byRow[rn].push({ widget: w, idx });
+        });
+
+        let html = '';
+        rowOrder.forEach(rowName => {
+            const h = this.rowHeights[rowName] || 1;
+            const cellH = 140 * h;
+            const rowWidgets = byRow[rowName] || [];
+
+            // Row header (spans all columns)
+            html += `
+                <div data-drop-row="${rowName}" style="
+                    grid-column: 1 / -1;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 5px 10px;
+                    background: rgba(79,195,247,0.07);
+                    border-radius: 8px;
+                    border: 1px solid rgba(79,195,247,0.15);
                 ">
-                <div style="display: flex; justify-content: space-between; align-items: start;">
-                    <div>
-                        <div style="font-size: 24px; margin-bottom: 5px;">
-                            ${this.getWidgetIcon(widget)}
-                        </div>
-                        <div style="color: var(--text); font-weight: 600; font-size: 13px;">
-                            ${widget.alias || this.getWidgetName(widget)}
-                        </div>
-                        <div style="color: var(--text-dim); font-size: 11px;">
-                            ${widget.type} | Größe: ${widget.size || 1}
+                    <span style="color: var(--accent); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; flex: 1;">
+                        ▸ ROW ${rowName}
+                    </span>
+                    <span style="color: var(--text-dim); font-size: 11px;">Höhe:</span>
+                    ${[1,2,3,4].map(n => `
+                        <button onclick="event.stopPropagation(); window.dashboardEditor.setRowHeight('${rowName}', ${n})" style="
+                            width: 26px; height: 26px;
+                            background: ${h === n ? 'var(--accent)' : 'var(--bg-card)'};
+                            color: ${h === n ? 'white' : 'var(--text-dim)'};
+                            border: 1px solid ${h === n ? 'var(--accent)' : 'var(--border)'};
+                            border-radius: 5px; cursor: pointer; font-size: 11px; font-weight: 700;
+                        ">H${n}</button>
+                    `).join('')}
+                    <button onclick="event.stopPropagation(); window.dashboardEditor.deleteRow('${rowName}')" title="Reihe löschen" style="
+                        width: 26px; height: 26px; margin-left: 4px;
+                        background: none; color: #ef5350;
+                        border: 1px solid rgba(239,83,80,0.4);
+                        border-radius: 5px; cursor: pointer; font-size: 13px; line-height: 1;
+                    ">🗑</button>
+                </div>
+            `;
+
+            // Empty row placeholder
+            if (rowWidgets.length === 0) {
+                html += `
+                    <div data-drop-row="${rowName}" style="
+                        grid-column: 1 / -1;
+                        height: 60px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: var(--text-dim);
+                        font-size: 12px;
+                        border: 1px dashed var(--border);
+                        border-radius: 8px;
+                        opacity: 0.6;
+                    ">Keine Widgets — ziehe oder klicke einen Sensor hinein</div>
+                `;
+            }
+
+            // Row's widgets
+            rowWidgets.forEach(({ widget, idx }) => {
+                html += `
+                    <div class="canvas-widget ${this.selectedWidget === idx ? 'selected' : ''}"
+                         data-index="${idx}"
+                         data-row="${widget.rowName || 'main'}"
+                         onclick="window.dashboardEditor.selectWidget(${idx})"
+                         style="
+                            grid-column: span ${widget.size || 1};
+                            height: ${cellH}px;
+                            background: var(--bg-panel);
+                            border: 2px solid ${this.selectedWidget === idx ? 'var(--accent)' : 'var(--border)'};
+                            border-radius: 12px;
+                            padding: 12px;
+                            cursor: pointer;
+                            position: relative;
+                            transition: border-color 0.2s;
+                            box-sizing: border-box;
+                            overflow: hidden;
+                         ">
+                        <div style="display: flex; justify-content: space-between; align-items: start; height: 100%;">
+                            <div>
+                                <div style="font-size: 20px; margin-bottom: 4px;">${this.getWidgetIcon(widget)}</div>
+                                <div style="color: var(--text); font-weight: 600; font-size: 12px;">${widget.alias || this.getWidgetName(widget)}</div>
+                                <div style="color: var(--text-dim); font-size: 10px;">${widget.type} | ×${widget.size || 1}</div>
+                            </div>
+                            <button onclick="event.stopPropagation(); window.dashboardEditor.deleteWidget(${idx})" style="
+                                background: var(--danger); color: white; border: none;
+                                width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 14px; flex-shrink: 0;
+                            ">×</button>
                         </div>
                     </div>
-                    <button onclick="event.stopPropagation(); window.dashboardEditor.deleteWidget(${index})" style="
-                        background: var(--danger);
-                        color: white;
-                        border: none;
-                        width: 28px;
-                        height: 28px;
-                        border-radius: 50%;
-                        cursor: pointer;
-                        font-size: 16px;
-                    ">×</button>
-                </div>
-            </div>
-        `).join('');
+                `;
+            });
+        });
+
+        return html;
+    }
+
+    /**
+     * Add a new row
+     */
+    addRow() {
+        let name = prompt('Reihen-Name:', `row${this.rows.length + 1}`);
+        if (!name) return;
+        name = name.trim().replace(/\s+/g, '_');
+        if (!name || this.rows.includes(name)) return;
+        this.rows.push(name);
+        this.rowHeights[name] = 1;
+        this.render();
+    }
+
+    /**
+     * Delete a row
+     */
+    deleteRow(rowName) {
+        const widgetsInRow = this.widgets.filter(w => (w.rowName || 'main') === rowName);
+        if (widgetsInRow.length > 0) {
+            if (!confirm(`Reihe "${rowName}" löschen?\n${widgetsInRow.length} Widget(s) werden nach "main" verschoben.`)) return;
+            this.widgets.forEach(w => { if ((w.rowName || 'main') === rowName) w.rowName = 'main'; });
+        } else {
+            if (!confirm(`Reihe "${rowName}" löschen?`)) return;
+        }
+        this.rows = this.rows.filter(r => r !== rowName);
+        if (!this.rows.includes('main')) this.rows.unshift('main');
+        delete this.rowHeights[rowName];
+        this.selectedWidget = null;
+        this.render();
+    }
+
+    /**
+     * Set height for a row (1-4)
+     */
+    setRowHeight(rowName, height) {
+        this.rowHeights[rowName] = Math.max(1, Math.min(4, height));
+        this.render();
     }
 
     /**
@@ -913,6 +1035,15 @@ ROW weather
                            style="width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                 </div>
                 ` : ''}
+
+                <!-- Row -->
+                <div>
+                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Reihe</label>
+                    <select onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'rowName', this.value)" style="
+                        width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
+                        ${this.rows.map(r => `<option value="${r}" ${widget.rowName === r ? 'selected' : ''}>${r}</option>`).join('')}
+                    </select>
+                </div>
 
                 <!-- Size -->
                 <div>
@@ -1023,12 +1154,13 @@ ROW weather
      * Add a new widget
      */
     addWidget(type, sensor = null) {
+        const targetRow = this.rows[this.rows.length - 1] || 'main';
         const widget = {
             type: type,
             size: 1,
             style: 'card',
             color: 'cyan',
-            rowName: 'main'
+            rowName: targetRow
         };
 
         if (type === 'sensor' && sensor) {
@@ -1048,6 +1180,7 @@ ROW weather
      * Add a gauge widget
      */
     addGauge(sensor, unit = '') {
+        const targetRow = this.rows[this.rows.length - 1] || 'main';
         const widget = {
             type: 'gauge',
             sensor: sensor,
@@ -1059,7 +1192,7 @@ ROW weather
             unit: unit,
             label: '',
             decimals: 1,
-            rowName: 'main'
+            rowName: targetRow
         };
 
         this.widgets.push(widget);
@@ -1116,40 +1249,76 @@ ROW weather
     }
 
     /**
-     * Initialize drag & drop (simplified)
+     * Initialize drag & drop with cross-row support
      */
     initDragDrop() {
         const grid = document.getElementById('canvas-grid');
         if (!grid) return;
 
-        const widgets = grid.querySelectorAll('.canvas-widget');
-        widgets.forEach(widget => {
-            widget.draggable = true;
+        const highlight = (el, on) => {
+            el.style.outline = on ? '2px solid var(--accent)' : '';
+            el.style.outlineOffset = on ? '-2px' : '';
+        };
 
-            widget.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('text/plain', widget.dataset.index);
-                widget.style.opacity = '0.5';
+        // Widget cards — draggable + drop target
+        grid.querySelectorAll('.canvas-widget').forEach(card => {
+            card.draggable = true;
+
+            card.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', card.dataset.index);
+                setTimeout(() => card.style.opacity = '0.4', 0);
             });
 
-            widget.addEventListener('dragend', () => {
-                widget.style.opacity = '1';
+            card.addEventListener('dragend', () => {
+                card.style.opacity = '1';
             });
 
-            widget.addEventListener('dragover', (e) => {
+            card.addEventListener('dragover', (e) => {
                 e.preventDefault();
+                highlight(card, true);
             });
 
-            widget.addEventListener('drop', (e) => {
+            card.addEventListener('dragleave', () => highlight(card, false));
+
+            card.addEventListener('drop', (e) => {
                 e.preventDefault();
+                e.stopPropagation();
+                highlight(card, false);
+
                 const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
-                const toIndex = parseInt(widget.dataset.index);
+                const toIndex = parseInt(card.dataset.index);
+                if (isNaN(fromIndex) || fromIndex === toIndex) return;
 
-                if (fromIndex !== toIndex) {
-                    const movedWidget = this.widgets.splice(fromIndex, 1)[0];
-                    this.widgets.splice(toIndex, 0, movedWidget);
-                    this.selectedWidget = toIndex;
-                    this.render();
-                }
+                const targetRow = card.dataset.row;
+                const moved = this.widgets.splice(fromIndex, 1)[0];
+                moved.rowName = targetRow;
+                const adjustedTo = toIndex > fromIndex ? toIndex - 1 : toIndex;
+                this.widgets.splice(adjustedTo, 0, moved);
+                this.selectedWidget = adjustedTo;
+                this.render();
+            });
+        });
+
+        // Row headers + empty placeholders — drop zone to move widget into that row
+        grid.querySelectorAll('[data-drop-row]').forEach(zone => {
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                highlight(zone, true);
+            });
+
+            zone.addEventListener('dragleave', () => highlight(zone, false));
+
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                highlight(zone, false);
+
+                const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                if (isNaN(fromIndex)) return;
+                const targetRow = zone.dataset.dropRow;
+                this.widgets[fromIndex].rowName = targetRow;
+                this.selectedWidget = fromIndex;
+                this.render();
             });
         });
     }
@@ -1169,7 +1338,8 @@ ROW weather
         });
 
         Object.entries(byRow).forEach(([rowName, widgets]) => {
-            dsl += `ROW ${rowName}\n`;
+            const h = this.rowHeights[rowName] || 1;
+            dsl += `ROW ${rowName}${h > 1 ? ` HEIGHT ${h}` : ''}\n`;
             widgets.forEach(w => {
                 if (w.type === 'sensor') {
                     dsl += `  SENSOR ${w.sensor}`;
