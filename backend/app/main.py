@@ -332,7 +332,29 @@ async def get_sensors_grouped():
             "age_seconds": round(age),
         })
 
-    order = [gid for _, gid, _, _, _ in _SENSOR_GROUP_RULES] + ["sonstige"]
+    # Inject synthetic GPS sensors into "navigation" group
+    gps_status = gps_service.get_gps_status()
+    gps_online = "online" if gps_status.get("fix") else "standby"
+    synthetic_gps = [
+        ("navigation/altitude",   "Höhe (GPS)",          gps_status.get("altitude") or 0,  "m"),
+        ("navigation/accuracy",   "GPS-Genauigkeit (HDOP)", gps_status.get("hdop") or 0,   ""),
+        ("navigation/satellites", "Satelliten",           gps_status.get("satellites") or 0, ""),
+    ]
+    if "gps" not in groups:
+        groups["gps"] = {"id": "gps", "label": "GPS / Navigation", "icon": "📡", "source": "GPS", "sensors": []}
+    existing_gps_topics = {s["topic"] for s in groups["gps"]["sensors"]}
+    for topic, label, value, unit in synthetic_gps:
+        if topic not in existing_gps_topics:
+            groups["gps"]["sensors"].append({
+                "topic": topic,
+                "label": label,
+                "value": str(value),
+                "unit": unit,
+                "status": gps_online,
+                "age_seconds": 0,
+            })
+
+    order = [gid for _, gid, _, _, _ in _SENSOR_GROUP_RULES] + ["gps", "sonstige"]
     seen: set = set()
     sorted_groups = []
     for gid in order:
