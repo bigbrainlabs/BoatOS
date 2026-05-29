@@ -2009,32 +2009,49 @@ class _DashboardSectionState extends State<_DashboardSection> {
   // ── Load ──────────────────────────────────────────────────────────────────
 
   Future<void> _loadAll() async {
+    await Future.wait([
+      _loadLayout(),
+      _loadAvailSensors(),
+      _loadSensorGroupsPaletteData(),
+    ]);
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _loadLayout() async {
     try {
-      final results = await Future.wait([
-        http.get(Uri.parse('$_base/api/dashboard/layout')),
-        http.get(Uri.parse('$_base/api/sensors/list')),
-        http.get(Uri.parse('$_base/api/sensors/grouped')),
-      ]);
-      if (results[0].statusCode == 200) {
-        final body = json.decode(results[0].body) as Map<String, dynamic>;
+      final r = await http.get(Uri.parse('$_base/api/dashboard/layout'));
+      if (r.statusCode == 200) {
+        final body = json.decode(r.body) as Map<String, dynamic>;
         final dsl = (body['layout'] as String?) ?? '';
         _dslCtrl.text = dsl;
         _parseDslToState(dsl);
       }
-      if (results[1].statusCode == 200) {
-        final body = json.decode(results[1].body) as Map<String, dynamic>;
+    } catch (_) {}
+  }
+
+  Future<void> _loadAvailSensors() async {
+    try {
+      final r = await http.get(Uri.parse('$_base/api/sensors/list'));
+      if (r.statusCode == 200) {
+        final body = json.decode(r.body) as Map<String, dynamic>;
         _availSensors = ((body['sensors'] as List?) ?? [])
             .cast<Map<String, dynamic>>()
             .where((e) => e['base_name'] != null)
             .toList();
       }
-      if (results[2].statusCode == 200) {
-        final body = json.decode(results[2].body) as Map<String, dynamic>;
+    } catch (_) {}
+  }
+
+  Future<void> _loadSensorGroupsPaletteData() async {
+    try {
+      final r = await http.get(Uri.parse('$_base/api/sensors/grouped'));
+      if (r.statusCode == 200) {
+        final body = json.decode(r.body) as Map<String, dynamic>;
         _sensorGroupsPalette = ((body['groups'] as List?) ?? [])
-            .cast<Map<String, dynamic>>();
+            .cast<Map<String, dynamic>>()
+            .toList();
       }
     } catch (_) {}
-    if (mounted) setState(() => _loading = false);
   }
 
   // ── Sensor Management ─────────────────────────────────────────────────────
@@ -2256,6 +2273,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
         if (_saveOk) {
           _dslCtrl.text = dsl;
           _parseDslToState(dsl);
+          context.read<SettingsService>().setRaw('dashboard_layout', dsl);
         }
       });
     } catch (e) {

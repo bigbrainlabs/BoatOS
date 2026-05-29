@@ -1028,6 +1028,15 @@ ROW weather
 
                 ${(isSensor || isGauge) ? `
                 <div>
+                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Sensor</label>
+                    <select onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'sensor', this.value)" style="
+                        width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
+                        ${this.sensors.length === 0
+                            ? `<option value="${widget.sensor || ''}">${widget.sensor || '— keine Sensoren —'}</option>`
+                            : this.sensors.map(s => `<option value="${s.base_name}" ${widget.sensor === s.base_name ? 'selected' : ''}>${s.name}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Label / Alias</label>
                     <input type="text" value="${widget.alias || widget.label || ''}"
                            onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, '${isGauge ? 'label' : 'alias'}', this.value)"
