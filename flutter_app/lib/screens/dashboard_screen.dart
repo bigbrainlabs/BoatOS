@@ -12,7 +12,7 @@ import '../widgets/gauge_widget.dart';
 // DSL data models
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum _WidgetType { gauge, sensor, text, clock, spacer, compass }
+enum _WidgetType { gauge, sensor, text, clock, spacer, compass, horizon }
 
 class _GaugeCfg {
   final String path;
@@ -49,24 +49,34 @@ class _SimpleCfg {
   const _SimpleCfg({this.size = 1, this.text = ''});
 }
 
+class _HorizonCfg {
+  final String path;
+  final int size;
+  const _HorizonCfg({required this.path, this.size = 1});
+}
+
 class _DashWidget {
   final _WidgetType type;
   final _GaugeCfg? gauge;
   final _SensorCfg? sensor;
   final _SimpleCfg? simple;
+  final _HorizonCfg? horizonCfg;
 
   int get size {
-    if (type == _WidgetType.gauge)  return gauge!.size;
-    if (type == _WidgetType.sensor) return sensor!.size;
+    if (type == _WidgetType.gauge)   return gauge!.size;
+    if (type == _WidgetType.sensor)  return sensor!.size;
+    if (type == _WidgetType.horizon) return horizonCfg!.size;
     return simple?.size ?? 1;
   }
 
   const _DashWidget.gauge(_GaugeCfg cfg)
-      : type = _WidgetType.gauge, gauge = cfg, sensor = null, simple = null;
+      : type = _WidgetType.gauge, gauge = cfg, sensor = null, simple = null, horizonCfg = null;
   const _DashWidget.sensor(_SensorCfg cfg)
-      : type = _WidgetType.sensor, gauge = null, sensor = cfg, simple = null;
+      : type = _WidgetType.sensor, gauge = null, sensor = cfg, simple = null, horizonCfg = null;
   const _DashWidget.simple(_WidgetType t, _SimpleCfg cfg)
-      : type = t, gauge = null, sensor = null, simple = cfg;
+      : type = t, gauge = null, sensor = null, simple = cfg, horizonCfg = null;
+  const _DashWidget.horizon(_HorizonCfg cfg)
+      : type = _WidgetType.horizon, gauge = null, sensor = null, simple = null, horizonCfg = cfg;
 }
 
 class _LayoutRow {
@@ -82,7 +92,39 @@ class _Layout {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DSL parser
+// SCREEN/LAYOUT template models
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _TemplateInfo {
+  final String id, cols, rows, areas;
+  const _TemplateInfo({required this.id, required this.cols, required this.rows, required this.areas});
+}
+
+class _DashScreen {
+  final String name;
+  final String layoutId;
+  final _TemplateInfo template;
+  final Map<String, _DashWidget> widgets; // slot letter → widget
+  const _DashScreen({required this.name, required this.layoutId, required this.template, required this.widgets});
+}
+
+const _kTemplates = <String, _TemplateInfo>{
+  'full':        _TemplateInfo(id: 'full',        cols: '1fr',         rows: '1fr',         areas: 'A'),
+  'split-h':     _TemplateInfo(id: 'split-h',     cols: '1fr 1fr',     rows: '1fr',         areas: 'A B'),
+  'split-v':     _TemplateInfo(id: 'split-v',     cols: '1fr',         rows: '1fr 1fr',     areas: 'A\nB'),
+  'thirds-h':    _TemplateInfo(id: 'thirds-h',    cols: '1fr 1fr 1fr', rows: '1fr',         areas: 'A B C'),
+  'hero-right':  _TemplateInfo(id: 'hero-right',  cols: '2fr 1fr',     rows: '1fr 1fr',     areas: 'A B\nA C'),
+  'hero-left':   _TemplateInfo(id: 'hero-left',   cols: '1fr 2fr',     rows: '1fr 1fr',     areas: 'B A\nC A'),
+  'hero-top':    _TemplateInfo(id: 'hero-top',    cols: '1fr 1fr',     rows: '2fr 1fr',     areas: 'A A\nB C'),
+  'hero-bottom': _TemplateInfo(id: 'hero-bottom', cols: '1fr 1fr',     rows: '1fr 2fr',     areas: 'B C\nA A'),
+  'grid-4':      _TemplateInfo(id: 'grid-4',      cols: '1fr 1fr',     rows: '1fr 1fr',     areas: 'A B\nC D'),
+  'mosaic-4':    _TemplateInfo(id: 'mosaic-4',    cols: '2fr 1fr',     rows: '1fr 1fr 1fr', areas: 'A B\nA C\nA D'),
+  'grid-6':      _TemplateInfo(id: 'grid-6',      cols: '1fr 1fr 1fr', rows: '1fr 1fr',     areas: 'A B C\nD E F'),
+  'mosaic-5':    _TemplateInfo(id: 'mosaic-5',    cols: '2fr 1fr 1fr', rows: '1fr 1fr',     areas: 'A B C\nA D E'),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DSL parser (old ROW/GRID format)
 // ─────────────────────────────────────────────────────────────────────────────
 
 _Layout _parseDSL(String dsl) {
@@ -144,11 +186,109 @@ _Layout _parseDSL(String dsl) {
           _         => _WidgetType.compass,
         };
         currentWidgets.add(_DashWidget.simple(sType, _SimpleCfg(size: sSize)));
+      case 'HORIZON':
+        currentWidgets ??= [];
+        if (tokens.length > 1) {
+          int hSize = 1;
+          for (int i = 2; i < tokens.length - 1; i += 2) {
+            if (tokens[i].toUpperCase() == 'SIZE') hSize = int.tryParse(tokens[i + 1]) ?? 1;
+          }
+          currentWidgets.add(_DashWidget.horizon(
+              _HorizonCfg(path: tokens[1], size: hSize)));
+        }
     }
   }
   flushRow();
   return _Layout(columns: columns, rows: rows);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCREEN/LAYOUT DSL parser (new format)
+// ─────────────────────────────────────────────────────────────────────────────
+
+List<_DashScreen> _parseScreenDSL(String dsl) {
+  final screens = <_DashScreen>[];
+  String? currentName;
+  String? currentLayoutId;
+  Map<String, _DashWidget>? currentWidgets;
+
+  void flushScreen() {
+    final name = currentName;
+    if (name != null) {
+      final layoutId = currentLayoutId ?? 'full';
+      final tmpl = _kTemplates[layoutId] ?? _kTemplates['full']!;
+      screens.add(_DashScreen(
+        name: name,
+        layoutId: layoutId,
+        template: tmpl,
+        widgets: currentWidgets ?? {},
+      ));
+    }
+  }
+
+  for (final rawLine in dsl.split('\n')) {
+    final line = rawLine.trim();
+    if (line.isEmpty || line.startsWith('#')) continue;
+
+    final tokens = _tokenize(line);
+    if (tokens.isEmpty) continue;
+
+    if (tokens[0].toUpperCase() == 'SCREEN') {
+      flushScreen();
+      currentName = tokens.length > 1 ? tokens[1] : 'Screen';
+      currentLayoutId = 'full';
+      currentWidgets = {};
+      for (int i = 2; i < tokens.length - 1; i++) {
+        if (tokens[i].toUpperCase() == 'LAYOUT') currentLayoutId = tokens[i + 1];
+      }
+    } else if (currentWidgets != null &&
+        tokens[0].length == 1 &&
+        RegExp(r'[A-Za-z]').hasMatch(tokens[0])) {
+      // Slot assignment: "A  SENSOR ..." or "B  GAUGE ..."
+      final slot = tokens[0].toUpperCase();
+      // Re-tokenize from the rest of the line (after slot letter)
+      final widgetLine = line.substring(tokens[0].length).trim();
+      final wTokens = _tokenize(widgetLine);
+      if (wTokens.isEmpty) continue;
+      final widget = _parseWidgetFromTokens(wTokens);
+      if (widget != null) currentWidgets[slot] = widget;
+    }
+  }
+  flushScreen();
+  return screens;
+}
+
+_DashWidget? _parseWidgetFromTokens(List<String> tokens) {
+  if (tokens.isEmpty) return null;
+  switch (tokens[0].toUpperCase()) {
+    case 'SENSOR':
+      if (tokens.length > 1) return _DashWidget.sensor(_parseSensor(tokens));
+    case 'GAUGE':
+      if (tokens.length > 1) return _DashWidget.gauge(_parseGauge(tokens));
+    case 'HORIZON':
+      if (tokens.length > 1) {
+        int hSize = 1;
+        for (int i = 2; i < tokens.length - 1; i += 2) {
+          if (tokens[i].toUpperCase() == 'SIZE') hSize = int.tryParse(tokens[i + 1]) ?? 1;
+        }
+        return _DashWidget.horizon(_HorizonCfg(path: tokens[1], size: hSize));
+      }
+    case 'CLOCK':
+      return _DashWidget.simple(_WidgetType.clock, const _SimpleCfg());
+    case 'COMPASS':
+      return _DashWidget.simple(_WidgetType.compass, const _SimpleCfg());
+    case 'SPACER':
+      return _DashWidget.simple(_WidgetType.spacer, const _SimpleCfg());
+    case 'TEXT':
+      return _DashWidget.simple(_WidgetType.text,
+          _SimpleCfg(text: tokens.length > 1 ? tokens[1] : ''));
+  }
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tokenizer & sub-parsers
+// ─────────────────────────────────────────────────────────────────────────────
 
 List<String> _tokenize(String line) {
   final tokens = <String>[];
@@ -338,121 +478,286 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
-    final layout = _parseDSL(dsl);
-    if (layout.rows.isEmpty || layout.rows.every((r) => r.widgets.isEmpty)) {
-      return const Center(
-        child: Text('Keine Widgets im Layout.',
-            style: TextStyle(color: Color(0xFF8B949E))),
-      );
+    // Detect format: if first non-comment, non-empty line starts with 'SCREEN'
+    bool isScreen = false;
+    for (final line in dsl.split('\n')) {
+      final t = line.trim();
+      if (t.isEmpty || t.startsWith('#')) continue;
+      isScreen = t.toUpperCase().startsWith('SCREEN');
+      break;
     }
 
-    const double kBaseRowH = 160.0;
-    const double gap = 10.0;
-    const double kDotsH = 28.0;
-
-    return LayoutBuilder(builder: (ctx, constraints) {
-      final totalW = constraints.maxWidth - 24.0;
-      final colW = (totalW - gap * (layout.columns - 1)) / layout.columns;
-
-      // Flatten DSL rows into visual lines (each line = one row of widgets at a fixed height)
-      final lineWidgets = <List<_DashWidget>>[];
-      final lineHeights = <double>[];
-      for (final row in layout.rows) {
-        final rowH = kBaseRowH * row.height;
-        var cur = <_DashWidget>[];
-        var used = 0;
-        for (final w in row.widgets) {
-          final span = w.size.clamp(1, layout.columns);
-          if (used + span > layout.columns && cur.isNotEmpty) {
-            lineWidgets.add(cur); lineHeights.add(rowH);
-            cur = [w]; used = span;
-          } else { cur.add(w); used += span; }
-        }
-        if (cur.isNotEmpty) { lineWidgets.add(cur); lineHeights.add(rowH); }
+    if (isScreen) {
+      // New SCREEN/LAYOUT format
+      final screens = _parseScreenDSL(dsl);
+      if (screens.isEmpty) {
+        return const Center(
+          child: Text('Keine Screens im Layout.',
+              style: TextStyle(color: Color(0xFF8B949E))),
+        );
       }
-
-      // Group lines into pages — each page fits within available height
-      final pageH = constraints.maxHeight - 24.0 - kDotsH;
-      final pageStarts = <int>[];
-      final pageEnds = <int>[];
-      var si = 0;
-      while (si < lineWidgets.length) {
-        var usedH = 0.0;
-        var ei = si;
-        while (ei < lineWidgets.length) {
-          final next = ei == si ? lineHeights[ei] : usedH + gap + lineHeights[ei];
-          if (next > pageH && ei > si) break;
-          usedH = next; ei++;
-        }
-        pageStarts.add(si);
-        pageEnds.add(ei == si ? si + 1 : ei);
-        si = pageEnds.last;
-      }
-      final pageCount = pageStarts.length;
-
-      Widget buildLine(int li, bool isLast) => Padding(
-        padding: EdgeInsets.only(bottom: isLast ? 0 : gap),
-        child: SizedBox(
-          height: lineHeights[li],
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: lineWidgets[li].asMap().entries.map((e) {
-              final i = e.key;
-              final w = e.value;
-              final span = w.size.clamp(1, layout.columns);
-              return Padding(
-                padding: EdgeInsets.only(left: i > 0 ? gap : 0),
-                child: SizedBox(
-                  width: colW * span + gap * (span - 1),
-                  child: _buildWidget(w),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
+      return LayoutBuilder(
+        builder: (ctx, bc) => _buildScreenLayout(screens, bc),
       );
-
-      Widget buildPage(int p) {
-        final s = pageStarts[p];
-        final e = pageEnds[p];
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: List.generate(e - s, (i) => buildLine(s + i, i == e - s - 1)),
-          ),
+    } else {
+      // Existing old-format code (ROW/GRID)
+      final layout = _parseDSL(dsl);
+      if (layout.rows.isEmpty || layout.rows.every((r) => r.widgets.isEmpty)) {
+        return const Center(
+          child: Text('Keine Widgets im Layout.',
+              style: TextStyle(color: Color(0xFF8B949E))),
         );
       }
 
-      if (pageCount <= 1) {
-        return SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: 80),
-          child: pageCount == 0 ? const SizedBox() : buildPage(0),
-        );
-      }
+      const double kBaseRowH = 160.0;
+      const double gap = 10.0;
+      const double kDotsH = 28.0;
 
-      // Reset page index if DSL changed and pages decreased
-      if (_currentPage >= pageCount) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) { _pageCtrl.jumpToPage(0); setState(() => _currentPage = 0); }
-        });
-      }
+      return LayoutBuilder(builder: (ctx, constraints) {
+        final totalW = constraints.maxWidth - 24.0;
+        final colW = (totalW - gap * (layout.columns - 1)) / layout.columns;
 
-      return Column(
-        children: [
-          Expanded(
-            child: PageView.builder(
-              controller: _pageCtrl,
-              itemCount: pageCount,
-              onPageChanged: (p) => setState(() => _currentPage = p),
-              itemBuilder: (_, p) => buildPage(p),
+        // Flatten DSL rows into visual lines (each line = one row of widgets at a fixed height)
+        final lineWidgets = <List<_DashWidget>>[];
+        final lineHeights = <double>[];
+        for (final row in layout.rows) {
+          final rowH = kBaseRowH * row.height;
+          var cur = <_DashWidget>[];
+          var used = 0;
+          for (final w in row.widgets) {
+            final span = w.size.clamp(1, layout.columns);
+            if (used + span > layout.columns && cur.isNotEmpty) {
+              lineWidgets.add(cur); lineHeights.add(rowH);
+              cur = [w]; used = span;
+            } else { cur.add(w); used += span; }
+          }
+          if (cur.isNotEmpty) { lineWidgets.add(cur); lineHeights.add(rowH); }
+        }
+
+        // Group lines into pages — each page fits within available height
+        final pageH = constraints.maxHeight - 24.0 - kDotsH;
+        final pageStarts = <int>[];
+        final pageEnds = <int>[];
+        var si = 0;
+        while (si < lineWidgets.length) {
+          var usedH = 0.0;
+          var ei = si;
+          while (ei < lineWidgets.length) {
+            final next = ei == si ? lineHeights[ei] : usedH + gap + lineHeights[ei];
+            if (next > pageH && ei > si) break;
+            usedH = next; ei++;
+          }
+          pageStarts.add(si);
+          pageEnds.add(ei == si ? si + 1 : ei);
+          si = pageEnds.last;
+        }
+        final pageCount = pageStarts.length;
+
+        Widget buildLine(int li, bool isLast) => Padding(
+          padding: EdgeInsets.only(bottom: isLast ? 0 : gap),
+          child: SizedBox(
+            height: lineHeights[li],
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: lineWidgets[li].asMap().entries.map((e) {
+                final i = e.key;
+                final w = e.value;
+                final span = w.size.clamp(1, layout.columns);
+                return Padding(
+                  padding: EdgeInsets.only(left: i > 0 ? gap : 0),
+                  child: SizedBox(
+                    width: colW * span + gap * (span - 1),
+                    child: _buildWidget(w),
+                  ),
+                );
+              }).toList(),
             ),
           ),
-          _buildDots(pageCount, _currentPage.clamp(0, pageCount - 1)),
-        ],
-      );
-    });
+        );
+
+        Widget buildPage(int p) {
+          final s = pageStarts[p];
+          final e = pageEnds[p];
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: List.generate(e - s, (i) => buildLine(s + i, i == e - s - 1)),
+            ),
+          );
+        }
+
+        if (pageCount <= 1) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 80),
+            child: pageCount == 0 ? const SizedBox() : buildPage(0),
+          );
+        }
+
+        // Reset page index if DSL changed and pages decreased
+        if (_currentPage >= pageCount) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) { _pageCtrl.jumpToPage(0); setState(() => _currentPage = 0); }
+          });
+        }
+
+        return Column(
+          children: [
+            Expanded(
+              child: PageView.builder(
+                controller: _pageCtrl,
+                itemCount: pageCount,
+                onPageChanged: (p) => setState(() => _currentPage = p),
+                itemBuilder: (_, p) => buildPage(p),
+              ),
+            ),
+            _buildDots(pageCount, _currentPage.clamp(0, pageCount - 1)),
+          ],
+        );
+      });
+    }
   }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SCREEN/LAYOUT rendering
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  Widget _buildScreenLayout(List<_DashScreen> screens, BoxConstraints constraints) {
+    if (screens.length == 1) {
+      return _buildOneScreen(screens[0], constraints);
+    }
+
+    // Reset page index if screen count decreased
+    if (_currentPage >= screens.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) { _pageCtrl.jumpToPage(0); setState(() => _currentPage = 0); }
+      });
+    }
+
+    return Column(children: [
+      Expanded(
+        child: PageView.builder(
+          controller: _pageCtrl,
+          itemCount: screens.length,
+          onPageChanged: (p) => setState(() => _currentPage = p),
+          itemBuilder: (_, i) => _buildOneScreen(screens[i], constraints),
+        ),
+      ),
+      _buildScreenDots(screens),
+    ]);
+  }
+
+  Widget _buildOneScreen(_DashScreen screen, BoxConstraints constraints) {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: LayoutBuilder(
+        builder: (ctx, bc) => _buildTemplateGrid(
+          screen,
+          Size(bc.maxWidth, bc.maxHeight),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTemplateGrid(_DashScreen screen, Size size) {
+    const gap = 10.0;
+    final tmpl = screen.template;
+
+    final colFracs = _parseFrList(tmpl.cols);
+    final rowFracs = _parseFrList(tmpl.rows);
+    final numCols = colFracs.length;
+    final numRows = rowFracs.length;
+
+    final areaRows = tmpl.areas
+        .split('\n')
+        .map((r) => r.trim().split(RegExp(r'\s+')))
+        .toList();
+
+    final totalW = size.width  - gap * (numCols - 1);
+    final totalH = size.height - gap * (numRows - 1);
+
+    final colWidths  = colFracs.map((f) => f * totalW).toList();
+    final rowHeights = rowFracs.map((f) => f * totalH).toList();
+
+    // Cumulative x/y positions (one extra entry = right/bottom edge)
+    final colX = <double>[0.0];
+    for (int i = 0; i < numCols; i++) { colX.add(colX.last + colWidths[i] + gap); }
+    final rowY = <double>[0.0];
+    for (int i = 0; i < numRows; i++) { rowY.add(rowY.last + rowHeights[i] + gap); }
+
+    final children = <Widget>[];
+    final processedSlots = <String>{};
+
+    for (int r = 0; r < areaRows.length && r < numRows; r++) {
+      final row = areaRows[r];
+      for (int c = 0; c < row.length && c < numCols; c++) {
+        final slot = row[c].toUpperCase();
+        if (processedSlots.contains(slot)) continue;
+        processedSlots.add(slot);
+
+        // Find bounding box of this slot across all area cells
+        int minC = numCols, maxC = 0, minR = numRows, maxR = 0;
+        for (int rr = 0; rr < areaRows.length && rr < numRows; rr++) {
+          final rrow = areaRows[rr];
+          for (int cc = 0; cc < rrow.length && cc < numCols; cc++) {
+            if (rrow[cc].toUpperCase() == slot) {
+              if (cc < minC) minC = cc;
+              if (cc + 1 > maxC) maxC = cc + 1;
+              if (rr < minR) minR = rr;
+              if (rr + 1 > maxR) maxR = rr + 1;
+            }
+          }
+        }
+
+        if (maxC <= minC || maxR <= minR) continue;
+
+        final left   = colX[minC];
+        final top    = rowY[minR];
+        final right  = colX[maxC - 1] + colWidths[maxC - 1];
+        final bottom = rowY[maxR - 1] + rowHeights[maxR - 1];
+        final w = right - left;
+        final h = bottom - top;
+
+        final widget = screen.widgets[slot];
+        if (widget == null) {
+          // Empty slot — invisible placeholder
+          continue;
+        }
+
+        children.add(Positioned(
+          left: left, top: top, width: w, height: h,
+          child: ClipRect(
+            child: SizedBox(
+              width: w, height: h,
+              child: _buildWidget(widget, slotHeight: h),
+            ),
+          ),
+        ));
+      }
+    }
+
+    return SizedBox(
+      width: size.width,
+      height: size.height,
+      child: Stack(children: children),
+    );
+  }
+
+  List<double> _parseFrList(String frStr) {
+    final trimmed = frStr.trim();
+    if (trimmed.isEmpty) return [1.0];
+    final parts = trimmed.split(RegExp(r'\s+'));
+    final values = parts.map((p) {
+      if (p.endsWith('fr')) return double.tryParse(p.replaceAll('fr', '')) ?? 1.0;
+      return 1.0;
+    }).toList();
+    final total = values.fold(0.0, (a, b) => a + b);
+    return total > 0 ? values.map((v) => v / total).toList() : [1.0];
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Dots indicators
+  // ─────────────────────────────────────────────────────────────────────────────
 
   Widget _buildDots(int count, int current) {
     return SizedBox(
@@ -476,7 +781,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildWidget(_DashWidget w) {
+  Widget _buildScreenDots(List<_DashScreen> screens) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: screens.asMap().entries.map((e) {
+        final isActive = e.key == _currentPage;
+        final name = e.value.name;
+        final label = name.length > 5 ? name.substring(0, 5) : name;
+        return GestureDetector(
+          onTap: () => _pageCtrl.animateToPage(
+            e.key,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          ),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            width: isActive ? 40 : 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: isActive ? const Color(0xFF4FC3F7) : Colors.white24,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            alignment: Alignment.center,
+            child: isActive && name.isNotEmpty
+                ? Text(label,
+                    style: const TextStyle(
+                        fontSize: 8,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold))
+                : null,
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Widget builder
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  Widget _buildWidget(_DashWidget w, {double? slotHeight}) {
     switch (w.type) {
       case _WidgetType.gauge:
         final cfg = w.gauge!;
@@ -555,9 +900,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           child: const Icon(Icons.explore, size: 48, color: Color(0xFF4FC3F7)),
         );
+      case _WidgetType.horizon:
+        final hcfg = w.horizonCfg!;
+        final roll  = _getValue(_sensors, '${hcfg.path}/schlagseite');
+        final pitch = _getValue(_sensors, '${hcfg.path}/neigung');
+        return HorizonWidget(roll: roll, pitch: pitch);
     }
   }
 
   String _weekday(int d) => const ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][d - 1];
 }
-

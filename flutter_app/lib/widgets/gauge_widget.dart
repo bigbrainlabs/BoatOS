@@ -232,8 +232,9 @@ class _ArcPainter extends CustomPainter {
 
   (Offset center, double radius) _layout(Size size) {
     if (style == GaugeStyle.arc180) {
-      final r = math.max(math.min(size.width * 0.42, size.height * 0.80), 10.0);
-      return (Offset(size.width / 2, size.height - r * 0.15), r);
+      // Square canvas: center at 70% so the arch (top half of circle) is vertically centered
+      final r = math.max(math.min(size.width * 0.42, size.height * 0.42), 10.0);
+      return (Offset(size.width / 2, size.height * 0.70), r);
     }
     final r = math.max(math.min(size.width, size.height) * 0.42, 10.0);
     return (Offset(size.width / 2, size.height / 2), r);
@@ -646,4 +647,312 @@ class _ValueChip extends StatelessWidget {
       ],
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HorizonWidget  (artificial horizon / attitude indicator)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class HorizonWidget extends StatefulWidget {
+  final double roll;   // degrees, positive = starboard roll
+  final double pitch;  // degrees, positive = bow up
+
+  const HorizonWidget({super.key, required this.roll, required this.pitch});
+
+  @override
+  State<HorizonWidget> createState() => _HorizonWidgetState();
+}
+
+class _HorizonWidgetState extends State<HorizonWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _rollAnim;
+  late Animation<double> _pitchAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 500));
+    _rollAnim = Tween<double>(begin: widget.roll, end: widget.roll)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _pitchAnim = Tween<double>(begin: widget.pitch, end: widget.pitch)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void didUpdateWidget(HorizonWidget old) {
+    super.didUpdateWidget(old);
+    if (old.roll != widget.roll || old.pitch != widget.pitch) {
+      _rollAnim = Tween<double>(begin: _rollAnim.value, end: widget.roll)
+          .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+      _pitchAnim = Tween<double>(begin: _pitchAnim.value, end: widget.pitch)
+          .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+      _ctrl.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, __) =>
+          _HorizonDisplay(roll: _rollAnim.value, pitch: _pitchAnim.value),
+    );
+  }
+}
+
+class _HorizonDisplay extends StatelessWidget {
+  final double roll, pitch;
+  const _HorizonDisplay({required this.roll, required this.pitch});
+
+  @override
+  Widget build(BuildContext context) {
+    final rs = roll  >= 0 ? '+' : '';
+    final ps = pitch >= 0 ? '+' : '';
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF21262D)),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [Color(0xFF0A0E1A), Color(0xFF0D1117)],
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      child: Column(
+        children: [
+          const Text('Lage',
+              style: TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
+          const SizedBox(height: 4),
+          Expanded(
+            child: LayoutBuilder(builder: (_, bc) {
+              final dim = math.min(bc.maxWidth, bc.maxHeight);
+              return Center(
+                child: SizedBox.square(
+                  dimension: dim,
+                  child: CustomPaint(
+                      painter: _HorizonPainter(roll: roll, pitch: pitch)),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _val('$rs${roll.toStringAsFixed(1)}°', 'Roll'),
+              const SizedBox(width: 20),
+              _val('$ps${pitch.toStringAsFixed(1)}°', 'Pitch'),
+            ],
+          ),
+          const SizedBox(height: 2),
+        ],
+      ),
+    );
+  }
+
+  Widget _val(String v, String label) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(v,
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.bold,
+                  color: Color(0xFF4FC3F7), fontFamily: 'monospace')),
+          Text(label,
+              style: const TextStyle(fontSize: 9, color: Color(0xFF6B7280))),
+        ],
+      );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _HorizonPainter
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _HorizonPainter extends CustomPainter {
+  final double roll, pitch;
+  const _HorizonPainter({required this.roll, required this.pitch});
+
+  static const double _kDegPerR = 30.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r  = math.min(cx, cy) - 14.0;
+    if (r < 10) return;
+
+    final rollRad = roll  * math.pi / 180;
+    final pitchPx = pitch * r / _kDegPerR;
+    final bigR    = r * 2.4;
+    final c       = Offset(cx, cy);
+
+    // ── Clip + rotating sky/sea ───────────────────────────────────────────────
+    canvas.save();
+    canvas.clipPath(Path()..addOval(Rect.fromCircle(center: c, radius: r)));
+
+    canvas.save();
+    canvas.translate(cx, cy);
+    canvas.rotate(rollRad);
+    canvas.translate(0, pitchPx);
+
+    // Sky gradient
+    final skyRect = Rect.fromLTWH(-bigR, -bigR * 2, bigR * 2, bigR * 2);
+    canvas.drawRect(skyRect, Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [Color(0xFF051220), Color(0xFF1565C0)],
+      ).createShader(skyRect));
+
+    // Sea gradient
+    final seaRect = Rect.fromLTWH(-bigR, 0, bigR * 2, bigR * 2);
+    canvas.drawRect(seaRect, Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [Color(0xFF0C4F72), Color(0xFF020B18)],
+      ).createShader(seaRect));
+
+    // Pitch scale lines
+    _drawPitchLines(canvas, r);
+
+    // Horizon glow
+    canvas.drawLine(Offset(-bigR, 0), Offset(bigR, 0), Paint()
+      ..color = Colors.white.withOpacity(0.18)
+      ..strokeWidth = 7
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3));
+    // Horizon line
+    canvas.drawLine(Offset(-bigR, 0), Offset(bigR, 0), Paint()
+      ..color = Colors.white.withOpacity(0.92)
+      ..strokeWidth = 1.8);
+
+    // Roll indicator triangle (rotates with horizon, no pitch offset)
+    canvas.translate(0, -pitchPx);
+    final triPath = Path()
+      ..moveTo(0, -(r - 6))
+      ..lineTo(-5, -(r - 16))
+      ..lineTo(5,  -(r - 16))
+      ..close();
+    canvas.drawPath(triPath, Paint()
+      ..color = Colors.white.withOpacity(0.92)..style = PaintingStyle.fill);
+    canvas.drawPath(triPath, Paint()
+      ..color = Colors.black.withOpacity(0.4)
+      ..style = PaintingStyle.stroke..strokeWidth = 1.0);
+
+    canvas.restore(); // end rotate+pitch
+    canvas.restore(); // end clip
+
+    // ── Roll scale (outside clip, around rim) ─────────────────────────────────
+    _drawRollScale(canvas, c, r);
+
+    // ── Bezel ring ────────────────────────────────────────────────────────────
+    canvas.drawCircle(c, r, Paint()
+      ..color = const Color(0xFF1E3A5F)
+      ..style = PaintingStyle.stroke..strokeWidth = 2.5);
+
+    // ── Fixed reticle (re-clipped) ────────────────────────────────────────────
+    canvas.save();
+    canvas.clipPath(
+        Path()..addOval(Rect.fromCircle(center: c, radius: r - 1)));
+    _drawFixedReticle(canvas, c, r);
+    canvas.restore();
+  }
+
+  void _drawPitchLines(Canvas canvas, double r) {
+    final pxPerDeg = r / _kDegPerR;
+    final major = Paint()
+      ..color = Colors.white.withOpacity(0.55)..strokeWidth = 1.5;
+    final minor = Paint()
+      ..color = Colors.white.withOpacity(0.28)..strokeWidth = 1.0;
+
+    for (int deg = -60; deg <= 60; deg += 5) {
+      if (deg == 0) continue;
+      final y  = -deg * pxPerDeg;
+      final isMajor = deg % 10 == 0;
+      final hl = isMajor ? r * 0.28 : r * 0.14;
+      canvas.drawLine(Offset(-hl, y), Offset(hl, y), isMajor ? major : minor);
+      if (isMajor) {
+        final tp = TextPainter(
+          text: TextSpan(
+              text: deg.abs().toString(),
+              style: const TextStyle(fontSize: 9, color: Color(0xBBFFFFFF))),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(hl + 3, y - tp.height / 2));
+        tp.paint(canvas, Offset(-hl - tp.width - 3, y - tp.height / 2));
+      }
+    }
+  }
+
+  void _drawRollScale(Canvas canvas, Offset c, double r) {
+    const kAngles = [-60, -45, -30, -20, -10, 0, 10, 20, 30, 45, 60];
+    for (final deg in kAngles) {
+      final rad     = (deg - 90.0) * math.pi / 180;
+      final isMajor = deg % 30 == 0 || deg == 0;
+      final len     = isMajor ? 9.0 : 5.5;
+      final inner   = r + 2.0;
+      final outer   = inner + len;
+      canvas.drawLine(
+        Offset(c.dx + math.cos(rad) * inner, c.dy + math.sin(rad) * inner),
+        Offset(c.dx + math.cos(rad) * outer, c.dy + math.sin(rad) * outer),
+        Paint()
+          ..color = Colors.white.withOpacity(isMajor ? 0.65 : 0.38)
+          ..strokeWidth = isMajor ? 1.5 : 1.0,
+      );
+    }
+    // Fixed 0° reference marker (downward-pointing triangle at 12 o'clock)
+    final topY = c.dy - r - 2;
+    final fixPath = Path()
+      ..moveTo(c.dx, topY + 12)
+      ..lineTo(c.dx - 5, topY + 2)
+      ..lineTo(c.dx + 5, topY + 2)
+      ..close();
+    canvas.drawPath(fixPath, Paint()..color = Colors.white.withOpacity(0.80));
+  }
+
+  void _drawFixedReticle(Canvas canvas, Offset c, double r) {
+    final wl     = r * 0.38;
+    final shadow = Paint()
+      ..color = Colors.black.withOpacity(0.55)
+      ..strokeWidth = 5..strokeCap = StrokeCap.round;
+    final white = Paint()
+      ..color = Colors.white.withOpacity(0.92)
+      ..strokeWidth = 3..strokeCap = StrokeCap.round;
+
+    // Left horizontal wing
+    canvas.drawLine(Offset(c.dx - wl, c.dy), Offset(c.dx - wl * 0.28, c.dy), shadow);
+    canvas.drawLine(Offset(c.dx - wl, c.dy), Offset(c.dx - wl * 0.28, c.dy), white);
+    // Left downward tip
+    canvas.drawLine(Offset(c.dx - wl * 0.28, c.dy),
+        Offset(c.dx - wl * 0.28, c.dy + r * 0.10), shadow);
+    canvas.drawLine(Offset(c.dx - wl * 0.28, c.dy),
+        Offset(c.dx - wl * 0.28, c.dy + r * 0.10), white);
+
+    // Right horizontal wing
+    canvas.drawLine(Offset(c.dx + wl * 0.28, c.dy), Offset(c.dx + wl, c.dy), shadow);
+    canvas.drawLine(Offset(c.dx + wl * 0.28, c.dy), Offset(c.dx + wl, c.dy), white);
+    // Right downward tip
+    canvas.drawLine(Offset(c.dx + wl * 0.28, c.dy),
+        Offset(c.dx + wl * 0.28, c.dy + r * 0.10), shadow);
+    canvas.drawLine(Offset(c.dx + wl * 0.28, c.dy),
+        Offset(c.dx + wl * 0.28, c.dy + r * 0.10), white);
+
+    // Center reference circle
+    canvas.drawCircle(c, 7, Paint()
+      ..color = Colors.black.withOpacity(0.5)
+      ..style = PaintingStyle.stroke..strokeWidth = 4);
+    canvas.drawCircle(c, 7, Paint()
+      ..color = Colors.white.withOpacity(0.90)
+      ..style = PaintingStyle.stroke..strokeWidth = 2);
+    canvas.drawCircle(c, 3, Paint()..color = Colors.white);
+  }
+
+  @override
+  bool shouldRepaint(_HorizonPainter old) =>
+      old.roll != roll || old.pitch != pitch;
 }

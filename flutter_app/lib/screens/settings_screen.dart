@@ -2159,6 +2159,18 @@ class _DashboardSectionState extends State<_DashboardSection> {
     if (line == 'CLOCK')  return _DashWidget(type: 'CLOCK');
     if (line == 'COMPASS') return _DashWidget(type: 'COMPASS');
 
+    if (line.startsWith('HORIZON')) {
+      final tokens = _tokenise(line);
+      final w = _DashWidget(type: 'HORIZON',
+          sensor: tokens.length > 1 ? tokens[1] : 'boot/sensoren/lage');
+      for (int i = 2; i < tokens.length; i++) {
+        if (tokens[i].toUpperCase() == 'SIZE' && i + 1 < tokens.length) {
+          w.size = int.tryParse(tokens[++i]) ?? 1;
+        }
+      }
+      return w;
+    }
+
     if (line.startsWith('TEXT ')) {
       final t = _stripQuotes(line.substring(5).trim());
       return _DashWidget(type: 'TEXT', text: t);
@@ -2219,6 +2231,10 @@ class _DashboardSectionState extends State<_DashboardSection> {
       case 'SPACER':  return 'SPACER';
       case 'CLOCK':   return 'CLOCK';
       case 'COMPASS': return 'COMPASS';
+      case 'HORIZON':
+        final buf = StringBuffer('HORIZON ${w.sensor ?? 'boot/sensoren/lage'}');
+        if (w.size != 1) buf.write(' SIZE ${w.size}');
+        return buf.toString();
       case 'TEXT':    return 'TEXT "${w.text ?? ''}"';
       case 'SENSOR':
         final buf = StringBuffer('SENSOR ${w.sensor ?? 'unknown'}');
@@ -2608,21 +2624,23 @@ class _DashboardSectionState extends State<_DashboardSection> {
   }
 
   (IconData, Color) _widgetMeta(String type) => switch (type) {
-        'SENSOR'  => (Icons.sensors, const Color(0xFF4FC3F7)),
-        'GAUGE'   => (Icons.speed,   const Color(0xFF81C784)),
-        'TEXT'    => (Icons.title,   const Color(0xFFFFB74D)),
-        'CLOCK'   => (Icons.access_time, const Color(0xFFBA68C8)),
-        'COMPASS' => (Icons.explore, const Color(0xFF4FC3F7)),
-        'SPACER'  => (Icons.space_bar, const Color(0xFF8B949E)),
-        _         => (Icons.widgets, const Color(0xFF8B949E)),
+        'SENSOR'  => (Icons.sensors,       const Color(0xFF4FC3F7)),
+        'GAUGE'   => (Icons.speed,         const Color(0xFF81C784)),
+        'HORIZON' => (Icons.landscape,     const Color(0xFF1565C0)),
+        'TEXT'    => (Icons.title,         const Color(0xFFFFB74D)),
+        'CLOCK'   => (Icons.access_time,   const Color(0xFFBA68C8)),
+        'COMPASS' => (Icons.explore,       const Color(0xFF4FC3F7)),
+        'SPACER'  => (Icons.space_bar,     const Color(0xFF8B949E)),
+        _         => (Icons.widgets,       const Color(0xFF8B949E)),
       };
 
   String _widgetChipLabel(_DashWidget w) {
     switch (w.type) {
-      case 'SENSOR': return w.alias ?? _shortPath(w.sensor ?? '');
-      case 'GAUGE':  return w.label ?? _shortPath(w.sensor ?? '');
-      case 'TEXT':   return w.text ?? '';
-      default:       return '';
+      case 'SENSOR':  return w.alias ?? _shortPath(w.sensor ?? '');
+      case 'GAUGE':   return w.label ?? _shortPath(w.sensor ?? '');
+      case 'TEXT':    return w.text ?? '';
+      case 'HORIZON': return _shortPath(w.sensor ?? 'lage');
+      default:        return '';
     }
   }
 
@@ -2972,7 +2990,8 @@ class _AddWidgetSheet extends StatelessWidget {
       child: GestureDetector(
         onTap: () {
           final w = _DashWidget(type: type);
-          if (type == 'TEXT') w.text = 'Text';
+          if (type == 'TEXT')    w.text   = 'Text';
+          if (type == 'HORIZON') w.sensor = 'boot/sensoren/lage';
           onAdd(w);
         },
         child: Container(
@@ -3019,6 +3038,7 @@ class _AddWidgetSheet extends StatelessWidget {
             _specialBtn(ctx, 'CLOCK',   Icons.access_time,  'Uhr'),
             _specialBtn(ctx, 'TEXT',    Icons.title,        'Text'),
             _specialBtn(ctx, 'COMPASS', Icons.explore,      'Kompass'),
+            _specialBtn(ctx, 'HORIZON', Icons.landscape,    'Horizont'),
           ]),
         ),
         const Padding(
@@ -3151,7 +3171,7 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
   final _searchCtrl = TextEditingController();
   String _search = '';
 
-  static const _types = ['SENSOR', 'GAUGE', 'TEXT', 'SPACER', 'CLOCK', 'COMPASS'];
+  static const _types = ['SENSOR', 'GAUGE', 'HORIZON', 'TEXT', 'SPACER', 'CLOCK', 'COMPASS'];
   static const _sensorStyles = ['card', 'minimal', 'compact', 'hero'];
   static const _gaugeStyles  = ['arc180', 'arc270', 'arc360', 'bar'];
 
@@ -3310,6 +3330,15 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                 ],
                 if (_w.type == 'TEXT') ...[
                   _inputRow('Text', _textCtrl),
+                  const SizedBox(height: 10),
+                  _label('Breite (Spalten)'),
+                  const SizedBox(height: 6),
+                  _sizePicker(),
+                ],
+                if (_w.type == 'HORIZON') ...[
+                  _label('Basis-Pfad (Lage-Sensor)'),
+                  const SizedBox(height: 6),
+                  _sensorPicker(),
                   const SizedBox(height: 10),
                   _label('Breite (Spalten)'),
                   const SizedBox(height: 6),

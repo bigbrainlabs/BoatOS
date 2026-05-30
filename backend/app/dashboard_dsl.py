@@ -1,13 +1,81 @@
 """
 Dashboard DSL Parser
-Parses BoatOS Dashboard Layout DSL into Python data structure
+Parses BoatOS Dashboard Layout DSL into Python data structure.
+
+Supports two formats:
+  - Legacy GRID/ROW format (auto-converted to screen format)
+  - New SCREEN/LAYOUT format
 """
 import re
+import json
+from pathlib import Path
 from typing import Dict, List, Any, Optional
 
 
+# ---------------------------------------------------------------------------
+# Template loading
+# ---------------------------------------------------------------------------
+
+_FALLBACK_TEMPLATES = [
+    {
+        "id": "full",
+        "name": "Vollbild",
+        "description": "Ein Widget füllt den ganzen Screen",
+        "builtin": True,
+        "slots": ["A"],
+        "cols": "1fr",
+        "rows": "1fr",
+        "areas": "A"
+    }
+]
+
+
+def _load_templates() -> List[Dict[str, Any]]:
+    """Load templates from JSON file, with hardcoded fallback."""
+    template_file = Path(__file__).parent.parent / "data" / "dashboard_templates.json"
+    try:
+        with open(template_file) as f:
+            data = json.load(f)
+            return data.get("templates", [])
+    except Exception:
+        return list(_FALLBACK_TEMPLATES)
+
+
+# Module-level cache
+_TEMPLATES: Optional[List[Dict[str, Any]]] = None
+
+
+def _get_templates_cached() -> List[Dict[str, Any]]:
+    global _TEMPLATES
+    if _TEMPLATES is None:
+        _TEMPLATES = _load_templates()
+    return _TEMPLATES
+
+
+def get_templates() -> List[Dict[str, Any]]:
+    """Return all available layout templates."""
+    return _get_templates_cached()
+
+
+def get_template(template_id: str) -> Dict[str, Any]:
+    """Return template by ID, falling back to 'full' if not found."""
+    templates = _get_templates_cached()
+    for t in templates:
+        if t["id"] == template_id:
+            return t
+    # Fallback to "full"
+    for t in templates:
+        if t["id"] == "full":
+            return t
+    return dict(_FALLBACK_TEMPLATES[0])
+
+
+# ---------------------------------------------------------------------------
+# Legacy GRID/ROW parser (kept intact for backward compat)
+# ---------------------------------------------------------------------------
+
 class DashboardDSLParser:
-    """Parser for Dashboard DSL"""
+    """Parser for legacy Dashboard DSL (GRID/ROW format)."""
 
     def __init__(self):
         self.grid_columns = 3  # Default
@@ -16,7 +84,7 @@ class DashboardDSLParser:
 
     def parse(self, dsl_text: str) -> Dict[str, Any]:
         """
-        Parse DSL text and return structured layout
+        Parse DSL text and return structured layout.
 
         Returns:
             {
@@ -30,7 +98,7 @@ class DashboardDSLParser:
                                 "sensor": "navigation/position",
                                 "size": 2,
                                 "style": "hero",
-                                "icon": "🧭",
+                                "icon": None,
                                 "alias": null,
                                 "color": "cyan"
                             }
@@ -123,6 +191,14 @@ class DashboardDSLParser:
                         self.errors.append(f"Line {line_num}: COMPASS without ROW")
                         continue
                     widget = self._parse_compass(line)
+                    current_row['widgets'].append(widget)
+
+                # Parse HORIZON
+                elif line.upper().startswith('HORIZON'):
+                    if not current_row:
+                        self.errors.append(f"Line {line_num}: HORIZON without ROW")
+                        continue
+                    widget = self._parse_horizon(line)
                     current_row['widgets'].append(widget)
 
                 else:
@@ -311,6 +387,19 @@ class DashboardDSLParser:
         widget.update(self._parse_options(line))
         return widget
 
+    def _parse_horizon(self, line: str) -> Dict[str, Any]:
+        """Parse HORIZON command — sensor base path provides /schlagseite (roll) and /neigung (pitch)"""
+        widget = {
+            "type": "horizon",
+            "sensor": "boot/sensoren/lage",
+            "size": 1,
+        }
+        match = re.search(r'HORIZON\s+([\w\/]+)', line, re.IGNORECASE)
+        if match:
+            widget["sensor"] = match.group(1)
+        widget.update(self._parse_options(line))
+        return widget
+
     def _parse_options(self, line: str) -> Dict[str, Any]:
         """Parse common options (SIZE, STYLE, ICON, ALIAS, COLOR, UNIT, SHOW, HIDE, UNITS)"""
         options = {}
@@ -391,27 +480,282 @@ class DashboardDSLParser:
         return errors
 
 
+# ---------------------------------------------------------------------------
+# Module-level widget line parser (used by new SCREEN parser)
+# ---------------------------------------------------------------------------
+
+_PARSER_INSTANCE = DashboardDSLParser()
+
+
+def _parse_widget_line(line: str) -> Optional[Dict[str, Any]]:
+    """
+    Dispatch a widget line to the appropriate parser method.
+    'line' must NOT include the slot letter prefix — it should start with
+    the widget keyword (SENSOR, GAUGE, CLOCK, etc.).
+    """
+    upper = line.upper()
+    if upper.startswith('SENSOR'):
+        return _PARSER_INSTANCE._parse_sensor(line)
+    elif upper.startswith('GAUGE'):
+        return _PARSER_INSTANCE._parse_gauge(line)
+    elif upper.startswith('CHART'):
+        return _PARSER_INSTANCE._parse_chart(line)
+    elif upper.startswith('TEXT'):
+        return _PARSER_INSTANCE._parse_text(line)
+    elif upper.startswith('SPACER'):
+        return _PARSER_INSTANCE._parse_spacer(line)
+    elif upper.startswith('CLOCK'):
+        return _PARSER_INSTANCE._parse_clock(line)
+    elif upper.startswith('COMPASS'):
+        return _PARSER_INSTANCE._parse_compass(line)
+    elif upper.startswith('HORIZON'):
+        return _PARSER_INSTANCE._parse_horizon(line)
+    return None
+
+
+# ---------------------------------------------------------------------------
+# New SCREEN/LAYOUT DSL parser
+# ---------------------------------------------------------------------------
+
+def parse_screen_dsl(text: str) -> Dict[str, Any]:
+    """
+    Parse new SCREEN-based DSL format.
+
+    Syntax:
+        SCREEN <name> LAYOUT <template_id>
+          A  SENSOR navigation/position STYLE hero
+          B  GAUGE   boot/motor/drehzahl MIN 0 MAX 3000
+          C  CLOCK
+    """
+    screens = []
+    errors = []
+
+    current_screen: Optional[Dict[str, Any]] = None
+    current_template: Optional[Dict[str, Any]] = None
+    current_widgets: Dict[str, Any] = {}
+
+    lines = text.strip().split('\n')
+
+    for line_num, raw_line in enumerate(lines, 1):
+        # Strip trailing whitespace but preserve leading for slot detection
+        line = raw_line.rstrip()
+
+        # Skip blanks and comments (after stripping)
+        stripped = line.strip()
+        if not stripped or stripped.startswith('#'):
+            continue
+
+        # Remove inline comments
+        if '#' in stripped:
+            stripped = stripped.split('#')[0].strip()
+
+        # Check for SCREEN header line
+        if stripped.upper().startswith('SCREEN'):
+            # Save previous screen
+            if current_screen is not None:
+                current_screen['widgets'] = current_widgets
+                screens.append(current_screen)
+
+            # Parse: SCREEN <name> LAYOUT <template_id>
+            match = re.match(
+                r'SCREEN\s+(\S+)\s+LAYOUT\s+(\S+)',
+                stripped,
+                re.IGNORECASE
+            )
+            if match:
+                screen_name = match.group(1)
+                layout_id = match.group(2)
+                current_template = get_template(layout_id)
+                current_screen = {
+                    "name": screen_name,
+                    "layout_id": layout_id,
+                    "template": {
+                        "id": current_template["id"],
+                        "name": current_template["name"],
+                        "cols": current_template["cols"],
+                        "rows": current_template["rows"],
+                        "areas": current_template["areas"],
+                        "slots": current_template["slots"],
+                    },
+                    "widgets": {}
+                }
+                current_widgets = {}
+            else:
+                errors.append(f"Line {line_num}: Invalid SCREEN syntax: {stripped}")
+                current_screen = None
+                current_template = None
+                current_widgets = {}
+            continue
+
+        # Check for slot assignment: single uppercase letter at start of stripped line
+        # Pattern: one alpha char, then whitespace, then widget keyword
+        slot_match = re.match(r'^([A-Za-z])\s+(\S.*)', stripped)
+        if slot_match and len(slot_match.group(1)) == 1:
+            slot_letter = slot_match.group(1).upper()
+            widget_line = slot_match.group(2).strip()
+
+            if current_screen is None:
+                errors.append(f"Line {line_num}: Slot assignment '{slot_letter}' outside SCREEN block")
+                continue
+
+            widget = _parse_widget_line(widget_line)
+            if widget is not None:
+                current_widgets[slot_letter] = widget
+            else:
+                errors.append(f"Line {line_num}: Unknown widget type in slot {slot_letter}: {widget_line}")
+            continue
+
+        # Unknown line inside a screen block
+        errors.append(f"Line {line_num}: Unexpected line: {stripped}")
+
+    # Flush last screen
+    if current_screen is not None:
+        current_screen['widgets'] = current_widgets
+        screens.append(current_screen)
+
+    return {
+        "format": "screen",
+        "screens": screens,
+        "errors": errors
+    }
+
+
+# ---------------------------------------------------------------------------
+# Auto-converter: old GRID/ROW layout → new SCREEN format
+# ---------------------------------------------------------------------------
+
+def _select_template_for_row(widgets: List[Dict[str, Any]]) -> str:
+    """Choose a template ID based on number of widgets and SIZE hints."""
+    n = len(widgets)
+    has_hero = any(w.get("size", 1) > 1 for w in widgets)
+
+    if n == 0:
+        return "full"  # caller should skip this row
+    elif n == 1:
+        return "full"
+    elif n == 2:
+        return "hero-right" if has_hero else "split-h"
+    elif n == 3:
+        return "hero-right" if has_hero else "thirds-h"
+    elif n == 4:
+        return "grid-4"
+    elif n == 5:
+        return "mosaic-5"
+    else:
+        return "grid-6"
+
+
+def convert_old_to_new(old_layout: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convert legacy GRID/ROW layout to new SCREEN format.
+
+    Each non-empty row becomes one screen.
+    """
+    screens = []
+    errors = list(old_layout.get("errors", []))
+    slot_letters = list("ABCDEF")
+
+    for row_idx, row in enumerate(old_layout.get("rows", [])):
+        widgets = row.get("widgets", [])
+        if not widgets:
+            continue
+
+        # Cap at 6 widgets for grid-6
+        if len(widgets) > 6:
+            widgets = widgets[:6]
+
+        template_id = _select_template_for_row(widgets)
+        template = get_template(template_id)
+        num_slots = len(template["slots"])
+
+        # Build slot assignments
+        # For hero templates, put the largest widget (by size) in slot A
+        has_hero = any(w.get("size", 1) > 1 for w in widgets)
+        if has_hero and num_slots >= 2:
+            # Find widget with largest size
+            hero_idx = max(range(len(widgets)), key=lambda i: widgets[i].get("size", 1))
+            # Reorder: hero first, then rest
+            ordered = [widgets[hero_idx]] + [w for i, w in enumerate(widgets) if i != hero_idx]
+        else:
+            ordered = list(widgets)
+
+        # Assign to slots
+        slot_widgets: Dict[str, Any] = {}
+        for i, widget in enumerate(ordered):
+            if i >= num_slots:
+                break
+            slot_letter = slot_letters[i]
+            slot_widgets[slot_letter] = widget
+
+        row_name = row.get("name") or f"Screen{row_idx + 1}"
+
+        screens.append({
+            "name": row_name,
+            "layout_id": template_id,
+            "template": {
+                "id": template["id"],
+                "name": template["name"],
+                "cols": template["cols"],
+                "rows": template["rows"],
+                "areas": template["areas"],
+                "slots": template["slots"],
+            },
+            "widgets": slot_widgets
+        })
+
+    return {
+        "format": "screen",
+        "screens": screens,
+        "errors": errors
+    }
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
 def parse_dashboard_dsl(dsl_text: str) -> Dict[str, Any]:
-    """Convenience function to parse DSL"""
-    parser = DashboardDSLParser()
-    layout = parser.parse(dsl_text)
+    """
+    Parse DSL text and return screen-format layout.
 
-    # Validate
-    validation_errors = parser.validate(layout)
-    layout["errors"].extend(validation_errors)
+    Auto-detects format:
+    - Lines starting with SCREEN → new SCREEN format
+    - Lines starting with GRID/ROW/widget keyword → legacy format (auto-converted)
+    """
+    # Detect format by scanning first meaningful line
+    for raw_line in dsl_text.strip().split('\n'):
+        line = raw_line.strip()
+        if not line or line.startswith('#'):
+            continue
+        # Remove inline comment
+        if '#' in line:
+            line = line.split('#')[0].strip()
+        if not line:
+            continue
 
-    return layout
+        upper = line.upper()
+        if upper.startswith('SCREEN'):
+            return parse_screen_dsl(dsl_text)
+        else:
+            # Legacy format
+            parser = DashboardDSLParser()
+            old_layout = parser.parse(dsl_text)
+            validation_errors = parser.validate(old_layout)
+            old_layout["errors"].extend(validation_errors)
+            return convert_old_to_new(old_layout)
+
+    # Empty / all-comments DSL: return empty screen layout
+    return {
+        "format": "screen",
+        "screens": [],
+        "errors": []
+    }
 
 
 def get_default_layout() -> str:
-    """Return default dashboard layout DSL"""
-    return """# Default BoatOS Dashboard
-GRID 3
-
-ROW hero
-  SENSOR navigation/position SIZE 2 STYLE hero
-  SENSOR navigation/gnss/satellites SIZE 1
-
-ROW sensors
-  SENSOR bilge/thermo
+    """Return default dashboard layout DSL (new SCREEN format)."""
+    return """SCREEN Sensoren LAYOUT hero-right
+  A  SENSOR navigation/position STYLE hero
+  B  SENSOR navigation/gnss/satellites
+  C  SENSOR bilge/thermo
 """

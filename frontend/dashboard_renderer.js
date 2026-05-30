@@ -138,7 +138,7 @@ class DashboardRenderer {
             }
             .dash-pager { display: flex; flex-direction: column; height: 100%; }
             .dash-track { flex: 1; display: flex; min-height: 0; transition: transform 300ms ease; }
-            .dash-page { min-width: 100%; flex-shrink: 0; overflow: hidden; padding: 12px; box-sizing: border-box; }
+            .dash-page { min-width: 100%; flex-shrink: 0; overflow: hidden; padding: 12px; box-sizing: border-box; height: 100%; }
             .dash-dots { display: flex; justify-content: center; align-items: center; gap: 8px; padding: 10px 0 6px; flex-shrink: 0; }
             .dash-dot { width: 8px; height: 8px; border-radius: 4px; background: rgba(80,100,140,0.5); cursor: pointer; transition: all 200ms ease; flex-shrink: 0; }
             .dash-dot.active { width: 20px; background: #4FC3F7; }
@@ -374,6 +374,29 @@ class DashboardRenderer {
             if (dateEl) dateEl.textContent = now.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
         });
 
+        // Update horizon widgets
+        document.querySelectorAll('[data-horizon-base]').forEach(container => {
+            const base  = container.dataset.horizonBase;
+            const roll  = parseFloat(this.getSensorValue(`${base}/schlagseite`)) || 0;
+            const pitch = parseFloat(this.getSensorValue(`${base}/neigung`))     || 0;
+            const fmt   = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '°';
+            const cv    = container.querySelector('canvas');
+            if (cv) {
+                const par = cv.parentElement;
+                const dim = Math.max(10,
+                    cv.offsetWidth ||
+                    (par ? Math.min(par.clientWidth, par.clientHeight) : 0) ||
+                    200
+                );
+                if (cv.width !== dim || cv.height !== dim) { cv.width = dim; cv.height = dim; }
+                this.drawHorizonCanvas(cv, roll, pitch);
+            }
+            const rollEl  = container.querySelector('[data-horizon-roll]');
+            const pitchEl = container.querySelector('[data-horizon-pitch]');
+            if (rollEl)  rollEl.textContent  = fmt(roll);
+            if (pitchEl) pitchEl.textContent = fmt(pitch);
+        });
+
         // Update status indicators
         document.querySelectorAll('[data-sensor-status]').forEach(el => {
             const baseName = el.dataset.sensorStatus;
@@ -455,13 +478,120 @@ class DashboardRenderer {
             return;
         }
         this.widgetCounter = 0;
-        const pages = this._buildPages();
-        if (pages.length <= 1) {
-            container.innerHTML = this.renderToHTML();
+
+        if (this.layout && this.layout.format === 'screen') {
+            // Pure CSS height: avoids JS measurement quirks across headless/Cog/browsers.
+            container.style.cssText = [
+                'height: calc(100vh - var(--topbar-h))',
+                'overflow: hidden',
+                'padding: 0',
+                'box-sizing: border-box',
+                'width: 100%',
+            ].join('; ');
+
+            const screens = this.layout.screens || [];
+            if (screens.length === 0) {
+                container.innerHTML = '';
+            } else if (screens.length === 1) {
+                container.innerHTML = this._renderScreen(screens[0]);
+                this._fixGridAreas(container);
+            } else {
+                container.innerHTML = this._renderScreenPager(screens);
+                this._fixGridAreas(container);
+                this._setupPager(container);
+            }
         } else {
-            container.innerHTML = this._renderPager(pages);
-            this._setupPager(container);
+            // Old scrollable format — restore normal flow layout
+            container.style.cssText = '';
+
+            const pages = this._buildPages();
+            if (pages.length <= 1) {
+                container.innerHTML = this.renderToHTML();
+            } else {
+                container.innerHTML = this._renderPager(pages);
+                this._setupPager(container);
+            }
         }
+        // Canvas widgets need a full layout frame before their parent sizes resolve.
+        requestAnimationFrame(() => this._initHorizonCanvases());
+    }
+
+    /**
+     * Render a single screen using CSS grid-template-areas
+     */
+    _renderScreen(screen) {
+        const tmpl = screen.template || {};
+        // CSS grid-template-areas values must be quoted strings — but the outer HTML
+        // attribute also uses double quotes, which would break parsing. We build the
+        // grid div via DOM to set gridTemplateAreas programmatically after inserting
+        // the slot HTML, avoiding any escaping issues.
+        const slots = tmpl.slots || Object.keys(screen.widgets || {});
+
+        // Build slot HTML first (uses double-quote attributes, no areas conflict)
+        let slotsHtml = '';
+        for (const slot of slots) {
+            const widget = (screen.widgets || {})[slot];
+            if (!widget) {
+                slotsHtml += `<div data-slot="${slot}" style="grid-area:${slot};"></div>`;
+                continue;
+            }
+            const widgetHtml = this._renderWidgetFull(widget);
+            slotsHtml += `<div data-slot="${slot}" style="grid-area:${slot};overflow:hidden;min-height:0;min-width:0;">${widgetHtml}</div>`;
+        }
+
+        // Wrap in a grid container — use a placeholder so we can set gridTemplateAreas via JS
+        // after innerHTML injection. We encode the areas as a data attribute (no quotes needed).
+        const areasEncoded = encodeURIComponent(
+            (tmpl.areas || '').split('\n').map(r => `"${r.trim()}"`).join(' ')
+        );
+        return `<div
+            data-grid-areas="${areasEncoded}"
+            style="display:grid;grid-template-columns:${tmpl.cols||'1fr'};grid-template-rows:${tmpl.rows||'1fr'};gap:12px;width:100%;height:100%;padding:12px;box-sizing:border-box;"
+        >${slotsHtml}</div>`;
+    }
+
+    /**
+     * After _renderScreen HTML is injected into DOM, resolve data-grid-areas attributes
+     * to actual CSS gridTemplateAreas values (avoids HTML double-quote escaping issue).
+     */
+    _fixGridAreas(root) {
+        root.querySelectorAll('[data-grid-areas]').forEach(el => {
+            el.style.gridTemplateAreas = decodeURIComponent(el.dataset.gridAreas);
+            delete el.dataset.gridAreas;
+        });
+    }
+
+    /**
+     * Render a widget for use inside a screen slot (no grid-column span needed)
+     */
+    _renderWidgetFull(widget) {
+        const size = 1; // slot determines size, not the widget
+        switch (widget.type) {
+            case 'sensor':  return this.renderSensorWidget(widget, size);
+            case 'gauge':   return this.renderGaugeWidget(widget, size);
+            case 'chart':   return this.renderChartWidget(widget, size);
+            case 'text':    return this.renderTextWidget(widget, size);
+            case 'spacer':  return this.renderSpacerWidget(widget, size);
+            case 'clock':   return this.renderClockWidget(widget, size);
+            case 'compass': return `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:var(--fs-4xl);">🧭</div>`;
+            case 'horizon': return this.renderHorizonWidget(widget, size);
+            default:        return '';
+        }
+    }
+
+    /**
+     * Render multiple screens as a swipeable pager
+     */
+    _renderScreenPager(screens) {
+        let html = '<div class="dash-pager" style="height:100%;"><div class="dash-track">';
+        screens.forEach((screen, i) => {
+            html += `<div class="dash-page" data-page="${i}" style="width:100%;height:100%;flex-shrink:0;overflow:hidden;padding:0;">${this._renderScreen(screen)}</div>`;
+        });
+        html += '</div><div class="dash-dots">';
+        screens.forEach((screen, i) => {
+            html += `<span class="dash-dot${i === 0 ? ' active' : ''}" data-page="${i}" title="${screen.name || ''}">${screen.name ? screen.name.charAt(0) : ''}</span>`;
+        });
+        return html + '</div></div>';
     }
 
     // ─── Paging helpers ────────────────────────────────────────────────────────
@@ -594,6 +724,7 @@ class DashboardRenderer {
             case 'spacer':  html = this.renderSpacerWidget(widget, size); break;
             case 'clock':   html = this.renderClockWidget(widget, size); break;
             case 'compass': html = `<div style="grid-column: span ${size}; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:var(--fs-4xl); padding:var(--space-3xl);">🧭</div>`; break;
+            case 'horizon': html = this.renderHorizonWidget(widget, size); break;
             default: return '';
         }
         if (rh > 1 && html) {
@@ -691,12 +822,14 @@ class DashboardRenderer {
             return `
                 <div style="
                     grid-column: span ${size};
+                    height: 100%;
                     background: linear-gradient(135deg, rgba(30, 60, 114, 0.8), rgba(42, 82, 152, 0.8));
                     backdrop-filter: blur(15px);
                     border: 1px solid ${border};
                     border-radius: var(--radius-2xl);
                     padding: var(--space-4xl);
                     box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                    box-sizing: border-box;
                 ">
                     <div style="display: flex; align-items: start; justify-content: space-between; margin-bottom: var(--space-3xl);">
                         <div style="
@@ -749,11 +882,13 @@ class DashboardRenderer {
             return `
                 <div style="
                     grid-column: span ${size};
+                    height: 100%;
                     background: ${bg};
                     border: 1px solid ${border};
                     border-radius: var(--radius-lg);
                     padding: var(--space-xl);
                     box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+                    box-sizing: border-box;
                 ">
                     <div style="display: flex; align-items: center; gap: var(--space-base); margin-bottom: var(--space-sm);">
                         <span style="font-size: var(--fs-3xl);">${icon}</span>
@@ -795,6 +930,7 @@ class DashboardRenderer {
         return `
             <div style="
                 grid-column: span ${size};
+                height: 100%;
                 background: ${bg};
                 backdrop-filter: blur(15px);
                 border: 2px solid ${border};
@@ -802,6 +938,7 @@ class DashboardRenderer {
                 padding: var(--space-3xl);
                 box-shadow: 0 4px 16px rgba(0,0,0,0.2);
                 position: relative;
+                box-sizing: border-box;
             ">
                 <div data-sensor-status="${baseName}" style="
                     position: absolute;
@@ -991,7 +1128,7 @@ class DashboardRenderer {
                  data-style="${style}" data-decimals="${decimals}" data-unit="${unit}"
                  data-start-angle="${startAngle}" data-total-angle="${totalAngle}"
                  data-gcx="${gcx}" data-gcy="${gcy}" data-radius="${radius}"
-                 style="--gauge-span: ${size}; grid-column: span ${size};">
+                 style="--gauge-span: ${size}; grid-column: span ${size}; height: 100%;">
                 ${label ? `<div class="gauge-label">${label}</div>` : ''}
                 <div class="gauge-instrument">
                     <svg viewBox="${vbX} ${vbY} ${vbW} ${vbH}" preserveAspectRatio="xMidYMid meet">
@@ -1227,6 +1364,7 @@ class DashboardRenderer {
                 justify-content: center;
                 align-items: center;
                 gap: var(--space-sm);
+                height: 100%;
             ">
                 <div class="clock-time" style="
                     font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
@@ -1246,17 +1384,230 @@ class DashboardRenderer {
     }
 
     /**
+     * Render artificial horizon widget (Canvas-based)
+     */
+    renderHorizonWidget(widget, size) {
+        const base = widget.sensor || 'boot/sensoren/lage';
+        const horizonId = this.generateId('horizon');
+        const roll  = parseFloat(this.getSensorValue(`${base}/schlagseite`)) || 0;
+        const pitch = parseFloat(this.getSensorValue(`${base}/neigung`))     || 0;
+        const fmt   = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '°';
+
+        return `
+            <div data-horizon-base="${base}" class="gauge-widget" style="grid-column: span ${size}; height: 100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:8px 6px 6px;">
+                <div style="font-size:11px; color:#8B949E; margin-bottom:4px; flex-shrink:0; letter-spacing:.5px;">Lage</div>
+                <div style="flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+                    <canvas id="${horizonId}" style="display:block; max-width:100%; max-height:100%; aspect-ratio:1/1;"></canvas>
+                </div>
+                <div style="display:flex; gap:14px; margin-top:5px; flex-shrink:0;">
+                    <div style="text-align:center;">
+                        <div data-horizon-roll="${base}" style="font-family:monospace; font-size:12px; font-weight:700; color:#4FC3F7;">${fmt(roll)}</div>
+                        <div style="font-size:9px; color:#6B7280;">Roll</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div data-horizon-pitch="${base}" style="font-family:monospace; font-size:12px; font-weight:700; color:#4FC3F7;">${fmt(pitch)}</div>
+                        <div style="font-size:9px; color:#6B7280;">Pitch</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Draw the artificial horizon on a canvas element
+     */
+    drawHorizonCanvas(canvas, roll, pitch) {
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width, h = canvas.height;
+        const cx = w / 2, cy = h / 2;
+        const r = Math.min(cx, cy) - 14;
+        if (r < 10) return;
+
+        ctx.clearRect(0, 0, w, h);
+
+        const rollRad  = roll  * Math.PI / 180;
+        const kDegPerR = 30;
+        const pitchPx  = pitch * r / kDegPerR;
+        const bigR     = r * 2.4;
+
+        // ── 1. Clip to circle ─────────────────────────────────────────────────
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.clip();
+
+        // ── 2. Rotating sky/sea in roll+pitch frame ───────────────────────────
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(rollRad);
+        ctx.translate(0, pitchPx);
+
+        // Sky
+        const skyGrad = ctx.createLinearGradient(0, -bigR * 2, 0, 0);
+        skyGrad.addColorStop(0, '#051220');
+        skyGrad.addColorStop(1, '#1565C0');
+        ctx.fillStyle = skyGrad;
+        ctx.fillRect(-bigR, -bigR * 2, bigR * 2, bigR * 2);
+
+        // Sea
+        const seaGrad = ctx.createLinearGradient(0, 0, 0, bigR * 2);
+        seaGrad.addColorStop(0, '#0C4F72');
+        seaGrad.addColorStop(1, '#020B18');
+        ctx.fillStyle = seaGrad;
+        ctx.fillRect(-bigR, 0, bigR * 2, bigR * 2);
+
+        // Pitch scale lines
+        const pxPerDeg = r / kDegPerR;
+        for (let deg = -60; deg <= 60; deg += 5) {
+            if (deg === 0) continue;
+            const y = -deg * pxPerDeg;
+            const isMajor = deg % 10 === 0;
+            const hl = isMajor ? r * 0.28 : r * 0.14;
+            ctx.beginPath();
+            ctx.moveTo(-hl, y); ctx.lineTo(hl, y);
+            ctx.strokeStyle = `rgba(255,255,255,${isMajor ? 0.55 : 0.28})`;
+            ctx.lineWidth   = isMajor ? 1.5 : 1.0;
+            ctx.stroke();
+            if (isMajor) {
+                const label = String(Math.abs(deg));
+                ctx.fillStyle = 'rgba(255,255,255,0.65)';
+                ctx.font      = '9px monospace';
+                ctx.textBaseline = 'middle';
+                const tw = ctx.measureText(label).width;
+                ctx.fillText(label, hl + 3, y);
+                ctx.fillText(label, -hl - tw - 3, y);
+            }
+        }
+
+        // Horizon glow
+        ctx.beginPath(); ctx.moveTo(-bigR, 0); ctx.lineTo(bigR, 0);
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.lineWidth   = 7;
+        ctx.stroke();
+        // Horizon line
+        ctx.beginPath(); ctx.moveTo(-bigR, 0); ctx.lineTo(bigR, 0);
+        ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+        ctx.lineWidth   = 1.8;
+        ctx.stroke();
+
+        // Roll indicator triangle (no pitch offset)
+        ctx.translate(0, -pitchPx);
+        const triY = -(r - 6);
+        ctx.beginPath();
+        ctx.moveTo(0, triY);
+        ctx.lineTo(-5, triY + 10);
+        ctx.lineTo(5,  triY + 10);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+        ctx.lineWidth   = 1;
+        ctx.stroke();
+
+        ctx.restore(); // end roll+pitch
+        ctx.restore(); // end clip
+
+        // ── 3. Roll scale ticks (outside clip) ───────────────────────────────
+        const scaleAngles = [-60,-45,-30,-20,-10,0,10,20,30,45,60];
+        for (const deg of scaleAngles) {
+            const rad     = (deg - 90) * Math.PI / 180;
+            const isMajor = deg % 30 === 0 || deg === 0;
+            const len     = isMajor ? 9 : 5.5;
+            const inner   = r + 2, outer = inner + len;
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(rad) * inner, cy + Math.sin(rad) * inner);
+            ctx.lineTo(cx + Math.cos(rad) * outer, cy + Math.sin(rad) * outer);
+            ctx.strokeStyle = `rgba(255,255,255,${isMajor ? 0.65 : 0.38})`;
+            ctx.lineWidth   = isMajor ? 1.5 : 1;
+            ctx.stroke();
+        }
+        // Fixed 0° marker triangle at top
+        const topY = cy - r - 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, topY + 12);
+        ctx.lineTo(cx - 5, topY + 2);
+        ctx.lineTo(cx + 5, topY + 2);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255,255,255,0.80)';
+        ctx.fill();
+
+        // ── 4. Bezel ring ─────────────────────────────────────────────────────
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.strokeStyle = '#1E3A5F';
+        ctx.lineWidth   = 2.5;
+        ctx.stroke();
+
+        // ── 5. Fixed reticle (re-clip) ────────────────────────────────────────
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r - 1, 0, Math.PI * 2);
+        ctx.clip();
+
+        const wl = r * 0.38;
+        const drawWingSegment = (x1, y1, x2, y2) => {
+            ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+            ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 5; ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+            ctx.strokeStyle = 'rgba(255,255,255,0.92)'; ctx.lineWidth = 3; ctx.stroke();
+        };
+        drawWingSegment(cx - wl, cy, cx - wl * 0.28, cy);
+        drawWingSegment(cx - wl * 0.28, cy, cx - wl * 0.28, cy + r * 0.10);
+        drawWingSegment(cx + wl * 0.28, cy, cx + wl, cy);
+        drawWingSegment(cx + wl * 0.28, cy, cx + wl * 0.28, cy + r * 0.10);
+
+        ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 4; ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255,255,255,0.90)'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+        ctx.fillStyle = 'white'; ctx.fill();
+
+        ctx.restore(); // end reticle clip
+    }
+
+    /**
+     * Initialize horizon canvases — must run after a layout frame so percentage-height chains
+     * inside the grid have resolved. Measures the canvas's flex-parent, not the canvas itself,
+     * because the canvas has no intrinsic size until we set its width/height attributes.
+     */
+    _initHorizonCanvases() {
+        document.querySelectorAll('[data-horizon-base]').forEach(container => {
+            const base  = container.dataset.horizonBase;
+            const roll  = parseFloat(this.getSensorValue(`${base}/schlagseite`)) || 0;
+            const pitch = parseFloat(this.getSensorValue(`${base}/neigung`))     || 0;
+            const cv    = container.querySelector('canvas');
+            if (!cv) return;
+            // Measure the flex parent (the canvas's containing box) — that has a definite
+            // size from the grid layout. The canvas itself is 0×0 until we set attributes.
+            const parent = cv.parentElement;
+            const pw = parent ? parent.clientWidth  : 0;
+            const ph = parent ? parent.clientHeight : 0;
+            const dim = Math.max(10, Math.min(pw, ph) || cv.offsetWidth || cv.offsetHeight || 200);
+            cv.width = dim; cv.height = dim;
+            this.drawHorizonCanvas(cv, roll, pitch);
+        });
+    }
+
+    /**
      * Render unknown sensor widget
      */
     renderUnknownWidget(widget, size) {
         return `
             <div style="
                 grid-column: span ${size};
+                height: 100%;
                 background: rgba(231, 76, 60, 0.1);
                 border: 2px solid rgba(231, 76, 60, 0.3);
                 border-radius: var(--radius-xl);
                 padding: var(--space-3xl);
                 text-align: center;
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
             ">
                 <div style="font-size: var(--fs-5xl); margin-bottom: var(--space-md);">❓</div>
                 <div style="color: #e74c3c; font-size: var(--fs-xl); font-weight: 600;">
