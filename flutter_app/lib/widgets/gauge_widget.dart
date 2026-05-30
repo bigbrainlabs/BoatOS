@@ -258,14 +258,30 @@ class _ArcPainter extends CustomPainter {
   }
 
   void _drawBezel(Canvas canvas, Offset center, double radius) {
-    canvas.drawCircle(center, radius + 11, Paint()
-      ..color = const Color(0xFF21262D)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 5);
-    canvas.drawCircle(center, radius + 2, Paint()
-      ..color = const Color(0xFF30363D)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1);
+    if (style == GaugeStyle.arc180) {
+      // Only draw the arc portion of the bezel, not a full circle
+      const start = math.pi - 0.08;
+      const sweep = math.pi + 0.16;
+      canvas.drawArc(Rect.fromCircle(center: center, radius: radius + 11),
+          start, sweep, false, Paint()
+            ..color = const Color(0xFF21262D)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 5);
+      canvas.drawArc(Rect.fromCircle(center: center, radius: radius + 2),
+          start, sweep, false, Paint()
+            ..color = const Color(0xFF30363D)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1);
+    } else {
+      canvas.drawCircle(center, radius + 11, Paint()
+        ..color = const Color(0xFF21262D)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5);
+      canvas.drawCircle(center, radius + 2, Paint()
+        ..color = const Color(0xFF30363D)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1);
+    }
   }
 
   void _drawTrack(Canvas canvas, Offset center, double r, double start, double sweep) {
