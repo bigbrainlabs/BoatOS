@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import '../services/settings_service.dart';
 import '../widgets/gauge_widget.dart';
 import '../widgets/onscreen_keyboard.dart';
+import '../widgets/dashboard/dash_widget.dart';
+import '../widgets/dashboard/registry.dart';
 import '../main.dart' show MainShellState;
 
 class SettingsScreen extends StatefulWidget {
@@ -1917,73 +1919,13 @@ class _ENCSectionState extends State<_ENCSection> {
   }
 }
 
-// ── Dashboard data models ─────────────────────────────────────────────────────
-
-class _DashWidget {
-  String type;       // SENSOR, GAUGE, TEXT, SPACER, CLOCK, COMPASS
-  String? sensor;    // sensor path
-  String? alias;     // AS "..."
-  String? style;     // card|minimal|compact|hero|arc180|arc270|arc360|bar
-  double? min;
-  double? max;
-  String? unit;
-  String? label;
-  int?    decimals;
-  String? text;      // for TEXT type
-  int     size;
-
-  // New per-widget sensor/field assignments
-  String? field;         // for GAUGE/SENSOR: which field to display
-  String? rollSensor;    // HORIZON: base_name of roll sensor
-  String? rollField;     // HORIZON: field name (default: "schlagseite")
-  String? pitchSensor;   // HORIZON: base_name of pitch sensor
-  String? pitchField;    // HORIZON: field name (default: "neigung")
-  String? impactSensor;  // HORIZON: base_name for impact alarm (empty = disabled)
-  String? impactField;   // HORIZON: field name (default: "aktiv")
-
-  _DashWidget({
-    required this.type,
-    this.sensor,
-    this.alias,
-    this.style,
-    this.min,
-    this.max,
-    this.unit,
-    this.label,
-    this.decimals,
-    this.text,
-    this.size = 1,
-    this.field,
-    this.rollSensor,
-    this.rollField,
-    this.pitchSensor,
-    this.pitchField,
-    this.impactSensor,
-    this.impactField,
-  });
-
-  _DashWidget copy() => _DashWidget(
-        type: type, sensor: sensor, alias: alias, style: style,
-        min: min, max: max, unit: unit, label: label,
-        decimals: decimals, text: text, size: size,
-        field: field,
-        rollSensor: rollSensor, rollField: rollField,
-        pitchSensor: pitchSensor, pitchField: pitchField,
-        impactSensor: impactSensor, impactField: impactField,
-      );
-}
-
-class _DashRow {
-  String name;
-  List<_DashWidget> widgets;
-  int height;
-  _DashRow({required this.name, required this.widgets, this.height = 1});
-}
+// ── Dashboard data models — use shared public types from dash_widget.dart ──────
+// DashWidget and DashRow are imported from '../widgets/dashboard/dash_widget.dart'
 
 class _ScreenEditorData {
   String name;
   String layoutId;
-  Map<String, _DashWidget> slots;
+  Map<String, DashWidget> slots;
   _ScreenEditorData({required this.name, required this.layoutId, required this.slots});
 }
 
@@ -2000,7 +1942,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
 
   int  _tab     = 0;   // 0 = visual, 1 = DSL, 2 = sensors
   int  _gridCols = 2;
-  List<_DashRow> _rows = [];
+  List<DashRow> _rows = [];
   late TextEditingController _dslCtrl;
 
   bool _loading = true;
@@ -2156,9 +2098,9 @@ class _DashboardSectionState extends State<_DashboardSection> {
   // ── DSL Parse ─────────────────────────────────────────────────────────────
 
   void _parseDslToState(String dsl) {
-    final rows    = <_DashRow>[];
+    final rows    = <DashRow>[];
     int   cols    = 2;
-    _DashRow? cur;
+    DashRow? cur;
 
     for (var line in dsl.split('\n')) {
       line = line.trim();
@@ -2178,13 +2120,13 @@ class _DashboardSectionState extends State<_DashboardSection> {
             h = int.tryParse(parts[pi + 1]) ?? 1;
           }
         }
-        cur = _DashRow(name: name, widgets: [], height: h.clamp(1, 4));
+        cur = DashRow(name: name, widgets: [], height: h.clamp(1, 4));
         rows.add(cur);
         continue;
       }
 
       cur ??= () {
-        final r = _DashRow(name: '', widgets: []);
+        final r = DashRow(name: '', widgets: []);
         rows.add(r);
         return r;
       }();
@@ -2231,14 +2173,14 @@ class _DashboardSectionState extends State<_DashboardSection> {
     _curScreen = _curScreen.clamp(0, (_screens.length - 1).clamp(0, 999));
   }
 
-  _DashWidget? _parseWidgetLine(String line) {
-    if (line == 'SPACER') return _DashWidget(type: 'SPACER');
-    if (line == 'CLOCK')  return _DashWidget(type: 'CLOCK');
-    if (line == 'COMPASS') return _DashWidget(type: 'COMPASS');
+  DashWidget? _parseWidgetLine(String line) {
+    if (line == 'SPACER') return DashWidget(type: 'SPACER');
+    if (line == 'CLOCK')  return DashWidget(type: 'CLOCK');
+    if (line == 'COMPASS') return DashWidget(type: 'COMPASS');
 
     if (line.startsWith('HORIZON')) {
       final tokens = _tokenise(line);
-      final w = _DashWidget(type: 'HORIZON');
+      final w = DashWidget(type: 'HORIZON');
       bool hasKv = false;
       for (int i = 1; i < tokens.length; i++) {
         final t = tokens[i];
@@ -2265,12 +2207,12 @@ class _DashboardSectionState extends State<_DashboardSection> {
 
     if (line.startsWith('TEXT ')) {
       final t = _stripQuotes(line.substring(5).trim());
-      return _DashWidget(type: 'TEXT', text: t);
+      return DashWidget(type: 'TEXT', text: t);
     }
 
     if (line.startsWith('SENSOR ') || line.startsWith('GAUGE ')) {
       final isGauge = line.startsWith('GAUGE ');
-      final w = _DashWidget(type: isGauge ? 'GAUGE' : 'SENSOR');
+      final w = DashWidget(type: isGauge ? 'GAUGE' : 'SENSOR');
       // tokenise: respect quoted strings
       final tokens = _tokenise(line);
       if (tokens.length < 2) return w;
@@ -2318,51 +2260,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
 
   // ── DSL Generation ────────────────────────────────────────────────────────
 
-  String _toWidgetDsl(_DashWidget w) {
-    switch (w.type) {
-      case 'SPACER':  return 'SPACER';
-      case 'CLOCK':   return 'CLOCK';
-      case 'COMPASS': return 'COMPASS';
-      case 'HORIZON':
-        final buf = StringBuffer('HORIZON');
-        final rollS  = w.rollSensor  ?? '';
-        final rollF  = w.rollField   ?? 'schlagseite';
-        final pitchS = w.pitchSensor ?? '';
-        final pitchF = w.pitchField  ?? 'neigung';
-        if (rollS.isNotEmpty || pitchS.isNotEmpty) {
-          if (rollS.isNotEmpty)  buf.write(' rollSensor=$rollS rollField=$rollF');
-          if (pitchS.isNotEmpty) buf.write(' pitchSensor=$pitchS pitchField=$pitchF');
-          if (w.impactSensor?.isNotEmpty == true)
-            buf.write(' impactSensor=${w.impactSensor} impactField=${w.impactField ?? 'aktiv'}');
-        } else {
-          buf.write(' ${w.sensor ?? 'boot/sensoren/lage'}');
-        }
-        if (w.size != 1) buf.write(' SIZE ${w.size}');
-        return buf.toString();
-      case 'TEXT':    return 'TEXT "${w.text ?? ''}"';
-      case 'SENSOR':
-        final buf = StringBuffer('SENSOR ${w.sensor ?? 'unknown'}');
-        if (w.alias != null)   buf.write(' AS "${w.alias}"');
-        if (w.size != 1)       buf.write(' SIZE ${w.size}');
-        if (w.style != null)   buf.write(' STYLE ${w.style}');
-        return buf.toString();
-      case 'GAUGE':
-        final buf = StringBuffer('GAUGE ${w.sensor ?? 'unknown'}');
-        if (w.min != null)     buf.write(' MIN ${_fmtNum(w.min!)}');
-        if (w.max != null)     buf.write(' MAX ${_fmtNum(w.max!)}');
-        if (w.unit != null)    buf.write(' UNIT "${w.unit}"');
-        if (w.label != null)   buf.write(' LABEL "${w.label}"');
-        if (w.size != 1)       buf.write(' SIZE ${w.size}');
-        if (w.style != null)   buf.write(' STYLE ${w.style}');
-        if (w.decimals != null) buf.write(' DECIMALS ${w.decimals}');
-        return buf.toString();
-      default:
-        return '# unknown ${w.type}';
-    }
-  }
-
-  String _fmtNum(double v) =>
-      v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
+  String _toWidgetDsl(DashWidget w) => DashWidgetRegistry.toDsl(w);
 
   String _toFullDsl() {
     final buf = StringBuffer('GRID $_gridCols\n');
@@ -2577,7 +2475,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
           icon: const Icon(Icons.add, size: 18),
           label: const Text('Zeile hinzufügen'),
           onPressed: () => setState(() {
-            _rows.add(_DashRow(name: 'Zeile ${_rows.length + 1}', widgets: []));
+            _rows.add(DashRow(name: 'Zeile ${_rows.length + 1}', widgets: []));
           }),
         ),
       ),
@@ -2807,7 +2705,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
     );
   }
 
-  Widget _buildWidgetPreview(_DashWidget w) {
+  Widget _buildWidgetPreview(DashWidget w) {
     final (icon, color) = _widgetMeta(w.type);
     final detail = switch (w.type) {
       'GAUGE'  => '${w.label ?? _shortPath(w.sensor ?? '')}  '
@@ -2837,8 +2735,8 @@ class _DashboardSectionState extends State<_DashboardSection> {
   }
 
   void _editSlotWidget(String slot, _ScreenEditorData screen) async {
-    final current = screen.slots[slot] ?? _DashWidget(type: 'SENSOR');
-    final saved = await showDialog<_DashWidget>(
+    final current = screen.slots[slot] ?? DashWidget(type: 'SENSOR');
+    final saved = await showDialog<DashWidget>(
       context: context,
       builder: (_) => _WidgetEditDialog(widget: current, sensors: _availSensors),
     );
@@ -2847,7 +2745,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
     }
   }
 
-  Widget _buildRowCard(int rowIdx, _DashRow row) {
+  Widget _buildRowCard(int rowIdx, DashRow row) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -2951,7 +2849,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
     );
   }
 
-  Widget _buildWidgetChip(int rowIdx, int wIdx, _DashWidget w) {
+  Widget _buildWidgetChip(int rowIdx, int wIdx, DashWidget w) {
     final (icon, color) = _widgetMeta(w.type);
     final label = _widgetChipLabel(w);
     final widgets = _rows[rowIdx].widgets;
@@ -3022,7 +2920,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
         _         => (Icons.widgets,       const Color(0xFF8B949E)),
       };
 
-  String _widgetChipLabel(_DashWidget w) {
+  String _widgetChipLabel(DashWidget w) {
     switch (w.type) {
       case 'SENSOR':  return w.alias ?? _shortPath(w.sensor ?? '');
       case 'GAUGE':   return w.label ?? _shortPath(w.sensor ?? '');
@@ -3070,7 +2968,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
 
   void _editWidget(int rowIdx, int wIdx) async {
     final w = _rows[rowIdx].widgets[wIdx].copy();
-    final saved = await showDialog<_DashWidget>(
+    final saved = await showDialog<DashWidget>(
       context: context,
       builder: (_) => _WidgetEditDialog(widget: w, sensors: _availSensors),
     );
@@ -3307,7 +3205,7 @@ class _SimpleInputDialog extends StatelessWidget {
 
 class _AddWidgetSheet extends StatelessWidget {
   final List<Map<String, dynamic>> sensorGroups;
-  final void Function(_DashWidget) onAdd;
+  final void Function(DashWidget) onAdd;
   const _AddWidgetSheet({required this.sensorGroups, required this.onAdd});
 
   Future<void> _pickType(BuildContext ctx, String topic, String label, String unit) async {
@@ -3334,7 +3232,7 @@ class _AddWidgetSheet extends StatelessWidget {
       ),
     );
     if (type == null) return;
-    final w = _DashWidget(type: type, sensor: topic);
+    final w = DashWidget(type: type, sensor: topic);
     if (type == 'GAUGE') {
       w.label = label;
       w.unit = unit.isEmpty ? null : unit;
@@ -3377,7 +3275,7 @@ class _AddWidgetSheet extends StatelessWidget {
     return Expanded(
       child: GestureDetector(
         onTap: () {
-          final w = _DashWidget(type: type);
+          final w = DashWidget(type: type);
           if (type == 'TEXT')    w.text   = 'Text';
           if (type == 'HORIZON') w.sensor = 'boot/sensoren/lage';
           onAdd(w);
@@ -3541,7 +3439,7 @@ class _AddWidgetSheet extends StatelessWidget {
 // ── Widget Edit Dialog ────────────────────────────────────────────────────────
 
 class _WidgetEditDialog extends StatefulWidget {
-  final _DashWidget widget;
+  final DashWidget widget;
   final List<Map<String, dynamic>> sensors;
   const _WidgetEditDialog({required this.widget, required this.sensors});
   @override
@@ -3549,7 +3447,7 @@ class _WidgetEditDialog extends StatefulWidget {
 }
 
 class _WidgetEditDialogState extends State<_WidgetEditDialog> {
-  late _DashWidget _w;
+  late DashWidget _w;
   final _aliasCtrl = TextEditingController();
   final _labelCtrl = TextEditingController();
   final _unitCtrl  = TextEditingController();
