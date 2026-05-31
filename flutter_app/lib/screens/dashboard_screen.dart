@@ -62,6 +62,15 @@ class _DashWidget {
   final _SimpleCfg? simple;
   final _HorizonCfg? horizonCfg;
 
+  // Per-widget sensor/field assignments (populated by settings editor)
+  final String? field;         // for GAUGE/SENSOR: which field to display
+  final String? rollSensor;    // HORIZON: base_name of roll sensor
+  final String? rollField;     // HORIZON: field name (default: "schlagseite")
+  final String? pitchSensor;   // HORIZON: base_name of pitch sensor
+  final String? pitchField;    // HORIZON: field name (default: "neigung")
+  final String? impactSensor;  // HORIZON: base_name for impact alarm (empty = disabled)
+  final String? impactField;   // HORIZON: field name (default: "aktiv")
+
   int get size {
     if (type == _WidgetType.gauge)   return gauge!.size;
     if (type == _WidgetType.sensor)  return sensor!.size;
@@ -70,13 +79,23 @@ class _DashWidget {
   }
 
   const _DashWidget.gauge(_GaugeCfg cfg)
-      : type = _WidgetType.gauge, gauge = cfg, sensor = null, simple = null, horizonCfg = null;
+      : type = _WidgetType.gauge, gauge = cfg, sensor = null, simple = null, horizonCfg = null,
+        field = null, rollSensor = null, rollField = null, pitchSensor = null, pitchField = null,
+        impactSensor = null, impactField = null;
   const _DashWidget.sensor(_SensorCfg cfg)
-      : type = _WidgetType.sensor, gauge = null, sensor = cfg, simple = null, horizonCfg = null;
+      : type = _WidgetType.sensor, gauge = null, sensor = cfg, simple = null, horizonCfg = null,
+        field = null, rollSensor = null, rollField = null, pitchSensor = null, pitchField = null,
+        impactSensor = null, impactField = null;
   const _DashWidget.simple(_WidgetType t, _SimpleCfg cfg)
-      : type = t, gauge = null, sensor = null, simple = cfg, horizonCfg = null;
-  const _DashWidget.horizon(_HorizonCfg cfg)
-      : type = _WidgetType.horizon, gauge = null, sensor = null, simple = null, horizonCfg = cfg;
+      : type = t, gauge = null, sensor = null, simple = cfg, horizonCfg = null,
+        field = null, rollSensor = null, rollField = null, pitchSensor = null, pitchField = null,
+        impactSensor = null, impactField = null;
+  const _DashWidget.horizon(_HorizonCfg cfg, {
+    this.rollSensor, this.rollField,
+    this.pitchSensor, this.pitchField,
+    this.impactSensor, this.impactField,
+  }) : type = _WidgetType.horizon, gauge = null, sensor = null, simple = null, horizonCfg = cfg,
+       field = null;
 }
 
 class _LayoutRow {
@@ -188,13 +207,36 @@ _Layout _parseDSL(String dsl) {
         currentWidgets.add(_DashWidget.simple(sType, _SimpleCfg(size: sSize)));
       case 'HORIZON':
         currentWidgets ??= [];
-        if (tokens.length > 1) {
+        {
           int hSize = 1;
-          for (int i = 2; i < tokens.length - 1; i += 2) {
-            if (tokens[i].toUpperCase() == 'SIZE') hSize = int.tryParse(tokens[i + 1]) ?? 1;
+          bool hasKv = false;
+          String rollS = '', rollF = 'schlagseite', pitchS = '', pitchF = 'neigung', impS = '', impF = 'aktiv';
+          for (int i = 1; i < tokens.length; i++) {
+            final t = tokens[i];
+            if (t.contains('=')) {
+              hasKv = true;
+              final eq = t.indexOf('=');
+              final k = t.substring(0, eq); final v = t.substring(eq + 1);
+              if (k == 'rollSensor') rollS = v;
+              else if (k == 'rollField') rollF = v;
+              else if (k == 'pitchSensor') pitchS = v;
+              else if (k == 'pitchField') pitchF = v;
+              else if (k == 'impactSensor') impS = v;
+              else if (k == 'impactField') impF = v;
+            } else if (t.toUpperCase() == 'SIZE' && i + 1 < tokens.length) {
+              hSize = int.tryParse(tokens[++i]) ?? 1;
+            }
           }
+          final base = hasKv ? rollS : (tokens.length > 1 ? tokens[1] : '');
           currentWidgets.add(_DashWidget.horizon(
-              _HorizonCfg(path: tokens[1], size: hSize)));
+            _HorizonCfg(path: base, size: hSize),
+            rollSensor: hasKv ? (rollS.isNotEmpty ? rollS : null) : (tokens.length > 1 ? tokens[1] : null),
+            rollField: rollF,
+            pitchSensor: hasKv ? (pitchS.isNotEmpty ? pitchS : null) : (tokens.length > 1 ? tokens[1] : null),
+            pitchField: pitchF,
+            impactSensor: impS.isNotEmpty ? impS : null,
+            impactField: impS.isNotEmpty ? impF : null,
+          ));
         }
     }
   }
@@ -266,12 +308,36 @@ _DashWidget? _parseWidgetFromTokens(List<String> tokens) {
     case 'GAUGE':
       if (tokens.length > 1) return _DashWidget.gauge(_parseGauge(tokens));
     case 'HORIZON':
-      if (tokens.length > 1) {
+      {
         int hSize = 1;
-        for (int i = 2; i < tokens.length - 1; i += 2) {
-          if (tokens[i].toUpperCase() == 'SIZE') hSize = int.tryParse(tokens[i + 1]) ?? 1;
+        bool hasKv = false;
+        String rollS = '', rollF = 'schlagseite', pitchS = '', pitchF = 'neigung', impS = '', impF = 'aktiv';
+        for (int i = 1; i < tokens.length; i++) {
+          final t = tokens[i];
+          if (t.contains('=')) {
+            hasKv = true;
+            final eq = t.indexOf('=');
+            final k = t.substring(0, eq); final v = t.substring(eq + 1);
+            if (k == 'rollSensor') rollS = v;
+            else if (k == 'rollField') rollF = v;
+            else if (k == 'pitchSensor') pitchS = v;
+            else if (k == 'pitchField') pitchF = v;
+            else if (k == 'impactSensor') impS = v;
+            else if (k == 'impactField') impF = v;
+          } else if (t.toUpperCase() == 'SIZE' && i + 1 < tokens.length) {
+            hSize = int.tryParse(tokens[++i]) ?? 1;
+          }
         }
-        return _DashWidget.horizon(_HorizonCfg(path: tokens[1], size: hSize));
+        final base = hasKv ? rollS : (tokens.length > 1 ? tokens[1] : '');
+        return _DashWidget.horizon(
+          _HorizonCfg(path: base, size: hSize),
+          rollSensor: hasKv ? (rollS.isNotEmpty ? rollS : null) : (tokens.length > 1 ? tokens[1] : null),
+          rollField: rollF,
+          pitchSensor: hasKv ? (pitchS.isNotEmpty ? pitchS : null) : (tokens.length > 1 ? tokens[1] : null),
+          pitchField: pitchF,
+          impactSensor: impS.isNotEmpty ? impS : null,
+          impactField: impS.isNotEmpty ? impF : null,
+        );
       }
     case 'CLOCK':
       return _DashWidget.simple(_WidgetType.clock, const _SimpleCfg());
@@ -373,6 +439,19 @@ _SensorCfg _parseSensor(List<String> t) {
 // Sensor value lookup
 // ─────────────────────────────────────────────────────────────────────────────
 
+String _getRawString(Map<String, dynamic> sensors, String basePath, String field) {
+  final entry = sensors[basePath];
+  if (entry == null) return '';
+  final values = entry['values'] as Map<String, dynamic>? ?? {};
+  return values[field]?.toString().trim() ?? '';
+}
+
+bool _isTruthy(String v) {
+  if (v.isEmpty) return false;
+  final l = v.toLowerCase();
+  return l != '0' && l != 'false' && l != 'null' && l != 'no';
+}
+
 double _getValue(Map<String, dynamic> sensors, String path) {
   // Direct base_name match
   if (sensors.containsKey(path)) {
@@ -395,6 +474,16 @@ double _getValue(Map<String, dynamic> sensors, String path) {
       return 0;
     }
   }
+  return 0;
+}
+
+double _getFieldValue(Map<String, dynamic> sensors, String basePath, String field) {
+  final entry = sensors[basePath];
+  if (entry == null) return 0;
+  final values = entry['values'] as Map<String, dynamic>? ?? {};
+  final raw = values[field];
+  if (raw is num) return raw.toDouble();
+  if (raw is String) return double.tryParse(raw.trim()) ?? 0;
   return 0;
 }
 
@@ -425,6 +514,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _firstLoad = true;
   final PageController _pageCtrl = PageController();
   int _currentPage = 0;
+
+  // Impact alarm mute state
+  bool _impactMuted    = false;
+  bool _impactWasActive = false;
 
   @override
   void initState() {
@@ -461,11 +554,88 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => _buildContent(context);
-
-  Widget _buildContent(BuildContext context) {
+  Widget build(BuildContext context) {
     final settings = context.watch<SettingsService>();
     final dsl = settings.raw['dashboard_layout'] as String? ?? '';
+
+    final anyImpactActive = _computeImpactActive(dsl);
+
+    // Rising edge: new alarm event resets mute so it fires again
+    if (anyImpactActive != _impactWasActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (anyImpactActive && !_impactWasActive) {
+          setState(() { _impactMuted = false; _impactWasActive = true; });
+        } else if (!anyImpactActive && _impactWasActive) {
+          setState(() { _impactWasActive = false; });
+        }
+      });
+    }
+
+    final content = _buildContent(context, dsl);
+    if (!anyImpactActive && !_impactMuted) return content;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        content,
+        if (anyImpactActive && !_impactMuted)
+          Positioned(
+            bottom: 24, left: 0, right: 0,
+            child: Center(child: _buildMuteButton()),
+          ),
+      ],
+    );
+  }
+
+  bool _computeImpactActive(String dsl) {
+    if (!dsl.contains('impactSensor=')) return false;
+    bool isScreen = false;
+    for (final line in dsl.split('\n')) {
+      final t = line.trim();
+      if (t.isEmpty || t.startsWith('#')) continue;
+      isScreen = t.toUpperCase().startsWith('SCREEN');
+      break;
+    }
+    final widgets = <_DashWidget>[];
+    if (isScreen) {
+      for (final s in _parseScreenDSL(dsl)) {
+        widgets.addAll(s.widgets.values.whereType<_DashWidget>());
+      }
+    } else {
+      for (final r in _parseDSL(dsl).rows) widgets.addAll(r.widgets);
+    }
+    return widgets.any((w) =>
+        w.type == _WidgetType.horizon &&
+        (w.impactSensor?.isNotEmpty == true) &&
+        _isTruthy(_getRawString(_sensors, w.impactSensor!, w.impactField ?? 'aktiv')));
+  }
+
+  Widget _buildMuteButton() => GestureDetector(
+    onTap: () => setState(() => _impactMuted = true),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFB71C1C),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFFEF5350).withOpacity(0.5),
+              blurRadius: 16, spreadRadius: 2),
+        ],
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.notifications_off_outlined, color: Colors.white, size: 18),
+          SizedBox(width: 8),
+          Text('Alarm stumm', style: TextStyle(
+              color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    ),
+  );
+
+  Widget _buildContent(BuildContext context, String dsl) {
 
     if (_firstLoad) {
       return const Center(child: CircularProgressIndicator(color: Color(0xFF4FC3F7)));
@@ -804,13 +974,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               borderRadius: BorderRadius.circular(4),
             ),
             alignment: Alignment.center,
-            child: isActive && name.isNotEmpty
-                ? Text(label,
-                    style: const TextStyle(
-                        fontSize: 8,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold))
-                : null,
+            child: null,
           ),
         );
       }).toList(),
@@ -825,7 +989,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     switch (w.type) {
       case _WidgetType.gauge:
         final cfg = w.gauge!;
-        final value = _getValue(_sensors, cfg.path);
+        final value = w.field != null && w.field!.isNotEmpty
+            ? _getFieldValue(_sensors, cfg.path, w.field!)
+            : _getValue(_sensors, cfg.path);
         final autoLabel = cfg.label.isNotEmpty
             ? cfg.label
             : _getSensorLabel(_sensors, cfg.path);
@@ -838,12 +1004,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
       case _WidgetType.sensor:
         final scfg = w.sensor!;
+        // If a specific field is configured, override showFields
+        final showFields = (w.field != null && w.field!.isNotEmpty)
+            ? [w.field!]
+            : scfg.show;
         return SensorCard(
           path: scfg.path,
           alias: scfg.alias,
           cardStyle: scfg.style,
           color: scfg.color,
-          showFields: scfg.show,
+          showFields: showFields,
           hideFields: scfg.hide,
           sensorData: _sensors[scfg.path],
         );
@@ -901,10 +1071,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: const Icon(Icons.explore, size: 48, color: Color(0xFF4FC3F7)),
         );
       case _WidgetType.horizon:
-        final hcfg = w.horizonCfg!;
-        final roll  = _getValue(_sensors, '${hcfg.path}/schlagseite');
-        final pitch = _getValue(_sensors, '${hcfg.path}/neigung');
-        return HorizonWidget(roll: roll, pitch: pitch);
+        final hcfg  = w.horizonCfg!;
+        final rollS  = w.rollSensor?.isNotEmpty == true ? w.rollSensor! : hcfg.path;
+        final rollF  = w.rollField  ?? 'schlagseite';
+        final pitchS = w.pitchSensor?.isNotEmpty == true ? w.pitchSensor! : hcfg.path;
+        final pitchF = w.pitchField ?? 'neigung';
+        final impS   = w.impactSensor ?? '';
+        final impF   = w.impactField  ?? 'aktiv';
+        final roll   = _getFieldValue(_sensors, rollS, rollF);
+        final pitch  = _getFieldValue(_sensors, pitchS, pitchF);
+        final impactActive = impS.isNotEmpty &&
+            _isTruthy(_getRawString(_sensors, impS, impF)) &&
+            !_impactMuted;
+        return HorizonWidget(roll: roll, pitch: pitch, impactActive: impactActive);
     }
   }
 

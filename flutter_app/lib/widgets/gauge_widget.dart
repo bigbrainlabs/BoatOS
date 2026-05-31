@@ -670,20 +670,27 @@ class _ValueChip extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class HorizonWidget extends StatefulWidget {
-  final double roll;   // degrees, positive = starboard roll
-  final double pitch;  // degrees, positive = bow up
+  final double roll;
+  final double pitch;
+  final bool impactActive;
 
-  const HorizonWidget({super.key, required this.roll, required this.pitch});
+  const HorizonWidget({
+    super.key,
+    required this.roll,
+    required this.pitch,
+    this.impactActive = false,
+  });
 
   @override
   State<HorizonWidget> createState() => _HorizonWidgetState();
 }
 
 class _HorizonWidgetState extends State<HorizonWidget>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _rollAnim;
   late Animation<double> _pitchAnim;
+  late AnimationController _blinkCtrl;
 
   @override
   void initState() {
@@ -694,6 +701,9 @@ class _HorizonWidgetState extends State<HorizonWidget>
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
     _pitchAnim = Tween<double>(begin: widget.pitch, end: widget.pitch)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _blinkCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 500));
+    if (widget.impactActive) _blinkCtrl.repeat(reverse: true);
   }
 
   @override
@@ -706,10 +716,19 @@ class _HorizonWidgetState extends State<HorizonWidget>
           .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
       _ctrl.forward(from: 0);
     }
+    if (old.impactActive != widget.impactActive) {
+      if (widget.impactActive) {
+        _blinkCtrl.repeat(reverse: true);
+      } else {
+        _blinkCtrl.stop();
+        _blinkCtrl.value = 0;
+      }
+    }
   }
 
   @override
   void dispose() {
+    _blinkCtrl.dispose();
     _ctrl.dispose();
     super.dispose();
   }
@@ -718,8 +737,34 @@ class _HorizonWidgetState extends State<HorizonWidget>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _ctrl,
-      builder: (_, __) =>
+      builder: (_, __) => Stack(
+        fit: StackFit.expand,
+        children: [
           _HorizonDisplay(roll: _rollAnim.value, pitch: _pitchAnim.value),
+          if (widget.impactActive)
+            AnimatedBuilder(
+              animation: _blinkCtrl,
+              builder: (_, __) => IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.red.withOpacity(0.2 + _blinkCtrl.value * 0.65),
+                      width: 3,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.red.withOpacity(_blinkCtrl.value * 0.25),
+                        blurRadius: 14,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

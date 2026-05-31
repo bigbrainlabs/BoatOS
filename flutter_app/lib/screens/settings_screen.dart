@@ -1932,6 +1932,15 @@ class _DashWidget {
   String? text;      // for TEXT type
   int     size;
 
+  // New per-widget sensor/field assignments
+  String? field;         // for GAUGE/SENSOR: which field to display
+  String? rollSensor;    // HORIZON: base_name of roll sensor
+  String? rollField;     // HORIZON: field name (default: "schlagseite")
+  String? pitchSensor;   // HORIZON: base_name of pitch sensor
+  String? pitchField;    // HORIZON: field name (default: "neigung")
+  String? impactSensor;  // HORIZON: base_name for impact alarm (empty = disabled)
+  String? impactField;   // HORIZON: field name (default: "aktiv")
+
   _DashWidget({
     required this.type,
     this.sensor,
@@ -1944,12 +1953,23 @@ class _DashWidget {
     this.decimals,
     this.text,
     this.size = 1,
+    this.field,
+    this.rollSensor,
+    this.rollField,
+    this.pitchSensor,
+    this.pitchField,
+    this.impactSensor,
+    this.impactField,
   });
 
   _DashWidget copy() => _DashWidget(
         type: type, sensor: sensor, alias: alias, style: style,
         min: min, max: max, unit: unit, label: label,
         decimals: decimals, text: text, size: size,
+        field: field,
+        rollSensor: rollSensor, rollField: rollField,
+        pitchSensor: pitchSensor, pitchField: pitchField,
+        impactSensor: impactSensor, impactField: impactField,
       );
 }
 
@@ -2006,6 +2026,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
   List<_ScreenEditorData> _screens = [];
   int _curScreen = 0;
 
+  // impact alert
   @override
   void initState() {
     super.initState();
@@ -2217,13 +2238,28 @@ class _DashboardSectionState extends State<_DashboardSection> {
 
     if (line.startsWith('HORIZON')) {
       final tokens = _tokenise(line);
-      final w = _DashWidget(type: 'HORIZON',
-          sensor: tokens.length > 1 ? tokens[1] : 'boot/sensoren/lage');
-      for (int i = 2; i < tokens.length; i++) {
-        if (tokens[i].toUpperCase() == 'SIZE' && i + 1 < tokens.length) {
+      final w = _DashWidget(type: 'HORIZON');
+      bool hasKv = false;
+      for (int i = 1; i < tokens.length; i++) {
+        final t = tokens[i];
+        if (t.contains('=')) {
+          hasKv = true;
+          final eq = t.indexOf('=');
+          final k = t.substring(0, eq);
+          final v = t.substring(eq + 1);
+          switch (k) {
+            case 'rollSensor':   w.rollSensor  = v;
+            case 'rollField':    w.rollField   = v;
+            case 'pitchSensor':  w.pitchSensor = v;
+            case 'pitchField':   w.pitchField  = v;
+            case 'impactSensor': w.impactSensor = v;
+            case 'impactField':  w.impactField  = v;
+          }
+        } else if (t.toUpperCase() == 'SIZE' && i + 1 < tokens.length) {
           w.size = int.tryParse(tokens[++i]) ?? 1;
         }
       }
+      if (!hasKv && tokens.length > 1) w.sensor = tokens[1];
       return w;
     }
 
@@ -2288,7 +2324,19 @@ class _DashboardSectionState extends State<_DashboardSection> {
       case 'CLOCK':   return 'CLOCK';
       case 'COMPASS': return 'COMPASS';
       case 'HORIZON':
-        final buf = StringBuffer('HORIZON ${w.sensor ?? 'boot/sensoren/lage'}');
+        final buf = StringBuffer('HORIZON');
+        final rollS  = w.rollSensor  ?? '';
+        final rollF  = w.rollField   ?? 'schlagseite';
+        final pitchS = w.pitchSensor ?? '';
+        final pitchF = w.pitchField  ?? 'neigung';
+        if (rollS.isNotEmpty || pitchS.isNotEmpty) {
+          if (rollS.isNotEmpty)  buf.write(' rollSensor=$rollS rollField=$rollF');
+          if (pitchS.isNotEmpty) buf.write(' pitchSensor=$pitchS pitchField=$pitchF');
+          if (w.impactSensor?.isNotEmpty == true)
+            buf.write(' impactSensor=${w.impactSensor} impactField=${w.impactField ?? 'aktiv'}');
+        } else {
+          buf.write(' ${w.sensor ?? 'boot/sensoren/lage'}');
+        }
         if (w.size != 1) buf.write(' SIZE ${w.size}');
         return buf.toString();
       case 'TEXT':    return 'TEXT "${w.text ?? ''}"';
@@ -2979,7 +3027,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
       case 'SENSOR':  return w.alias ?? _shortPath(w.sensor ?? '');
       case 'GAUGE':   return w.label ?? _shortPath(w.sensor ?? '');
       case 'TEXT':    return w.text ?? '';
-      case 'HORIZON': return _shortPath(w.sensor ?? 'lage');
+      case 'HORIZON': return _shortPath(w.rollSensor ?? w.sensor ?? 'lage');
       default:        return '';
     }
   }
@@ -3632,7 +3680,32 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                   _label('Sensor'),
                   const SizedBox(height: 6),
                   _sensorPicker(),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
+                  if (_w.sensor != null) ...[
+                    _label('Feld'),
+                    const SizedBox(height: 6),
+                    Builder(builder: (_) {
+                      final fields = ((widget.sensors
+                          .firstWhere((s) => s['base_name'] == _w.sensor,
+                              orElse: () => <String, dynamic>{})['values']
+                          as Map<String, dynamic>?)?.keys.toList()) ?? <String>[];
+                      if (fields.isEmpty) return const SizedBox.shrink();
+                      final cur = (_w.field != null && fields.contains(_w.field))
+                          ? _w.field!
+                          : fields.first;
+                      return DropdownButton<String>(
+                        value: cur,
+                        isExpanded: true,
+                        dropdownColor: const Color(0xFF161B22),
+                        style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+                        underline: Container(height: 1, color: const Color(0xFF30363D)),
+                        items: fields.map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
+                        onChanged: (v) { if (v != null) setState(() => _w.field = v); },
+                      );
+                    }),
+                    const SizedBox(height: 2),
+                  ],
+                  const SizedBox(height: 2),
                 ],
                 if (_w.type == 'SENSOR') ...[
                   _inputRow('Bezeichnung (AS)', _aliasCtrl),
@@ -3692,13 +3765,102 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                   _sizePicker(),
                 ],
                 if (_w.type == 'HORIZON') ...[
-                  _label('Basis-Pfad (Lage-Sensor)'),
-                  const SizedBox(height: 6),
-                  _sensorPicker(),
-                  const SizedBox(height: 10),
-                  _label('Breite (Spalten)'),
-                  const SizedBox(height: 6),
-                  _sizePicker(),
+                  Builder(builder: (_) {
+                    // Flat list of all full topic paths: base_name/field
+                    final allPaths = <Map<String, String>>[];
+                    for (final s in widget.sensors) {
+                      final base = s['base_name'] as String? ?? '';
+                      final sensorName = s['name'] as String? ?? base;
+                      final vals = (s['values'] as Map<dynamic, dynamic>?) ?? {};
+                      for (final field in vals.keys) {
+                        allPaths.add({
+                          'full': '$base/$field',
+                          'label': '$sensorName › $field',
+                        });
+                      }
+                    }
+                    String? rollFull = (_w.rollSensor?.isNotEmpty == true && _w.rollField != null)
+                        ? '${_w.rollSensor}/${_w.rollField}'
+                        : null;
+                    if (rollFull != null && !allPaths.any((p) => p['full'] == rollFull)) rollFull = null;
+                    String? pitchFull = (_w.pitchSensor?.isNotEmpty == true && _w.pitchField != null)
+                        ? '${_w.pitchSensor}/${_w.pitchField}'
+                        : null;
+                    if (pitchFull != null && !allPaths.any((p) => p['full'] == pitchFull)) pitchFull = null;
+                    String? impactFull = (_w.impactSensor?.isNotEmpty == true && _w.impactField != null)
+                        ? '${_w.impactSensor}/${_w.impactField}'
+                        : null;
+                    if (impactFull != null && !allPaths.any((p) => p['full'] == impactFull)) impactFull = null;
+
+                    void setPath(String which, String? full) {
+                      if (full == null) return;
+                      final idx = full.lastIndexOf('/');
+                      final base = idx >= 0 ? full.substring(0, idx) : full;
+                      final field = idx >= 0 ? full.substring(idx + 1) : '';
+                      setState(() {
+                        if (which == 'roll') { _w.rollSensor = base; _w.rollField = field; }
+                        else if (which == 'pitch') { _w.pitchSensor = base; _w.pitchField = field; }
+                        else if (which == 'impact') { _w.impactSensor = base; _w.impactField = field; }
+                      });
+                    }
+
+                    DropdownButton<String> pathDropdown(String which, String? cur, String hint) =>
+                        DropdownButton<String>(
+                          value: cur,
+                          hint: Text(hint, style: const TextStyle(color: Color(0xFF8B949E))),
+                          isExpanded: true,
+                          dropdownColor: const Color(0xFF161B22),
+                          style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+                          underline: Container(height: 1, color: const Color(0xFF30363D)),
+                          items: allPaths.map((p) => DropdownMenuItem<String>(
+                            value: p['full'],
+                            child: Text(p['label'] ?? p['full'] ?? '', overflow: TextOverflow.ellipsis),
+                          )).toList(),
+                          onChanged: (v) => setPath(which, v),
+                        );
+
+                    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      _label('Roll-Topic'),
+                      const SizedBox(height: 6),
+                      pathDropdown('roll', rollFull, 'Roll-Topic wählen…'),
+                      const SizedBox(height: 14),
+                      _label('Pitch-Topic'),
+                      const SizedBox(height: 6),
+                      pathDropdown('pitch', pitchFull, 'Pitch-Topic wählen…'),
+                      const SizedBox(height: 14),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0D1117),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF30363D)),
+                        ),
+                        child: SwitchListTile(
+                          dense: true,
+                          activeColor: const Color(0xFF4FC3F7),
+                          title: const Text('Impact-Alarm',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                                  color: Color(0xFFE6EDF3))),
+                          subtitle: const Text('Horizont blinkt rot bei Erschütterung',
+                              style: TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
+                          value: _w.impactSensor != null,
+                          onChanged: (on) => setState(() {
+                            _w.impactSensor = on ? '' : null;
+                            _w.impactField  = on ? 'aktiv' : null;
+                          }),
+                        ),
+                      ),
+                      if (_w.impactSensor != null) ...[
+                        const SizedBox(height: 10),
+                        _label('Impact-Topic'),
+                        const SizedBox(height: 6),
+                        pathDropdown('impact', impactFull, 'Impact-Topic wählen…'),
+                      ],
+                      const SizedBox(height: 10),
+                      _label('Breite (Spalten)'),
+                      const SizedBox(height: 6),
+                      _sizePicker(),
+                    ]);
+                  }),
                 ],
                 if (_w.type == 'CLOCK' || _w.type == 'COMPASS' || _w.type == 'SPACER') ...[
                   _label('Breite (Spalten)'),

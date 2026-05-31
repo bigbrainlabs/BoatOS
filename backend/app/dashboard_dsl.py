@@ -249,6 +249,7 @@ class DashboardDSLParser:
         widget = {
             "type": "sensor",
             "sensor": "",
+            "field": "",
             "size": 1,
             "style": "card",
             "icon": None,
@@ -260,6 +261,11 @@ class DashboardDSLParser:
         match = re.search(r'SENSOR\s+([\w\/]+)', line, re.IGNORECASE)
         if match:
             widget["sensor"] = match.group(1)
+
+        # Parse optional field= parameter
+        field_match = re.search(r'\bfield=([\w]+)', line, re.IGNORECASE)
+        if field_match:
+            widget["field"] = field_match.group(1)
 
         # Parse options
         widget.update(self._parse_options(line))
@@ -278,6 +284,7 @@ class DashboardDSLParser:
         widget = {
             "type": "gauge",
             "sensor": "",
+            "field": "",
             "min": 0,
             "max": 100,
             "unit": "",
@@ -292,6 +299,11 @@ class DashboardDSLParser:
         match = re.search(r'GAUGE\s+([\w\/]+)', line, re.IGNORECASE)
         if match:
             widget["sensor"] = match.group(1)
+
+        # Parse optional field= parameter
+        field_match = re.search(r'\bfield=([\w]+)', line, re.IGNORECASE)
+        if field_match:
+            widget["field"] = field_match.group(1)
 
         # Parse options
         options = self._parse_options(line)
@@ -388,15 +400,66 @@ class DashboardDSLParser:
         return widget
 
     def _parse_horizon(self, line: str) -> Dict[str, Any]:
-        """Parse HORIZON command — sensor base path provides /schlagseite (roll) and /neigung (pitch)"""
+        """Parse HORIZON command.
+
+        New format (key=value params):
+          HORIZON rollSensor=boot/lage rollField=schlagseite pitchSensor=boot/lage pitchField=neigung
+                  impactSensor=boot/sensoren/erschuetterung impactField=aktiv
+
+        Legacy format (positional):
+          HORIZON boot/sensoren/lage
+          → rollSensor=boot/sensoren/lage, rollField=schlagseite,
+            pitchSensor=boot/sensoren/lage, pitchField=neigung (defaults)
+        """
         widget = {
             "type": "horizon",
-            "sensor": "boot/sensoren/lage",
+            "rollSensor": "boot/sensoren/lage",
+            "rollField": "schlagseite",
+            "pitchSensor": "boot/sensoren/lage",
+            "pitchField": "neigung",
+            "impactSensor": "",
+            "impactField": "",
             "size": 1,
         }
-        match = re.search(r'HORIZON\s+([\w\/]+)', line, re.IGNORECASE)
-        if match:
-            widget["sensor"] = match.group(1)
+
+        # Try to parse new key=value parameters first
+        roll_sensor_match = re.search(r'\brollSensor=([\w\/]+)', line, re.IGNORECASE)
+        roll_field_match = re.search(r'\brollField=([\w]+)', line, re.IGNORECASE)
+        pitch_sensor_match = re.search(r'\bpitchSensor=([\w\/]+)', line, re.IGNORECASE)
+        pitch_field_match = re.search(r'\bpitchField=([\w]+)', line, re.IGNORECASE)
+        impact_sensor_match = re.search(r'\bimpactSensor=([\w\/]+)', line, re.IGNORECASE)
+        impact_field_match = re.search(r'\bimpactField=([\w]+)', line, re.IGNORECASE)
+
+        has_new_params = any([
+            roll_sensor_match, roll_field_match,
+            pitch_sensor_match, pitch_field_match,
+            impact_sensor_match, impact_field_match,
+        ])
+
+        if has_new_params:
+            # New key=value format
+            if roll_sensor_match:
+                widget["rollSensor"] = roll_sensor_match.group(1)
+            if roll_field_match:
+                widget["rollField"] = roll_field_match.group(1)
+            if pitch_sensor_match:
+                widget["pitchSensor"] = pitch_sensor_match.group(1)
+            if pitch_field_match:
+                widget["pitchField"] = pitch_field_match.group(1)
+            if impact_sensor_match:
+                widget["impactSensor"] = impact_sensor_match.group(1)
+            if impact_field_match:
+                widget["impactField"] = impact_field_match.group(1)
+        else:
+            # Legacy format: HORIZON <sensor_base_path>
+            # The sensor base path implicitly provides /schlagseite (roll) and /neigung (pitch)
+            match = re.search(r'HORIZON\s+([\w\/]+)', line, re.IGNORECASE)
+            if match:
+                sensor_base = match.group(1)
+                widget["rollSensor"] = sensor_base
+                widget["pitchSensor"] = sensor_base
+            # rollField and pitchField keep their defaults: "schlagseite" and "neigung"
+
         widget.update(self._parse_options(line))
         return widget
 

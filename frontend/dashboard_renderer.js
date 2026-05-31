@@ -56,6 +56,7 @@ class DashboardRenderer {
                 border: 2px solid rgba(100, 180, 255, 0.25);
                 border-radius: var(--radius-xl);
                 padding: var(--space-xl);
+                position: relative;
                 box-shadow:
                     0 4px 24px rgba(0, 0, 0, 0.4),
                     inset 0 1px 0 rgba(255, 255, 255, 0.08);
@@ -142,6 +143,20 @@ class DashboardRenderer {
             .dash-dots { display: flex; justify-content: center; align-items: center; gap: 8px; padding: 10px 0 6px; flex-shrink: 0; }
             .dash-dot { width: 8px; height: 8px; border-radius: 4px; background: rgba(80,100,140,0.5); cursor: pointer; transition: all 200ms ease; flex-shrink: 0; }
             .dash-dot.active { width: 20px; background: #4FC3F7; }
+            .horizon-impact-flash {
+                position: absolute; inset: 0;
+                border-radius: var(--radius-xl);
+                border: 3px solid transparent;
+                pointer-events: none;
+                z-index: 10;
+            }
+            @keyframes horizon-impact-blink {
+                0%, 100% { border-color: transparent; box-shadow: none; }
+                50% { border-color: rgba(255,50,50,0.85); box-shadow: 0 0 14px rgba(255,50,50,0.35) inset; }
+            }
+            .horizon-impact-active .horizon-impact-flash {
+                animation: horizon-impact-blink 0.5s ease-in-out infinite;
+            }
         `;
         document.head.appendChild(style);
     }
@@ -375,12 +390,15 @@ class DashboardRenderer {
         });
 
         // Update horizon widgets
-        document.querySelectorAll('[data-horizon-base]').forEach(container => {
-            const base  = container.dataset.horizonBase;
-            const roll  = parseFloat(this.getSensorValue(`${base}/schlagseite`)) || 0;
-            const pitch = parseFloat(this.getSensorValue(`${base}/neigung`))     || 0;
+        document.querySelectorAll('[data-horizon-roll-path]').forEach(container => {
+            const rollPath   = container.dataset.horizonRollPath;
+            const pitchPath  = container.dataset.horizonPitchPath;
+            const impactPath = container.dataset.horizonImpactPath || '';
+            const roll  = parseFloat(this.getSensorValue(rollPath))  || 0;
+            const pitch = parseFloat(this.getSensorValue(pitchPath)) || 0;
             const fmt   = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '°';
-            const cv    = container.querySelector('canvas');
+
+            const cv = container.querySelector('canvas');
             if (cv) {
                 const par = cv.parentElement;
                 const dim = Math.max(10,
@@ -395,6 +413,13 @@ class DashboardRenderer {
             const pitchEl = container.querySelector('[data-horizon-pitch]');
             if (rollEl)  rollEl.textContent  = fmt(roll);
             if (pitchEl) pitchEl.textContent = fmt(pitch);
+
+            let impactActive = false;
+            if (impactPath) {
+                const impactRaw = String(this.getSensorValue(impactPath) ?? '').toLowerCase().trim();
+                impactActive = impactRaw !== '' && impactRaw !== '0' && impactRaw !== 'false' && impactRaw !== 'null';
+            }
+            container.classList.toggle('horizon-impact-active', impactActive);
         });
 
         // Update status indicators
@@ -589,7 +614,7 @@ class DashboardRenderer {
         });
         html += '</div><div class="dash-dots">';
         screens.forEach((screen, i) => {
-            html += `<span class="dash-dot${i === 0 ? ' active' : ''}" data-page="${i}" title="${screen.name || ''}">${screen.name ? screen.name.charAt(0) : ''}</span>`;
+            html += `<span class="dash-dot${i === 0 ? ' active' : ''}" data-page="${i}" title="${screen.name || ''}"></span>`;
         });
         return html + '</div></div>';
     }
@@ -737,18 +762,19 @@ class DashboardRenderer {
      * Render sensor widget with data attributes for partial updates
      */
     renderSensorWidget(widget, size) {
-        // Try to find sensor - support both base_name and full path
+        // Support new widget.sensor (base) + widget.field contract.
+        // If widget.field is set, use it as specificValue directly.
         let sensor = this.sensors[widget.sensor];
-        let specificValue = null;
+        let specificValue = widget.field || null;
 
         if (!sensor) {
-            // Try to find by base path
+            // Backward-compat: try to find by base path (old full-path in widget.sensor)
             const parts = widget.sensor.split('/');
             for (let i = parts.length - 1; i >= 1; i--) {
                 const baseName = parts.slice(0, i).join('/');
                 if (this.sensors[baseName]) {
                     sensor = this.sensors[baseName];
-                    specificValue = parts.slice(i).join('/');
+                    if (!specificValue) specificValue = parts.slice(i).join('/');
                     break;
                 }
             }
@@ -987,10 +1013,33 @@ class DashboardRenderer {
     }
 
     /**
+     * Resolve the full sensor path for gauge/sensor widgets using widget.sensor + widget.field.
+     * Supports:
+     *   - New contract: widget.sensor = base_name, widget.field = field key → "base/field"
+     *   - Backward-compat: widget.sensor = full path (no widget.field) → return as-is after
+     *     verifying the base is known; if field still empty, pick first available key.
+     */
+    _resolveGaugeSensorPath(widget) {
+        if (widget.field) {
+            return `${widget.sensor}/${widget.field}`;
+        }
+        // New-style base_name but no field yet — use first available key
+        const group = this.sensors[widget.sensor];
+        if (group) {
+            const keys = Object.keys(group.values || {});
+            if (keys.length > 0) return `${widget.sensor}/${keys[0]}`;
+        }
+        // Backward-compat: widget.sensor may be a full path like "boot/motor/drehzahl"
+        // The getSensorValue() method already handles split-path lookup, so return as-is.
+        return widget.sensor;
+    }
+
+    /**
      * Render gauge widget with data attributes for smooth updates
      */
     renderGaugeWidget(widget, size) {
-        const value = this.getSensorValue(widget.sensor);
+        const sensorPath = this._resolveGaugeSensorPath(widget);
+        const value = this.getSensorValue(sensorPath);
         const numValue = parseFloat(value) || 0;
 
         const min = widget.min || 0;
@@ -998,7 +1047,7 @@ class DashboardRenderer {
         const unit = widget.unit || '';
         const color = widget.color || 'cyan';
         const style = widget.style || 'arc180';
-        const label = widget.label || widget.sensor?.split('/').pop() || '';
+        const label = widget.label || widget.field || widget.sensor?.split('/').pop() || '';
         const decimals = widget.decimals !== undefined ? widget.decimals : 1;
 
         const percentage = Math.min(100, Math.max(0, ((numValue - min) / (max - min)) * 100));
@@ -1016,20 +1065,20 @@ class DashboardRenderer {
 
         // Render based on style
         if (style === 'bar') {
-            return this.renderBarGauge(widget, size, numValue, min, max, unit, percentage, textColor, label, decimals);
+            return this.renderBarGauge(widget, sensorPath, size, numValue, min, max, unit, percentage, textColor, label, decimals);
         } else {
-            return this.renderArcGauge(widget, size, numValue, min, max, unit, percentage, textColor, label, decimals, style);
+            return this.renderArcGauge(widget, sensorPath, size, numValue, min, max, unit, percentage, textColor, label, decimals, style);
         }
     }
 
     /**
      * Render linear bar gauge with glass instrument look
      */
-    renderBarGauge(widget, size, value, min, max, unit, percentage, color, label, decimals) {
+    renderBarGauge(widget, sensorPath, size, value, min, max, unit, percentage, color, label, decimals) {
         const gaugeId = this.generateId('gauge');
 
         return `
-            <div id="${gaugeId}" class="gauge-bar-widget" data-gauge-path="${widget.sensor}" data-min="${min}" data-max="${max}"
+            <div id="${gaugeId}" class="gauge-bar-widget" data-gauge-path="${sensorPath}" data-min="${min}" data-max="${max}"
                  data-style="bar" data-decimals="${decimals}" data-unit="${unit}" style="--gauge-span: ${size}; grid-column: span ${size};">
                 ${label ? `<div class="gauge-label">${label}</div>` : ''}
                 <div class="gauge-value gauge-value-display" style="font-size: var(--fs-5xl); color: ${color}; margin-bottom: var(--space-lg);">
@@ -1052,7 +1101,7 @@ class DashboardRenderer {
     /**
      * Render arc gauge as premium instrument with glass effect
      */
-    renderArcGauge(widget, size, value, min, max, unit, percentage, color, label, decimals, style) {
+    renderArcGauge(widget, sensorPath, size, value, min, max, unit, percentage, color, label, decimals, style) {
         const gaugeId = this.generateId('gauge');
 
         // Viewbox size (internal SVG coordinate system)
@@ -1124,7 +1173,7 @@ class DashboardRenderer {
         const vbH = isHalf ? Math.round(gcy + P) : S + 2 * P;
 
         return `
-            <div id="${gaugeId}" class="gauge-widget" data-gauge-path="${widget.sensor}" data-min="${min}" data-max="${max}"
+            <div id="${gaugeId}" class="gauge-widget" data-gauge-path="${sensorPath}" data-min="${min}" data-max="${max}"
                  data-style="${style}" data-decimals="${decimals}" data-unit="${unit}"
                  data-start-angle="${startAngle}" data-total-angle="${totalAngle}"
                  data-gcx="${gcx}" data-gcy="${gcy}" data-radius="${radius}"
@@ -1384,28 +1433,52 @@ class DashboardRenderer {
     }
 
     /**
+     * Resolve roll/pitch/impact paths from per-widget fields.
+     * Supports new contract (rollSensor/rollField etc.) with old-style fallback (sensor).
+     */
+    _resolveHorizonPaths(widget) {
+        const fallbackBase = widget.sensor || 'boot/sensoren/lage';
+        const rollSensor  = widget.rollSensor  || fallbackBase;
+        const rollField   = widget.rollField   || 'schlagseite';
+        const pitchSensor = widget.pitchSensor || fallbackBase;
+        const pitchField  = widget.pitchField  || 'neigung';
+        const impactSensor = widget.impactSensor || '';
+        const impactField  = widget.impactField  || 'aktiv';
+        return {
+            rollPath:   `${rollSensor}/${rollField}`,
+            pitchPath:  `${pitchSensor}/${pitchField}`,
+            impactPath: impactSensor ? `${impactSensor}/${impactField}` : '',
+        };
+    }
+
+    /**
      * Render artificial horizon widget (Canvas-based)
      */
     renderHorizonWidget(widget, size) {
-        const base = widget.sensor || 'boot/sensoren/lage';
         const horizonId = this.generateId('horizon');
-        const roll  = parseFloat(this.getSensorValue(`${base}/schlagseite`)) || 0;
-        const pitch = parseFloat(this.getSensorValue(`${base}/neigung`))     || 0;
+        const { rollPath, pitchPath, impactPath } = this._resolveHorizonPaths(widget);
+        const roll  = parseFloat(this.getSensorValue(rollPath))  || 0;
+        const pitch = parseFloat(this.getSensorValue(pitchPath)) || 0;
         const fmt   = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '°';
 
         return `
-            <div data-horizon-base="${base}" class="gauge-widget" style="grid-column: span ${size}; height: 100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:8px 6px 6px;">
+            <div data-horizon-roll-path="${rollPath}"
+                 data-horizon-pitch-path="${pitchPath}"
+                 data-horizon-impact-path="${impactPath}"
+                 class="gauge-widget"
+                 style="grid-column: span ${size}; height: 100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:8px 6px 6px;">
+                <div class="horizon-impact-flash"></div>
                 <div style="font-size:11px; color:#8B949E; margin-bottom:4px; flex-shrink:0; letter-spacing:.5px;">Lage</div>
                 <div style="flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; overflow:hidden;">
                     <canvas id="${horizonId}" style="display:block; max-width:100%; max-height:100%; aspect-ratio:1/1;"></canvas>
                 </div>
                 <div style="display:flex; gap:14px; margin-top:5px; flex-shrink:0;">
                     <div style="text-align:center;">
-                        <div data-horizon-roll="${base}" style="font-family:monospace; font-size:12px; font-weight:700; color:#4FC3F7;">${fmt(roll)}</div>
+                        <div data-horizon-roll style="font-family:monospace; font-size:12px; font-weight:700; color:#4FC3F7;">${fmt(roll)}</div>
                         <div style="font-size:9px; color:#6B7280;">Roll</div>
                     </div>
                     <div style="text-align:center;">
-                        <div data-horizon-pitch="${base}" style="font-family:monospace; font-size:12px; font-weight:700; color:#4FC3F7;">${fmt(pitch)}</div>
+                        <div data-horizon-pitch style="font-family:monospace; font-size:12px; font-weight:700; color:#4FC3F7;">${fmt(pitch)}</div>
                         <div style="font-size:9px; color:#6B7280;">Pitch</div>
                     </div>
                 </div>
@@ -1598,10 +1671,11 @@ class DashboardRenderer {
      * because the canvas has no intrinsic size until we set its width/height attributes.
      */
     _initHorizonCanvases() {
-        document.querySelectorAll('[data-horizon-base]').forEach(container => {
-            const base  = container.dataset.horizonBase;
-            const roll  = parseFloat(this.getSensorValue(`${base}/schlagseite`)) || 0;
-            const pitch = parseFloat(this.getSensorValue(`${base}/neigung`))     || 0;
+        document.querySelectorAll('[data-horizon-roll-path]').forEach(container => {
+            const rollPath  = container.dataset.horizonRollPath;
+            const pitchPath = container.dataset.horizonPitchPath;
+            const roll  = parseFloat(this.getSensorValue(rollPath))  || 0;
+            const pitch = parseFloat(this.getSensorValue(pitchPath)) || 0;
             const cv    = container.querySelector('canvas');
             if (!cv) return;
             // Measure the flex parent (the canvas's containing box) — that has a definite

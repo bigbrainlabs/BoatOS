@@ -1049,6 +1049,44 @@ SCREEN Wetter LAYOUT grid-4
     }
 
     /**
+     * Build a sensor dropdown (base_name) + field dropdown pair for a given key prefix.
+     * sensorKey: property name on widget (e.g. 'sensor', 'rollSensor')
+     * fieldKey:  property name for the field (e.g. 'field', 'rollField')
+     * label:     human-readable label
+     * optional:  if true, first option is "— deaktiviert —" with empty value
+     */
+    _renderSensorFieldDropdowns(widgetIdx, widget, sensorKey, fieldKey, label, optional = false) {
+        const currentSensor = widget[sensorKey] || '';
+        const currentField  = widget[fieldKey]  || '';
+        const grp = (this.sensorGroups || []).find(s => s.base_name === currentSensor);
+        const availableFields = grp ? Object.keys(grp.values || {}) : [];
+
+        const sensorOptions = (optional ? `<option value="">— deaktiviert —</option>` : '') +
+            (this.sensorGroups || []).map(s =>
+                `<option value="${s.base_name}" ${currentSensor === s.base_name ? 'selected' : ''}>${s.name}</option>`
+            ).join('');
+
+        const fieldDropdown = (currentSensor && availableFields.length > 0) ? `
+            <div>
+                <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">${label} — Feld</label>
+                <select onchange="window.dashboardEditor.updateWidget(${widgetIdx}, '${fieldKey}', this.value)" style="
+                    width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
+                    ${availableFields.map(f => `<option value="${f}" ${currentField === f ? 'selected' : ''}>${f}</option>`).join('')}
+                </select>
+            </div>` : '';
+
+        return `
+            <div>
+                <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">${label} — Sensor</label>
+                <select onchange="window.dashboardEditor.updateWidgetSensor(${widgetIdx}, '${sensorKey}', '${fieldKey}', this.value)" style="
+                    width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
+                    ${sensorOptions}
+                </select>
+            </div>
+            ${fieldDropdown}`;
+    }
+
+    /**
      * Render properties panel
      */
     renderProperties() {
@@ -1059,6 +1097,8 @@ SCREEN Wetter LAYOUT grid-4
         const isSensor  = widget.type === 'sensor';
         const isHorizon = widget.type === 'horizon';
         const isText    = widget.type === 'text';
+
+        const idx = this.selectedWidget;
 
         return `
             <div style="display: flex; flex-direction: column; gap: 12px;">
@@ -1073,36 +1113,59 @@ SCREEN Wetter LAYOUT grid-4
                 <div>
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Text</label>
                     <input type="text" value="${widget.text || ''}"
-                           onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'text', this.value)"
+                           onchange="window.dashboardEditor.updateWidget(${idx}, 'text', this.value)"
                            style="width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                 </div>
                 ` : ''}
 
-                ${(isSensor || isGauge || isHorizon) ? `
+                ${isGauge ? `
+                ${this._renderSensorFieldDropdowns(idx, widget, 'sensor', 'field', 'Sensor')}
+                <!-- Label / Alias -->
                 <div>
-                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">${isHorizon ? 'Basis-Sensor (Lage-Pfad)' : 'Sensor'}</label>
-                    <select onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'sensor', this.value)" style="
-                        width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
-                        ${this.sensors.length === 0
-                            ? `<option value="${widget.sensor || ''}">${widget.sensor || '— keine Sensoren —'}</option>`
-                            : this.sensors.map(s => `<option value="${s.base_name}" ${widget.sensor === s.base_name ? 'selected' : ''}>${s.name}</option>`).join('')}
-                    </select>
+                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Label</label>
+                    <input type="text" value="${widget.label || ''}"
+                           onchange="window.dashboardEditor.updateWidget(${idx}, 'label', this.value)"
+                           placeholder="${widget.field || widget.sensor?.split('/').pop() || 'Label'}"
+                           style="width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                 </div>
-                ${!isHorizon ? `
+                ` : ''}
+
+                ${isSensor ? `
+                ${this._renderSensorFieldDropdowns(idx, widget, 'sensor', 'field', 'Sensor')}
+                <!-- Alias -->
                 <div>
-                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Label / Alias</label>
-                    <input type="text" value="${widget.alias || widget.label || ''}"
-                           onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, '${isGauge ? 'label' : 'alias'}', this.value)"
+                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Alias</label>
+                    <input type="text" value="${widget.alias || ''}"
+                           onchange="window.dashboardEditor.updateWidget(${idx}, 'alias', this.value)"
                            placeholder="${this.getWidgetName(widget)}"
                            style="width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                 </div>
                 ` : ''}
+
+                ${isHorizon ? `
+                ${this._renderSensorFieldDropdowns(idx, widget, 'rollSensor', 'rollField', 'Roll')}
+                ${this._renderSensorFieldDropdowns(idx, widget, 'pitchSensor', 'pitchField', 'Pitch')}
+                <!-- Impact Alert toggle -->
+                <div style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+                        <input type="checkbox" ${widget.impactSensor ? 'checked' : ''}
+                            onchange="window.dashboardEditor.updateWidget(${idx}, 'impactSensor', this.checked ? '' : null); window.dashboardEditor.updateWidget(${idx}, 'impactField', this.checked ? 'aktiv' : null);"
+                            style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+                        <span style="font-size: 13px; color: var(--text); font-weight: 600;">Impact-Alarm</span>
+                        <span style="font-size: 11px; color: var(--text-dim);">Horizont blinkt rot bei Erschütterung</span>
+                    </label>
+                    ${widget.impactSensor != null ? `
+                    <div style="margin-top: 10px;">
+                        ${this._renderSensorFieldDropdowns(idx, widget, 'impactSensor', 'impactField', 'Impact')}
+                    </div>
+                    ` : ''}
+                </div>
                 ` : ''}
 
                 <!-- Row -->
                 <div>
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Reihe</label>
-                    <select onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'rowName', this.value)" style="
+                    <select onchange="window.dashboardEditor.updateWidget(${idx}, 'rowName', this.value)" style="
                         width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                         ${this.rows.map(r => `<option value="${r}" ${widget.rowName === r ? 'selected' : ''}>${r}</option>`).join('')}
                     </select>
@@ -1110,8 +1173,8 @@ SCREEN Wetter LAYOUT grid-4
 
                 <!-- Size -->
                 <div>
-                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Größe</label>
-                    <select onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'size', parseInt(this.value))" style="
+                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Breite</label>
+                    <select onchange="window.dashboardEditor.updateWidget(${idx}, 'size', parseInt(this.value))" style="
                         width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                         ${[1,2,3,4].map(n => `<option value="${n}" ${(widget.size || 1) === n ? 'selected' : ''}>${n} Spalte${n > 1 ? 'n' : ''}</option>`).join('')}
                     </select>
@@ -1121,12 +1184,12 @@ SCREEN Wetter LAYOUT grid-4
                 <!-- Gauge Style -->
                 <div>
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Gauge-Stil</label>
-                    <select onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'style', this.value)" style="
+                    <select onchange="window.dashboardEditor.updateWidget(${idx}, 'style', this.value)" style="
                         width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
-                        <option value="arc180" ${widget.style === 'arc180' ? 'selected' : ''}>🎯 Halbkreis (180°)</option>
-                        <option value="arc270" ${widget.style === 'arc270' ? 'selected' : ''}>🎯 Dreiviertel (270°)</option>
-                        <option value="arc360" ${widget.style === 'arc360' ? 'selected' : ''}>🎯 Vollkreis (360°)</option>
-                        <option value="bar" ${widget.style === 'bar' ? 'selected' : ''}>📊 Balken</option>
+                        <option value="arc180" ${widget.style === 'arc180' ? 'selected' : ''}>Halbkreis (180°)</option>
+                        <option value="arc270" ${widget.style === 'arc270' ? 'selected' : ''}>Dreiviertel (270°)</option>
+                        <option value="arc360" ${widget.style === 'arc360' ? 'selected' : ''}>Vollkreis (360°)</option>
+                        <option value="bar" ${widget.style === 'bar' ? 'selected' : ''}>Balken</option>
                     </select>
                 </div>
 
@@ -1135,13 +1198,13 @@ SCREEN Wetter LAYOUT grid-4
                     <div>
                         <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Min</label>
                         <input type="number" value="${widget.min || 0}"
-                               onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'min', parseFloat(this.value))"
+                               onchange="window.dashboardEditor.updateWidget(${idx}, 'min', parseFloat(this.value))"
                                style="width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                     </div>
                     <div>
                         <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Max</label>
                         <input type="number" value="${widget.max || 100}"
-                               onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'max', parseFloat(this.value))"
+                               onchange="window.dashboardEditor.updateWidget(${idx}, 'max', parseFloat(this.value))"
                                style="width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                     </div>
                 </div>
@@ -1150,7 +1213,7 @@ SCREEN Wetter LAYOUT grid-4
                 <div>
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Einheit</label>
                     <input type="text" value="${widget.unit || ''}"
-                           onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'unit', this.value)"
+                           onchange="window.dashboardEditor.updateWidget(${idx}, 'unit', this.value)"
                            placeholder="z.B. °C, %, kn"
                            style="width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                 </div>
@@ -1158,7 +1221,7 @@ SCREEN Wetter LAYOUT grid-4
                 <!-- Decimals -->
                 <div>
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Dezimalstellen</label>
-                    <select onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'decimals', parseInt(this.value))" style="
+                    <select onchange="window.dashboardEditor.updateWidget(${idx}, 'decimals', parseInt(this.value))" style="
                         width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                         ${[0,1,2,3].map(n => `<option value="${n}" ${(widget.decimals || 1) === n ? 'selected' : ''}>${n}</option>`).join('')}
                     </select>
@@ -1169,12 +1232,12 @@ SCREEN Wetter LAYOUT grid-4
                 <!-- Sensor Style -->
                 <div>
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Style</label>
-                    <select onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'style', this.value)" style="
+                    <select onchange="window.dashboardEditor.updateWidget(${idx}, 'style', this.value)" style="
                         width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
-                        <option value="card" ${widget.style === 'card' ? 'selected' : ''}>📦 Card</option>
-                        <option value="minimal" ${widget.style === 'minimal' ? 'selected' : ''}>➖ Minimal</option>
-                        <option value="compact" ${widget.style === 'compact' ? 'selected' : ''}>📱 Compact</option>
-                        <option value="hero" ${widget.style === 'hero' ? 'selected' : ''}>⭐ Hero</option>
+                        <option value="card" ${widget.style === 'card' ? 'selected' : ''}>Card</option>
+                        <option value="minimal" ${widget.style === 'minimal' ? 'selected' : ''}>Minimal</option>
+                        <option value="compact" ${widget.style === 'compact' ? 'selected' : ''}>Compact</option>
+                        <option value="hero" ${widget.style === 'hero' ? 'selected' : ''}>Hero</option>
                     </select>
                 </div>
                 ` : ''}
@@ -1184,7 +1247,7 @@ SCREEN Wetter LAYOUT grid-4
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Farbe</label>
                     <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                         ${['cyan', 'blue', 'green', 'orange', 'purple', 'red', 'yellow'].map(color => `
-                            <div onclick="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'color', '${color}')" style="
+                            <div onclick="window.dashboardEditor.updateWidget(${idx}, 'color', '${color}')" style="
                                 width: 28px;
                                 height: 28px;
                                 border-radius: 6px;
@@ -1198,15 +1261,15 @@ SCREEN Wetter LAYOUT grid-4
 
                 <!-- Move buttons -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
-                    <button onclick="window.dashboardEditor.moveWidget(${this.selectedWidget}, -1)"
-                            ${this.selectedWidget === 0 ? 'disabled' : ''}
+                    <button onclick="window.dashboardEditor.moveWidget(${idx}, -1)"
+                            ${idx === 0 ? 'disabled' : ''}
                             style="padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); cursor: pointer; font-size: 12px;">
-                        ⬆️ Hoch
+                        Hoch
                     </button>
-                    <button onclick="window.dashboardEditor.moveWidget(${this.selectedWidget}, 1)"
-                            ${this.selectedWidget >= this.widgets.length - 1 ? 'disabled' : ''}
+                    <button onclick="window.dashboardEditor.moveWidget(${idx}, 1)"
+                            ${idx >= this.widgets.length - 1 ? 'disabled' : ''}
                             style="padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); cursor: pointer; font-size: 12px;">
-                        ⬇️ Runter
+                        Runter
                     </button>
                 </div>
             </div>
@@ -1228,6 +1291,7 @@ SCREEN Wetter LAYOUT grid-4
 
         if (type === 'sensor' && sensor) {
             widget.sensor = sensor;
+            widget.field  = '';
         }
 
         if (type === 'text') {
@@ -1235,7 +1299,12 @@ SCREEN Wetter LAYOUT grid-4
         }
 
         if (type === 'horizon') {
-            widget.sensor = 'boot/sensoren/lage';
+            widget.rollSensor  = '';
+            widget.rollField   = '';
+            widget.pitchSensor = '';
+            widget.pitchField  = '';
+            widget.impactSensor = '';
+            widget.impactField  = 'aktiv';
         }
 
         this.widgets.push(widget);
@@ -1251,6 +1320,7 @@ SCREEN Wetter LAYOUT grid-4
         const widget = {
             type: 'gauge',
             sensor: sensor,
+            field: '',
             size: 1,
             style: 'arc180',  // arc180, arc270, arc360, bar
             color: 'cyan',
@@ -1290,6 +1360,17 @@ SCREEN Wetter LAYOUT grid-4
     updateWidget(index, property, value) {
         if (this.widgets[index]) {
             this.widgets[index][property] = value;
+            this.render();
+        }
+    }
+
+    /**
+     * Update widget sensor selection — sets sensorKey and clears fieldKey in one render cycle
+     */
+    updateWidgetSensor(index, sensorKey, fieldKey, sensorValue) {
+        if (this.widgets[index]) {
+            this.widgets[index][sensorKey] = sensorValue;
+            this.widgets[index][fieldKey]  = '';
             this.render();
         }
     }
@@ -1513,13 +1594,42 @@ SCREEN Wetter LAYOUT grid-4
                                         <option value="spacer" ${wtype==='spacer'?'selected':''}>Spacer</option>
                                         <option value="text" ${wtype==='text'?'selected':''}>Text</option>
                                     </select>
-                                    ${(wtype === 'sensor' || wtype === 'gauge' || wtype === 'horizon') ? `
+                                    ${(wtype === 'sensor' || wtype === 'gauge') ? `
                                     <select onchange="window.dashboardEditor.setSlotProp('${slot}','sensor',this.value)" style="
                                         width:100%;padding:6px 8px;background:var(--bg-panel);border:1px solid var(--border);
                                         border-radius:6px;color:var(--text);font-size:12px;">
                                         <option value="">— Sensor wählen —</option>
                                         ${this.sensors.map(s => `<option value="${s.base_name}" ${w.sensor===s.base_name?'selected':''}>${s.name}</option>`).join('')}
                                     </select>` : ''}
+                                    ${wtype === 'horizon' ? `
+                                    <div style="display:flex;flex-direction:column;gap:5px;">
+                                        <label style="font-size:10px;color:var(--text-dim);margin:0;">Roll-Topic</label>
+                                        <select onchange="window.dashboardEditor.setSlotHorizonPath('${slot}','roll',this.value)" style="
+                                            width:100%;padding:5px 8px;background:var(--bg-panel);border:1px solid var(--border);
+                                            border-radius:6px;color:var(--text);font-size:11px;">
+                                            <option value="">— Roll auswählen —</option>
+                                            ${this.sensors.map(s => `<option value="${s.full_path||s.base_name+'/'+s.value_name}" ${(w.rollSensor&&w.rollField)&&(w.rollSensor+'/'+(w.rollField||''))===(s.full_path||s.base_name+'/'+s.value_name)?'selected':''}>${s.name||s.full_path}</option>`).join('')}
+                                        </select>
+                                        <label style="font-size:10px;color:var(--text-dim);margin:0;">Pitch-Topic</label>
+                                        <select onchange="window.dashboardEditor.setSlotHorizonPath('${slot}','pitch',this.value)" style="
+                                            width:100%;padding:5px 8px;background:var(--bg-panel);border:1px solid var(--border);
+                                            border-radius:6px;color:var(--text);font-size:11px;">
+                                            <option value="">— Pitch auswählen —</option>
+                                            ${this.sensors.map(s => `<option value="${s.full_path||s.base_name+'/'+s.value_name}" ${(w.pitchSensor&&w.pitchField)&&(w.pitchSensor+'/'+(w.pitchField||''))===(s.full_path||s.base_name+'/'+s.value_name)?'selected':''}>${s.name||s.full_path}</option>`).join('')}
+                                        </select>
+                                        <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text);cursor:pointer;margin:2px 0;">
+                                            <input type="checkbox" ${w.impactSensor?'checked':''} onchange="window.dashboardEditor.toggleSlotImpact('${slot}',this.checked)"
+                                                style="width:14px;height:14px;cursor:pointer;">
+                                            Impact-Alarm
+                                        </label>
+                                        ${w.impactSensor !== undefined && w.impactSensor !== null ? `
+                                        <select onchange="window.dashboardEditor.setSlotHorizonPath('${slot}','impact',this.value)" style="
+                                            width:100%;padding:5px 8px;background:var(--bg-panel);border:1px solid var(--border);
+                                            border-radius:6px;color:var(--text);font-size:11px;">
+                                            <option value="">— Impact-Topic —</option>
+                                            ${this.sensors.map(s => `<option value="${s.full_path||s.base_name+'/'+s.value_name}" ${(w.impactSensor&&w.impactField)&&(w.impactSensor+'/'+(w.impactField||''))===(s.full_path||s.base_name+'/'+s.value_name)?'selected':''}>${s.name||s.full_path}</option>`).join('')}
+                                        </select>` : ''}
+                                    </div>` : ''}
                                     ${wtype === 'sensor' ? `
                                     <div style="display:flex;gap:6px;">
                                         <select onchange="window.dashboardEditor.setSlotProp('${slot}','style',this.value)" style="
@@ -1649,7 +1759,7 @@ SCREEN Wetter LAYOUT grid-4
             const defaults = {
                 sensor:  { type:'sensor', sensor:'', style:'card', color:'cyan' },
                 gauge:   { type:'gauge', sensor:'', min:0, max:100, unit:'', style:'arc270', color:'cyan', decimals:1 },
-                horizon: { type:'horizon', sensor:'boot/sensoren/lage' },
+                horizon: { type:'horizon', rollSensor:'', rollField:'schlagseite', pitchSensor:'', pitchField:'neigung', impactSensor:null, impactField:null },
                 clock:   { type:'clock' },
                 compass: { type:'compass' },
                 spacer:  { type:'spacer' },
@@ -1669,6 +1779,37 @@ SCREEN Wetter LAYOUT grid-4
         if (!screen || !screen.widgets[slot]) return;
         screen.widgets[slot][prop] = value;
         // No re-render needed — input/select already reflects the value
+    }
+
+    setSlotHorizonPath(slot, which, fullPath) {
+        const screen = this.screens[this.currentScreenIndex];
+        if (!screen || !screen.widgets[slot]) return;
+        const w = screen.widgets[slot];
+        if (!fullPath) return;
+        const idx = fullPath.lastIndexOf('/');
+        const base  = idx >= 0 ? fullPath.slice(0, idx)  : fullPath;
+        const field = idx >= 0 ? fullPath.slice(idx + 1) : '';
+        if (which === 'roll') {
+            w.rollSensor = base; w.rollField = field;
+        } else if (which === 'pitch') {
+            w.pitchSensor = base; w.pitchField = field;
+        } else if (which === 'impact') {
+            w.impactSensor = base; w.impactField = field;
+        }
+    }
+
+    toggleSlotImpact(slot, enabled) {
+        const screen = this.screens[this.currentScreenIndex];
+        if (!screen || !screen.widgets[slot]) return;
+        const w = screen.widgets[slot];
+        if (enabled) {
+            if (!w.impactSensor) w.impactSensor = '';
+            if (!w.impactField)  w.impactField  = 'aktiv';
+        } else {
+            w.impactSensor = null;
+            w.impactField  = null;
+        }
+        this.render();
     }
 
     /**
@@ -1722,8 +1863,14 @@ SCREEN Wetter LAYOUT grid-4
                 if (w.color && w.color !== 'cyan') line += ` COLOR ${w.color}`;
                 return line;
             }
-            case 'horizon':
-                return `HORIZON ${w.sensor || 'boot/sensoren/lage'}`;
+            case 'horizon': {
+                const parts = ['HORIZON'];
+                if (w.rollSensor)  parts.push(`rollSensor=${w.rollSensor}`, `rollField=${w.rollField || 'schlagseite'}`);
+                if (w.pitchSensor) parts.push(`pitchSensor=${w.pitchSensor}`, `pitchField=${w.pitchField || 'neigung'}`);
+                if (w.impactSensor) parts.push(`impactSensor=${w.impactSensor}`, `impactField=${w.impactField || 'aktiv'}`);
+                if (!w.rollSensor && !w.pitchSensor) parts.push(w.sensor || 'boot/sensoren/lage');
+                return parts.join(' ');
+            }
             case 'clock':   return 'CLOCK';
             case 'compass': return 'COMPASS';
             case 'spacer':  return 'SPACER';
@@ -1774,7 +1921,12 @@ SCREEN Wetter LAYOUT grid-4
                     if (w.style && w.style !== 'normal') dsl += ` STYLE ${w.style}`;
                     if (w.color && w.color !== 'cyan') dsl += ` COLOR ${w.color}`;
                 } else if (w.type === 'horizon') {
-                    dsl += `  HORIZON ${w.sensor || 'boot/sensoren/lage'}`;
+                    const hparts = ['HORIZON'];
+                    if (w.rollSensor)  hparts.push(`rollSensor=${w.rollSensor}`, `rollField=${w.rollField || 'schlagseite'}`);
+                    if (w.pitchSensor) hparts.push(`pitchSensor=${w.pitchSensor}`, `pitchField=${w.pitchField || 'neigung'}`);
+                    if (w.impactSensor) hparts.push(`impactSensor=${w.impactSensor}`, `impactField=${w.impactField || 'aktiv'}`);
+                    if (!w.rollSensor && !w.pitchSensor) hparts.push(w.sensor || 'boot/sensoren/lage');
+                    dsl += `  ${hparts.join(' ')}`;
                     if (w.size && w.size > 1) dsl += ` SIZE ${w.size}`;
                 } else {
                     dsl += `  ${w.type.toUpperCase()}`;
