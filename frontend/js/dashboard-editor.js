@@ -1171,16 +1171,7 @@ SCREEN Wetter LAYOUT grid-4
                     </select>
                 </div>
 
-                <!-- Size -->
-                <div>
-                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Breite</label>
-                    <select onchange="window.dashboardEditor.updateWidget(${idx}, 'size', parseInt(this.value))" style="
-                        width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
-                        ${[1,2,3,4].map(n => `<option value="${n}" ${(widget.size || 1) === n ? 'selected' : ''}>${n} Spalte${n > 1 ? 'n' : ''}</option>`).join('')}
-                    </select>
-                </div>
-
-                ${isGauge ? `
+${isGauge ? `
                 <!-- Gauge Style -->
                 <div>
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Gauge-Stil</label>

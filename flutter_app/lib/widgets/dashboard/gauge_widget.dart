@@ -187,14 +187,6 @@ class _GaugeEditorFieldsState extends State<_GaugeEditorFields> {
         value: widget.w.decimals,
         onSelect: (d) => widget.setState(() => widget.w.decimals = d),
       ),
-      const SizedBox(height: 10),
-      // Size
-      _lbl('Breite (Spalten)'),
-      const SizedBox(height: 6),
-      DashSizePicker(
-        value: widget.w.size,
-        onSelect: (n) => widget.setState(() => widget.w.size = n),
-      ),
     ]);
   }
 
@@ -403,38 +395,3 @@ class DashDecimalsPicker extends StatelessWidget {
   }
 }
 
-class DashSizePicker extends StatelessWidget {
-  final int value;
-  final void Function(int) onSelect;
-  const DashSizePicker({required this.value, required this.onSelect});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: List.generate(4, (i) {
-        final n = i + 1;
-        final sel = value == n;
-        return Padding(
-          padding: const EdgeInsets.only(right: 6),
-          child: GestureDetector(
-            onTap: () => onSelect(n),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 120),
-              width: 44, height: 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: sel ? const Color(0xFF1565C0) : const Color(0xFF0D1117),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: sel ? const Color(0xFF4FC3F7) : const Color(0xFF30363D)),
-              ),
-              child: Text('$n',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
-                      color: sel ? Colors.white : const Color(0xFF8B949E))),
-            ),
-          ),
-        );
-      }),
-    );
-  }
-}

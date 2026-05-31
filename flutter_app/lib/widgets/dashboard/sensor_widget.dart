@@ -106,12 +106,6 @@ class _SensorEditorFieldsState extends State<_SensorEditorFields> {
         selected: widget.w.style,
         onSelect: (s) => widget.setState(() => widget.w.style = s),
       ),
-      const SizedBox(height: 10),
-      _lbl('Breite (Spalten)'), const SizedBox(height: 6),
-      DashSizePicker(
-        value: widget.w.size,
-        onSelect: (n) => widget.setState(() => widget.w.size = n),
-      ),
     ]);
   }
 

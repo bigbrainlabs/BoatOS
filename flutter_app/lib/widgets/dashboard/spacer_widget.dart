@@ -5,7 +5,6 @@
 import 'package:flutter/material.dart';
 import 'dash_widget.dart';
 import 'registry.dart';
-import 'gauge_widget.dart' show DashSizePicker;
 
 class SpacerDashWidget {
   static void registerSelf() {
@@ -28,15 +27,6 @@ class SpacerDashWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('Unsichtbarer Platzhalter. Nur Größe relevant.',
           style: TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
-      const SizedBox(height: 10),
-      const Text('BREITE (SPALTEN)',
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-              color: Color(0xFF4FC3F7), letterSpacing: 0.6)),
-      const SizedBox(height: 6),
-      DashSizePicker(
-        value: w.size,
-        onSelect: (n) => setState(() => w.size = n),
-      ),
     ]);
   }
 

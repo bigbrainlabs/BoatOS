@@ -5,7 +5,6 @@
 import 'package:flutter/material.dart';
 import 'dash_widget.dart';
 import 'registry.dart';
-import 'gauge_widget.dart' show DashSizePicker;
 
 class TextDashWidget {
   static void registerSelf() {
@@ -86,12 +85,6 @@ class _TextEditorFieldsState extends State<_TextEditorFields> {
           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6),
               borderSide: const BorderSide(color: Color(0xFF4FC3F7))),
         ),
-      ),
-      const SizedBox(height: 10),
-      _lbl('Breite (Spalten)'), const SizedBox(height: 6),
-      DashSizePicker(
-        value: widget.w.size,
-        onSelect: (n) => widget.setState(() => widget.w.size = n),
       ),
     ]);
   }

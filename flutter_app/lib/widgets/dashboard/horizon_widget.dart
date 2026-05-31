@@ -5,7 +5,6 @@
 import 'package:flutter/material.dart';
 import '../gauge_widget.dart' show HorizonWidget;
 import 'dash_widget.dart';
-import 'gauge_widget.dart' show DashSizePicker;
 import 'registry.dart';
 
 class HorizonDashWidget {
@@ -178,13 +177,6 @@ class _HorizonEditorFields extends StatelessWidget {
         const SizedBox(height: 6),
         pathDrop('impact', impactFull, 'Impact-Topic wählen…'),
       ],
-      const SizedBox(height: 14),
-      _lbl('Breite (Spalten)'),
-      const SizedBox(height: 6),
-      DashSizePicker(
-        value: w.size,
-        onSelect: (n) => setState(() => w.size = n),
-      ),
     ]);
   }
 
