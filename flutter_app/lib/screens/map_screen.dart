@@ -170,7 +170,7 @@ class _MapScreenState extends State<MapScreen> {
   bool _showLocks = true;
   bool _showPegel = false;
   bool _showTrack = true;
-  bool _showFavorites = true;
+  bool _showFavorites = false;
   bool _satelliteMode = false;
 
   // Layer data

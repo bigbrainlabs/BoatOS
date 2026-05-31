@@ -932,40 +932,80 @@ class _HorizonPainter extends CustomPainter {
   }
 
   void _drawFixedReticle(Canvas canvas, Offset c, double r) {
-    final wl     = r * 0.38;
     final shadow = Paint()
-      ..color = Colors.black.withOpacity(0.55)
-      ..strokeWidth = 5..strokeCap = StrokeCap.round;
+      ..color = Colors.black.withOpacity(0.35)
+      ..strokeWidth = 3.0
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
     final white = Paint()
-      ..color = Colors.white.withOpacity(0.92)
-      ..strokeWidth = 3..strokeCap = StrokeCap.round;
+      ..color = Colors.white.withOpacity(0.60)
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    final fill = Paint()
+      ..color = Colors.white.withOpacity(0.04)
+      ..style = PaintingStyle.fill;
 
-    // Left horizontal wing
-    canvas.drawLine(Offset(c.dx - wl, c.dy), Offset(c.dx - wl * 0.28, c.dy), shadow);
-    canvas.drawLine(Offset(c.dx - wl, c.dy), Offset(c.dx - wl * 0.28, c.dy), white);
-    // Left downward tip
-    canvas.drawLine(Offset(c.dx - wl * 0.28, c.dy),
-        Offset(c.dx - wl * 0.28, c.dy + r * 0.10), shadow);
-    canvas.drawLine(Offset(c.dx - wl * 0.28, c.dy),
-        Offset(c.dx - wl * 0.28, c.dy + r * 0.10), white);
+    // Boat silhouette — front/cross-section view
+    // center c.dy ≈ waterline, hull above + keel below
+    final hw = r * 0.44;             // half-width at gunwale
+    final gY = c.dy - r * 0.14;     // gunwale Y (deck level)
+    final kY = c.dy + r * 0.22;     // keel Y
+    final cHW = r * 0.15;           // cabin half-width
+    final cT = gY - r * 0.20;       // cabin top Y
+    final mY = cT - r * 0.16;       // mast top Y
 
-    // Right horizontal wing
-    canvas.drawLine(Offset(c.dx + wl * 0.28, c.dy), Offset(c.dx + wl, c.dy), shadow);
-    canvas.drawLine(Offset(c.dx + wl * 0.28, c.dy), Offset(c.dx + wl, c.dy), white);
-    // Right downward tip
-    canvas.drawLine(Offset(c.dx + wl * 0.28, c.dy),
-        Offset(c.dx + wl * 0.28, c.dy + r * 0.10), shadow);
-    canvas.drawLine(Offset(c.dx + wl * 0.28, c.dy),
-        Offset(c.dx + wl * 0.28, c.dy + r * 0.10), white);
+    // Hull V-shape: gunwale → bilge → keel → bilge → gunwale (closed for fill)
+    final hullFill = Path()
+      ..moveTo(c.dx - hw,          gY)
+      ..lineTo(c.dx - hw * 0.50,  kY)
+      ..lineTo(c.dx,               kY + r * 0.06)
+      ..lineTo(c.dx + hw * 0.50,  kY)
+      ..lineTo(c.dx + hw,          gY)
+      ..close();
 
-    // Center reference circle
-    canvas.drawCircle(c, 7, Paint()
+    // Hull outline (open — same V without closing line)
+    final hull = Path()
+      ..moveTo(c.dx - hw,          gY)
+      ..lineTo(c.dx - hw * 0.50,  kY)
+      ..lineTo(c.dx,               kY + r * 0.06)
+      ..lineTo(c.dx + hw * 0.50,  kY)
+      ..lineTo(c.dx + hw,          gY);
+
+    // Deck line (horizontal top of hull)
+    final deck = Path()
+      ..moveTo(c.dx - hw, gY)
+      ..lineTo(c.dx + hw, gY);
+
+    // Cabin: trapezoid
+    final cabin = Path()
+      ..moveTo(c.dx - cHW * 1.4,  gY)
+      ..lineTo(c.dx - cHW,         cT)
+      ..lineTo(c.dx + cHW,         cT)
+      ..lineTo(c.dx + cHW * 1.4,  gY);
+
+    // Mast / antenna
+    final mast = Path()
+      ..moveTo(c.dx, cT)
+      ..lineTo(c.dx, mY);
+
+    // Fill hull body first
+    canvas.drawPath(hullFill, fill);
+
+    // Shadow pass then white pass
+    for (final p in [hull, deck, cabin, mast]) canvas.drawPath(p, shadow);
+    for (final p in [hull, deck, cabin, mast]) canvas.drawPath(p, white);
+
+    // Waterline marker (center dot)
+    canvas.drawCircle(c, 6, Paint()
       ..color = Colors.black.withOpacity(0.5)
       ..style = PaintingStyle.stroke..strokeWidth = 4);
-    canvas.drawCircle(c, 7, Paint()
+    canvas.drawCircle(c, 6, Paint()
       ..color = Colors.white.withOpacity(0.90)
       ..style = PaintingStyle.stroke..strokeWidth = 2);
-    canvas.drawCircle(c, 3, Paint()..color = Colors.white);
+    canvas.drawCircle(c, 2.5, Paint()..color = Colors.white);
   }
 
   @override

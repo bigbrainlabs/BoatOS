@@ -1538,33 +1538,58 @@ class DashboardRenderer {
         ctx.lineWidth   = 2.5;
         ctx.stroke();
 
-        // ── 5. Fixed reticle (re-clip) ────────────────────────────────────────
+        // ── 5. Fixed boat silhouette (re-clip) ───────────────────────────────
         ctx.save();
         ctx.beginPath();
         ctx.arc(cx, cy, r - 1, 0, Math.PI * 2);
         ctx.clip();
 
-        const wl = r * 0.38;
-        const drawWingSegment = (x1, y1, x2, y2) => {
-            ctx.lineCap = 'round';
-            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
-            ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 5; ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
-            ctx.strokeStyle = 'rgba(255,255,255,0.92)'; ctx.lineWidth = 3; ctx.stroke();
-        };
-        drawWingSegment(cx - wl, cy, cx - wl * 0.28, cy);
-        drawWingSegment(cx - wl * 0.28, cy, cx - wl * 0.28, cy + r * 0.10);
-        drawWingSegment(cx + wl * 0.28, cy, cx + wl, cy);
-        drawWingSegment(cx + wl * 0.28, cy, cx + wl * 0.28, cy + r * 0.10);
+        // Boat silhouette — front/cross-section view (subtle)
+        const hw  = r * 0.44;            // half-width at gunwale
+        const gY  = cy - r * 0.14;      // gunwale Y
+        const kY  = cy + r * 0.22;      // keel Y
+        const cHW = r * 0.15;           // cabin half-width
+        const cT  = gY - r * 0.20;      // cabin top Y
+        const mY  = cT - r * 0.16;      // mast top Y
 
-        ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+        const drawBoatPath = (stroke, lw) => {
+            ctx.strokeStyle = stroke; ctx.lineWidth = lw;
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            // hull fill
+            ctx.beginPath();
+            ctx.moveTo(cx - hw,          gY);
+            ctx.lineTo(cx - hw * 0.50,  kY);
+            ctx.lineTo(cx,               kY + r * 0.06);
+            ctx.lineTo(cx + hw * 0.50,  kY);
+            ctx.lineTo(cx + hw,          gY);
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fill();
+            ctx.stroke();
+            // deck line
+            ctx.beginPath(); ctx.moveTo(cx - hw, gY); ctx.lineTo(cx + hw, gY); ctx.stroke();
+            // cabin trapezoid
+            ctx.beginPath();
+            ctx.moveTo(cx - cHW * 1.4,  gY);
+            ctx.lineTo(cx - cHW,         cT);
+            ctx.lineTo(cx + cHW,         cT);
+            ctx.lineTo(cx + cHW * 1.4,  gY);
+            ctx.stroke();
+            // mast
+            ctx.beginPath(); ctx.moveTo(cx, cT); ctx.lineTo(cx, mY); ctx.stroke();
+        };
+
+        drawBoatPath('rgba(0,0,0,0.35)', 3.0);
+        drawBoatPath('rgba(255,255,255,0.60)', 1.5);
+
+        // Waterline marker
+        ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 4; ctx.stroke();
-        ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(255,255,255,0.90)'; ctx.lineWidth = 2; ctx.stroke();
-        ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
         ctx.fillStyle = 'white'; ctx.fill();
 
-        ctx.restore(); // end reticle clip
+        ctx.restore(); // end silhouette clip
     }
 
     /**
