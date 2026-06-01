@@ -1,6 +1,7 @@
 // lib/widgets/gauge_widget.dart
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
@@ -689,35 +690,53 @@ class HorizonWidget extends StatefulWidget {
 
 class _HorizonWidgetState extends State<HorizonWidget>
     with TickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _rollAnim;
-  late Animation<double> _pitchAnim;
+  late Ticker _ticker;
   late AnimationController _blinkCtrl;
+
+  // Displayed values (updated at 60 fps via ticker)
+  double _dispRoll  = 0;
+  double _dispPitch = 0;
+  // Target values (updated on each sensor poll)
+  double _tgtRoll   = 0;
+  double _tgtPitch  = 0;
+  Duration _lastTick = Duration.zero;
+
+  // Exponential approach speed (per second).
+  // speed=4 → reaches ~98 % of target after 1 s — responsive but smooth.
+  static const _speed = 4.0;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 500));
-    _rollAnim = Tween<double>(begin: widget.roll, end: widget.roll)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-    _pitchAnim = Tween<double>(begin: widget.pitch, end: widget.pitch)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _dispRoll  = widget.roll;
+    _dispPitch = widget.pitch;
+    _tgtRoll   = widget.roll;
+    _tgtPitch  = widget.pitch;
+
+    _ticker = createTicker(_onTick)..start();
+
     _blinkCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 500));
     if (widget.impactActive) _blinkCtrl.repeat(reverse: true);
   }
 
+  void _onTick(Duration elapsed) {
+    if (_lastTick == Duration.zero) { _lastTick = elapsed; return; }
+    final dt = (elapsed - _lastTick).inMicroseconds / 1e6;
+    _lastTick = elapsed;
+    // Framerate-independent exponential lerp
+    final t = 1.0 - math.exp(-_speed * dt);
+    setState(() {
+      _dispRoll  += (_tgtRoll  - _dispRoll)  * t;
+      _dispPitch += (_tgtPitch - _dispPitch) * t;
+    });
+  }
+
   @override
   void didUpdateWidget(HorizonWidget old) {
     super.didUpdateWidget(old);
-    if (old.roll != widget.roll || old.pitch != widget.pitch) {
-      _rollAnim = Tween<double>(begin: _rollAnim.value, end: widget.roll)
-          .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-      _pitchAnim = Tween<double>(begin: _pitchAnim.value, end: widget.pitch)
-          .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-      _ctrl.forward(from: 0);
-    }
+    if (old.roll != widget.roll)   _tgtRoll  = widget.roll;
+    if (old.pitch != widget.pitch) _tgtPitch = widget.pitch;
     if (old.impactActive != widget.impactActive) {
       if (widget.impactActive) {
         _blinkCtrl.repeat(reverse: true);
@@ -730,43 +749,40 @@ class _HorizonWidgetState extends State<HorizonWidget>
 
   @override
   void dispose() {
+    _ticker.dispose();
     _blinkCtrl.dispose();
-    _ctrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (_, __) => Stack(
-        fit: StackFit.expand,
-        children: [
-          _HorizonDisplay(roll: _rollAnim.value, pitch: _pitchAnim.value),
-          if (widget.impactActive)
-            AnimatedBuilder(
-              animation: _blinkCtrl,
-              builder: (_, __) => IgnorePointer(
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.red.withOpacity(0.2 + _blinkCtrl.value * 0.65),
-                      width: 3,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.red.withOpacity(_blinkCtrl.value * 0.25),
-                        blurRadius: 14,
-                        spreadRadius: 2,
-                      ),
-                    ],
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _HorizonDisplay(roll: _dispRoll, pitch: _dispPitch),
+        if (widget.impactActive)
+          AnimatedBuilder(
+            animation: _blinkCtrl,
+            builder: (_, __) => IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.red.withOpacity(0.2 + _blinkCtrl.value * 0.65),
+                    width: 3,
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.red.withOpacity(_blinkCtrl.value * 0.25),
+                      blurRadius: 14,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
               ),
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 }

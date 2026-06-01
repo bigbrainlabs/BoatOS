@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' show pi, sqrt, sin, cos, atan2; // ignore: unused_shown_name — pi used in bearing/haversine math below
 import 'dart:ui' as ui;
 
@@ -247,6 +248,12 @@ class _MapScreenState extends State<MapScreen> {
   RouteWaypoint? _draggingWp;
   LatLng? _draggingLatLng;
 
+  // ── MOB (Man Over Board) ──────────────────────────────────────────────────
+  LatLng? _mobPos;
+  DateTime? _mobTime;
+  Timer? _mobUpdateTimer;
+  static const String _mobFile = '/tmp/boatos_mob.json';
+
   SettingsService? _settingsSvc;
 
   @override
@@ -255,6 +262,7 @@ class _MapScreenState extends State<MapScreen> {
     _boatAnimTimer = Timer.periodic(const Duration(milliseconds: 60), _boatAnimTick);
     _buildStyle();
     _loadSettings();
+    _restoreMOB();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _settingsSvc = context.read<SettingsService>();
       _settingsSvc!.addListener(_onSettingsChanged);
@@ -272,6 +280,7 @@ class _MapScreenState extends State<MapScreen> {
     _mapEventSub?.cancel();
     _simTimer?.cancel();
     _boatAnimTimer?.cancel();
+    _mobUpdateTimer?.cancel();
     super.dispose();
   }
 
@@ -286,6 +295,117 @@ class _MapScreenState extends State<MapScreen> {
     );
     setState(() => _animBoatPos = next);
     if (_autoFollow) _mapController.move(next, _mapController.camera.zoom);
+  }
+
+  // -------------------------------------------------------------------------
+  // MOB (Man Over Board)
+  // -------------------------------------------------------------------------
+
+  void _activateMOB() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Color(0xFFB71C1C), width: 2),
+        ),
+        title: const Text('🆘 SOS / Man Over Board',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: const Text(
+          'GPS-Position jetzt als MOB-Marker setzen?',
+          style: TextStyle(color: Color(0xFFB0BEC5)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Abbrechen',
+                style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFB71C1C)),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _doActivateMOB();
+            },
+            child: const Text('MOB SETZEN',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _doActivateMOB() {
+    setState(() {
+      _mobPos = _lastBoatPos;
+      _mobTime = DateTime.now();
+    });
+    _mobUpdateTimer?.cancel();
+    _mobUpdateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+    _saveMOBToFile();
+  }
+
+  void _clearMOB() {
+    _mobUpdateTimer?.cancel();
+    _mobUpdateTimer = null;
+    setState(() {
+      _mobPos = null;
+      _mobTime = null;
+    });
+    try { File(_mobFile).deleteSync(); } catch (_) {}
+  }
+
+  void _navigateToMOB() {
+    if (_mobPos == null) return;
+    setState(() => _autoFollow = false);
+    _mapController.move(_mobPos!, 15);
+  }
+
+  void _saveMOBToFile() {
+    if (_mobPos == null) return;
+    try {
+      File(_mobFile).writeAsStringSync(jsonEncode({
+        'lat': _mobPos!.latitude,
+        'lon': _mobPos!.longitude,
+        'time': _mobTime!.toIso8601String(),
+      }));
+    } catch (_) {}
+  }
+
+  void _restoreMOB() {
+    try {
+      final f = File(_mobFile);
+      if (!f.existsSync()) return;
+      final m = jsonDecode(f.readAsStringSync()) as Map<String, dynamic>;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _mobPos = LatLng(
+              (m['lat'] as num).toDouble(), (m['lon'] as num).toDouble());
+          _mobTime = DateTime.parse(m['time'] as String);
+        });
+        _mobUpdateTimer?.cancel();
+        _mobUpdateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+          if (mounted) setState(() {});
+        });
+      });
+    } catch (_) {}
+  }
+
+  String _fmtMOBElapsed(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    final s = d.inSeconds % 60;
+    if (h > 0) {
+      return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
   // -------------------------------------------------------------------------
@@ -1370,6 +1490,19 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ],
             ),
+
+            // 10. MOB marker
+            if (_mobPos != null)
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: _mobPos!,
+                    width: 48,
+                    height: 48,
+                    child: const _MobMarker(),
+                  ),
+                ],
+              ),
           ],
         ),
 
@@ -1555,6 +1688,48 @@ class _MapScreenState extends State<MapScreen> {
                 if (v) context.read<FavoritesService>().fetch();
               }, scale: scale),
             ],
+          ),
+        ),
+
+        // ----------------------------------------------------------------
+        // SOS / MOB button — right side, vertically centered
+        // ----------------------------------------------------------------
+        Positioned(
+          right: sc(12),
+          width: sc(44),
+          top: 0,
+          bottom: 0,
+          child: Center(
+            child: GestureDetector(
+              onTap: _mobPos != null ? _navigateToMOB : _activateMOB,
+              child: Container(
+                width: sc(44),
+                height: sc(44),
+                decoration: BoxDecoration(
+                  color: _mobPos != null
+                      ? const Color(0xFFFF1744)
+                      : const Color(0xFFB71C1C),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: sc(2)),
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.4),
+                        blurRadius: sc(6)),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    'SOS',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: sc(11),
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
 
@@ -1795,6 +1970,12 @@ class _MapScreenState extends State<MapScreen> {
           ),
 
         // ----------------------------------------------------------------
+        // MOB panel
+        // ----------------------------------------------------------------
+        if (_mobPos != null && _mobTime != null)
+          _buildMOBPanel(scale),
+
+        // ----------------------------------------------------------------
         // AIS detail panel
         // ----------------------------------------------------------------
         if (_selectedVessel != null)
@@ -1939,6 +2120,128 @@ class _MapScreenState extends State<MapScreen> {
               fontWeight: FontWeight.bold,
               color: color)),
     ]);
+  }
+
+  // -------------------------------------------------------------------------
+  // MOB Panel
+  // -------------------------------------------------------------------------
+
+  Widget _buildMOBPanel(double scale) {
+    double sc(double v) => v * scale;
+    final elapsed = DateTime.now().difference(_mobTime!);
+    final distNm = _distNm(
+      _lastBoatPos.latitude, _lastBoatPos.longitude,
+      _mobPos!.latitude, _mobPos!.longitude,
+    );
+    final bearing = _bearingDeg(
+      _lastBoatPos.latitude, _lastBoatPos.longitude,
+      _mobPos!.latitude, _mobPos!.longitude,
+    );
+
+    Widget stat(String label, String value) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label,
+                style: TextStyle(
+                    color: const Color(0xFF888888), fontSize: sc(9))),
+            SizedBox(height: sc(2)),
+            Text(value,
+                style: TextStyle(
+                    color: const Color(0xFFFF1744),
+                    fontSize: sc(15),
+                    fontWeight: FontWeight.bold)),
+          ],
+        );
+
+    return Positioned(
+      left: sc(12),
+      right: sc(12),
+      bottom: sc(16),
+      child: Container(
+        padding: EdgeInsets.all(sc(14)),
+        decoration: BoxDecoration(
+          color: const Color(0xF5161B22),
+          borderRadius: BorderRadius.circular(sc(12)),
+          border: Border.all(color: const Color(0xFFB71C1C), width: 2),
+          boxShadow: [
+            BoxShadow(
+                color: const Color(0x55FF1744), blurRadius: 16, spreadRadius: 2)
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.sos_rounded,
+                    color: Color(0xFFFF1744), size: 20),
+                SizedBox(width: sc(8)),
+                Text('SOS · Man Over Board',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: sc(14),
+                        fontWeight: FontWeight.bold)),
+                const Spacer(),
+                GestureDetector(
+                  onTap: _clearMOB,
+                  child: Icon(Icons.close,
+                      color: const Color(0xFF8B949E), size: sc(18)),
+                ),
+              ],
+            ),
+            SizedBox(height: sc(10)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                stat('Distanz', '${distNm.toStringAsFixed(2)} NM'),
+                stat('Peilung', '${bearing.toStringAsFixed(0)}°'),
+                stat('Zeit', _fmtMOBElapsed(elapsed)),
+              ],
+            ),
+            SizedBox(height: sc(12)),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _navigateToMOB,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(vertical: sc(10)),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1565C0),
+                        borderRadius: BorderRadius.circular(sc(6)),
+                      ),
+                      child: Center(
+                          child: Text('Navigieren',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: sc(13)))),
+                    ),
+                  ),
+                ),
+                SizedBox(width: sc(10)),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _clearMOB,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(vertical: sc(10)),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2D2D2D),
+                        borderRadius: BorderRadius.circular(sc(6)),
+                      ),
+                      child: Center(
+                          child: Text('MOB Löschen',
+                              style: TextStyle(
+                                  color: const Color(0xFFE6EDF3),
+                                  fontSize: sc(13)))),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -2428,4 +2731,68 @@ class _PoiDetailPanelState extends State<_PoiDetailPanel> {
                   fontSize: 13 * sc, color: const Color(0xFF64FFDA))),
         ],
       );
+}
+
+// ---------------------------------------------------------------------------
+// MOB Map Marker
+// ---------------------------------------------------------------------------
+
+class _MobMarker extends StatefulWidget {
+  const _MobMarker();
+
+  @override
+  State<_MobMarker> createState() => _MobMarkerState();
+}
+
+class _MobMarkerState extends State<_MobMarker>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _blink;
+
+  @override
+  void initState() {
+    super.initState();
+    _blink = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _blink.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _blink,
+      builder: (_, __) => Opacity(
+        opacity: 0.5 + _blink.value * 0.5,
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: const Color(0xCCFF1744),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 3),
+            boxShadow: [
+              BoxShadow(
+                  color: const Color(0x99FF1744),
+                  blurRadius: 12,
+                  spreadRadius: 4),
+            ],
+          ),
+          child: const Center(
+            child: Text('SOS',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5)),
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -10,6 +10,9 @@ class DashboardRenderer {
         this.updateInterval = null;
         this.widgetCounter = 0;
         this.isInitialized = false;
+        // Horizon smoothing: keyed by container id → { dispRoll, dispPitch, tgtRoll, tgtPitch, lastTs }
+        this._horizonState = {};
+        this._horizonRafId = null;
         this.injectStyles();
     }
 
@@ -389,30 +392,24 @@ class DashboardRenderer {
             if (dateEl) dateEl.textContent = now.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
         });
 
-        // Update horizon widgets
+        // Update horizon widgets — only set targets; RAF loop does the drawing
         document.querySelectorAll('[data-horizon-roll-path]').forEach(container => {
             const rollPath   = container.dataset.horizonRollPath;
             const pitchPath  = container.dataset.horizonPitchPath;
             const impactPath = container.dataset.horizonImpactPath || '';
             const roll  = parseFloat(this.getSensorValue(rollPath))  || 0;
             const pitch = parseFloat(this.getSensorValue(pitchPath)) || 0;
-            const fmt   = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '°';
 
-            const cv = container.querySelector('canvas');
-            if (cv) {
-                const par = cv.parentElement;
-                const dim = Math.max(10,
-                    cv.offsetWidth ||
-                    (par ? Math.min(par.clientWidth, par.clientHeight) : 0) ||
-                    200
-                );
-                if (cv.width !== dim || cv.height !== dim) { cv.width = dim; cv.height = dim; }
-                this.drawHorizonCanvas(cv, roll, pitch);
+            if (!container.id) container.id = 'hz-' + Math.random().toString(36).slice(2);
+            const id = container.id;
+            if (!this._horizonState[id]) {
+                // First time: initialise display values to target so there's no initial sweep
+                this._horizonState[id] = { dispRoll: roll, dispPitch: pitch, tgtRoll: roll, tgtPitch: pitch, lastTs: null };
+                this._startHorizonRaf();
+            } else {
+                this._horizonState[id].tgtRoll  = roll;
+                this._horizonState[id].tgtPitch = pitch;
             }
-            const rollEl  = container.querySelector('[data-horizon-roll]');
-            const pitchEl = container.querySelector('[data-horizon-pitch]');
-            if (rollEl)  rollEl.textContent  = fmt(roll);
-            if (pitchEl) pitchEl.textContent = fmt(pitch);
 
             let impactActive = false;
             if (impactPath) {
@@ -447,11 +444,10 @@ class DashboardRenderer {
             clearInterval(this.updateInterval);
         }
 
-        // Update values every 3s — sensor data arrives via MQTT, no need to poll faster
         this.updateInterval = setInterval(async () => {
             await this.updateSensors();
             this.updateValues();
-        }, 3000);
+        }, 1000);
     }
 
     /**
@@ -461,6 +457,48 @@ class DashboardRenderer {
         if (this.updateInterval) {
             clearInterval(this.updateInterval);
             this.updateInterval = null;
+        }
+    }
+
+    /** Start the horizon RAF loop (idempotent). */
+    _startHorizonRaf() {
+        if (this._horizonRafId) return;
+        const loop = (ts) => {
+            this._horizonRafId = requestAnimationFrame(loop);
+            this._horizonRafTick(ts);
+        };
+        this._horizonRafId = requestAnimationFrame(loop);
+    }
+
+    /** Called every frame — lerps display values toward targets and redraws. */
+    _horizonRafTick(ts) {
+        const speed = 4.0; // same as Flutter — reaches ~98% of target per second
+        for (const [id, st] of Object.entries(this._horizonState)) {
+            if (st.lastTs === null) { st.lastTs = ts; continue; }
+            const dt = Math.min((ts - st.lastTs) / 1000, 0.1); // seconds, capped
+            st.lastTs = ts;
+            const t = 1 - Math.exp(-speed * dt);
+            st.dispRoll  += (st.tgtRoll  - st.dispRoll)  * t;
+            st.dispPitch += (st.tgtPitch - st.dispPitch) * t;
+
+            const container = document.getElementById(id);
+            if (!container) { delete this._horizonState[id]; continue; }
+
+            const cv = container.querySelector('canvas');
+            if (cv) {
+                const par = cv.parentElement;
+                const dim = Math.max(10,
+                    cv.offsetWidth ||
+                    (par ? Math.min(par.clientWidth, par.clientHeight) : 0) || 200
+                );
+                if (cv.width !== dim || cv.height !== dim) { cv.width = dim; cv.height = dim; }
+                this.drawHorizonCanvas(cv, st.dispRoll, st.dispPitch);
+            }
+            const fmt = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '°';
+            const rollEl  = container.querySelector('[data-horizon-roll]');
+            const pitchEl = container.querySelector('[data-horizon-pitch]');
+            if (rollEl)  rollEl.textContent = fmt(st.dispRoll);
+            if (pitchEl) pitchEl.textContent = fmt(st.dispPitch);
         }
     }
 
@@ -1674,6 +1712,8 @@ class DashboardRenderer {
      * because the canvas has no intrinsic size until we set its width/height attributes.
      */
     _initHorizonCanvases() {
+        // Reset smoothing state so stale IDs from previous layout don't linger
+        this._horizonState = {};
         document.querySelectorAll('[data-horizon-roll-path]').forEach(container => {
             const rollPath  = container.dataset.horizonRollPath;
             const pitchPath = container.dataset.horizonPitchPath;
@@ -1681,8 +1721,6 @@ class DashboardRenderer {
             const pitch = parseFloat(this.getSensorValue(pitchPath)) || 0;
             const cv    = container.querySelector('canvas');
             if (!cv) return;
-            // Measure the flex parent (the canvas's containing box) — that has a definite
-            // size from the grid layout. The canvas itself is 0×0 until we set attributes.
             const parent = cv.parentElement;
             const pw = parent ? parent.clientWidth  : 0;
             const ph = parent ? parent.clientHeight : 0;
