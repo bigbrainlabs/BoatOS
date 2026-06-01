@@ -13,8 +13,10 @@ import 'services/favorites_service.dart';
 import 'services/logbook_service.dart';
 import 'services/settings_service.dart';
 import 'services/websocket_service.dart';
+import 'widgets/dashboard/registry_init.dart';
 
 void main() {
+  initDashWidgetRegistry();
   runApp(
     MultiProvider(
       providers: [

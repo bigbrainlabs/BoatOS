@@ -4,7 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../services/settings_service.dart';
+import '../widgets/gauge_widget.dart';
 import '../widgets/onscreen_keyboard.dart';
+import '../widgets/dashboard/dash_widget.dart';
+import '../widgets/dashboard/registry.dart';
+import '../widgets/dashboard/sensor_widget.dart' show SensorDashWidget;
 import '../main.dart' show MainShellState;
 
 class SettingsScreen extends StatefulWidget {
@@ -1916,47 +1920,14 @@ class _ENCSectionState extends State<_ENCSection> {
   }
 }
 
-// ── Dashboard data models ─────────────────────────────────────────────────────
+// ── Dashboard data models — use shared public types from dash_widget.dart ──────
+// DashWidget and DashRow are imported from '../widgets/dashboard/dash_widget.dart'
 
-class _DashWidget {
-  String type;       // SENSOR, GAUGE, TEXT, SPACER, CLOCK, COMPASS
-  String? sensor;    // sensor path
-  String? alias;     // AS "..."
-  String? style;     // card|minimal|compact|hero|arc180|arc270|arc360|bar
-  double? min;
-  double? max;
-  String? unit;
-  String? label;
-  int?    decimals;
-  String? text;      // for TEXT type
-  int     size;
-
-  _DashWidget({
-    required this.type,
-    this.sensor,
-    this.alias,
-    this.style,
-    this.min,
-    this.max,
-    this.unit,
-    this.label,
-    this.decimals,
-    this.text,
-    this.size = 1,
-  });
-
-  _DashWidget copy() => _DashWidget(
-        type: type, sensor: sensor, alias: alias, style: style,
-        min: min, max: max, unit: unit, label: label,
-        decimals: decimals, text: text, size: size,
-      );
-}
-
-class _DashRow {
+class _ScreenEditorData {
   String name;
-  List<_DashWidget> widgets;
-  int height;
-  _DashRow({required this.name, required this.widgets, this.height = 1});
+  String layoutId;
+  Map<String, DashWidget> slots;
+  _ScreenEditorData({required this.name, required this.layoutId, required this.slots});
 }
 
 // ── Dashboard Section ─────────────────────────────────────────────────────────
@@ -1972,7 +1943,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
 
   int  _tab     = 0;   // 0 = visual, 1 = DSL, 2 = sensors
   int  _gridCols = 2;
-  List<_DashRow> _rows = [];
+  List<DashRow> _rows = [];
   late TextEditingController _dslCtrl;
 
   bool _loading = true;
@@ -1993,6 +1964,12 @@ class _DashboardSectionState extends State<_DashboardSection> {
   bool _sensorsLoading = false;
   String? _sensorsError;
 
+  // screen-format editor
+  bool _isScreenFormat = false;
+  List<_ScreenEditorData> _screens = [];
+  int _curScreen = 0;
+
+  // impact alert
   @override
   void initState() {
     super.initState();
@@ -2024,9 +2001,18 @@ class _DashboardSectionState extends State<_DashboardSection> {
         final body = json.decode(r.body) as Map<String, dynamic>;
         final dsl = (body['layout'] as String?) ?? '';
         _dslCtrl.text = dsl;
-        _parseDslToState(dsl);
+        _detectAndParse(dsl);
       }
     } catch (_) {}
+  }
+
+  void _detectAndParse(String dsl) {
+    _isScreenFormat = dsl.trim().toUpperCase().startsWith('SCREEN');
+    if (_isScreenFormat) {
+      _parseDslToScreenState(dsl);
+    } else {
+      _parseDslToState(dsl);
+    }
   }
 
   Future<void> _loadAvailSensors() async {
@@ -2113,9 +2099,9 @@ class _DashboardSectionState extends State<_DashboardSection> {
   // ── DSL Parse ─────────────────────────────────────────────────────────────
 
   void _parseDslToState(String dsl) {
-    final rows    = <_DashRow>[];
+    final rows    = <DashRow>[];
     int   cols    = 2;
-    _DashRow? cur;
+    DashRow? cur;
 
     for (var line in dsl.split('\n')) {
       line = line.trim();
@@ -2135,13 +2121,13 @@ class _DashboardSectionState extends State<_DashboardSection> {
             h = int.tryParse(parts[pi + 1]) ?? 1;
           }
         }
-        cur = _DashRow(name: name, widgets: [], height: h.clamp(1, 4));
+        cur = DashRow(name: name, widgets: [], height: h.clamp(1, 4));
         rows.add(cur);
         continue;
       }
 
       cur ??= () {
-        final r = _DashRow(name: '', widgets: []);
+        final r = DashRow(name: '', widgets: []);
         rows.add(r);
         return r;
       }();
@@ -2154,19 +2140,80 @@ class _DashboardSectionState extends State<_DashboardSection> {
     _rows     = rows;
   }
 
-  _DashWidget? _parseWidgetLine(String line) {
-    if (line == 'SPACER') return _DashWidget(type: 'SPACER');
-    if (line == 'CLOCK')  return _DashWidget(type: 'CLOCK');
-    if (line == 'COMPASS') return _DashWidget(type: 'COMPASS');
+  void _parseDslToScreenState(String dsl) {
+    final result = <_ScreenEditorData>[];
+    _ScreenEditorData? cur;
+    for (var line in dsl.split('\n')) {
+      line = line.trim();
+      if (line.isEmpty || line.startsWith('#')) continue;
+      final tokens = _tokenise(line);
+      if (tokens.isEmpty) continue;
+      if (tokens[0].toUpperCase() == 'SCREEN') {
+        cur = _ScreenEditorData(
+          name: tokens.length > 1 ? _stripQuotes(tokens[1]) : 'Screen',
+          layoutId: 'full',
+          slots: {},
+        );
+        for (int i = 2; i < tokens.length - 1; i++) {
+          if (tokens[i].toUpperCase() == 'LAYOUT' && i + 1 < tokens.length) {
+            cur.layoutId = tokens[i + 1];
+          }
+        }
+        result.add(cur);
+      } else if (cur != null &&
+          tokens[0].length == 1 &&
+          RegExp(r'[A-Za-z]').hasMatch(tokens[0])) {
+        final slot = tokens[0].toUpperCase();
+        final w = _parseWidgetLine(tokens.sublist(1).join(' '));
+        if (w != null) cur.slots[slot] = w;
+      }
+    }
+    _screens = result.isEmpty
+        ? [_ScreenEditorData(name: 'Screen 1', layoutId: 'full', slots: {})]
+        : result;
+    _curScreen = _curScreen.clamp(0, (_screens.length - 1).clamp(0, 999));
+  }
+
+  DashWidget? _parseWidgetLine(String line) {
+    if (line == 'SPACER') return DashWidget(type: 'SPACER');
+    if (line == 'CLOCK')  return DashWidget(type: 'CLOCK');
+    if (line == 'COMPASS') return DashWidget(type: 'COMPASS');
+
+    if (line.startsWith('HORIZON')) {
+      final tokens = _tokenise(line);
+      final w = DashWidget(type: 'HORIZON');
+      bool hasKv = false;
+      for (int i = 1; i < tokens.length; i++) {
+        final t = tokens[i];
+        if (t.contains('=')) {
+          hasKv = true;
+          final eq = t.indexOf('=');
+          final k = t.substring(0, eq);
+          final v = t.substring(eq + 1);
+          switch (k) {
+            case 'rollSensor':   w.rollSensor  = v;
+            case 'rollField':    w.rollField   = v;
+            case 'pitchSensor':  w.pitchSensor = v;
+            case 'pitchField':   w.pitchField  = v;
+            case 'impactSensor': w.impactSensor = v;
+            case 'impactField':  w.impactField  = v;
+          }
+        } else if (t.toUpperCase() == 'SIZE' && i + 1 < tokens.length) {
+          w.size = int.tryParse(tokens[++i]) ?? 1;
+        }
+      }
+      if (!hasKv && tokens.length > 1) w.sensor = tokens[1];
+      return w;
+    }
 
     if (line.startsWith('TEXT ')) {
       final t = _stripQuotes(line.substring(5).trim());
-      return _DashWidget(type: 'TEXT', text: t);
+      return DashWidget(type: 'TEXT', text: t);
     }
 
     if (line.startsWith('SENSOR ') || line.startsWith('GAUGE ')) {
       final isGauge = line.startsWith('GAUGE ');
-      final w = _DashWidget(type: isGauge ? 'GAUGE' : 'SENSOR');
+      final w = DashWidget(type: isGauge ? 'GAUGE' : 'SENSOR');
       // tokenise: respect quoted strings
       final tokens = _tokenise(line);
       if (tokens.length < 2) return w;
@@ -2214,35 +2261,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
 
   // ── DSL Generation ────────────────────────────────────────────────────────
 
-  String _toWidgetDsl(_DashWidget w) {
-    switch (w.type) {
-      case 'SPACER':  return 'SPACER';
-      case 'CLOCK':   return 'CLOCK';
-      case 'COMPASS': return 'COMPASS';
-      case 'TEXT':    return 'TEXT "${w.text ?? ''}"';
-      case 'SENSOR':
-        final buf = StringBuffer('SENSOR ${w.sensor ?? 'unknown'}');
-        if (w.alias != null)   buf.write(' AS "${w.alias}"');
-        if (w.size != 1)       buf.write(' SIZE ${w.size}');
-        if (w.style != null)   buf.write(' STYLE ${w.style}');
-        return buf.toString();
-      case 'GAUGE':
-        final buf = StringBuffer('GAUGE ${w.sensor ?? 'unknown'}');
-        if (w.min != null)     buf.write(' MIN ${_fmtNum(w.min!)}');
-        if (w.max != null)     buf.write(' MAX ${_fmtNum(w.max!)}');
-        if (w.unit != null)    buf.write(' UNIT "${w.unit}"');
-        if (w.label != null)   buf.write(' LABEL "${w.label}"');
-        if (w.size != 1)       buf.write(' SIZE ${w.size}');
-        if (w.style != null)   buf.write(' STYLE ${w.style}');
-        if (w.decimals != null) buf.write(' DECIMALS ${w.decimals}');
-        return buf.toString();
-      default:
-        return '# unknown ${w.type}';
-    }
-  }
-
-  String _fmtNum(double v) =>
-      v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
+  String _toWidgetDsl(DashWidget w) => DashWidgetRegistry.toDsl(w);
 
   String _toFullDsl() {
     final buf = StringBuffer('GRID $_gridCols\n');
@@ -2256,12 +2275,32 @@ class _DashboardSectionState extends State<_DashboardSection> {
     return buf.toString().trimRight();
   }
 
+  String _toScreenDsl() {
+    final buf = StringBuffer();
+    for (int i = 0; i < _screens.length; i++) {
+      final s = _screens[i];
+      if (i > 0) buf.write('\n');
+      buf.write('SCREEN "${s.name}" LAYOUT ${s.layoutId}\n');
+      for (final e in s.slots.entries) {
+        buf.write('${e.key} ${_toWidgetDsl(e.value)}\n');
+      }
+    }
+    return buf.toString().trimRight();
+  }
+
   // ── Save ──────────────────────────────────────────────────────────────────
 
   Future<void> _saveLayout() async {
     setState(() { _saving = true; _saveMsg = null; });
     try {
-      final dsl = _tab == 0 ? _toFullDsl() : _dslCtrl.text;
+      final String dsl;
+      if (_tab == 1) {
+        dsl = _dslCtrl.text;
+      } else if (_isScreenFormat) {
+        dsl = _toScreenDsl();
+      } else {
+        dsl = _toFullDsl();
+      }
       final r = await http.post(
         Uri.parse('$_base/api/dashboard/layout'),
         headers: {'Content-Type': 'application/json'},
@@ -2272,7 +2311,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
         _saveOk  = r.statusCode == 200;
         if (_saveOk) {
           _dslCtrl.text = dsl;
-          _parseDslToState(dsl);
+          _detectAndParse(dsl);
           context.read<SettingsService>().setRaw('dashboard_layout', dsl);
         }
       });
@@ -2352,9 +2391,9 @@ class _DashboardSectionState extends State<_DashboardSection> {
   Widget _tabBtn(int idx, IconData icon, String label) => GestureDetector(
         onTap: () {
           if (_tab == 0 && idx == 1) {
-            _dslCtrl.text = _toFullDsl();
+            _dslCtrl.text = _isScreenFormat ? _toScreenDsl() : _toFullDsl();
           } else if (_tab == 1 && idx == 0) {
-            _parseDslToState(_dslCtrl.text);
+            _detectAndParse(_dslCtrl.text);
           }
           setState(() => _tab = idx);
           if (idx == 2 && _sensorGroups.isEmpty && !_sensorsLoading) {
@@ -2386,6 +2425,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
   // ── Visual Tab ────────────────────────────────────────────────────────────
 
   Widget _buildVisual() {
+    if (_isScreenFormat) return _buildScreenVisual();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       // GRID cols selector
       Row(children: [
@@ -2436,14 +2476,277 @@ class _DashboardSectionState extends State<_DashboardSection> {
           icon: const Icon(Icons.add, size: 18),
           label: const Text('Zeile hinzufügen'),
           onPressed: () => setState(() {
-            _rows.add(_DashRow(name: 'Zeile ${_rows.length + 1}', widgets: []));
+            _rows.add(DashRow(name: 'Zeile ${_rows.length + 1}', widgets: []));
           }),
         ),
       ),
     ]);
   }
 
-  Widget _buildRowCard(int rowIdx, _DashRow row) {
+  // ── Screen-Format Editor ─────────────────────────────────────────────────
+
+  static const _kTmplAreas = {
+    'full':        'A',        'split-h':     'A B',
+    'split-v':     'A\nB',     'thirds-h':    'A B C',
+    'hero-right':  'A B\nA C', 'hero-left':   'B A\nC A',
+    'hero-top':    'A A\nB C', 'hero-bottom': 'B C\nA A',
+    'grid-4':      'A B\nC D', 'mosaic-4':    'A B\nA C\nA D',
+    'grid-6':      'A B C\nD E F', 'mosaic-5': 'A B C\nA D E',
+  };
+
+  List<String> _getTemplateSlots(String layoutId) {
+    final areas = _kTmplAreas[layoutId] ?? 'A';
+    final seen = <String>{};
+    final slots = <String>[];
+    for (final part in areas.split(RegExp(r'[\s\n]+'))) {
+      if (part.isNotEmpty && seen.add(part)) slots.add(part);
+    }
+    return slots;
+  }
+
+  Widget _buildScreenVisual() {
+    if (_screens.isEmpty) {
+      return const Center(child: Text('Kein Layout', style: TextStyle(color: Color(0xFF8B949E))));
+    }
+    final screen = _screens[_curScreen];
+    final slots = _getTemplateSlots(screen.layoutId);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Screen pager row
+      Row(children: [
+        Expanded(
+          child: Text(screen.name,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFFE6EDF3))),
+        ),
+        if (_screens.length > 1) ...[
+          GestureDetector(
+            onTap: _curScreen > 0 ? () => setState(() => _curScreen--) : null,
+            child: Icon(Icons.chevron_left, size: 20,
+                color: _curScreen > 0 ? const Color(0xFF8B949E) : const Color(0xFF30363D)),
+          ),
+          Text('${_curScreen + 1}/${_screens.length}',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF8B949E))),
+          GestureDetector(
+            onTap: _curScreen < _screens.length - 1 ? () => setState(() => _curScreen++) : null,
+            child: Icon(Icons.chevron_right, size: 20,
+                color: _curScreen < _screens.length - 1 ? const Color(0xFF8B949E) : const Color(0xFF30363D)),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: () => setState(() {
+              _screens.removeAt(_curScreen);
+              _curScreen = (_curScreen - 1).clamp(0, _screens.length - 1);
+            }),
+            child: const Icon(Icons.delete_outline, size: 16, color: Color(0xFF8B949E)),
+          ),
+          const SizedBox(width: 8),
+        ],
+        GestureDetector(
+          onTap: () => setState(() {
+            _screens.add(_ScreenEditorData(
+                name: 'Screen ${_screens.length + 1}', layoutId: 'full', slots: {}));
+            _curScreen = _screens.length - 1;
+          }),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1565C0).withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: const Color(0xFF1565C0)),
+            ),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.add, size: 14, color: Color(0xFF4FC3F7)),
+              SizedBox(width: 4),
+              Text('+Screen', style: TextStyle(fontSize: 12, color: Color(0xFF4FC3F7))),
+            ]),
+          ),
+        ),
+      ]),
+      const SizedBox(height: 14),
+      const Text('VORLAGE', style: TextStyle(
+          fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF4FC3F7), letterSpacing: 0.8)),
+      const SizedBox(height: 8),
+      _buildTemplatePicker(screen),
+      const SizedBox(height: 16),
+      const Text('SLOTS', style: TextStyle(
+          fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF4FC3F7), letterSpacing: 0.8)),
+      const SizedBox(height: 8),
+      ...slots.map((slot) => _buildSlotCard(slot, screen)),
+    ]);
+  }
+
+  Widget _buildTemplatePicker(_ScreenEditorData screen) {
+    const templates = [
+      ('full',        'Vollbild',   'A'),
+      ('split-h',     'Split H',    'A B'),
+      ('split-v',     'Split V',    'A\nB'),
+      ('thirds-h',    '3 Spalten',  'A B C'),
+      ('hero-right',  'Hero R',     'A B\nA C'),
+      ('hero-left',   'Hero L',     'B A\nC A'),
+      ('hero-top',    'Hero O',     'A A\nB C'),
+      ('hero-bottom', 'Hero U',     'B C\nA A'),
+      ('grid-4',      'Grid 2×2',   'A B\nC D'),
+      ('mosaic-4',    'Mosaik 4',   'A B\nA C\nA D'),
+      ('grid-6',      'Grid 2×3',   'A B C\nD E F'),
+      ('mosaic-5',    'Mosaik 5',   'A B C\nA D E'),
+    ];
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: templates.map((t) {
+        final (id, label, areas) = t;
+        final sel = screen.layoutId == id;
+        return GestureDetector(
+          onTap: () => setState(() => _screens[_curScreen].layoutId = id),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: sel
+                  ? const Color(0xFF1565C0).withValues(alpha: 0.2)
+                  : const Color(0xFF161B22),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: sel ? const Color(0xFF4FC3F7) : const Color(0xFF30363D),
+                width: sel ? 2 : 1,
+              ),
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              _miniTemplateGrid(areas),
+              const SizedBox(height: 4),
+              Text(label, style: TextStyle(
+                  fontSize: 9,
+                  color: sel ? const Color(0xFF4FC3F7) : const Color(0xFF8B949E))),
+            ]),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _miniTemplateGrid(String areas) {
+    const colors = {
+      'A': Color(0xFF1565C0), 'B': Color(0xFF1B5E20),
+      'C': Color(0xFF6A1B9A), 'D': Color(0xFF7B4500),
+      'E': Color(0xFF006064), 'F': Color(0xFF880E4F),
+    };
+    final rows = areas.split('\n').map((r) => r.trim().split(RegExp(r'\s+'))).toList();
+    final numCols = rows.fold<int>(0, (m, r) => r.length > m ? r.length : m);
+    return SizedBox(
+      width: 52,
+      height: 32,
+      child: Column(
+        children: rows.map((rowSlots) => Expanded(
+          child: Row(
+            children: List.generate(numCols, (i) {
+              final slot = i < rowSlots.length ? rowSlots[i] : '';
+              return Expanded(
+                child: Container(
+                  margin: const EdgeInsets.all(1),
+                  decoration: BoxDecoration(
+                    color: slot.isEmpty ? Colors.transparent : (colors[slot] ?? const Color(0xFF30363D)),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  child: slot.isEmpty ? null : Center(
+                    child: Text(slot, style: const TextStyle(
+                        fontSize: 7, color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              );
+            }),
+          ),
+        )).toList(),
+      ),
+    );
+  }
+
+  Widget _buildSlotCard(String slot, _ScreenEditorData screen) {
+    final w = screen.slots[slot];
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161B22),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF30363D)),
+      ),
+      child: InkWell(
+        onTap: () => _editSlotWidget(slot, screen),
+        borderRadius: BorderRadius.circular(10),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          Container(
+            width: 36,
+            height: 60,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              color: Color(0xFF0D1117),
+              borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(9), bottomLeft: Radius.circular(9)),
+            ),
+            child: Text(slot, style: const TextStyle(
+                fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF4FC3F7))),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              child: w == null
+                  ? const Row(children: [
+                      Icon(Icons.add_circle_outline, size: 18, color: Color(0xFF8B949E)),
+                      SizedBox(width: 8),
+                      Text('Widget hinzufügen',
+                          style: TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
+                    ])
+                  : _buildWidgetPreview(w),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: Icon(Icons.edit_outlined, size: 16, color: Color(0xFF8B949E)),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildWidgetPreview(DashWidget w) {
+    final (icon, color) = _widgetMeta(w.type);
+    final detail = switch (w.type) {
+      'GAUGE'  => '${w.label ?? _shortPath(w.sensor ?? '')}  '
+                  '${w.min?.toInt() ?? 0}–${w.max?.toInt() ?? 100} ${w.unit ?? ''}  '
+                  '(${w.style ?? 'arc180'})',
+      'SENSOR' => w.alias ?? _shortPath(w.sensor ?? ''),
+      'TEXT'   => '"${w.text ?? ''}"',
+      _        => w.type,
+    };
+    return Row(children: [
+      Icon(icon, size: 20, color: color),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(w.type, style: TextStyle(
+              fontSize: 10, color: color, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+          const SizedBox(height: 2),
+          Text(detail, style: const TextStyle(fontSize: 12, color: Color(0xFFE6EDF3)),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          if ((w.type == 'GAUGE' || w.type == 'SENSOR') && w.sensor != null)
+            Text(w.sensor!,
+                style: const TextStyle(fontSize: 10, color: Color(0xFF8B949E)),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+        ]),
+      ),
+    ]);
+  }
+
+  void _editSlotWidget(String slot, _ScreenEditorData screen) async {
+    final current = screen.slots[slot] ?? DashWidget(type: 'SENSOR');
+    final saved = await showDialog<DashWidget>(
+      context: context,
+      builder: (_) => _WidgetEditDialog(widget: current, sensors: _availSensors),
+    );
+    if (saved != null && mounted) {
+      setState(() => _screens[_curScreen].slots[slot] = saved);
+    }
+  }
+
+  Widget _buildRowCard(int rowIdx, DashRow row) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -2547,7 +2850,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
     );
   }
 
-  Widget _buildWidgetChip(int rowIdx, int wIdx, _DashWidget w) {
+  Widget _buildWidgetChip(int rowIdx, int wIdx, DashWidget w) {
     final (icon, color) = _widgetMeta(w.type);
     final label = _widgetChipLabel(w);
     final widgets = _rows[rowIdx].widgets;
@@ -2608,21 +2911,23 @@ class _DashboardSectionState extends State<_DashboardSection> {
   }
 
   (IconData, Color) _widgetMeta(String type) => switch (type) {
-        'SENSOR'  => (Icons.sensors, const Color(0xFF4FC3F7)),
-        'GAUGE'   => (Icons.speed,   const Color(0xFF81C784)),
-        'TEXT'    => (Icons.title,   const Color(0xFFFFB74D)),
-        'CLOCK'   => (Icons.access_time, const Color(0xFFBA68C8)),
-        'COMPASS' => (Icons.explore, const Color(0xFF4FC3F7)),
-        'SPACER'  => (Icons.space_bar, const Color(0xFF8B949E)),
-        _         => (Icons.widgets, const Color(0xFF8B949E)),
+        'SENSOR'  => (Icons.sensors,       const Color(0xFF4FC3F7)),
+        'GAUGE'   => (Icons.speed,         const Color(0xFF81C784)),
+        'HORIZON' => (Icons.landscape,     const Color(0xFF1565C0)),
+        'TEXT'    => (Icons.title,         const Color(0xFFFFB74D)),
+        'CLOCK'   => (Icons.access_time,   const Color(0xFFBA68C8)),
+        'COMPASS' => (Icons.explore,       const Color(0xFF4FC3F7)),
+        'SPACER'  => (Icons.space_bar,     const Color(0xFF8B949E)),
+        _         => (Icons.widgets,       const Color(0xFF8B949E)),
       };
 
-  String _widgetChipLabel(_DashWidget w) {
+  String _widgetChipLabel(DashWidget w) {
     switch (w.type) {
-      case 'SENSOR': return w.alias ?? _shortPath(w.sensor ?? '');
-      case 'GAUGE':  return w.label ?? _shortPath(w.sensor ?? '');
-      case 'TEXT':   return w.text ?? '';
-      default:       return '';
+      case 'SENSOR':  return w.alias ?? _shortPath(w.sensor ?? '');
+      case 'GAUGE':   return w.label ?? _shortPath(w.sensor ?? '');
+      case 'TEXT':    return w.text ?? '';
+      case 'HORIZON': return _shortPath(w.rollSensor ?? w.sensor ?? 'lage');
+      default:        return '';
     }
   }
 
@@ -2664,7 +2969,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
 
   void _editWidget(int rowIdx, int wIdx) async {
     final w = _rows[rowIdx].widgets[wIdx].copy();
-    final saved = await showDialog<_DashWidget>(
+    final saved = await showDialog<DashWidget>(
       context: context,
       builder: (_) => _WidgetEditDialog(widget: w, sensors: _availSensors),
     );
@@ -2901,7 +3206,7 @@ class _SimpleInputDialog extends StatelessWidget {
 
 class _AddWidgetSheet extends StatelessWidget {
   final List<Map<String, dynamic>> sensorGroups;
-  final void Function(_DashWidget) onAdd;
+  final void Function(DashWidget) onAdd;
   const _AddWidgetSheet({required this.sensorGroups, required this.onAdd});
 
   Future<void> _pickType(BuildContext ctx, String topic, String label, String unit) async {
@@ -2928,7 +3233,7 @@ class _AddWidgetSheet extends StatelessWidget {
       ),
     );
     if (type == null) return;
-    final w = _DashWidget(type: type, sensor: topic);
+    final w = DashWidget(type: type, sensor: topic);
     if (type == 'GAUGE') {
       w.label = label;
       w.unit = unit.isEmpty ? null : unit;
@@ -2971,8 +3276,9 @@ class _AddWidgetSheet extends StatelessWidget {
     return Expanded(
       child: GestureDetector(
         onTap: () {
-          final w = _DashWidget(type: type);
-          if (type == 'TEXT') w.text = 'Text';
+          final w = DashWidget(type: type);
+          if (type == 'TEXT')    w.text   = 'Text';
+          if (type == 'HORIZON') w.sensor = 'boot/sensoren/lage';
           onAdd(w);
         },
         child: Container(
@@ -3019,6 +3325,7 @@ class _AddWidgetSheet extends StatelessWidget {
             _specialBtn(ctx, 'CLOCK',   Icons.access_time,  'Uhr'),
             _specialBtn(ctx, 'TEXT',    Icons.title,        'Text'),
             _specialBtn(ctx, 'COMPASS', Icons.explore,      'Kompass'),
+            _specialBtn(ctx, 'HORIZON', Icons.landscape,    'Horizont'),
           ]),
         ),
         const Padding(
@@ -3133,7 +3440,7 @@ class _AddWidgetSheet extends StatelessWidget {
 // ── Widget Edit Dialog ────────────────────────────────────────────────────────
 
 class _WidgetEditDialog extends StatefulWidget {
-  final _DashWidget widget;
+  final DashWidget widget;
   final List<Map<String, dynamic>> sensors;
   const _WidgetEditDialog({required this.widget, required this.sensors});
   @override
@@ -3141,7 +3448,7 @@ class _WidgetEditDialog extends StatefulWidget {
 }
 
 class _WidgetEditDialogState extends State<_WidgetEditDialog> {
-  late _DashWidget _w;
+  late DashWidget _w;
   final _aliasCtrl = TextEditingController();
   final _labelCtrl = TextEditingController();
   final _unitCtrl  = TextEditingController();
@@ -3151,7 +3458,7 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
   final _searchCtrl = TextEditingController();
   String _search = '';
 
-  static const _types = ['SENSOR', 'GAUGE', 'TEXT', 'SPACER', 'CLOCK', 'COMPASS'];
+  static const _types = ['SENSOR', 'GAUGE', 'HORIZON', 'TEXT', 'SPACER', 'CLOCK', 'COMPASS'];
   static const _sensorStyles = ['card', 'minimal', 'compact', 'hero'];
   static const _gaugeStyles  = ['arc180', 'arc270', 'arc360', 'bar'];
 
@@ -3180,7 +3487,9 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
       v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
 
   void _commit() {
-    _w.alias    = _aliasCtrl.text.isEmpty ? null : _aliasCtrl.text;
+    if (_w.type != 'SENSOR') {
+      _w.alias = _aliasCtrl.text.isEmpty ? null : _aliasCtrl.text;
+    }
     _w.label    = _labelCtrl.text.isEmpty ? null : _labelCtrl.text;
     _w.unit     = _unitCtrl.text.isEmpty  ? null : _unitCtrl.text;
     _w.text     = _textCtrl.text.isEmpty  ? null : _textCtrl.text;
@@ -3268,22 +3577,18 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                 const SizedBox(height: 14),
 
                 // Type-specific fields
-                if (_w.type == 'SENSOR' || _w.type == 'GAUGE') ...[
-                  _label('Sensor'),
-                  const SizedBox(height: 6),
-                  _sensorPicker(),
-                  const SizedBox(height: 12),
-                ],
                 if (_w.type == 'SENSOR') ...[
-                  _inputRow('Bezeichnung (AS)', _aliasCtrl),
+                  SensorDashWidget.buildEditor(_w, setState, widget.sensors),
                   const SizedBox(height: 10),
                   _label('Stil'),
                   const SizedBox(height: 6),
                   _stylePicker(_sensorStyles),
-                  const SizedBox(height: 10),
-                  _label('Breite (Spalten)'),
+                ],
+                if (_w.type == 'GAUGE') ...[
+                  _label('Sensor / Feld'),
                   const SizedBox(height: 6),
-                  _sizePicker(),
+                  _gaugeFieldPicker(),
+                  const SizedBox(height: 10),
                 ],
                 if (_w.type == 'GAUGE') ...[
                   Row(children: [
@@ -3299,21 +3604,127 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                   _label('Stil'),
                   const SizedBox(height: 6),
                   _stylePicker(_gaugeStyles),
+                  const SizedBox(height: 12),
+                  _label('Vorschau'),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: 160,
+                    child: GaugeWidget(
+                      value: (_w.min ?? 0) + ((_w.max ?? 100) - (_w.min ?? 0)) * 0.65,
+                      min: _w.min ?? 0,
+                      max: _w.max ?? 100,
+                      unit: _w.unit ?? '',
+                      label: _w.label ?? (_w.sensor?.split('/').last ?? ''),
+                      style: _gaugeStyleOf(_w.style),
+                      color: const Color(0xFF4FC3F7),
+                      decimals: _w.decimals ?? 1,
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   _label('Dezimalstellen'),
                   const SizedBox(height: 6),
                   _decimalsPicker(),
-                  const SizedBox(height: 10),
-                  _label('Breite (Spalten)'),
-                  const SizedBox(height: 6),
-                  _sizePicker(),
                 ],
                 if (_w.type == 'TEXT') ...[
                   _inputRow('Text', _textCtrl),
-                  const SizedBox(height: 10),
-                  _label('Breite (Spalten)'),
-                  const SizedBox(height: 6),
-                  _sizePicker(),
+                ],
+                if (_w.type == 'HORIZON') ...[
+                  Builder(builder: (_) {
+                    // Flat list of all full topic paths: base_name/field
+                    final allPaths = <Map<String, String>>[];
+                    for (final s in widget.sensors) {
+                      final base = s['base_name'] as String? ?? '';
+                      final sensorName = s['name'] as String? ?? base;
+                      final vals = (s['values'] as Map<dynamic, dynamic>?) ?? {};
+                      for (final field in vals.keys) {
+                        allPaths.add({
+                          'full': '$base/$field',
+                          'label': '$sensorName › $field',
+                        });
+                      }
+                    }
+                    String? rollFull = (_w.rollSensor?.isNotEmpty == true && _w.rollField != null)
+                        ? '${_w.rollSensor}/${_w.rollField}'
+                        : null;
+                    if (rollFull != null && !allPaths.any((p) => p['full'] == rollFull)) rollFull = null;
+                    String? pitchFull = (_w.pitchSensor?.isNotEmpty == true && _w.pitchField != null)
+                        ? '${_w.pitchSensor}/${_w.pitchField}'
+                        : null;
+                    if (pitchFull != null && !allPaths.any((p) => p['full'] == pitchFull)) pitchFull = null;
+                    String? impactFull = (_w.impactSensor?.isNotEmpty == true && _w.impactField != null)
+                        ? '${_w.impactSensor}/${_w.impactField}'
+                        : null;
+                    if (impactFull != null && !allPaths.any((p) => p['full'] == impactFull)) impactFull = null;
+
+                    void setPath(String which, String? full) {
+                      if (full == null) return;
+                      final idx = full.lastIndexOf('/');
+                      final base = idx >= 0 ? full.substring(0, idx) : full;
+                      final field = idx >= 0 ? full.substring(idx + 1) : '';
+                      setState(() {
+                        if (which == 'roll') { _w.rollSensor = base; _w.rollField = field; }
+                        else if (which == 'pitch') { _w.pitchSensor = base; _w.pitchField = field; }
+                        else if (which == 'impact') { _w.impactSensor = base; _w.impactField = field; }
+                      });
+                    }
+
+                    DropdownButton<String> pathDropdown(String which, String? cur, String hint) =>
+                        DropdownButton<String>(
+                          value: cur,
+                          hint: Text(hint, style: const TextStyle(color: Color(0xFF8B949E))),
+                          isExpanded: true,
+                          dropdownColor: const Color(0xFF161B22),
+                          style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
+                          underline: Container(height: 1, color: const Color(0xFF30363D)),
+                          items: allPaths.map((p) => DropdownMenuItem<String>(
+                            value: p['full'],
+                            child: Text(p['label'] ?? p['full'] ?? '', overflow: TextOverflow.ellipsis),
+                          )).toList(),
+                          onChanged: (v) => setPath(which, v),
+                        );
+
+                    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      _label('Roll-Topic'),
+                      const SizedBox(height: 6),
+                      pathDropdown('roll', rollFull, 'Roll-Topic wählen…'),
+                      const SizedBox(height: 14),
+                      _label('Pitch-Topic'),
+                      const SizedBox(height: 6),
+                      pathDropdown('pitch', pitchFull, 'Pitch-Topic wählen…'),
+                      const SizedBox(height: 14),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0D1117),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF30363D)),
+                        ),
+                        child: SwitchListTile(
+                          dense: true,
+                          activeColor: const Color(0xFF4FC3F7),
+                          title: const Text('Impact-Alarm',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                                  color: Color(0xFFE6EDF3))),
+                          subtitle: const Text('Horizont blinkt rot bei Erschütterung',
+                              style: TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
+                          value: _w.impactSensor != null,
+                          onChanged: (on) => setState(() {
+                            _w.impactSensor = on ? '' : null;
+                            _w.impactField  = on ? 'aktiv' : null;
+                          }),
+                        ),
+                      ),
+                      if (_w.impactSensor != null) ...[
+                        const SizedBox(height: 10),
+                        _label('Impact-Topic'),
+                        const SizedBox(height: 6),
+                        pathDropdown('impact', impactFull, 'Impact-Topic wählen…'),
+                      ],
+                      const SizedBox(height: 10),
+                      _label('Breite (Spalten)'),
+                      const SizedBox(height: 6),
+                      _sizePicker(),
+                    ]);
+                  }),
                 ],
                 if (_w.type == 'CLOCK' || _w.type == 'COMPASS' || _w.type == 'SPACER') ...[
                   _label('Breite (Spalten)'),
@@ -3362,14 +3773,26 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
     );
   }
 
-  Widget _sensorPicker() {
+  Widget _gaugeFieldPicker() {
+    // Build flat list of all base_name/field paths
+    final allPaths = <Map<String, String>>[];
+    for (final s in widget.sensors) {
+      final base = s['base_name'] as String? ?? '';
+      if (base.isEmpty) continue;
+      final sensorName = s['name'] as String? ?? base;
+      final vals = (s['values'] as Map<dynamic, dynamic>?) ?? {};
+      for (final field in vals.keys) {
+        allPaths.add({
+          'full':  '$base/$field',
+          'label': '$sensorName › $field',
+        });
+      }
+    }
     final filtered = _search.isEmpty
-        ? widget.sensors
-        : widget.sensors.where((s) {
-            final name = '${s['name'] ?? ''} ${s['base_name'] ?? ''}'.toLowerCase();
-            return name.contains(_search.toLowerCase());
+        ? allPaths
+        : allPaths.where((p) {
+            return (p['label'] ?? '').toLowerCase().contains(_search.toLowerCase());
           }).toList();
-    final showSearch = widget.sensors.length > 8;
 
     return Container(
       decoration: BoxDecoration(
@@ -3378,11 +3801,11 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
         border: Border.all(color: const Color(0xFF30363D)),
       ),
       child: Column(children: [
-        if (showSearch)
+        if (allPaths.length > 8)
           Padding(
             padding: const EdgeInsets.all(8),
             child: GestureDetector(
-              onTap: () => showKeyboard(context, _searchCtrl, label: 'Sensor suchen'),
+              onTap: () => showKeyboard(context, _searchCtrl, label: 'Sensor / Feld suchen'),
               child: AbsorbPointer(
                 child: TextField(
                   controller: _searchCtrl,
@@ -3408,22 +3831,26 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
             ),
           ),
         SizedBox(
-          height: 180,
+          height: 200,
           child: ListView.builder(
             padding: EdgeInsets.zero,
             itemCount: filtered.length,
             itemBuilder: (_, i) {
-              final s    = filtered[i];
-              final path = s['base_name'] as String;
-              final name = s['name'] as String? ?? path;
-              final unit = s['unit'] as String? ?? '';
-              final sel  = _w.sensor == path;
+              final item  = filtered[i];
+              final full  = item['full']!;
+              final label = item['label']!;
+              final sel   = _w.sensor == full;
               return GestureDetector(
-                onTap: () => setState(() => _w.sensor = path),
+                onTap: () => setState(() {
+                  _w.sensor = full;
+                  _w.field  = null;
+                }),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: sel ? const Color(0xFF1565C0).withValues(alpha: 0.2) : Colors.transparent,
+                    color: sel
+                        ? const Color(0xFF1565C0).withValues(alpha: 0.2)
+                        : Colors.transparent,
                     border: Border(
                       left: BorderSide(
                         color: sel ? const Color(0xFF4FC3F7) : Colors.transparent,
@@ -3432,12 +3859,13 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                     ),
                   ),
                   child: Row(children: [
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(name, style: TextStyle(
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Text(label, style: TextStyle(
                           fontSize: 13,
                           color: sel ? const Color(0xFFE6EDF3) : const Color(0xFF8B949E),
                           fontWeight: sel ? FontWeight.w600 : FontWeight.normal)),
-                      Text(unit.isNotEmpty ? '$path · $unit' : path,
+                      Text(full,
                           style: const TextStyle(fontSize: 10, color: Color(0xFF8B949E))),
                     ])),
                     if (sel)
@@ -3535,6 +3963,14 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
       }),
     );
   }
+
+  GaugeStyle _gaugeStyleOf(String? s) => switch (s) {
+    'arc180' => GaugeStyle.arc180,
+    'arc270' => GaugeStyle.arc270,
+    'arc360' => GaugeStyle.arc360,
+    'bar'    => GaugeStyle.bar,
+    _        => GaugeStyle.arc270,
+  };
 
   Widget _label(String t) => Text(t,
       style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700,

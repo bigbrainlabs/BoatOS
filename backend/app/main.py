@@ -744,6 +744,11 @@ async def parse_dashboard_layout(data: Dict[str, Any]):
     except Exception as e:
         return {"status": "error", "message": str(e), "errors": [str(e)]}
 
+@app.get("/api/dashboard/templates")
+async def get_dashboard_templates():
+    """Get available dashboard layout templates"""
+    return {"templates": dashboard_dsl.get_templates()}
+
 @app.post("/api/mqtt/test")
 async def test_mqtt_connection(mqtt_config: Dict[str, Any]):
     """Test MQTT broker connection"""

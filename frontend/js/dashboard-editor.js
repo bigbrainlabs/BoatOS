@@ -17,6 +17,11 @@ class DashboardEditor {
         this.mode = 'visual'; // 'visual' or 'code'
         this.dslText = '';
         this.showHelp = false;
+        // Screen-based layout (new format)
+        this.templates = [];
+        this.screens = [];
+        this.currentScreenIndex = 0;
+        this.layout = null; // parsed layout response
     }
 
     /**
@@ -35,7 +40,7 @@ class DashboardEditor {
         overlay.style.display = 'flex';
 
         // Load data
-        await Promise.all([this.loadSensors(), this.loadSensorGroupsPalette()]);
+        await Promise.all([this.loadSensors(), this.loadSensorGroupsPalette(), this.loadTemplates()]);
         await this.loadLayout();
 
         // Render editor
@@ -171,6 +176,34 @@ class DashboardEditor {
     }
 
     /**
+     * Load layout templates from API (with hardcoded fallback)
+     */
+    async loadTemplates() {
+        try {
+            const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
+            const resp = await fetch(`${apiUrl}/api/dashboard/templates`);
+            const data = await resp.json();
+            this.templates = data.templates || [];
+        } catch (e) {
+            // Hardcoded fallback
+            this.templates = [
+                {id:'full',name:'Vollbild',description:'Ein Widget, volle Fläche',slots:['A'],cols:'1fr',rows:'1fr',areas:'A'},
+                {id:'split-h',name:'Hälften',description:'Zwei gleiche Hälften',slots:['A','B'],cols:'1fr 1fr',rows:'1fr',areas:'A B'},
+                {id:'split-v',name:'Oben/Unten',description:'Zwei übereinander',slots:['A','B'],cols:'1fr',rows:'1fr 1fr',areas:'A\nB'},
+                {id:'thirds-h',name:'Drittel',description:'Drei gleiche Spalten',slots:['A','B','C'],cols:'1fr 1fr 1fr',rows:'1fr',areas:'A B C'},
+                {id:'hero-right',name:'Hero Links',description:'Großes Widget links, zwei rechts',slots:['A','B','C'],cols:'2fr 1fr',rows:'1fr 1fr',areas:'A B\nA C'},
+                {id:'hero-left',name:'Hero Rechts',description:'Großes Widget rechts, zwei links',slots:['A','B','C'],cols:'1fr 2fr',rows:'1fr 1fr',areas:'B A\nC A'},
+                {id:'hero-top',name:'Hero Oben',description:'Großes Widget oben, zwei unten',slots:['A','B','C'],cols:'1fr 1fr',rows:'2fr 1fr',areas:'A A\nB C'},
+                {id:'hero-bottom',name:'Hero Unten',description:'Zwei oben, großes Widget unten',slots:['A','B','C'],cols:'1fr 1fr',rows:'1fr 2fr',areas:'B C\nA A'},
+                {id:'grid-4',name:'4er Raster',description:'Vier gleichgroße Felder',slots:['A','B','C','D'],cols:'1fr 1fr',rows:'1fr 1fr',areas:'A B\nC D'},
+                {id:'mosaic-4',name:'Mosaik 4',description:'Großes links, drei rechts',slots:['A','B','C','D'],cols:'2fr 1fr',rows:'1fr 1fr 1fr',areas:'A B\nA C\nA D'},
+                {id:'grid-6',name:'6er Raster',description:'Sechs gleichgroße Felder',slots:['A','B','C','D','E','F'],cols:'1fr 1fr 1fr',rows:'1fr 1fr',areas:'A B C\nD E F'},
+                {id:'mosaic-5',name:'Mosaik 5',description:'Großes links, vier rechts',slots:['A','B','C','D','E'],cols:'2fr 1fr 1fr',rows:'1fr 1fr',areas:'A B C\nA D E'}
+            ];
+        }
+    }
+
+    /**
      * Load current dashboard layout
      */
     async loadLayout() {
@@ -184,7 +217,7 @@ class DashboardEditor {
             if (data.layout) {
                 this.dslText = data.layout;
                 await this.parseLayout(data.layout);
-                console.log('Parsed widgets:', this.widgets);
+                console.log('Parsed layout:', this.layout);
             } else {
                 console.log('No layout in response, using defaults');
                 this.useDefaultLayout();
@@ -217,7 +250,7 @@ ROW main
     }
 
     /**
-     * Parse DSL layout
+     * Parse DSL layout — handles both old (rows) and new (screen) format
      */
     async parseLayout(dslText) {
         try {
@@ -228,27 +261,44 @@ ROW main
                 body: JSON.stringify({ layout: dslText })
             });
             const parsed = await response.json();
+            this.layout = parsed;
 
-            this.gridColumns = parsed.grid || 3;
-            this.widgets = [];
-            this.rows = [];
-            this.rowHeights = {};
+            if (parsed.format === 'screen') {
+                // New screen-based format
+                this.screens = (parsed.screens || []).map(s => ({
+                    name: s.name || 'Screen',
+                    layoutId: s.layout_id || 'full',
+                    widgets: s.widgets || {}
+                }));
+                this.currentScreenIndex = 0;
+                // Clear old format state
+                this.widgets = [];
+                this.rows = ['main'];
+                this.rowHeights = { main: 1 };
+            } else {
+                // Old format
+                this.screens = [];
+                this.gridColumns = parsed.grid || 3;
+                this.widgets = [];
+                this.rows = [];
+                this.rowHeights = {};
 
-            if (parsed.rows) {
-                parsed.rows.forEach(row => {
-                    if (!this.rows.includes(row.name)) {
-                        this.rows.push(row.name);
-                    }
-                    this.rowHeights[row.name] = row.height || 1;
-                    row.widgets.forEach(widget => {
-                        this.widgets.push({ ...widget, rowName: row.name });
+                if (parsed.rows) {
+                    parsed.rows.forEach(row => {
+                        if (!this.rows.includes(row.name)) {
+                            this.rows.push(row.name);
+                        }
+                        this.rowHeights[row.name] = row.height || 1;
+                        row.widgets.forEach(widget => {
+                            this.widgets.push({ ...widget, rowName: row.name });
+                        });
                     });
-                });
-            }
+                }
 
-            if (!this.rows.includes('main')) {
-                this.rows.push('main');
-                this.rowHeights['main'] = this.rowHeights['main'] || 1;
+                if (!this.rows.includes('main')) {
+                    this.rows.push('main');
+                    this.rowHeights['main'] = this.rowHeights['main'] || 1;
+                }
             }
         } catch (error) {
             console.error('Error parsing layout:', error);
@@ -263,7 +313,7 @@ ROW main
 
         // Update DSL text when switching to code mode
         if (this.mode === 'code') {
-            this.dslText = this.toDSL();
+            this.dslText = this.screens.length > 0 ? this.toDSLScreen() : this.toDSL();
         }
 
         this.container.innerHTML = `
@@ -292,10 +342,10 @@ ROW main
                 ">📡 Sensoren</button>
             </div>
 
-            ${this.mode === 'code' ? this.renderCodeEditor() : this.mode === 'sensors' ? this.renderSensorManager() : this.renderVisualEditor()}
+            ${this.mode === 'code' ? this.renderCodeEditor() : this.mode === 'sensors' ? this.renderSensorManager() : (this.screens.length > 0 ? this.renderScreenEditor() : this.renderVisualEditor())}
         `;
 
-        if (this.mode === 'visual') {
+        if (this.mode === 'visual' && this.screens.length === 0) {
             this.initDragDrop();
         }
         if (this.mode === 'sensors') {
@@ -538,7 +588,8 @@ ROW main
                             <strong style="color: var(--accent);">Spezial-Widgets:</strong><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">SPACER</code><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">CLOCK</code><br>
-                            <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">COMPASS</code>
+                            <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">COMPASS</code><br>
+                            <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">HORIZON boot/sensoren/lage</code>
                         </div>
 
                         <div style="padding: 10px; background: var(--bg-card); border-radius: 8px; font-family: monospace; font-size: 11px; white-space: pre;">GRID 2
@@ -550,6 +601,28 @@ ROW navigation
 ROW weather
   SENSOR temperature STYLE big
   SENSOR wind_speed COLOR blue</div>
+
+                        <div style="margin-top: 15px; margin-bottom: 8px;">
+                            <strong style="color: var(--accent);">SCREEN/LAYOUT Format (neu):</strong>
+                        </div>
+
+                        <div style="padding: 10px; background: var(--bg-card); border-radius: 8px; font-family: monospace; font-size: 11px; white-space: pre;">SCREEN Navigation LAYOUT hero-right
+  A  SENSOR navigation/position STYLE hero
+  B  GAUGE boot/motor/drehzahl MIN 0 MAX 3000 UNIT "rpm"
+  C  CLOCK
+
+SCREEN Wetter LAYOUT grid-4
+  A  SENSOR bilge/thermo
+  B  GAUGE wind_speed MIN 0 MAX 50 UNIT "kn"
+  C  COMPASS
+  D  CLOCK</div>
+
+                        <div style="margin-top: 12px; margin-bottom: 8px;">
+                            <strong style="color: var(--accent);">Verfügbare Vorlagen:</strong><br>
+                            <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px; font-size: 10px;">full, split-h, split-v, thirds-h</code><br>
+                            <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px; font-size: 10px;">hero-right, hero-left, hero-top, hero-bottom</code><br>
+                            <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px; font-size: 10px;">grid-4, mosaic-4, grid-6, mosaic-5</code>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -619,6 +692,7 @@ ROW weather
                             ['window.dashboardEditor.addWidget(\'clock\')',  '🕐', 'Uhr'],
                             ['window.dashboardEditor.addWidget(\'text\')',   '📝', 'Text'],
                             ['window.dashboardEditor.addWidget(\'compass\')', '🧭', 'Kompass'],
+                            ['window.dashboardEditor.addWidget(\'horizon\')', '🌅', 'Horizont'],
                         ].map(([fn, icon, label]) => `
                             <div onclick="${fn}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;margin-bottom:5px;cursor:pointer;font-size:12px;transition:border-color .15s"
                                 onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
@@ -711,7 +785,7 @@ ROW weather
      */
     setMode(mode) {
         if (mode === 'code') {
-            this.dslText = this.toDSL();
+            this.dslText = this.screens.length > 0 ? this.toDSLScreen() : this.toDSL();
         } else if (mode === 'visual' && this.mode === 'code') {
             // Parse code changes before switching to visual
             const textarea = document.getElementById('dsl-code-editor');
@@ -733,35 +807,12 @@ ROW weather
         this.dslText = textarea.value;
 
         try {
-            const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
-            const response = await fetch(`${apiUrl}/api/dashboard/parse`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ layout: this.dslText })
-            });
-            const parsed = await response.json();
+            // Use parseLayout which handles both old and new screen format
+            await this.parseLayout(this.dslText);
 
-            if (parsed.errors && parsed.errors.length > 0) {
-                alert('Fehler im DSL-Code:\n' + parsed.errors.join('\n'));
+            if (this.layout && this.layout.errors && this.layout.errors.length > 0) {
+                alert('Fehler im DSL-Code:\n' + this.layout.errors.join('\n'));
                 return;
-            }
-
-            // Update widgets from parsed result
-            this.gridColumns = parsed.grid || 3;
-            this.widgets = [];
-            this.rows = [];
-            this.rowHeights = {};
-
-            if (parsed.rows) {
-                parsed.rows.forEach(row => {
-                    if (!this.rows.includes(row.name)) {
-                        this.rows.push(row.name);
-                    }
-                    this.rowHeights[row.name] = row.height || 1;
-                    row.widgets.forEach(widget => {
-                        this.widgets.push({ ...widget, rowName: row.name });
-                    });
-                });
             }
 
             if (window.BoatOS?.ui?.showNotification) {
@@ -781,7 +832,7 @@ ROW weather
      * Reset code to current widget state
      */
     resetCode() {
-        this.dslText = this.toDSL();
+        this.dslText = this.screens.length > 0 ? this.toDSLScreen() : this.toDSL();
         this.render();
     }
 
@@ -973,7 +1024,7 @@ ROW weather
         if (widget.type === 'gauge') {
             return '🎯';
         }
-        const icons = { spacer: '⬜', clock: '🕐', compass: '🧭', map: '🗺️', text: '📝' };
+        const icons = { spacer: '⬜', clock: '🕐', compass: '🧭', map: '🗺️', text: '📝', horizon: '🌅' };
         return icons[widget.type] || '📦';
     }
 
@@ -993,8 +1044,46 @@ ROW weather
         if (widget.type === 'text') {
             return widget.text ? (widget.text.substring(0, 20) + (widget.text.length > 20 ? '...' : '')) : 'Text';
         }
-        const names = { spacer: 'Spacer', clock: 'Uhr', compass: 'Kompass', map: 'Karte' };
+        const names = { spacer: 'Spacer', clock: 'Uhr', compass: 'Kompass', map: 'Karte', horizon: 'Horizont' };
         return names[widget.type] || widget.type;
+    }
+
+    /**
+     * Build a sensor dropdown (base_name) + field dropdown pair for a given key prefix.
+     * sensorKey: property name on widget (e.g. 'sensor', 'rollSensor')
+     * fieldKey:  property name for the field (e.g. 'field', 'rollField')
+     * label:     human-readable label
+     * optional:  if true, first option is "— deaktiviert —" with empty value
+     */
+    _renderSensorFieldDropdowns(widgetIdx, widget, sensorKey, fieldKey, label, optional = false) {
+        const currentSensor = widget[sensorKey] || '';
+        const currentField  = widget[fieldKey]  || '';
+        const grp = (this.sensorGroups || []).find(s => s.base_name === currentSensor);
+        const availableFields = grp ? Object.keys(grp.values || {}) : [];
+
+        const sensorOptions = (optional ? `<option value="">— deaktiviert —</option>` : '') +
+            (this.sensorGroups || []).map(s =>
+                `<option value="${s.base_name}" ${currentSensor === s.base_name ? 'selected' : ''}>${s.name}</option>`
+            ).join('');
+
+        const fieldDropdown = (currentSensor && availableFields.length > 0) ? `
+            <div>
+                <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">${label} — Feld</label>
+                <select onchange="window.dashboardEditor.updateWidget(${widgetIdx}, '${fieldKey}', this.value)" style="
+                    width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
+                    ${availableFields.map(f => `<option value="${f}" ${currentField === f ? 'selected' : ''}>${f}</option>`).join('')}
+                </select>
+            </div>` : '';
+
+        return `
+            <div>
+                <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">${label} — Sensor</label>
+                <select onchange="window.dashboardEditor.updateWidgetSensor(${widgetIdx}, '${sensorKey}', '${fieldKey}', this.value)" style="
+                    width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
+                    ${sensorOptions}
+                </select>
+            </div>
+            ${fieldDropdown}`;
     }
 
     /**
@@ -1004,9 +1093,12 @@ ROW weather
         const widget = this.widgets[this.selectedWidget];
         if (!widget) return '';
 
-        const isGauge = widget.type === 'gauge';
-        const isSensor = widget.type === 'sensor';
-        const isText = widget.type === 'text';
+        const isGauge   = widget.type === 'gauge';
+        const isSensor  = widget.type === 'sensor';
+        const isHorizon = widget.type === 'horizon';
+        const isText    = widget.type === 'text';
+
+        const idx = this.selectedWidget;
 
         return `
             <div style="display: flex; flex-direction: column; gap: 12px;">
@@ -1021,58 +1113,90 @@ ROW weather
                 <div>
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Text</label>
                     <input type="text" value="${widget.text || ''}"
-                           onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'text', this.value)"
+                           onchange="window.dashboardEditor.updateWidget(${idx}, 'text', this.value)"
                            style="width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                 </div>
                 ` : ''}
 
-                ${(isSensor || isGauge) ? `
+                ${isGauge ? `
                 <div>
-                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Sensor</label>
-                    <select onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'sensor', this.value)" style="
+                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Sensor / Feld</label>
+                    <select onchange="window.dashboardEditor.updateWidget(${idx},'sensor',this.value);window.dashboardEditor.updateWidget(${idx},'field',null);" style="
                         width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
-                        ${this.sensors.length === 0
-                            ? `<option value="${widget.sensor || ''}">${widget.sensor || '— keine Sensoren —'}</option>`
-                            : this.sensors.map(s => `<option value="${s.base_name}" ${widget.sensor === s.base_name ? 'selected' : ''}>${s.name}</option>`).join('')}
+                        <option value="">— Sensor / Feld wählen —</option>
+                        ${(this.sensors||[]).map(s => `<option value="${s.full_path}" ${widget.sensor===s.full_path?'selected':''}>${s.name||s.full_path}</option>`).join('')}
                     </select>
                 </div>
+                <!-- Label / Alias -->
                 <div>
-                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Label / Alias</label>
-                    <input type="text" value="${widget.alias || widget.label || ''}"
-                           onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, '${isGauge ? 'label' : 'alias'}', this.value)"
+                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Label</label>
+                    <input type="text" value="${widget.label || ''}"
+                           onchange="window.dashboardEditor.updateWidget(${idx}, 'label', this.value)"
+                           placeholder="${widget.sensor?.split('/').pop() || 'Label'}"
+                           style="width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
+                </div>
+                ` : ''}
+
+                ${isSensor ? `
+                <!-- Sensor -->
+                <div>
+                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Sensor</label>
+                    <select onchange="window.dashboardEditor.updateWidgetSensor(${idx}, 'sensor', 'fields', this.value)" style="
+                        width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
+                        <option value="">— Sensor wählen —</option>
+                        ${(this.sensorGroups || []).map(s => `<option value="${s.base_name}" ${widget.sensor === s.base_name ? 'selected' : ''}>${s.name}</option>`).join('')}
+                    </select>
+                </div>
+                ${this._renderSensorFieldCheckboxes(idx, widget)}
+                <!-- Alias -->
+                <div>
+                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Anzeigename (Titel)</label>
+                    <input type="text" value="${widget.alias || ''}"
+                           onchange="window.dashboardEditor.updateWidget(${idx}, 'alias', this.value)"
                            placeholder="${this.getWidgetName(widget)}"
                            style="width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
+                </div>
+                ` : ''}
+
+                ${isHorizon ? `
+                ${this._renderSensorFieldDropdowns(idx, widget, 'rollSensor', 'rollField', 'Roll')}
+                ${this._renderSensorFieldDropdowns(idx, widget, 'pitchSensor', 'pitchField', 'Pitch')}
+                <!-- Impact Alert toggle -->
+                <div style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+                        <input type="checkbox" ${widget.impactSensor ? 'checked' : ''}
+                            onchange="window.dashboardEditor.updateWidget(${idx}, 'impactSensor', this.checked ? '' : null); window.dashboardEditor.updateWidget(${idx}, 'impactField', this.checked ? 'aktiv' : null);"
+                            style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+                        <span style="font-size: 13px; color: var(--text); font-weight: 600;">Impact-Alarm</span>
+                        <span style="font-size: 11px; color: var(--text-dim);">Horizont blinkt rot bei Erschütterung</span>
+                    </label>
+                    ${widget.impactSensor != null ? `
+                    <div style="margin-top: 10px;">
+                        ${this._renderSensorFieldDropdowns(idx, widget, 'impactSensor', 'impactField', 'Impact')}
+                    </div>
+                    ` : ''}
                 </div>
                 ` : ''}
 
                 <!-- Row -->
                 <div>
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Reihe</label>
-                    <select onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'rowName', this.value)" style="
+                    <select onchange="window.dashboardEditor.updateWidget(${idx}, 'rowName', this.value)" style="
                         width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                         ${this.rows.map(r => `<option value="${r}" ${widget.rowName === r ? 'selected' : ''}>${r}</option>`).join('')}
                     </select>
                 </div>
 
-                <!-- Size -->
-                <div>
-                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Größe</label>
-                    <select onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'size', parseInt(this.value))" style="
-                        width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
-                        ${[1,2,3,4].map(n => `<option value="${n}" ${(widget.size || 1) === n ? 'selected' : ''}>${n} Spalte${n > 1 ? 'n' : ''}</option>`).join('')}
-                    </select>
-                </div>
-
-                ${isGauge ? `
+${isGauge ? `
                 <!-- Gauge Style -->
                 <div>
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Gauge-Stil</label>
-                    <select onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'style', this.value)" style="
+                    <select onchange="window.dashboardEditor.updateWidget(${idx}, 'style', this.value)" style="
                         width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
-                        <option value="arc180" ${widget.style === 'arc180' ? 'selected' : ''}>🎯 Halbkreis (180°)</option>
-                        <option value="arc270" ${widget.style === 'arc270' ? 'selected' : ''}>🎯 Dreiviertel (270°)</option>
-                        <option value="arc360" ${widget.style === 'arc360' ? 'selected' : ''}>🎯 Vollkreis (360°)</option>
-                        <option value="bar" ${widget.style === 'bar' ? 'selected' : ''}>📊 Balken</option>
+                        <option value="arc180" ${widget.style === 'arc180' ? 'selected' : ''}>Halbkreis (180°)</option>
+                        <option value="arc270" ${widget.style === 'arc270' ? 'selected' : ''}>Dreiviertel (270°)</option>
+                        <option value="arc360" ${widget.style === 'arc360' ? 'selected' : ''}>Vollkreis (360°)</option>
+                        <option value="bar" ${widget.style === 'bar' ? 'selected' : ''}>Balken</option>
                     </select>
                 </div>
 
@@ -1081,13 +1205,13 @@ ROW weather
                     <div>
                         <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Min</label>
                         <input type="number" value="${widget.min || 0}"
-                               onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'min', parseFloat(this.value))"
+                               onchange="window.dashboardEditor.updateWidget(${idx}, 'min', parseFloat(this.value))"
                                style="width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                     </div>
                     <div>
                         <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Max</label>
                         <input type="number" value="${widget.max || 100}"
-                               onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'max', parseFloat(this.value))"
+                               onchange="window.dashboardEditor.updateWidget(${idx}, 'max', parseFloat(this.value))"
                                style="width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                     </div>
                 </div>
@@ -1096,7 +1220,7 @@ ROW weather
                 <div>
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Einheit</label>
                     <input type="text" value="${widget.unit || ''}"
-                           onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'unit', this.value)"
+                           onchange="window.dashboardEditor.updateWidget(${idx}, 'unit', this.value)"
                            placeholder="z.B. °C, %, kn"
                            style="width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                 </div>
@@ -1104,7 +1228,7 @@ ROW weather
                 <!-- Decimals -->
                 <div>
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Dezimalstellen</label>
-                    <select onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'decimals', parseInt(this.value))" style="
+                    <select onchange="window.dashboardEditor.updateWidget(${idx}, 'decimals', parseInt(this.value))" style="
                         width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                         ${[0,1,2,3].map(n => `<option value="${n}" ${(widget.decimals || 1) === n ? 'selected' : ''}>${n}</option>`).join('')}
                     </select>
@@ -1115,12 +1239,12 @@ ROW weather
                 <!-- Sensor Style -->
                 <div>
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Style</label>
-                    <select onchange="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'style', this.value)" style="
+                    <select onchange="window.dashboardEditor.updateWidget(${idx}, 'style', this.value)" style="
                         width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
-                        <option value="card" ${widget.style === 'card' ? 'selected' : ''}>📦 Card</option>
-                        <option value="minimal" ${widget.style === 'minimal' ? 'selected' : ''}>➖ Minimal</option>
-                        <option value="compact" ${widget.style === 'compact' ? 'selected' : ''}>📱 Compact</option>
-                        <option value="hero" ${widget.style === 'hero' ? 'selected' : ''}>⭐ Hero</option>
+                        <option value="card" ${widget.style === 'card' ? 'selected' : ''}>Card</option>
+                        <option value="minimal" ${widget.style === 'minimal' ? 'selected' : ''}>Minimal</option>
+                        <option value="compact" ${widget.style === 'compact' ? 'selected' : ''}>Compact</option>
+                        <option value="hero" ${widget.style === 'hero' ? 'selected' : ''}>Hero</option>
                     </select>
                 </div>
                 ` : ''}
@@ -1130,7 +1254,7 @@ ROW weather
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Farbe</label>
                     <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                         ${['cyan', 'blue', 'green', 'orange', 'purple', 'red', 'yellow'].map(color => `
-                            <div onclick="window.dashboardEditor.updateWidget(${this.selectedWidget}, 'color', '${color}')" style="
+                            <div onclick="window.dashboardEditor.updateWidget(${idx}, 'color', '${color}')" style="
                                 width: 28px;
                                 height: 28px;
                                 border-radius: 6px;
@@ -1144,15 +1268,15 @@ ROW weather
 
                 <!-- Move buttons -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
-                    <button onclick="window.dashboardEditor.moveWidget(${this.selectedWidget}, -1)"
-                            ${this.selectedWidget === 0 ? 'disabled' : ''}
+                    <button onclick="window.dashboardEditor.moveWidget(${idx}, -1)"
+                            ${idx === 0 ? 'disabled' : ''}
                             style="padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); cursor: pointer; font-size: 12px;">
-                        ⬆️ Hoch
+                        Hoch
                     </button>
-                    <button onclick="window.dashboardEditor.moveWidget(${this.selectedWidget}, 1)"
-                            ${this.selectedWidget >= this.widgets.length - 1 ? 'disabled' : ''}
+                    <button onclick="window.dashboardEditor.moveWidget(${idx}, 1)"
+                            ${idx >= this.widgets.length - 1 ? 'disabled' : ''}
                             style="padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); cursor: pointer; font-size: 12px;">
-                        ⬇️ Runter
+                        Runter
                     </button>
                 </div>
             </div>
@@ -1174,10 +1298,20 @@ ROW weather
 
         if (type === 'sensor' && sensor) {
             widget.sensor = sensor;
+            widget.field  = '';
         }
 
         if (type === 'text') {
             widget.text = 'Text hier eingeben';
+        }
+
+        if (type === 'horizon') {
+            widget.rollSensor  = '';
+            widget.rollField   = '';
+            widget.pitchSensor = '';
+            widget.pitchField  = '';
+            widget.impactSensor = '';
+            widget.impactField  = 'aktiv';
         }
 
         this.widgets.push(widget);
@@ -1193,6 +1327,7 @@ ROW weather
         const widget = {
             type: 'gauge',
             sensor: sensor,
+            field: '',
             size: 1,
             style: 'arc180',  // arc180, arc270, arc360, bar
             color: 'cyan',
@@ -1234,6 +1369,55 @@ ROW weather
             this.widgets[index][property] = value;
             this.render();
         }
+    }
+
+    /**
+     * Update widget sensor selection — sets sensorKey and clears fieldKey in one render cycle
+     */
+    updateWidgetSensor(index, sensorKey, fieldKey, sensorValue) {
+        if (this.widgets[index]) {
+            this.widgets[index][sensorKey] = sensorValue;
+            this.widgets[index][fieldKey]  = fieldKey === 'fields' ? [] : '';
+            this.render();
+        }
+    }
+
+    toggleField(index, fieldName, checked) {
+        const widget = this.widgets[index];
+        if (!widget) return;
+        let fields = [...(widget.fields || [])];
+        if (checked) {
+            if (!fields.includes(fieldName)) fields.push(fieldName);
+        } else {
+            fields = fields.filter(f => f !== fieldName);
+        }
+        widget.fields = fields;
+        this.render();
+    }
+
+    _renderSensorFieldCheckboxes(widgetIdx, widget) {
+        const grp = (this.sensorGroups || []).find(s => s.base_name === widget.sensor);
+        if (!grp) return '';
+        const fields = Object.keys(grp.values || {});
+        if (!fields.length) return '';
+        const selectedFields = widget.fields || [];
+        return `
+            <div>
+                <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Angezeigte Werte</label>
+                <div style="display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; overflow: hidden;">
+                    ${fields.map((f, i) => `
+                        <label style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; user-select: none;
+                               border-bottom: ${i < fields.length - 1 ? '1px solid var(--border)' : 'none'};
+                               background: ${selectedFields.includes(f) ? 'rgba(79,195,247,0.08)' : 'transparent'};">
+                            <input type="checkbox" ${selectedFields.includes(f) ? 'checked' : ''}
+                                   onchange="window.dashboardEditor.toggleField(${widgetIdx}, '${f}', this.checked)"
+                                   style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
+                            <span style="font-size: 13px; color: var(--text);">${f}</span>
+                        </label>
+                    `).join('')}
+                </div>
+            </div>
+        `;
     }
 
     /**
@@ -1332,6 +1516,488 @@ ROW weather
         });
     }
 
+    // ─── Screen-based editor (new format) ──────────────────────────────────────
+
+    /**
+     * Generate small SVG thumbnail visualising a template's grid areas
+     */
+    _templateThumbnailSvg(template) {
+        const areaRows = (template.areas || '').split('\n');
+        const numRows = areaRows.length;
+        const numCols = areaRows[0] ? areaRows[0].trim().split(/\s+/).length : 1;
+        const W = 60, H = 45;
+        const cellW = W / numCols, cellH = H / numRows;
+        const colors = {A:'#1565C0',B:'#0D6E6E',C:'#6B3A7D',D:'#1A5C2A',E:'#7D3A1A',F:'#2A3A7D'};
+        const drawn = new Set();
+        let svg = '';
+        for (let r = 0; r < numRows; r++) {
+            const cols = areaRows[r].trim().split(/\s+/);
+            for (let c = 0; c < cols.length; c++) {
+                const slot = cols[c].toUpperCase();
+                if (drawn.has(slot)) continue;
+                drawn.add(slot);
+                // Find bounding box of this slot
+                let minR=r, maxR=r, minC=c, maxC=c;
+                for (let rr = 0; rr < numRows; rr++) {
+                    const rc = (areaRows[rr]||'').trim().split(/\s+/);
+                    for (let cc = 0; cc < rc.length; cc++) {
+                        if (rc[cc].toUpperCase() === slot) {
+                            minR=Math.min(minR,rr); maxR=Math.max(maxR,rr);
+                            minC=Math.min(minC,cc); maxC=Math.max(maxC,cc);
+                        }
+                    }
+                }
+                const x = minC*cellW+1, y = minR*cellH+1;
+                const w = (maxC-minC+1)*cellW-2, h = (maxR-minR+1)*cellH-2;
+                svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${colors[slot]||'#333'}" opacity="0.85"/>`;
+                svg += `<text x="${(x+w/2).toFixed(1)}" y="${(y+h/2+4).toFixed(1)}" text-anchor="middle" fill="white" font-size="12" font-weight="bold" font-family="monospace">${slot}</text>`;
+            }
+        }
+        return `<svg viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px;display:block;">${svg}</svg>`;
+    }
+
+    /**
+     * Render the screen-based visual editor
+     */
+    renderScreenEditor() {
+        const screen = this.screens[this.currentScreenIndex];
+        if (!screen) return '<div style="color:var(--text-dim);padding:20px">Kein Screen vorhanden</div>';
+
+        const tmpl = this.templates.find(t => t.id === screen.layoutId) || this.templates[0] || {id:'full',slots:['A'],cols:'1fr',rows:'1fr',areas:'A'};
+        const slots = tmpl.slots || Object.keys(screen.widgets || {});
+
+        return `
+            <div style="height:calc(100% - 60px); display:flex; flex-direction:column; gap:12px;">
+                <!-- Screen tabs -->
+                <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; flex-shrink:0;">
+                    ${this.screens.map((s, i) => `
+                        <button onclick="window.dashboardEditor.switchScreen(${i})" style="
+                            padding:6px 14px;
+                            background:${i === this.currentScreenIndex ? 'var(--accent)' : 'var(--bg-card)'};
+                            color:${i === this.currentScreenIndex ? 'white' : 'var(--text)'};
+                            border:1px solid ${i === this.currentScreenIndex ? 'var(--accent)' : 'var(--border)'};
+                            border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; position:relative;
+                        ">${s.name || `Screen ${i+1}`}
+                            <span onclick="event.stopPropagation();window.dashboardEditor.deleteScreen(${i})" style="
+                                position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;
+                                background:#ef5350;color:white;font-size:10px;display:flex;align-items:center;justify-content:center;
+                                cursor:pointer;line-height:1;" title="Screen löschen">×</span>
+                        </button>`).join('')}
+                    <button onclick="window.dashboardEditor.addScreen()" style="
+                        padding:6px 12px; background:var(--bg-card); color:var(--accent);
+                        border:1px solid var(--accent); border-radius:8px; font-size:13px; cursor:pointer; font-weight:600;
+                    ">+ Screen</button>
+                    <input type="text" value="${screen.name || ''}"
+                        onchange="window.dashboardEditor.renameScreen(this.value)"
+                        style="padding:5px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
+                               color:var(--text);font-size:12px;width:140px;" placeholder="Screen-Name">
+                </div>
+
+                <!-- Two-column editor: template picker + slot assignment -->
+                <div style="flex:1; display:flex; gap:14px; min-height:0; overflow:hidden;">
+                    <!-- Template picker -->
+                    <div style="width:280px; flex-shrink:0; background:var(--bg-panel); border:1px solid var(--border); border-radius:12px; padding:14px; overflow-y:auto;">
+                        <div style="font-size:12px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Vorlage</div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                            ${this.templates.map(t => `
+                                <div onclick="window.dashboardEditor.setScreenLayout('${t.id}')" style="
+                                    padding:8px; border-radius:8px; cursor:pointer; text-align:center;
+                                    border:2px solid ${screen.layoutId === t.id ? 'var(--accent)' : 'var(--border)'};
+                                    background:${screen.layoutId === t.id ? 'rgba(79,195,247,0.08)' : 'var(--bg-card)'};
+                                    transition:border-color .15s;
+                                " onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='${screen.layoutId === t.id ? 'var(--accent)' : 'var(--border)'}'">
+                                    <div style="margin-bottom:5px;">${this._templateThumbnailSvg(t)}</div>
+                                    <div style="font-size:10px;color:var(--text);font-weight:600;">${t.name}</div>
+                                </div>`).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Slot assignment -->
+                    <div style="flex:1; background:var(--bg-panel); border:1px solid var(--border); border-radius:12px; padding:14px; overflow-y:auto;">
+                        <div style="font-size:12px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">
+                            Slots — Vorlage: <span style="color:var(--accent)">${tmpl.name || tmpl.id}</span>
+                        </div>
+                        ${slots.map(slot => {
+                            const w = (screen.widgets || {})[slot] || {};
+                            const wtype = w.type || '';
+                            return `
+                            <div style="display:flex;align-items:flex-start;gap:10px;padding:10px;margin-bottom:8px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;">
+                                <!-- Slot letter badge -->
+                                <div style="width:28px;height:28px;border-radius:6px;background:#1565C0;display:flex;align-items:center;justify-content:center;
+                                            color:white;font-weight:700;font-family:monospace;font-size:14px;flex-shrink:0;">${slot}</div>
+                                <div style="flex:1;display:flex;flex-direction:column;gap:6px;">
+                                    <!-- Widget type -->
+                                    <select onchange="window.dashboardEditor.setSlotWidgetType('${slot}', this.value)" style="
+                                        width:100%;padding:6px 8px;background:var(--bg-panel);border:1px solid var(--border);
+                                        border-radius:6px;color:var(--text);font-size:12px;">
+                                        <option value="" ${!wtype ? 'selected':''}>— leer —</option>
+                                        <option value="sensor" ${wtype==='sensor'?'selected':''}>Sensor-Karte</option>
+                                        <option value="gauge" ${wtype==='gauge'?'selected':''}>Gauge</option>
+                                        <option value="horizon" ${wtype==='horizon'?'selected':''}>Horizont</option>
+                                        <option value="clock" ${wtype==='clock'?'selected':''}>Uhr</option>
+                                        <option value="compass" ${wtype==='compass'?'selected':''}>Kompass</option>
+                                        <option value="spacer" ${wtype==='spacer'?'selected':''}>Spacer</option>
+                                        <option value="text" ${wtype==='text'?'selected':''}>Text</option>
+                                    </select>
+                                    ${wtype === 'gauge' ? `
+                                    <select onchange="window.dashboardEditor.setSlotProp('${slot}','sensor',this.value)" style="
+                                        width:100%;padding:6px 8px;background:var(--bg-panel);border:1px solid var(--border);
+                                        border-radius:6px;color:var(--text);font-size:12px;">
+                                        <option value="">— Sensor / Feld wählen —</option>
+                                        ${(this.sensors||[]).map(s => `<option value="${s.full_path}" ${w.sensor===s.full_path?'selected':''}>${s.name||s.full_path}</option>`).join('')}
+                                    </select>` : ''}
+                                    ${wtype === 'sensor' ? `
+                                    <select onchange="window.dashboardEditor.setSlotSensor('${slot}',this.value)" style="
+                                        width:100%;padding:6px 8px;background:var(--bg-panel);border:1px solid var(--border);
+                                        border-radius:6px;color:var(--text);font-size:12px;">
+                                        <option value="">— Sensor-Gruppe wählen —</option>
+                                        ${(this.sensorGroups||[]).map(s => `<option value="${s.base_name}" ${w.sensor===s.base_name?'selected':''}>${s.name}</option>`).join('')}
+                                    </select>
+                                    ${this._renderSlotFieldCheckboxes(slot, w)}
+                                    <input type="text" value="${(w.alias||'').replace(/"/g,'&quot;')}" placeholder="Anzeigename (Titel)"
+                                        onchange="window.dashboardEditor.setSlotProp('${slot}','alias',this.value)"
+                                        style="width:100%;padding:5px 8px;background:var(--bg-panel);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;box-sizing:border-box;">
+                                    <select onchange="window.dashboardEditor.setSlotProp('${slot}','style',this.value)" style="
+                                        width:100%;padding:5px 8px;background:var(--bg-panel);border:1px solid var(--border);
+                                        border-radius:6px;color:var(--text);font-size:12px;margin-top:2px;">
+                                        <option value="card" ${(w.style||'card')==='card'?'selected':''}>Card</option>
+                                        <option value="compact" ${w.style==='compact'?'selected':''}>Kompakt</option>
+                                        <option value="hero" ${w.style==='hero'?'selected':''}>Hero</option>
+                                    </select>
+                                    ` : ''}
+                                    ${wtype === 'horizon' ? `
+                                    <div style="display:flex;flex-direction:column;gap:5px;">
+                                        <label style="font-size:10px;color:var(--text-dim);margin:0;">Roll-Topic</label>
+                                        <select onchange="window.dashboardEditor.setSlotHorizonPath('${slot}','roll',this.value)" style="
+                                            width:100%;padding:5px 8px;background:var(--bg-panel);border:1px solid var(--border);
+                                            border-radius:6px;color:var(--text);font-size:11px;">
+                                            <option value="">— Roll auswählen —</option>
+                                            ${this.sensors.map(s => `<option value="${s.full_path||s.base_name+'/'+s.value_name}" ${(w.rollSensor&&w.rollField)&&(w.rollSensor+'/'+(w.rollField||''))===(s.full_path||s.base_name+'/'+s.value_name)?'selected':''}>${s.name||s.full_path}</option>`).join('')}
+                                        </select>
+                                        <label style="font-size:10px;color:var(--text-dim);margin:0;">Pitch-Topic</label>
+                                        <select onchange="window.dashboardEditor.setSlotHorizonPath('${slot}','pitch',this.value)" style="
+                                            width:100%;padding:5px 8px;background:var(--bg-panel);border:1px solid var(--border);
+                                            border-radius:6px;color:var(--text);font-size:11px;">
+                                            <option value="">— Pitch auswählen —</option>
+                                            ${this.sensors.map(s => `<option value="${s.full_path||s.base_name+'/'+s.value_name}" ${(w.pitchSensor&&w.pitchField)&&(w.pitchSensor+'/'+(w.pitchField||''))===(s.full_path||s.base_name+'/'+s.value_name)?'selected':''}>${s.name||s.full_path}</option>`).join('')}
+                                        </select>
+                                        <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text);cursor:pointer;margin:2px 0;">
+                                            <input type="checkbox" ${w.impactSensor?'checked':''} onchange="window.dashboardEditor.toggleSlotImpact('${slot}',this.checked)"
+                                                style="width:14px;height:14px;cursor:pointer;">
+                                            Impact-Alarm
+                                        </label>
+                                        ${w.impactSensor !== undefined && w.impactSensor !== null ? `
+                                        <select onchange="window.dashboardEditor.setSlotHorizonPath('${slot}','impact',this.value)" style="
+                                            width:100%;padding:5px 8px;background:var(--bg-panel);border:1px solid var(--border);
+                                            border-radius:6px;color:var(--text);font-size:11px;">
+                                            <option value="">— Impact-Topic —</option>
+                                            ${this.sensors.map(s => `<option value="${s.full_path||s.base_name+'/'+s.value_name}" ${(w.impactSensor&&w.impactField)&&(w.impactSensor+'/'+(w.impactField||''))===(s.full_path||s.base_name+'/'+s.value_name)?'selected':''}>${s.name||s.full_path}</option>`).join('')}
+                                        </select>` : ''}
+                                    </div>` : ''}
+                                    ${wtype === 'gauge' ? `
+                                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                                        <input type="number" placeholder="Min" value="${w.min!=null?w.min:0}"
+                                            onchange="window.dashboardEditor.setSlotProp('${slot}','min',parseFloat(this.value))"
+                                            style="width:60px;padding:5px;background:var(--bg-panel);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;">
+                                        <input type="number" placeholder="Max" value="${w.max!=null?w.max:100}"
+                                            onchange="window.dashboardEditor.setSlotProp('${slot}','max',parseFloat(this.value))"
+                                            style="width:60px;padding:5px;background:var(--bg-panel);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;">
+                                        <input type="text" placeholder='Einheit' value="${w.unit||''}"
+                                            onchange="window.dashboardEditor.setSlotProp('${slot}','unit',this.value)"
+                                            style="width:60px;padding:5px;background:var(--bg-panel);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;">
+                                        <select onchange="window.dashboardEditor.setSlotProp('${slot}','style',this.value)" style="
+                                            flex:1;padding:5px 6px;background:var(--bg-panel);border:1px solid var(--border);
+                                            border-radius:6px;color:var(--text);font-size:11px;">
+                                            <option value="arc270" ${(w.style||'arc270')==='arc270'?'selected':''}>270°</option>
+                                            <option value="arc180" ${w.style==='arc180'?'selected':''}>180°</option>
+                                            <option value="arc360" ${w.style==='arc360'?'selected':''}>360°</option>
+                                            <option value="bar" ${w.style==='bar'?'selected':''}>Balken</option>
+                                        </select>
+                                        <select onchange="window.dashboardEditor.setSlotProp('${slot}','color',this.value)" style="
+                                            flex:1;padding:5px 6px;background:var(--bg-panel);border:1px solid var(--border);
+                                            border-radius:6px;color:var(--text);font-size:11px;">
+                                            ${['cyan','blue','green','orange','purple','red'].map(c=>`<option value="${c}" ${(w.color||'cyan')===c?'selected':''}>${c}</option>`).join('')}
+                                        </select>
+                                        <select onchange="window.dashboardEditor.setSlotProp('${slot}','decimals',parseInt(this.value))" title="Dezimalstellen" style="
+                                            width:54px;padding:5px 4px;background:var(--bg-panel);border:1px solid var(--border);
+                                            border-radius:6px;color:var(--text);font-size:11px;">
+                                            ${[0,1,2,3].map(n=>`<option value="${n}" ${(w.decimals??1)===n?'selected':''}>${n} Dez.</option>`).join('')}
+                                        </select>
+                                    </div>` : ''}
+                                    ${wtype === 'text' ? `
+                                    <input type="text" placeholder="Text eingeben" value="${(w.text||'').replace(/"/g,'&quot;')}"
+                                        onchange="window.dashboardEditor.setSlotProp('${slot}','text',this.value)"
+                                        style="width:100%;padding:5px 8px;background:var(--bg-panel);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;">
+                                    ` : ''}
+                                </div>
+                                <!-- Clear slot button -->
+                                <button onclick="window.dashboardEditor.clearSlot('${slot}')" title="Slot leeren" style="
+                                    background:none;border:1px solid rgba(239,83,80,0.4);border-radius:6px;
+                                    color:#ef5350;font-size:13px;padding:4px 7px;cursor:pointer;flex-shrink:0;line-height:1;">×</button>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Switch to a different screen tab
+     */
+    switchScreen(index) {
+        this.currentScreenIndex = Math.max(0, Math.min(index, this.screens.length - 1));
+        this.render();
+    }
+
+    /**
+     * Add a new screen
+     */
+    addScreen() {
+        const n = this.screens.length + 1;
+        this.screens.push({ name: `Screen ${n}`, layoutId: 'full', widgets: {} });
+        this.currentScreenIndex = this.screens.length - 1;
+        this.render();
+    }
+
+    /**
+     * Delete a screen at index i
+     */
+    deleteScreen(i) {
+        if (this.screens.length <= 1) {
+            alert('Mindestens ein Screen muss vorhanden sein.');
+            return;
+        }
+        if (!confirm(`Screen "${this.screens[i].name}" löschen?`)) return;
+        this.screens.splice(i, 1);
+        this.currentScreenIndex = Math.max(0, Math.min(this.currentScreenIndex, this.screens.length - 1));
+        this.render();
+    }
+
+    /**
+     * Rename current screen
+     */
+    renameScreen(name) {
+        if (this.screens[this.currentScreenIndex]) {
+            this.screens[this.currentScreenIndex].name = name.trim() || `Screen ${this.currentScreenIndex + 1}`;
+        }
+    }
+
+    /**
+     * Set the layout template for the current screen
+     */
+    setScreenLayout(layoutId) {
+        const screen = this.screens[this.currentScreenIndex];
+        if (!screen) return;
+        const oldTmpl = this.templates.find(t => t.id === screen.layoutId) || { slots: [] };
+        const newTmpl = this.templates.find(t => t.id === layoutId) || { slots: [] };
+        // Keep widgets that exist in the new template's slots
+        const newWidgets = {};
+        for (const slot of (newTmpl.slots || [])) {
+            if (screen.widgets[slot]) newWidgets[slot] = screen.widgets[slot];
+        }
+        screen.layoutId = layoutId;
+        screen.widgets = newWidgets;
+        this.render();
+    }
+
+    /**
+     * Set a slot's widget type
+     */
+    setSlotWidgetType(slot, type) {
+        const screen = this.screens[this.currentScreenIndex];
+        if (!screen) return;
+        if (!type) {
+            delete screen.widgets[slot];
+        } else {
+            const defaults = {
+                sensor:  { type:'sensor', sensor:'', style:'card', color:'cyan' },
+                gauge:   { type:'gauge', sensor:'', min:0, max:100, unit:'', style:'arc270', color:'cyan', decimals:1 },
+                horizon: { type:'horizon', rollSensor:'', rollField:'schlagseite', pitchSensor:'', pitchField:'neigung', impactSensor:null, impactField:null },
+                clock:   { type:'clock' },
+                compass: { type:'compass' },
+                spacer:  { type:'spacer' },
+                text:    { type:'text', text:'' }
+            };
+            screen.widgets[slot] = { ...(screen.widgets[slot] || {}), ...(defaults[type] || { type }) };
+            screen.widgets[slot].type = type;
+        }
+        this.render();
+    }
+
+    /**
+     * Set a property on a slot's widget
+     */
+    setSlotProp(slot, prop, value) {
+        const screen = this.screens[this.currentScreenIndex];
+        if (!screen || !screen.widgets[slot]) return;
+        screen.widgets[slot][prop] = value;
+        // No re-render needed — input/select already reflects the value
+    }
+
+    setSlotHorizonPath(slot, which, fullPath) {
+        const screen = this.screens[this.currentScreenIndex];
+        if (!screen || !screen.widgets[slot]) return;
+        const w = screen.widgets[slot];
+        if (!fullPath) return;
+        const idx = fullPath.lastIndexOf('/');
+        const base  = idx >= 0 ? fullPath.slice(0, idx)  : fullPath;
+        const field = idx >= 0 ? fullPath.slice(idx + 1) : '';
+        if (which === 'roll') {
+            w.rollSensor = base; w.rollField = field;
+        } else if (which === 'pitch') {
+            w.pitchSensor = base; w.pitchField = field;
+        } else if (which === 'impact') {
+            w.impactSensor = base; w.impactField = field;
+        }
+    }
+
+    toggleSlotImpact(slot, enabled) {
+        const screen = this.screens[this.currentScreenIndex];
+        if (!screen || !screen.widgets[slot]) return;
+        const w = screen.widgets[slot];
+        if (enabled) {
+            if (!w.impactSensor) w.impactSensor = '';
+            if (!w.impactField)  w.impactField  = 'aktiv';
+        } else {
+            w.impactSensor = null;
+            w.impactField  = null;
+        }
+        this.render();
+    }
+
+    setSlotSensor(slot, baseName) {
+        const screen = this.screens[this.currentScreenIndex];
+        if (!screen) return;
+        if (!screen.widgets[slot]) screen.widgets[slot] = { type: 'sensor' };
+        screen.widgets[slot].sensor = baseName;
+        screen.widgets[slot].fields = [];
+        this.render();
+    }
+
+    toggleSlotField(slot, fieldName, checked) {
+        const screen = this.screens[this.currentScreenIndex];
+        if (!screen || !screen.widgets[slot]) return;
+        const w = screen.widgets[slot];
+        let fields = [...(w.fields || [])];
+        if (checked) {
+            if (!fields.includes(fieldName)) fields.push(fieldName);
+        } else {
+            fields = fields.filter(f => f !== fieldName);
+        }
+        w.fields = fields;
+        this.render();
+    }
+
+    setSlotFieldAlias(slot, fieldName, alias) {
+        const screen = this.screens[this.currentScreenIndex];
+        if (!screen || !screen.widgets[slot]) return;
+        const w = screen.widgets[slot];
+        if (!w.fieldAliases) w.fieldAliases = {};
+        if (alias) {
+            w.fieldAliases[fieldName] = alias;
+        } else {
+            delete w.fieldAliases[fieldName];
+        }
+    }
+
+    _renderSlotFieldCheckboxes(slot, w) {
+        if (!w || !w.sensor) return '';
+        const group = (this.sensorGroups || []).find(s => s.base_name === w.sensor);
+        if (!group) return '';
+        const fieldNames = Object.keys(group.values || {});
+        if (!fieldNames.length) return '';
+        const selectedFields = w.fields || w.show || [];
+        const aliases = w.fieldAliases || {};
+        const rows = fieldNames.map(f => {
+            const checked = selectedFields.includes(f) ? 'checked' : '';
+            const aliasVal = (aliases[f] || '').replace(/"/g, '&quot;');
+            return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border);">
+                <input type="checkbox" ${checked} onchange="window.dashboardEditor.toggleSlotField('${slot}','${f}',this.checked)"
+                    style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent);flex-shrink:0;">
+                <span style="font-size:12px;color:var(--text);min-width:80px;">${f}</span>
+                <input type="text" value="${aliasVal}" placeholder="Anzeigename"
+                    onchange="window.dashboardEditor.setSlotFieldAlias('${slot}','${f}',this.value)"
+                    style="flex:1;padding:3px 7px;background:var(--bg-card);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;">
+            </div>`;
+        }).join('');
+        return `<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-top:4px;">${rows}</div>`;
+    }
+
+    /**
+     * Clear a slot (remove widget assignment)
+     */
+    clearSlot(slot) {
+        const screen = this.screens[this.currentScreenIndex];
+        if (screen) delete screen.widgets[slot];
+        this.render();
+    }
+
+    /**
+     * Convert screens to DSL (new SCREEN/LAYOUT format)
+     */
+    toDSLScreen() {
+        let dsl = '';
+        for (const screen of this.screens) {
+            const layoutId = screen.layoutId || 'full';
+            const safeName = (screen.name || 'Screen').replace(/\s+/g, '_');
+            dsl += `SCREEN ${safeName} LAYOUT ${layoutId}\n`;
+            const tmpl = this.templates.find(t => t.id === layoutId) || { slots: [] };
+            for (const slot of (tmpl.slots || [])) {
+                const w = (screen.widgets || {})[slot];
+                if (!w || !w.type) continue;
+                dsl += `  ${slot}  ${this._widgetToDSLLine(w)}\n`;
+            }
+            dsl += '\n';
+        }
+        return dsl.trim();
+    }
+
+    /**
+     * Serialize a single widget to a DSL line (without slot prefix)
+     */
+    _widgetToDSLLine(w) {
+        switch (w.type) {
+            case 'sensor': {
+                let line = `SENSOR ${w.sensor || 'bilge/thermo'}`;
+                if (w.alias) line += ` ALIAS "${w.alias}"`;
+                const showFields = w.fields && w.fields.length ? w.fields : (w.show && w.show.length ? w.show : null);
+                if (showFields) line += ` SHOW "${showFields.join(',')}"`;
+                const fa = w.fieldAliases && Object.keys(w.fieldAliases).length
+                    ? Object.entries(w.fieldAliases).map(([k,v]) => `${k}:${v}`).join(',') : null;
+                if (fa) line += ` FIELDALIAS "${fa}"`;
+                if (w.style && w.style !== 'card') line += ` STYLE ${w.style}`;
+                if (w.color && w.color !== 'cyan') line += ` COLOR ${w.color}`;
+                return line;
+            }
+            case 'gauge': {
+                let line = `GAUGE ${w.sensor || 'bilge/thermo'}`;
+                if (w.min != null) line += ` MIN ${w.min}`;
+                if (w.max != null) line += ` MAX ${w.max}`;
+                if (w.unit) line += ` UNIT "${w.unit}"`;
+                if (w.label) line += ` LABEL "${w.label}"`;
+                if (w.style && w.style !== 'arc270') line += ` STYLE ${w.style}`;
+                if (w.color && w.color !== 'cyan') line += ` COLOR ${w.color}`;
+                return line;
+            }
+            case 'horizon': {
+                const parts = ['HORIZON'];
+                if (w.rollSensor)  parts.push(`rollSensor=${w.rollSensor}`, `rollField=${w.rollField || 'schlagseite'}`);
+                if (w.pitchSensor) parts.push(`pitchSensor=${w.pitchSensor}`, `pitchField=${w.pitchField || 'neigung'}`);
+                if (w.impactSensor) parts.push(`impactSensor=${w.impactSensor}`, `impactField=${w.impactField || 'aktiv'}`);
+                if (!w.rollSensor && !w.pitchSensor) parts.push(w.sensor || 'boot/sensoren/lage');
+                return parts.join(' ');
+            }
+            case 'clock':   return 'CLOCK';
+            case 'compass': return 'COMPASS';
+            case 'spacer':  return 'SPACER';
+            case 'text':    return `TEXT "${w.text || ''}"`;
+            default:        return 'SPACER';
+        }
+    }
+
+    // ───────────────────────────────────────────────────────────────────────────
+
     /**
      * Convert widgets to DSL format
      */
@@ -1353,6 +2019,7 @@ ROW weather
                 if (w.type === 'sensor') {
                     dsl += `  SENSOR ${w.sensor}`;
                     if (w.alias) dsl += ` ALIAS "${w.alias}"`;
+                    if (w.fields && w.fields.length) dsl += ` SHOW "${w.fields.join(',')}"`;
                     if (w.size && w.size > 1) dsl += ` SIZE ${w.size}`;
                     if (w.style && w.style !== 'card') dsl += ` STYLE ${w.style}`;
                     if (w.color && w.color !== 'cyan') dsl += ` COLOR ${w.color}`;
@@ -1371,6 +2038,14 @@ ROW weather
                     if (w.size && w.size > 1) dsl += ` SIZE ${w.size}`;
                     if (w.style && w.style !== 'normal') dsl += ` STYLE ${w.style}`;
                     if (w.color && w.color !== 'cyan') dsl += ` COLOR ${w.color}`;
+                } else if (w.type === 'horizon') {
+                    const hparts = ['HORIZON'];
+                    if (w.rollSensor)  hparts.push(`rollSensor=${w.rollSensor}`, `rollField=${w.rollField || 'schlagseite'}`);
+                    if (w.pitchSensor) hparts.push(`pitchSensor=${w.pitchSensor}`, `pitchField=${w.pitchField || 'neigung'}`);
+                    if (w.impactSensor) hparts.push(`impactSensor=${w.impactSensor}`, `impactField=${w.impactField || 'aktiv'}`);
+                    if (!w.rollSensor && !w.pitchSensor) hparts.push(w.sensor || 'boot/sensoren/lage');
+                    dsl += `  ${hparts.join(' ')}`;
+                    if (w.size && w.size > 1) dsl += ` SIZE ${w.size}`;
                 } else {
                     dsl += `  ${w.type.toUpperCase()}`;
                     if (w.size && w.size > 1) dsl += ` SIZE ${w.size}`;
@@ -1387,7 +2062,7 @@ ROW weather
      * Save layout to backend
      */
     async save() {
-        const dsl = this.toDSL();
+        const dsl = this.screens.length > 0 ? this.toDSLScreen() : this.toDSL();
         console.log('=== SAVING DASHBOARD ===');
         console.log('DSL to save:', dsl);
         console.log('Widgets:', JSON.stringify(this.widgets, null, 2));

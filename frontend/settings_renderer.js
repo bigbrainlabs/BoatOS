@@ -1031,9 +1031,9 @@ window.saveSensorAlias = async function(baseName, sensorId) {
 async function renderDashboardSettings() {
     try {
         // Load current layout
-        const response = await fetch('/api/dashboard/layout');
-        const data = await response.json();
-        const layout = data.layout || '';
+        const layoutResp = await fetch('/api/dashboard/layout');
+        const data       = await layoutResp.json();
+        const layout     = data.layout || '';
 
         return `
             <div style="max-width: 1400px; margin: 0 auto; position: relative; z-index: 2;">
@@ -1472,3 +1472,4 @@ window.SettingsRenderer = {
     createSettingsHeroCard: createSettingsHeroCard,
     createSettingsCard: createSettingsCard
 };
+

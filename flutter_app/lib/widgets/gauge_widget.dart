@@ -1,6 +1,7 @@
 // lib/widgets/gauge_widget.dart
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
@@ -51,8 +52,12 @@ class GaugeWidget extends StatefulWidget {
 
 class _GaugeWidgetState extends State<GaugeWidget>
     with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
+  late Ticker _ticker;
+  double _dispValue = 0;
+  double _tgtValue  = 0;
+  Duration _lastTick = Duration.zero;
+
+  static const _speed = 4.0;
 
   double _toPct(double v) => widget.max > widget.min
       ? ((v - widget.min) / (widget.max - widget.min)).clamp(0.0, 1.0)
@@ -61,51 +66,48 @@ class _GaugeWidgetState extends State<GaugeWidget>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 500));
-    final p = _toPct(widget.value);
-    _anim = Tween<double>(begin: p, end: p)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _dispValue = widget.value;
+    _tgtValue  = widget.value;
+    _ticker = createTicker(_onTick)..start();
+  }
+
+  void _onTick(Duration elapsed) {
+    if (_lastTick == Duration.zero) { _lastTick = elapsed; return; }
+    final dt = (elapsed - _lastTick).inMicroseconds / 1e6;
+    _lastTick = elapsed;
+    final t = 1.0 - math.exp(-_speed * dt);
+    setState(() {
+      _dispValue += (_tgtValue - _dispValue) * t;
+    });
   }
 
   @override
   void didUpdateWidget(GaugeWidget old) {
     super.didUpdateWidget(old);
-    if (old.value != widget.value) {
-      final from = _anim.value;
-      final to   = _toPct(widget.value);
-      _anim = Tween<double>(begin: from, end: to)
-          .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-      _ctrl.forward(from: 0);
-    }
+    if (old.value != widget.value) _tgtValue = widget.value;
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _ticker.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, __) {
-        if (widget.style == GaugeStyle.bar) {
-          return _BarGauge(
-            pct: _anim.value, value: widget.value,
-            min: widget.min, max: widget.max,
-            unit: widget.unit, label: widget.label,
-            color: widget.color, decimals: widget.decimals,
-          );
-        }
-        return _ArcGauge(
-          pct: _anim.value, value: widget.value,
-          min: widget.min, max: widget.max,
-          unit: widget.unit, label: widget.label,
-          style: widget.style, color: widget.color, decimals: widget.decimals,
-        );
-      },
+    if (widget.style == GaugeStyle.bar) {
+      return _BarGauge(
+        pct: _toPct(_dispValue), value: _dispValue,
+        min: widget.min, max: widget.max,
+        unit: widget.unit, label: widget.label,
+        color: widget.color, decimals: widget.decimals,
+      );
+    }
+    return _ArcGauge(
+      pct: _toPct(_dispValue), value: _dispValue,
+      min: widget.min, max: widget.max,
+      unit: widget.unit, label: widget.label,
+      style: widget.style, color: widget.color, decimals: widget.decimals,
     );
   }
 }
@@ -232,8 +234,9 @@ class _ArcPainter extends CustomPainter {
 
   (Offset center, double radius) _layout(Size size) {
     if (style == GaugeStyle.arc180) {
-      final r = math.max(math.min(size.width * 0.42, size.height * 0.80), 10.0);
-      return (Offset(size.width / 2, size.height - r * 0.15), r);
+      // Square canvas: center at 70% so the arch (top half of circle) is vertically centered
+      final r = math.max(math.min(size.width * 0.42, size.height * 0.42), 10.0);
+      return (Offset(size.width / 2, size.height * 0.70), r);
     }
     final r = math.max(math.min(size.width, size.height) * 0.42, 10.0);
     return (Offset(size.width / 2, size.height / 2), r);
@@ -257,14 +260,30 @@ class _ArcPainter extends CustomPainter {
   }
 
   void _drawBezel(Canvas canvas, Offset center, double radius) {
-    canvas.drawCircle(center, radius + 11, Paint()
-      ..color = const Color(0xFF21262D)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 5);
-    canvas.drawCircle(center, radius + 2, Paint()
-      ..color = const Color(0xFF30363D)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1);
+    if (style == GaugeStyle.arc180) {
+      // Only draw the arc portion of the bezel, not a full circle
+      const start = math.pi - 0.08;
+      const sweep = math.pi + 0.16;
+      canvas.drawArc(Rect.fromCircle(center: center, radius: radius + 11),
+          start, sweep, false, Paint()
+            ..color = const Color(0xFF21262D)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 5);
+      canvas.drawArc(Rect.fromCircle(center: center, radius: radius + 2),
+          start, sweep, false, Paint()
+            ..color = const Color(0xFF30363D)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1);
+    } else {
+      canvas.drawCircle(center, radius + 11, Paint()
+        ..color = const Color(0xFF21262D)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5);
+      canvas.drawCircle(center, radius + 2, Paint()
+        ..color = const Color(0xFF30363D)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1);
+    }
   }
 
   void _drawTrack(Canvas canvas, Offset center, double r, double start, double sweep) {
@@ -476,6 +495,7 @@ class SensorCard extends StatelessWidget {
   final Color color;
   final List<String> showFields;
   final List<String> hideFields;
+  final Map<String, String> fieldAliases;
   final Map<String, dynamic>? sensorData;
 
   const SensorCard({
@@ -486,6 +506,7 @@ class SensorCard extends StatelessWidget {
     this.color = const Color(0xFF64FFDA),
     this.showFields = const [],
     this.hideFields = const [],
+    this.fieldAliases = const {},
     this.sensorData,
   });
 
@@ -561,7 +582,7 @@ class SensorCard extends StatelessWidget {
                   spacing: 16,
                   runSpacing: 6,
                   children: entries
-                      .map((e) => _ValueChip(fieldName: e.key, value: e.value, color: color))
+                      .map((e) => _ValueChip(fieldName: fieldAliases[e.key] ?? e.key, value: e.value, color: color))
                       .toList(),
                 ),
         ],
@@ -587,12 +608,13 @@ class SensorCard extends StatelessWidget {
           _header(statusColor),
           if (primary != null) ...[
             const SizedBox(height: 6),
-            Text(
-              _fmt(primary.value),
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: color),
+            _ValueChip(
+              fieldName: fieldAliases[primary.key] ?? primary.key,
+              value: primary.value,
+              color: color,
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
             ),
-            Text(primary.key,
-                style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280))),
           ],
           if (secondary.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -625,25 +647,505 @@ class SensorCard extends StatelessWidget {
       ]);
 }
 
-class _ValueChip extends StatelessWidget {
+class _ValueChip extends StatefulWidget {
   final String fieldName;
   final dynamic value;
   final Color color;
+  final double fontSize;
+  final FontWeight fontWeight;
 
-  const _ValueChip({required this.fieldName, required this.value, required this.color});
+  const _ValueChip({
+    required this.fieldName,
+    required this.value,
+    required this.color,
+    this.fontSize = 16,
+    this.fontWeight = FontWeight.w600,
+  });
+
+  @override
+  State<_ValueChip> createState() => _ValueChipState();
+}
+
+class _ValueChipState extends State<_ValueChip>
+    with SingleTickerProviderStateMixin {
+  late Ticker _ticker;
+  double? _dispValue;
+  double? _tgtValue;
+  Duration _lastTick = Duration.zero;
+
+  static const _speed = 4.0;
+
+  static double? _toDouble(dynamic v) {
+    if (v is double) return v;
+    if (v is int)    return v.toDouble();
+    if (v is String) return double.tryParse(v.trim());
+    return null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _dispValue = _tgtValue = _toDouble(widget.value);
+    _ticker = createTicker(_onTick)..start();
+  }
+
+  void _onTick(Duration elapsed) {
+    if (_lastTick == Duration.zero) { _lastTick = elapsed; return; }
+    final dt = (elapsed - _lastTick).inMicroseconds / 1e6;
+    _lastTick = elapsed;
+    if (_dispValue == null || _tgtValue == null) return;
+    final t = 1.0 - math.exp(-_speed * dt);
+    setState(() {
+      _dispValue = _dispValue! + (_tgtValue! - _dispValue!) * t;
+    });
+  }
+
+  @override
+  void didUpdateWidget(_ValueChip old) {
+    super.didUpdateWidget(old);
+    final newTgt = _toDouble(widget.value);
+    if (newTgt != null) {
+      if (_dispValue == null) _dispValue = newTgt;
+      _tgtValue = newTgt;
+    } else {
+      _dispValue = _tgtValue = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final displayStr = _dispValue != null
+        ? SensorCard._fmt(_dispValue!)
+        : SensorCard._fmt(widget.value);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          SensorCard._fmt(value),
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: color),
+          displayStr,
+          style: TextStyle(
+            fontSize: widget.fontSize,
+            fontWeight: widget.fontWeight,
+            color: widget.color,
+          ),
         ),
-        Text(fieldName, style: const TextStyle(fontSize: 9, color: Color(0xFF6B7280))),
+        Text(widget.fieldName, style: const TextStyle(fontSize: 9, color: Color(0xFF6B7280))),
       ],
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HorizonWidget  (artificial horizon / attitude indicator)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class HorizonWidget extends StatefulWidget {
+  final double roll;
+  final double pitch;
+  final bool impactActive;
+
+  const HorizonWidget({
+    super.key,
+    required this.roll,
+    required this.pitch,
+    this.impactActive = false,
+  });
+
+  @override
+  State<HorizonWidget> createState() => _HorizonWidgetState();
+}
+
+class _HorizonWidgetState extends State<HorizonWidget>
+    with TickerProviderStateMixin {
+  late Ticker _ticker;
+  late AnimationController _blinkCtrl;
+
+  // Displayed values (updated at 60 fps via ticker)
+  double _dispRoll  = 0;
+  double _dispPitch = 0;
+  // Target values (updated on each sensor poll)
+  double _tgtRoll   = 0;
+  double _tgtPitch  = 0;
+  Duration _lastTick = Duration.zero;
+
+  // Exponential approach speed (per second).
+  // speed=4 → reaches ~98 % of target after 1 s — responsive but smooth.
+  static const _speed = 4.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _dispRoll  = widget.roll;
+    _dispPitch = widget.pitch;
+    _tgtRoll   = widget.roll;
+    _tgtPitch  = widget.pitch;
+
+    _ticker = createTicker(_onTick)..start();
+
+    _blinkCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 500));
+    if (widget.impactActive) _blinkCtrl.repeat(reverse: true);
+  }
+
+  void _onTick(Duration elapsed) {
+    if (_lastTick == Duration.zero) { _lastTick = elapsed; return; }
+    final dt = (elapsed - _lastTick).inMicroseconds / 1e6;
+    _lastTick = elapsed;
+    // Framerate-independent exponential lerp
+    final t = 1.0 - math.exp(-_speed * dt);
+    setState(() {
+      _dispRoll  += (_tgtRoll  - _dispRoll)  * t;
+      _dispPitch += (_tgtPitch - _dispPitch) * t;
+    });
+  }
+
+  @override
+  void didUpdateWidget(HorizonWidget old) {
+    super.didUpdateWidget(old);
+    if (old.roll != widget.roll)   _tgtRoll  = widget.roll;
+    if (old.pitch != widget.pitch) _tgtPitch = widget.pitch;
+    if (old.impactActive != widget.impactActive) {
+      if (widget.impactActive) {
+        _blinkCtrl.repeat(reverse: true);
+      } else {
+        _blinkCtrl.stop();
+        _blinkCtrl.value = 0;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    _blinkCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _HorizonDisplay(roll: _dispRoll, pitch: _dispPitch),
+        if (widget.impactActive)
+          AnimatedBuilder(
+            animation: _blinkCtrl,
+            builder: (_, __) => IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.red.withOpacity(0.2 + _blinkCtrl.value * 0.65),
+                    width: 3,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.red.withOpacity(_blinkCtrl.value * 0.25),
+                      blurRadius: 14,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _HorizonDisplay extends StatelessWidget {
+  final double roll, pitch;
+  const _HorizonDisplay({required this.roll, required this.pitch});
+
+  @override
+  Widget build(BuildContext context) {
+    final rs = roll  >= 0 ? '+' : '';
+    final ps = pitch >= 0 ? '+' : '';
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF21262D)),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [Color(0xFF0A0E1A), Color(0xFF0D1117)],
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      child: Column(
+        children: [
+          const Text('Lage',
+              style: TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
+          const SizedBox(height: 4),
+          Expanded(
+            child: LayoutBuilder(builder: (_, bc) {
+              final dim = math.min(bc.maxWidth, bc.maxHeight);
+              return Center(
+                child: SizedBox.square(
+                  dimension: dim,
+                  child: CustomPaint(
+                      painter: _HorizonPainter(roll: roll, pitch: pitch)),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _val('$rs${roll.toStringAsFixed(1)}°', 'Roll'),
+              const SizedBox(width: 20),
+              _val('$ps${pitch.toStringAsFixed(1)}°', 'Pitch'),
+            ],
+          ),
+          const SizedBox(height: 2),
+        ],
+      ),
+    );
+  }
+
+  Widget _val(String v, String label) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(v,
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.bold,
+                  color: Color(0xFF4FC3F7), fontFamily: 'monospace')),
+          Text(label,
+              style: const TextStyle(fontSize: 9, color: Color(0xFF6B7280))),
+        ],
+      );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _HorizonPainter
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _HorizonPainter extends CustomPainter {
+  final double roll, pitch;
+  const _HorizonPainter({required this.roll, required this.pitch});
+
+  static const double _kDegPerR = 30.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r  = math.min(cx, cy) - 14.0;
+    if (r < 10) return;
+
+    final rollRad = roll  * math.pi / 180;
+    final pitchPx = pitch * r / _kDegPerR;
+    final bigR    = r * 2.4;
+    final c       = Offset(cx, cy);
+
+    // ── Clip + rotating sky/sea ───────────────────────────────────────────────
+    canvas.save();
+    canvas.clipPath(Path()..addOval(Rect.fromCircle(center: c, radius: r)));
+
+    canvas.save();
+    canvas.translate(cx, cy);
+    canvas.rotate(rollRad);
+    canvas.translate(0, pitchPx);
+
+    // Sky gradient
+    final skyRect = Rect.fromLTWH(-bigR, -bigR * 2, bigR * 2, bigR * 2);
+    canvas.drawRect(skyRect, Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [Color(0xFF051220), Color(0xFF1565C0)],
+      ).createShader(skyRect));
+
+    // Sea gradient
+    final seaRect = Rect.fromLTWH(-bigR, 0, bigR * 2, bigR * 2);
+    canvas.drawRect(seaRect, Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [Color(0xFF0C4F72), Color(0xFF020B18)],
+      ).createShader(seaRect));
+
+    // Pitch scale lines
+    _drawPitchLines(canvas, r);
+
+    // Horizon glow
+    canvas.drawLine(Offset(-bigR, 0), Offset(bigR, 0), Paint()
+      ..color = Colors.white.withOpacity(0.18)
+      ..strokeWidth = 7
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3));
+    // Horizon line
+    canvas.drawLine(Offset(-bigR, 0), Offset(bigR, 0), Paint()
+      ..color = Colors.white.withOpacity(0.92)
+      ..strokeWidth = 1.8);
+
+    // Roll indicator triangle (rotates with horizon, no pitch offset)
+    canvas.translate(0, -pitchPx);
+    final triPath = Path()
+      ..moveTo(0, -(r - 6))
+      ..lineTo(-5, -(r - 16))
+      ..lineTo(5,  -(r - 16))
+      ..close();
+    canvas.drawPath(triPath, Paint()
+      ..color = Colors.white.withOpacity(0.92)..style = PaintingStyle.fill);
+    canvas.drawPath(triPath, Paint()
+      ..color = Colors.black.withOpacity(0.4)
+      ..style = PaintingStyle.stroke..strokeWidth = 1.0);
+
+    canvas.restore(); // end rotate+pitch
+    canvas.restore(); // end clip
+
+    // ── Roll scale (outside clip, around rim) ─────────────────────────────────
+    _drawRollScale(canvas, c, r);
+
+    // ── Bezel ring ────────────────────────────────────────────────────────────
+    canvas.drawCircle(c, r, Paint()
+      ..color = const Color(0xFF1E3A5F)
+      ..style = PaintingStyle.stroke..strokeWidth = 2.5);
+
+    // ── Fixed reticle (re-clipped) ────────────────────────────────────────────
+    canvas.save();
+    canvas.clipPath(
+        Path()..addOval(Rect.fromCircle(center: c, radius: r - 1)));
+    _drawFixedReticle(canvas, c, r);
+    canvas.restore();
+  }
+
+  void _drawPitchLines(Canvas canvas, double r) {
+    final pxPerDeg = r / _kDegPerR;
+    final major = Paint()
+      ..color = Colors.white.withOpacity(0.55)..strokeWidth = 1.5;
+    final minor = Paint()
+      ..color = Colors.white.withOpacity(0.28)..strokeWidth = 1.0;
+
+    for (int deg = -60; deg <= 60; deg += 5) {
+      if (deg == 0) continue;
+      final y  = -deg * pxPerDeg;
+      final isMajor = deg % 10 == 0;
+      final hl = isMajor ? r * 0.28 : r * 0.14;
+      canvas.drawLine(Offset(-hl, y), Offset(hl, y), isMajor ? major : minor);
+      if (isMajor) {
+        final tp = TextPainter(
+          text: TextSpan(
+              text: deg.abs().toString(),
+              style: const TextStyle(fontSize: 9, color: Color(0xBBFFFFFF))),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(hl + 3, y - tp.height / 2));
+        tp.paint(canvas, Offset(-hl - tp.width - 3, y - tp.height / 2));
+      }
+    }
+  }
+
+  void _drawRollScale(Canvas canvas, Offset c, double r) {
+    const kAngles = [-60, -45, -30, -20, -10, 0, 10, 20, 30, 45, 60];
+    for (final deg in kAngles) {
+      final rad     = (deg - 90.0) * math.pi / 180;
+      final isMajor = deg % 30 == 0 || deg == 0;
+      final len     = isMajor ? 9.0 : 5.5;
+      final inner   = r + 2.0;
+      final outer   = inner + len;
+      canvas.drawLine(
+        Offset(c.dx + math.cos(rad) * inner, c.dy + math.sin(rad) * inner),
+        Offset(c.dx + math.cos(rad) * outer, c.dy + math.sin(rad) * outer),
+        Paint()
+          ..color = Colors.white.withOpacity(isMajor ? 0.65 : 0.38)
+          ..strokeWidth = isMajor ? 1.5 : 1.0,
+      );
+    }
+    // Fixed 0° reference marker (downward-pointing triangle at 12 o'clock)
+    final topY = c.dy - r - 2;
+    final fixPath = Path()
+      ..moveTo(c.dx, topY + 12)
+      ..lineTo(c.dx - 5, topY + 2)
+      ..lineTo(c.dx + 5, topY + 2)
+      ..close();
+    canvas.drawPath(fixPath, Paint()..color = Colors.white.withOpacity(0.80));
+  }
+
+  void _drawFixedReticle(Canvas canvas, Offset c, double r) {
+    final shadow = Paint()
+      ..color = Colors.black.withOpacity(0.35)
+      ..strokeWidth = 3.0
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    final white = Paint()
+      ..color = Colors.white.withOpacity(0.60)
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    final fill = Paint()
+      ..color = Colors.white.withOpacity(0.04)
+      ..style = PaintingStyle.fill;
+
+    // Boat silhouette — front/cross-section view
+    // center c.dy ≈ waterline, hull above + keel below
+    final hw = r * 0.44;             // half-width at gunwale
+    final gY = c.dy - r * 0.14;     // gunwale Y (deck level)
+    final kY = c.dy + r * 0.22;     // keel Y
+    final cHW = r * 0.15;           // cabin half-width
+    final cT = gY - r * 0.20;       // cabin top Y
+    final mY = cT - r * 0.16;       // mast top Y
+
+    // Hull V-shape: gunwale → bilge → keel → bilge → gunwale (closed for fill)
+    final hullFill = Path()
+      ..moveTo(c.dx - hw,          gY)
+      ..lineTo(c.dx - hw * 0.50,  kY)
+      ..lineTo(c.dx,               kY + r * 0.06)
+      ..lineTo(c.dx + hw * 0.50,  kY)
+      ..lineTo(c.dx + hw,          gY)
+      ..close();
+
+    // Hull outline (open — same V without closing line)
+    final hull = Path()
+      ..moveTo(c.dx - hw,          gY)
+      ..lineTo(c.dx - hw * 0.50,  kY)
+      ..lineTo(c.dx,               kY + r * 0.06)
+      ..lineTo(c.dx + hw * 0.50,  kY)
+      ..lineTo(c.dx + hw,          gY);
+
+    // Deck line (horizontal top of hull)
+    final deck = Path()
+      ..moveTo(c.dx - hw, gY)
+      ..lineTo(c.dx + hw, gY);
+
+    // Cabin: trapezoid
+    final cabin = Path()
+      ..moveTo(c.dx - cHW * 1.4,  gY)
+      ..lineTo(c.dx - cHW,         cT)
+      ..lineTo(c.dx + cHW,         cT)
+      ..lineTo(c.dx + cHW * 1.4,  gY);
+
+    // Mast / antenna
+    final mast = Path()
+      ..moveTo(c.dx, cT)
+      ..lineTo(c.dx, mY);
+
+    // Fill hull body first
+    canvas.drawPath(hullFill, fill);
+
+    // Shadow pass then white pass
+    for (final p in [hull, deck, cabin, mast]) canvas.drawPath(p, shadow);
+    for (final p in [hull, deck, cabin, mast]) canvas.drawPath(p, white);
+
+    // Waterline marker (center dot)
+    canvas.drawCircle(c, 6, Paint()
+      ..color = Colors.black.withOpacity(0.5)
+      ..style = PaintingStyle.stroke..strokeWidth = 4);
+    canvas.drawCircle(c, 6, Paint()
+      ..color = Colors.white.withOpacity(0.90)
+      ..style = PaintingStyle.stroke..strokeWidth = 2);
+    canvas.drawCircle(c, 2.5, Paint()..color = Colors.white);
+  }
+
+  @override
+  bool shouldRepaint(_HorizonPainter old) =>
+      old.roll != roll || old.pitch != pitch;
 }
