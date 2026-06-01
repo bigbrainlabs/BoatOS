@@ -1119,13 +1119,20 @@ SCREEN Wetter LAYOUT grid-4
                 ` : ''}
 
                 ${isGauge ? `
-                ${this._renderSensorFieldDropdowns(idx, widget, 'sensor', 'field', 'Sensor')}
+                <div>
+                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Sensor / Feld</label>
+                    <select onchange="window.dashboardEditor.updateWidget(${idx},'sensor',this.value);window.dashboardEditor.updateWidget(${idx},'field',null);" style="
+                        width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
+                        <option value="">— Sensor / Feld wählen —</option>
+                        ${(this.sensors||[]).map(s => `<option value="${s.full_path}" ${widget.sensor===s.full_path?'selected':''}>${s.name||s.full_path}</option>`).join('')}
+                    </select>
+                </div>
                 <!-- Label / Alias -->
                 <div>
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Label</label>
                     <input type="text" value="${widget.label || ''}"
                            onchange="window.dashboardEditor.updateWidget(${idx}, 'label', this.value)"
-                           placeholder="${widget.field || widget.sensor?.split('/').pop() || 'Label'}"
+                           placeholder="${widget.sensor?.split('/').pop() || 'Label'}"
                            style="width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                 </div>
                 ` : ''}
@@ -1636,8 +1643,8 @@ ${isGauge ? `
                                     <select onchange="window.dashboardEditor.setSlotProp('${slot}','sensor',this.value)" style="
                                         width:100%;padding:6px 8px;background:var(--bg-panel);border:1px solid var(--border);
                                         border-radius:6px;color:var(--text);font-size:12px;">
-                                        <option value="">— Sensor wählen —</option>
-                                        ${(this.sensorGroups||[]).map(s => `<option value="${s.base_name}" ${w.sensor===s.base_name?'selected':''}>${s.name}</option>`).join('')}
+                                        <option value="">— Sensor / Feld wählen —</option>
+                                        ${(this.sensors||[]).map(s => `<option value="${s.full_path}" ${w.sensor===s.full_path?'selected':''}>${s.name||s.full_path}</option>`).join('')}
                                     </select>` : ''}
                                     ${wtype === 'sensor' ? `
                                     <select onchange="window.dashboardEditor.setSlotSensor('${slot}',this.value)" style="
@@ -1710,6 +1717,11 @@ ${isGauge ? `
                                             flex:1;padding:5px 6px;background:var(--bg-panel);border:1px solid var(--border);
                                             border-radius:6px;color:var(--text);font-size:11px;">
                                             ${['cyan','blue','green','orange','purple','red'].map(c=>`<option value="${c}" ${(w.color||'cyan')===c?'selected':''}>${c}</option>`).join('')}
+                                        </select>
+                                        <select onchange="window.dashboardEditor.setSlotProp('${slot}','decimals',parseInt(this.value))" title="Dezimalstellen" style="
+                                            width:54px;padding:5px 4px;background:var(--bg-panel);border:1px solid var(--border);
+                                            border-radius:6px;color:var(--text);font-size:11px;">
+                                            ${[0,1,2,3].map(n=>`<option value="${n}" ${(w.decimals??1)===n?'selected':''}>${n} Dez.</option>`).join('')}
                                         </select>
                                     </div>` : ''}
                                     ${wtype === 'text' ? `

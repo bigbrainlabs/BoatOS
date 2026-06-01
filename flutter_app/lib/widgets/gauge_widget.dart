@@ -52,8 +52,12 @@ class GaugeWidget extends StatefulWidget {
 
 class _GaugeWidgetState extends State<GaugeWidget>
     with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
+  late Ticker _ticker;
+  double _dispValue = 0;
+  double _tgtValue  = 0;
+  Duration _lastTick = Duration.zero;
+
+  static const _speed = 4.0;
 
   double _toPct(double v) => widget.max > widget.min
       ? ((v - widget.min) / (widget.max - widget.min)).clamp(0.0, 1.0)
@@ -62,51 +66,48 @@ class _GaugeWidgetState extends State<GaugeWidget>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 500));
-    final p = _toPct(widget.value);
-    _anim = Tween<double>(begin: p, end: p)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _dispValue = widget.value;
+    _tgtValue  = widget.value;
+    _ticker = createTicker(_onTick)..start();
+  }
+
+  void _onTick(Duration elapsed) {
+    if (_lastTick == Duration.zero) { _lastTick = elapsed; return; }
+    final dt = (elapsed - _lastTick).inMicroseconds / 1e6;
+    _lastTick = elapsed;
+    final t = 1.0 - math.exp(-_speed * dt);
+    setState(() {
+      _dispValue += (_tgtValue - _dispValue) * t;
+    });
   }
 
   @override
   void didUpdateWidget(GaugeWidget old) {
     super.didUpdateWidget(old);
-    if (old.value != widget.value) {
-      final from = _anim.value;
-      final to   = _toPct(widget.value);
-      _anim = Tween<double>(begin: from, end: to)
-          .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-      _ctrl.forward(from: 0);
-    }
+    if (old.value != widget.value) _tgtValue = widget.value;
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _ticker.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, __) {
-        if (widget.style == GaugeStyle.bar) {
-          return _BarGauge(
-            pct: _anim.value, value: widget.value,
-            min: widget.min, max: widget.max,
-            unit: widget.unit, label: widget.label,
-            color: widget.color, decimals: widget.decimals,
-          );
-        }
-        return _ArcGauge(
-          pct: _anim.value, value: widget.value,
-          min: widget.min, max: widget.max,
-          unit: widget.unit, label: widget.label,
-          style: widget.style, color: widget.color, decimals: widget.decimals,
-        );
-      },
+    if (widget.style == GaugeStyle.bar) {
+      return _BarGauge(
+        pct: _toPct(_dispValue), value: _dispValue,
+        min: widget.min, max: widget.max,
+        unit: widget.unit, label: widget.label,
+        color: widget.color, decimals: widget.decimals,
+      );
+    }
+    return _ArcGauge(
+      pct: _toPct(_dispValue), value: _dispValue,
+      min: widget.min, max: widget.max,
+      unit: widget.unit, label: widget.label,
+      style: widget.style, color: widget.color, decimals: widget.decimals,
     );
   }
 }
@@ -607,12 +608,13 @@ class SensorCard extends StatelessWidget {
           _header(statusColor),
           if (primary != null) ...[
             const SizedBox(height: 6),
-            Text(
-              _fmt(primary.value),
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: color),
+            _ValueChip(
+              fieldName: fieldAliases[primary.key] ?? primary.key,
+              value: primary.value,
+              color: color,
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
             ),
-            Text(fieldAliases[primary.key] ?? primary.key,
-                style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280))),
           ],
           if (secondary.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -645,24 +647,96 @@ class SensorCard extends StatelessWidget {
       ]);
 }
 
-class _ValueChip extends StatelessWidget {
+class _ValueChip extends StatefulWidget {
   final String fieldName;
   final dynamic value;
   final Color color;
+  final double fontSize;
+  final FontWeight fontWeight;
 
-  const _ValueChip({required this.fieldName, required this.value, required this.color});
+  const _ValueChip({
+    required this.fieldName,
+    required this.value,
+    required this.color,
+    this.fontSize = 16,
+    this.fontWeight = FontWeight.w600,
+  });
+
+  @override
+  State<_ValueChip> createState() => _ValueChipState();
+}
+
+class _ValueChipState extends State<_ValueChip>
+    with SingleTickerProviderStateMixin {
+  late Ticker _ticker;
+  double? _dispValue;
+  double? _tgtValue;
+  Duration _lastTick = Duration.zero;
+
+  static const _speed = 4.0;
+
+  static double? _toDouble(dynamic v) {
+    if (v is double) return v;
+    if (v is int)    return v.toDouble();
+    if (v is String) return double.tryParse(v.trim());
+    return null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _dispValue = _tgtValue = _toDouble(widget.value);
+    _ticker = createTicker(_onTick)..start();
+  }
+
+  void _onTick(Duration elapsed) {
+    if (_lastTick == Duration.zero) { _lastTick = elapsed; return; }
+    final dt = (elapsed - _lastTick).inMicroseconds / 1e6;
+    _lastTick = elapsed;
+    if (_dispValue == null || _tgtValue == null) return;
+    final t = 1.0 - math.exp(-_speed * dt);
+    setState(() {
+      _dispValue = _dispValue! + (_tgtValue! - _dispValue!) * t;
+    });
+  }
+
+  @override
+  void didUpdateWidget(_ValueChip old) {
+    super.didUpdateWidget(old);
+    final newTgt = _toDouble(widget.value);
+    if (newTgt != null) {
+      if (_dispValue == null) _dispValue = newTgt;
+      _tgtValue = newTgt;
+    } else {
+      _dispValue = _tgtValue = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final displayStr = _dispValue != null
+        ? SensorCard._fmt(_dispValue!)
+        : SensorCard._fmt(widget.value);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          SensorCard._fmt(value),
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: color),
+          displayStr,
+          style: TextStyle(
+            fontSize: widget.fontSize,
+            fontWeight: widget.fontWeight,
+            color: widget.color,
+          ),
         ),
-        Text(fieldName, style: const TextStyle(fontSize: 9, color: Color(0xFF6B7280))),
+        Text(widget.fieldName, style: const TextStyle(fontSize: 9, color: Color(0xFF6B7280))),
       ],
     );
   }

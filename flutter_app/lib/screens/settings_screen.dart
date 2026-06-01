@@ -3585,35 +3585,10 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                   _stylePicker(_sensorStyles),
                 ],
                 if (_w.type == 'GAUGE') ...[
-                  _label('Sensor'),
+                  _label('Sensor / Feld'),
                   const SizedBox(height: 6),
-                  _sensorPicker(),
+                  _gaugeFieldPicker(),
                   const SizedBox(height: 10),
-                  if (_w.sensor != null) ...[
-                    _label('Feld'),
-                    const SizedBox(height: 6),
-                    Builder(builder: (_) {
-                      final fields = ((widget.sensors
-                          .firstWhere((s) => s['base_name'] == _w.sensor,
-                              orElse: () => <String, dynamic>{})['values']
-                          as Map<String, dynamic>?)?.keys.toList()) ?? <String>[];
-                      if (fields.isEmpty) return const SizedBox.shrink();
-                      final cur = (_w.field != null && fields.contains(_w.field))
-                          ? _w.field!
-                          : fields.first;
-                      return DropdownButton<String>(
-                        value: cur,
-                        isExpanded: true,
-                        dropdownColor: const Color(0xFF161B22),
-                        style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 13),
-                        underline: Container(height: 1, color: const Color(0xFF30363D)),
-                        items: fields.map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
-                        onChanged: (v) { if (v != null) setState(() => _w.field = v); },
-                      );
-                    }),
-                    const SizedBox(height: 2),
-                  ],
-                  const SizedBox(height: 2),
                 ],
                 if (_w.type == 'GAUGE') ...[
                   Row(children: [
@@ -3798,14 +3773,26 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
     );
   }
 
-  Widget _sensorPicker() {
+  Widget _gaugeFieldPicker() {
+    // Build flat list of all base_name/field paths
+    final allPaths = <Map<String, String>>[];
+    for (final s in widget.sensors) {
+      final base = s['base_name'] as String? ?? '';
+      if (base.isEmpty) continue;
+      final sensorName = s['name'] as String? ?? base;
+      final vals = (s['values'] as Map<dynamic, dynamic>?) ?? {};
+      for (final field in vals.keys) {
+        allPaths.add({
+          'full':  '$base/$field',
+          'label': '$sensorName › $field',
+        });
+      }
+    }
     final filtered = _search.isEmpty
-        ? widget.sensors
-        : widget.sensors.where((s) {
-            final name = '${s['name'] ?? ''} ${s['base_name'] ?? ''}'.toLowerCase();
-            return name.contains(_search.toLowerCase());
+        ? allPaths
+        : allPaths.where((p) {
+            return (p['label'] ?? '').toLowerCase().contains(_search.toLowerCase());
           }).toList();
-    final showSearch = widget.sensors.length > 8;
 
     return Container(
       decoration: BoxDecoration(
@@ -3814,11 +3801,11 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
         border: Border.all(color: const Color(0xFF30363D)),
       ),
       child: Column(children: [
-        if (showSearch)
+        if (allPaths.length > 8)
           Padding(
             padding: const EdgeInsets.all(8),
             child: GestureDetector(
-              onTap: () => showKeyboard(context, _searchCtrl, label: 'Sensor suchen'),
+              onTap: () => showKeyboard(context, _searchCtrl, label: 'Sensor / Feld suchen'),
               child: AbsorbPointer(
                 child: TextField(
                   controller: _searchCtrl,
@@ -3844,22 +3831,26 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
             ),
           ),
         SizedBox(
-          height: 180,
+          height: 200,
           child: ListView.builder(
             padding: EdgeInsets.zero,
             itemCount: filtered.length,
             itemBuilder: (_, i) {
-              final s    = filtered[i];
-              final path = s['base_name'] as String;
-              final name = s['name'] as String? ?? path;
-              final unit = s['unit'] as String? ?? '';
-              final sel  = _w.sensor == path;
+              final item  = filtered[i];
+              final full  = item['full']!;
+              final label = item['label']!;
+              final sel   = _w.sensor == full;
               return GestureDetector(
-                onTap: () => setState(() => _w.sensor = path),
+                onTap: () => setState(() {
+                  _w.sensor = full;
+                  _w.field  = null;
+                }),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: sel ? const Color(0xFF1565C0).withValues(alpha: 0.2) : Colors.transparent,
+                    color: sel
+                        ? const Color(0xFF1565C0).withValues(alpha: 0.2)
+                        : Colors.transparent,
                     border: Border(
                       left: BorderSide(
                         color: sel ? const Color(0xFF4FC3F7) : Colors.transparent,
@@ -3868,12 +3859,13 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                     ),
                   ),
                   child: Row(children: [
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(name, style: TextStyle(
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Text(label, style: TextStyle(
                           fontSize: 13,
                           color: sel ? const Color(0xFFE6EDF3) : const Color(0xFF8B949E),
                           fontWeight: sel ? FontWeight.w600 : FontWeight.normal)),
-                      Text(unit.isNotEmpty ? '$path · $unit' : path,
+                      Text(full,
                           style: const TextStyle(fontSize: 10, color: Color(0xFF8B949E))),
                     ])),
                     if (sel)
