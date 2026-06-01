@@ -23,17 +23,32 @@ Alles ist vorkonfiguriert: Dienste, Karten, Routing, Flutter-App. Flashen, einsc
 1. Raspberry Pi Imager öffnen
 2. **"Choose OS"** → **"Use custom"** → heruntergeladene `.img.gz` auswählen
 3. **"Choose Storage"** → deine SD-Karte auswählen
-4. **Zahnrad-Icon** (⚙️) öffnen:
-   - **Hostname** setzen (z.B. `boatos`)
-   - **SSH aktivieren** (Passwort-Auth)
-   - **WLAN** eintragen (SSID + Passwort) — optional, kann auch später über die App konfiguriert werden
-5. **"Write"** → warten bis fertig
+4. **"Write"** → warten bis fertig
 
-### Schritt 3 — Einschalten
+> **Hinweis:** Die WLAN-Einstellungen im Zahnrad-Icon (⚙️) des Pi Imagers funktionieren mit dem BoatOS-Image **nicht** — WLAN wird im nächsten Schritt direkt auf der SD-Karte konfiguriert.
+
+### Schritt 3 — WLAN auf der SD-Karte eintragen
+
+Nach dem Flashen erscheint die Boot-Partition der SD-Karte als normales Laufwerk auf dem PC/Mac. Dort liegt eine Datei namens `wlan.txt`:
+
+1. `wlan.txt` mit einem Texteditor öffnen
+2. SSID und Passwort eintragen:
+   ```
+   SSID=DeinNetzwerkname
+   PASSWORD=DeinPasswort
+   COUNTRY=DE
+   ```
+3. Speichern, SD-Karte sicher auswerfen
+
+Beim ersten Boot liest BoatOS diese Datei automatisch ein, verbindet sich mit dem WLAN und löscht `wlan.txt` danach (Passwort wird nicht dauerhaft auf der Boot-Partition gespeichert).
+
+> Kein WLAN verfügbar? SD-Karte ohne `wlan.txt`-Eintrag starten — BoatOS ist dann per Ethernet (`https://boatos.local`) erreichbar. WLAN lässt sich jederzeit über **Deck → Einstellungen → WLAN** nachkonfigurieren.
+
+### Schritt 4 — Einschalten
 
 SD-Karte in den Pi, Strom anlegen. Beim ersten Start dauert es ~60 Sekunden bis alle Dienste laufen.
 
-### Schritt 4 — Deck aufrufen
+### Schritt 5 — Deck aufrufen
 
 Im Browser (Handy, Tablet oder Laptop im gleichen WLAN):
 
@@ -44,11 +59,6 @@ https://boatos.local
 > Zertifikatswarnung einfach wegklicken — das Zertifikat ist selbst-signiert.
 
 Falls `boatos.local` nicht funktioniert (Windows ohne Bonjour): IP-Adresse des Pi im Router nachschauen.
-
-### Schritt 5 — WLAN konfigurieren (falls noch nicht gemacht)
-
-Über **Deck** → Einstellungen → WLAN oder direkt über den **Helm**-Touchscreen.  
-Siehe [wlan-config.md](wlan-config.md).
 
 ---
 
