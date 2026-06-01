@@ -493,6 +493,7 @@ class SensorCard extends StatelessWidget {
   final Color color;
   final List<String> showFields;
   final List<String> hideFields;
+  final Map<String, String> fieldAliases;
   final Map<String, dynamic>? sensorData;
 
   const SensorCard({
@@ -503,6 +504,7 @@ class SensorCard extends StatelessWidget {
     this.color = const Color(0xFF64FFDA),
     this.showFields = const [],
     this.hideFields = const [],
+    this.fieldAliases = const {},
     this.sensorData,
   });
 
@@ -578,7 +580,7 @@ class SensorCard extends StatelessWidget {
                   spacing: 16,
                   runSpacing: 6,
                   children: entries
-                      .map((e) => _ValueChip(fieldName: e.key, value: e.value, color: color))
+                      .map((e) => _ValueChip(fieldName: fieldAliases[e.key] ?? e.key, value: e.value, color: color))
                       .toList(),
                 ),
         ],
@@ -608,7 +610,7 @@ class SensorCard extends StatelessWidget {
               _fmt(primary.value),
               style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: color),
             ),
-            Text(primary.key,
+            Text(fieldAliases[primary.key] ?? primary.key,
                 style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280))),
           ],
           if (secondary.isNotEmpty) ...[

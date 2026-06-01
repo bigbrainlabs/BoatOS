@@ -843,6 +843,9 @@ class DashboardRenderer {
             return `<span class="sensor-value" data-sensor-path="${sensorPath}" data-format="auto" data-decimals="2">${formattedValue}</span>`;
         };
 
+        // Per-field alias helper
+        const fieldLabel = key => (widget.fieldAliases && widget.fieldAliases[key]) || key;
+
         // Hero style
         if (style === 'hero') {
             return `
@@ -891,7 +894,7 @@ class DashboardRenderer {
                                 border: 1px solid ${border};
                             ">
                                 <div style="color: #8892b0; font-size: var(--fs-sm); text-transform: uppercase; margin-bottom: var(--space-xs);">
-                                    ${key}
+                                    ${fieldLabel(key)}
                                 </div>
                                 <div style="color: ${textColor}; font-size: var(--fs-2xl); font-weight: 700; font-family: monospace;">
                                     ${createValueElement(key, value)}
@@ -920,7 +923,7 @@ class DashboardRenderer {
                         <span style="font-size: var(--fs-3xl);">${icon}</span>
                         <div style="flex: 1;">
                             <div style="font-size: var(--fs-md); color: white; font-weight: 600;">${name}</div>
-                            <div style="font-size: var(--fs-xs); color: #8892b0; text-transform: uppercase;">${sensor.type}</div>
+                            ${sensor.type && sensor.type !== 'unknown' ? `<div style="font-size: var(--fs-xs); color: #8892b0; text-transform: uppercase;">${sensor.type}</div>` : ''}
                         </div>
                         <div data-sensor-status="${baseName}" style="
                             width: 8px;
@@ -940,7 +943,7 @@ class DashboardRenderer {
                                 min-width: 80px;
                             ">
                                 <div style="color: #8892b0; font-size: var(--fs-2xs); text-transform: uppercase; margin-bottom: 2px;">
-                                    ${key}
+                                    ${fieldLabel(key)}
                                 </div>
                                 <div style="color: ${textColor}; font-size: var(--fs-md); font-weight: 700; font-family: monospace;">
                                     ${createValueElement(key, value)}
@@ -983,7 +986,7 @@ class DashboardRenderer {
                     <span style="font-size: var(--fs-5xl);">${icon}</span>
                     <div>
                         <div style="font-size: var(--fs-3xl); font-weight: 600; color: white;">${name}</div>
-                        <div style="font-size: var(--fs-sm); color: #8892b0; text-transform: uppercase;">${sensor.type}</div>
+                        ${sensor.type && sensor.type !== 'unknown' ? `<div style="font-size: var(--fs-sm); color: #8892b0; text-transform: uppercase;">${sensor.type}</div>` : ''}
                     </div>
                 </div>
 
@@ -1001,7 +1004,7 @@ class DashboardRenderer {
                             padding: var(--space-sm) 0;
                             ${index < Object.keys(filteredValues).length - 1 ? 'border-bottom: 1px solid rgba(255,255,255,0.08);' : ''}
                         ">
-                            <span style="color: #8892b0; font-size: var(--fs-base); font-weight: 500;">${key}</span>
+                            <span style="color: #8892b0; font-size: var(--fs-base); font-weight: 500;">${fieldLabel(key)}</span>
                             <span style="color: ${textColor}; font-size: var(--fs-lg); font-weight: 700; font-family: monospace;">
                                 ${createValueElement(key, value)}
                             </span>

@@ -8,6 +8,7 @@ import '../widgets/gauge_widget.dart';
 import '../widgets/onscreen_keyboard.dart';
 import '../widgets/dashboard/dash_widget.dart';
 import '../widgets/dashboard/registry.dart';
+import '../widgets/dashboard/sensor_widget.dart' show SensorDashWidget;
 import '../main.dart' show MainShellState;
 
 class SettingsScreen extends StatefulWidget {
@@ -3486,7 +3487,9 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
       v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
 
   void _commit() {
-    _w.alias    = _aliasCtrl.text.isEmpty ? null : _aliasCtrl.text;
+    if (_w.type != 'SENSOR') {
+      _w.alias = _aliasCtrl.text.isEmpty ? null : _aliasCtrl.text;
+    }
     _w.label    = _labelCtrl.text.isEmpty ? null : _labelCtrl.text;
     _w.unit     = _unitCtrl.text.isEmpty  ? null : _unitCtrl.text;
     _w.text     = _textCtrl.text.isEmpty  ? null : _textCtrl.text;
@@ -3574,7 +3577,14 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                 const SizedBox(height: 14),
 
                 // Type-specific fields
-                if (_w.type == 'SENSOR' || _w.type == 'GAUGE') ...[
+                if (_w.type == 'SENSOR') ...[
+                  SensorDashWidget.buildEditor(_w, setState, widget.sensors),
+                  const SizedBox(height: 10),
+                  _label('Stil'),
+                  const SizedBox(height: 6),
+                  _stylePicker(_sensorStyles),
+                ],
+                if (_w.type == 'GAUGE') ...[
                   _label('Sensor'),
                   const SizedBox(height: 6),
                   _sensorPicker(),
@@ -3604,17 +3614,6 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                     const SizedBox(height: 2),
                   ],
                   const SizedBox(height: 2),
-                ],
-                if (_w.type == 'SENSOR') ...[
-                  _inputRow('Bezeichnung (AS)', _aliasCtrl),
-                  const SizedBox(height: 10),
-                  _label('Stil'),
-                  const SizedBox(height: 6),
-                  _stylePicker(_sensorStyles),
-                  const SizedBox(height: 10),
-                  _label('Breite (Spalten)'),
-                  const SizedBox(height: 6),
-                  _sizePicker(),
                 ],
                 if (_w.type == 'GAUGE') ...[
                   Row(children: [
@@ -3650,17 +3649,9 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                   _label('Dezimalstellen'),
                   const SizedBox(height: 6),
                   _decimalsPicker(),
-                  const SizedBox(height: 10),
-                  _label('Breite (Spalten)'),
-                  const SizedBox(height: 6),
-                  _sizePicker(),
                 ],
                 if (_w.type == 'TEXT') ...[
                   _inputRow('Text', _textCtrl),
-                  const SizedBox(height: 10),
-                  _label('Breite (Spalten)'),
-                  const SizedBox(height: 6),
-                  _sizePicker(),
                 ],
                 if (_w.type == 'HORIZON') ...[
                   Builder(builder: (_) {

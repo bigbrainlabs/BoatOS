@@ -497,15 +497,26 @@ class DashboardDSLParser:
         if unit_match:
             options["unit"] = unit_match.group(1)
 
-        # SHOW (comma-separated topics to show)
-        show_match = re.search(r'SHOW\s+([\w,]+)', line, re.IGNORECASE)
+        # SHOW (comma-separated topics to show) — accepts quoted or unquoted
+        show_match = re.search(r'SHOW\s+"([^"]+)"', line, re.IGNORECASE) \
+                  or re.search(r'SHOW\s+([\w,]+)', line, re.IGNORECASE)
         if show_match:
-            options["show"] = [t.strip() for t in show_match.group(1).split(',')]
+            options["show"] = [t.strip() for t in show_match.group(1).split(',') if t.strip()]
 
         # HIDE (comma-separated topics to hide)
         hide_match = re.search(r'HIDE\s+([\w,]+)', line, re.IGNORECASE)
         if hide_match:
             options["hide"] = [t.strip() for t in hide_match.group(1).split(',')]
+
+        # FIELDALIAS (per-field display names) — "key1:Alias1,key2:Alias2"
+        fieldalias_match = re.search(r'FIELDALIAS\s+"([^"]+)"', line, re.IGNORECASE)
+        if fieldalias_match:
+            fa_map = {}
+            for mapping in fieldalias_match.group(1).split(','):
+                if ':' in mapping:
+                    k, v = mapping.split(':', 1)
+                    fa_map[k.strip()] = v.strip()
+            options["fieldAliases"] = fa_map
 
         # UNITS (in quotes) - topic-specific units mapping "topic1:unit1,topic2:unit2"
         units_match = re.search(r'UNITS\s+"([^"]+)"', line, re.IGNORECASE)

@@ -26,6 +26,8 @@ class DashWidget {
   String? text;
   int     size;
   String? color;
+  List<String>? fields;           // selected sensor fields to show (SENSOR widget)
+  Map<String, String>? fieldAliases; // per-field display names
 
   // HORIZON-specific
   String? rollSensor;
@@ -49,6 +51,8 @@ class DashWidget {
     this.text,
     this.size = 1,
     this.color,
+    this.fields,
+    this.fieldAliases,
     this.rollSensor,
     this.rollField,
     this.pitchSensor,
@@ -61,7 +65,7 @@ class DashWidget {
     type: type, sensor: sensor, field: field,
     alias: alias, style: style, min: min, max: max,
     unit: unit, label: label, decimals: decimals,
-    text: text, size: size, color: color,
+    text: text, size: size, color: color, fields: fields, fieldAliases: fieldAliases,
     rollSensor: rollSensor, rollField: rollField,
     pitchSensor: pitchSensor, pitchField: pitchField,
     impactSensor: impactSensor, impactField: impactField,

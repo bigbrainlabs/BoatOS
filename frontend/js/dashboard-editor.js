@@ -1131,10 +1131,19 @@ SCREEN Wetter LAYOUT grid-4
                 ` : ''}
 
                 ${isSensor ? `
-                ${this._renderSensorFieldDropdowns(idx, widget, 'sensor', 'field', 'Sensor')}
+                <!-- Sensor -->
+                <div>
+                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Sensor</label>
+                    <select onchange="window.dashboardEditor.updateWidgetSensor(${idx}, 'sensor', 'fields', this.value)" style="
+                        width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
+                        <option value="">— Sensor wählen —</option>
+                        ${(this.sensorGroups || []).map(s => `<option value="${s.base_name}" ${widget.sensor === s.base_name ? 'selected' : ''}>${s.name}</option>`).join('')}
+                    </select>
+                </div>
+                ${this._renderSensorFieldCheckboxes(idx, widget)}
                 <!-- Alias -->
                 <div>
-                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Alias</label>
+                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Anzeigename (Titel)</label>
                     <input type="text" value="${widget.alias || ''}"
                            onchange="window.dashboardEditor.updateWidget(${idx}, 'alias', this.value)"
                            placeholder="${this.getWidgetName(widget)}"
@@ -1361,9 +1370,47 @@ ${isGauge ? `
     updateWidgetSensor(index, sensorKey, fieldKey, sensorValue) {
         if (this.widgets[index]) {
             this.widgets[index][sensorKey] = sensorValue;
-            this.widgets[index][fieldKey]  = '';
+            this.widgets[index][fieldKey]  = fieldKey === 'fields' ? [] : '';
             this.render();
         }
+    }
+
+    toggleField(index, fieldName, checked) {
+        const widget = this.widgets[index];
+        if (!widget) return;
+        let fields = [...(widget.fields || [])];
+        if (checked) {
+            if (!fields.includes(fieldName)) fields.push(fieldName);
+        } else {
+            fields = fields.filter(f => f !== fieldName);
+        }
+        widget.fields = fields;
+        this.render();
+    }
+
+    _renderSensorFieldCheckboxes(widgetIdx, widget) {
+        const grp = (this.sensorGroups || []).find(s => s.base_name === widget.sensor);
+        if (!grp) return '';
+        const fields = Object.keys(grp.values || {});
+        if (!fields.length) return '';
+        const selectedFields = widget.fields || [];
+        return `
+            <div>
+                <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Angezeigte Werte</label>
+                <div style="display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; overflow: hidden;">
+                    ${fields.map((f, i) => `
+                        <label style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; user-select: none;
+                               border-bottom: ${i < fields.length - 1 ? '1px solid var(--border)' : 'none'};
+                               background: ${selectedFields.includes(f) ? 'rgba(79,195,247,0.08)' : 'transparent'};">
+                            <input type="checkbox" ${selectedFields.includes(f) ? 'checked' : ''}
+                                   onchange="window.dashboardEditor.toggleField(${widgetIdx}, '${f}', this.checked)"
+                                   style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
+                            <span style="font-size: 13px; color: var(--text);">${f}</span>
+                        </label>
+                    `).join('')}
+                </div>
+            </div>
+        `;
     }
 
     /**
@@ -1585,13 +1632,32 @@ ${isGauge ? `
                                         <option value="spacer" ${wtype==='spacer'?'selected':''}>Spacer</option>
                                         <option value="text" ${wtype==='text'?'selected':''}>Text</option>
                                     </select>
-                                    ${(wtype === 'sensor' || wtype === 'gauge') ? `
+                                    ${wtype === 'gauge' ? `
                                     <select onchange="window.dashboardEditor.setSlotProp('${slot}','sensor',this.value)" style="
                                         width:100%;padding:6px 8px;background:var(--bg-panel);border:1px solid var(--border);
                                         border-radius:6px;color:var(--text);font-size:12px;">
                                         <option value="">— Sensor wählen —</option>
-                                        ${this.sensors.map(s => `<option value="${s.base_name}" ${w.sensor===s.base_name?'selected':''}>${s.name}</option>`).join('')}
+                                        ${(this.sensorGroups||[]).map(s => `<option value="${s.base_name}" ${w.sensor===s.base_name?'selected':''}>${s.name}</option>`).join('')}
                                     </select>` : ''}
+                                    ${wtype === 'sensor' ? `
+                                    <select onchange="window.dashboardEditor.setSlotSensor('${slot}',this.value)" style="
+                                        width:100%;padding:6px 8px;background:var(--bg-panel);border:1px solid var(--border);
+                                        border-radius:6px;color:var(--text);font-size:12px;">
+                                        <option value="">— Sensor-Gruppe wählen —</option>
+                                        ${(this.sensorGroups||[]).map(s => `<option value="${s.base_name}" ${w.sensor===s.base_name?'selected':''}>${s.name}</option>`).join('')}
+                                    </select>
+                                    ${this._renderSlotFieldCheckboxes(slot, w)}
+                                    <input type="text" value="${(w.alias||'').replace(/"/g,'&quot;')}" placeholder="Anzeigename (Titel)"
+                                        onchange="window.dashboardEditor.setSlotProp('${slot}','alias',this.value)"
+                                        style="width:100%;padding:5px 8px;background:var(--bg-panel);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;box-sizing:border-box;">
+                                    <select onchange="window.dashboardEditor.setSlotProp('${slot}','style',this.value)" style="
+                                        width:100%;padding:5px 8px;background:var(--bg-panel);border:1px solid var(--border);
+                                        border-radius:6px;color:var(--text);font-size:12px;margin-top:2px;">
+                                        <option value="card" ${(w.style||'card')==='card'?'selected':''}>Card</option>
+                                        <option value="compact" ${w.style==='compact'?'selected':''}>Kompakt</option>
+                                        <option value="hero" ${w.style==='hero'?'selected':''}>Hero</option>
+                                    </select>
+                                    ` : ''}
                                     ${wtype === 'horizon' ? `
                                     <div style="display:flex;flex-direction:column;gap:5px;">
                                         <label style="font-size:10px;color:var(--text-dim);margin:0;">Roll-Topic</label>
@@ -1620,21 +1686,6 @@ ${isGauge ? `
                                             <option value="">— Impact-Topic —</option>
                                             ${this.sensors.map(s => `<option value="${s.full_path||s.base_name+'/'+s.value_name}" ${(w.impactSensor&&w.impactField)&&(w.impactSensor+'/'+(w.impactField||''))===(s.full_path||s.base_name+'/'+s.value_name)?'selected':''}>${s.name||s.full_path}</option>`).join('')}
                                         </select>` : ''}
-                                    </div>` : ''}
-                                    ${wtype === 'sensor' ? `
-                                    <div style="display:flex;gap:6px;">
-                                        <select onchange="window.dashboardEditor.setSlotProp('${slot}','style',this.value)" style="
-                                            flex:1;padding:5px 6px;background:var(--bg-panel);border:1px solid var(--border);
-                                            border-radius:6px;color:var(--text);font-size:11px;">
-                                            <option value="card" ${(w.style||'card')==='card'?'selected':''}>Card</option>
-                                            <option value="compact" ${w.style==='compact'?'selected':''}>Kompakt</option>
-                                            <option value="hero" ${w.style==='hero'?'selected':''}>Hero</option>
-                                        </select>
-                                        <select onchange="window.dashboardEditor.setSlotProp('${slot}','color',this.value)" style="
-                                            flex:1;padding:5px 6px;background:var(--bg-panel);border:1px solid var(--border);
-                                            border-radius:6px;color:var(--text);font-size:11px;">
-                                            ${['cyan','blue','green','orange','purple'].map(c=>`<option value="${c}" ${(w.color||'cyan')===c?'selected':''}>${c}</option>`).join('')}
-                                        </select>
                                     </div>` : ''}
                                     ${wtype === 'gauge' ? `
                                     <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -1803,6 +1854,64 @@ ${isGauge ? `
         this.render();
     }
 
+    setSlotSensor(slot, baseName) {
+        const screen = this.screens[this.currentScreenIndex];
+        if (!screen) return;
+        if (!screen.widgets[slot]) screen.widgets[slot] = { type: 'sensor' };
+        screen.widgets[slot].sensor = baseName;
+        screen.widgets[slot].fields = [];
+        this.render();
+    }
+
+    toggleSlotField(slot, fieldName, checked) {
+        const screen = this.screens[this.currentScreenIndex];
+        if (!screen || !screen.widgets[slot]) return;
+        const w = screen.widgets[slot];
+        let fields = [...(w.fields || [])];
+        if (checked) {
+            if (!fields.includes(fieldName)) fields.push(fieldName);
+        } else {
+            fields = fields.filter(f => f !== fieldName);
+        }
+        w.fields = fields;
+        this.render();
+    }
+
+    setSlotFieldAlias(slot, fieldName, alias) {
+        const screen = this.screens[this.currentScreenIndex];
+        if (!screen || !screen.widgets[slot]) return;
+        const w = screen.widgets[slot];
+        if (!w.fieldAliases) w.fieldAliases = {};
+        if (alias) {
+            w.fieldAliases[fieldName] = alias;
+        } else {
+            delete w.fieldAliases[fieldName];
+        }
+    }
+
+    _renderSlotFieldCheckboxes(slot, w) {
+        if (!w || !w.sensor) return '';
+        const group = (this.sensorGroups || []).find(s => s.base_name === w.sensor);
+        if (!group) return '';
+        const fieldNames = Object.keys(group.values || {});
+        if (!fieldNames.length) return '';
+        const selectedFields = w.fields || w.show || [];
+        const aliases = w.fieldAliases || {};
+        const rows = fieldNames.map(f => {
+            const checked = selectedFields.includes(f) ? 'checked' : '';
+            const aliasVal = (aliases[f] || '').replace(/"/g, '&quot;');
+            return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border);">
+                <input type="checkbox" ${checked} onchange="window.dashboardEditor.toggleSlotField('${slot}','${f}',this.checked)"
+                    style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent);flex-shrink:0;">
+                <span style="font-size:12px;color:var(--text);min-width:80px;">${f}</span>
+                <input type="text" value="${aliasVal}" placeholder="Anzeigename"
+                    onchange="window.dashboardEditor.setSlotFieldAlias('${slot}','${f}',this.value)"
+                    style="flex:1;padding:3px 7px;background:var(--bg-card);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;">
+            </div>`;
+        }).join('');
+        return `<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-top:4px;">${rows}</div>`;
+    }
+
     /**
      * Clear a slot (remove widget assignment)
      */
@@ -1840,6 +1949,11 @@ ${isGauge ? `
             case 'sensor': {
                 let line = `SENSOR ${w.sensor || 'bilge/thermo'}`;
                 if (w.alias) line += ` ALIAS "${w.alias}"`;
+                const showFields = w.fields && w.fields.length ? w.fields : (w.show && w.show.length ? w.show : null);
+                if (showFields) line += ` SHOW "${showFields.join(',')}"`;
+                const fa = w.fieldAliases && Object.keys(w.fieldAliases).length
+                    ? Object.entries(w.fieldAliases).map(([k,v]) => `${k}:${v}`).join(',') : null;
+                if (fa) line += ` FIELDALIAS "${fa}"`;
                 if (w.style && w.style !== 'card') line += ` STYLE ${w.style}`;
                 if (w.color && w.color !== 'cyan') line += ` COLOR ${w.color}`;
                 return line;
@@ -1893,6 +2007,7 @@ ${isGauge ? `
                 if (w.type === 'sensor') {
                     dsl += `  SENSOR ${w.sensor}`;
                     if (w.alias) dsl += ` ALIAS "${w.alias}"`;
+                    if (w.fields && w.fields.length) dsl += ` SHOW "${w.fields.join(',')}"`;
                     if (w.size && w.size > 1) dsl += ` SIZE ${w.size}`;
                     if (w.style && w.style !== 'card') dsl += ` STYLE ${w.style}`;
                     if (w.color && w.color !== 'cyan') dsl += ` COLOR ${w.color}`;

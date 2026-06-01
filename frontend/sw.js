@@ -1,10 +1,10 @@
 /**
  * BoatOS Service Worker - PWA Support
- * v9 - Network-First for app files + persistent Cache-First for satellite tiles
+ * v10 - Network-First for app files + persistent Cache-First for satellite tiles
  */
 
 // App shell cache — bump this version on any app update
-const CACHE_NAME = 'boatos-v9';
+const CACHE_NAME = 'boatos-v10';
 
 // Satellite tile cache — intentionally versioned separately so it is NEVER
 // wiped when the app cache version changes (tiles take a long time to download)

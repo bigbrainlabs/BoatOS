@@ -150,6 +150,8 @@ DashWidget _parseSensorDW(List<String> t) {
   final path = t[1];
   String alias = '', color = 'cyan', style = 'card';
   int size = 1;
+  List<String>? fields;
+  Map<String, String>? fieldAliases;
   for (int i = 2; i < t.length - 1; i += 2) {
     final k = t[i].toUpperCase();
     final v = t[i + 1];
@@ -163,6 +165,22 @@ DashWidget _parseSensorDW(List<String> t) {
         color = v;
       case 'STYLE':
         style = v.toLowerCase();
+      case 'SHOW':
+        final clean = v.replaceAll('"', '').trim();
+        if (clean.isNotEmpty) {
+          fields = clean.split(',').map((f) => f.trim()).where((f) => f.isNotEmpty).toList();
+        }
+      case 'FIELDALIAS':
+        final clean = v.replaceAll('"', '').trim();
+        if (clean.isNotEmpty) {
+          fieldAliases = {};
+          for (final pair in clean.split(',')) {
+            final idx = pair.indexOf(':');
+            if (idx > 0) {
+              fieldAliases![pair.substring(0, idx).trim()] = pair.substring(idx + 1).trim();
+            }
+          }
+        }
     }
   }
   return DashWidget(
@@ -172,6 +190,8 @@ DashWidget _parseSensorDW(List<String> t) {
     style: style,
     color: color,
     size: size,
+    fields: fields,
+    fieldAliases: fieldAliases,
   );
 }
 
