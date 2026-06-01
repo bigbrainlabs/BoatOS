@@ -31,11 +31,11 @@ jobs:
       - name: Install flutterpi_tool
         run: dart pub global activate flutterpi_tool
 
-      - name: Build flutter-pi bundle (arm64, Pi 4)
+      - name: Build flutter-pi bundle (arm64, generic)
         working-directory: flutter_app
         run: |
           flutter pub get
-          $HOME/.pub-cache/bin/flutterpi_tool build --arch=arm64 --cpu=pi4 --release
+          $HOME/.pub-cache/bin/flutterpi_tool build --arch=arm64 --cpu=generic --release
 
       - name: Extract version tag
         id: tag
@@ -55,11 +55,12 @@ jobs:
 
             ### Manuelles Update
             ```bash
-            bash /home/arielle/BoatOS/scripts/update.sh
+            bash /home/boatos/BoatOS/scripts/update.sh
             ```
 
             ### Enthaltene Dateien
-            - `app.so` — Helm-App (Flutter, Pi 4 arm64)
-          files: flutter_app/build/flutter-pi/pi4-64/app.so
+            - `app.so` — Helm-App (Flutter, arm64 generic)
+          files: flutter_app/build/flutter-pi/aarch64-generic/app.so
           draft: false
           prerelease: false
+          make_latest: true

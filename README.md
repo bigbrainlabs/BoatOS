@@ -260,8 +260,8 @@ cd flutter_app
 flutterpi_tool build --arch=arm64 --cpu=pi4 --release
 
 # Deploy auf Pi:
-scp build/flutter-pi/pi4-64/app.so arielle@<pi-ip>:/home/arielle/BoatOS/flutter_app/app.so
-ssh arielle@<pi-ip> "sudo systemctl restart lightdm"
+scp build/flutter-pi/aarch64-generic/app.so boatos@<pi-ip>:/home/boatos/BoatOS/flutter_app/app.so
+ssh boatos@<pi-ip> "sudo systemctl restart lightdm"
 ```
 
 Detaillierte Anleitung: [INSTALL.md](INSTALL.md)
@@ -395,8 +395,8 @@ cd flutter_app
 flutterpi_tool build --arch=arm64 --cpu=pi4 --release
 
 # Deploy
-scp build/flutter-pi/pi4-64/app.so arielle@<pi-ip>:/home/arielle/BoatOS/flutter_app/app.so
-ssh arielle@<pi-ip> "sudo systemctl restart lightdm"
+scp build/flutter-pi/aarch64-generic/app.so boatos@<pi-ip>:/home/boatos/BoatOS/flutter_app/app.so
+ssh boatos@<pi-ip> "sudo systemctl restart lightdm"
 ```
 
 ### MQTT Debugging
