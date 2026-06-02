@@ -22,8 +22,8 @@ else
     git remote set-url origin "$GITHUB_URL" 2>/dev/null || true
 fi
 # --force --prune-tags damit Tags nach History-Rewrite korrekt aktualisiert werden
-if ! git fetch origin -q --force --prune --prune-tags --tags 2>/dev/null; then
-    log "       Fetch fehlgeschlagen (veraltetes Repo?) — re-initialisiere..."
+if ! timeout 45 git fetch origin -q --force --prune --prune-tags --tags 2>/dev/null; then
+    log "       Fetch fehlgeschlagen/timeout (veraltetes Repo?) — re-initialisiere..."
     rm -rf .git
     git init -q
     git remote add origin "$GITHUB_URL"
