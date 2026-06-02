@@ -18,9 +18,17 @@ if [ ! -d ".git" ]; then
     log "       Kein Git-Repo gefunden — initialisiere..."
     git init -q
     git remote add origin "$GITHUB_URL"
-    log "       Git initialisiert"
+else
+    git remote set-url origin "$GITHUB_URL" 2>/dev/null || true
 fi
-git fetch origin -q --tags
+# --force --prune-tags damit Tags nach History-Rewrite korrekt aktualisiert werden
+if ! git fetch origin -q --force --prune --prune-tags --tags 2>/dev/null; then
+    log "       Fetch fehlgeschlagen (veraltetes Repo?) — re-initialisiere..."
+    rm -rf .git
+    git init -q
+    git remote add origin "$GITHUB_URL"
+    git fetch origin -q --force --tags
+fi
 LATEST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.' | head -1)
 if [ -n "$LATEST_TAG" ]; then
     git reset --hard "$LATEST_TAG" -q
