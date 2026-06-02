@@ -32,12 +32,32 @@ valhalla/
 .DS_Store
 Thumbs.db
 
-# Backup files
+# Backup & temporary editor files
 *.backup
 *.backup_*
-*.broken*
+*.bak
+*.broken
+*.broken2
+*.broken3
 *.before-*
 *.old
+*.orig
+*.rej
+*.tmp
+*.temp
+*~
+*.swp
+*.swo
+# Numbered/dated backups
+*_backup_*
+*_bak_*
+*.backup.*
+# Explicit suffixes used in this project
+*.backup-*
+*.full
+*.debug
+*.leaflet.*
+*.leaflet
 
 # SSL certificates & credentials
 *.key
@@ -69,7 +89,19 @@ tools/wlan.txt
 *.tmp
 .cache/
 
-# Instagram Reel production files
+# Binary / large files
+*.bin
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.zip
+*.gz
+osrm-binaries/
+
+# Firmware files
+frontend/firmware*.bin
+
+# Instagram / Reel production files
 *.mp4
 build_reel*.py
 REEL_*.md
@@ -92,3 +124,8 @@ README_*.md
 # Internal docs (not for public repo)
 docs/v2-flutter-pi.md
 docs/distri-image.md
+
+# Screenshots & local artifacts
+*screenshot*.png
+*_screenshot.*
+flutter_app/C*
