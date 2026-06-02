@@ -60,6 +60,17 @@ https://boatos.local
 
 Falls `boatos.local` nicht funktioniert (Windows ohne Bonjour): IP-Adresse des Pi im Router nachschauen.
 
+### ⚠️ Sicherheit — Standard-Passwörter ändern
+
+Das Image wird mit öffentlich bekannten Standard-Passwörtern ausgeliefert. **Ändere diese vor dem ersten Einsatz in einem Hafen oder Netzwerk mit anderen Personen:**
+
+| Zugang | Standard-Passwort | Ändern unter |
+|---|---|---|
+| SSH-Login (`boatos`) | `boatos123` | `passwd` per SSH |
+| Hotspot WLAN | `boatos1234` | Deck/Helm → Einstellungen → WLAN → Hotspot |
+
+Solange der Pi nur im eigenen Heimnetz läuft, ist das Risiko überschaubar. An öffentlichen Liegeplätzen oder in Marinas sind Standard-Passwörter ein echtes Sicherheitsproblem.
+
 ---
 
 ## Weg 2 — Manuelle Installation aus dem Repository

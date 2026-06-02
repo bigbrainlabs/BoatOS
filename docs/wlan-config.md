@@ -49,6 +49,8 @@ Wenn kein bekanntes WLAN in Reichweite ist, kann der Pi einen eigenen Hotspot au
 
 Nach dem Verbinden mit dem Hotspot: `https://192.168.4.1` im Browser aufrufen.
 
+> ⚠️ **Sicherheitshinweis:** Das Hotspot-Passwort `boatos1234` ist ein öffentlich bekanntes Standard-Passwort. Ändere es nach der Ersteinrichtung unter **Einstellungen → WLAN → Hotspot-Passwort**, bevor du BoatOS in einem Hafen oder an einem anderen öffentlichen Liegeplatz verwendest.
+
 > **Hinweis:** Der Hotspot läuft auf 2,4 GHz. Auf kleinem Raum (z.B. in einem Hafen) kann er andere WLAN-Geräte kurzzeitig beeinflussen. Nach Gebrauch stoppen.
 
 **Hotspot stoppen:**
