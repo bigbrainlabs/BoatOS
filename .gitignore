@@ -39,10 +39,24 @@ Thumbs.db
 *.before-*
 *.old
 
-# SSL certificates
+# SSL certificates & credentials
 *.key
 *.crt
 *.pem
+*.p12
+*.pfx
+*.der
+*.csr
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+authorized_keys
+known_hosts
+*.nmconnection
+credentials.json
+secrets.json
+tools/wlan.txt
 
 # IDE
 .vscode/
