@@ -514,6 +514,16 @@ BoatOS entsteht als Teil der **„Logbuch ohne Pose"**-Reihe — einer Bauserie 
 
 ---
 
+---
+
+## Lizenz
+
+BoatOS ist Open Source und steht unter der **[GNU General Public License v3.0](LICENSE)**.
+
+Das bedeutet: du kannst den Code frei nutzen, studieren und modifizieren. Ableitungen müssen ebenfalls unter der GPL v3 veröffentlicht werden.
+
+---
+
 <div align="center">
 
 **Gebaut mit ❤️ für die Schifffahrt**
