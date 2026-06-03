@@ -184,7 +184,7 @@ def generate_sensor_name(topic_base: str) -> str:
 
 # ==================== SENSOR GROUPING ====================
 
-# Praefix -> (group_id, label, icon, source) — Reihenfolge bestimmt Prioritaet
+# Prefix → (group_id, label, icon, source) — order determines priority
 _SENSOR_GROUP_RULES = [
     ("boot/sensoren/motor",             "motor",      "Motor",          "⚙️",  "ESP32"),
     ("boot/sensoren/batterie",          "batterie",   "Batterie",       "\U0001f50b", "ESP32"),
@@ -203,7 +203,7 @@ _SENSOR_GROUP_RULES = [
     ("boatos/bilge",                    "bilge",      "Bilge",          "\U0001f321️", "Bilge-Sensor"),
 ]
 
-# Topics/Praefixe komplett ignorieren
+# Topics/prefixes to ignore entirely
 _SENSOR_IGNORE_PREFIXES = [
     "boot/status",
     "boat/notifications",
@@ -212,7 +212,7 @@ _SENSOR_IGNORE_PREFIXES = [
     "test/boatos",
 ]
 
-# Letzte Topic-Segmente die keine Sensorwerte sind
+# Last topic segments that are not sensor values
 _SENSOR_IGNORE_SUFFIXES = {
     "online", "status", "uptime", "wifi_rssi", "mode", "sensors_ok",
     "datetime", "methodquality", "differentialreference",
@@ -220,7 +220,7 @@ _SENSOR_IGNORE_SUFFIXES = {
     "satellitesinview",
 }
 
-# Einheiten-Mapping: letztes Topic-Segment (lowercase) -> Einheit
+# Unit mapping: last topic segment (lowercase) → unit string
 _SENSOR_UNIT_MAP = {
     "temperature": "°C", "temperatur": "°C", "temp": "°C",
     "humidity": "%",    "hum": "%",
@@ -242,7 +242,7 @@ _SENSOR_UNIT_MAP = {
     "satellites": "",
 }
 
-# Lesbare Labels fuer bekannte letzte Topic-Segmente
+# Human-readable labels for known last topic segments
 _SENSOR_LABEL_MAP = {
     "drehzahl": "Drehzahl",
     "oeldruck": "Öldruck",
@@ -270,7 +270,7 @@ _SENSOR_LABEL_MAP = {
 }
 
 def _group_for_topic(topic: str):
-    """Gibt (group_id, label, icon, source) zurueck oder None wenn ignoriert."""
+    """Return (group_id, label, icon, source) or None if the topic should be ignored."""
     t = topic.lower()
     for prefix in _SENSOR_IGNORE_PREFIXES:
         if t.startswith(prefix.lower()):
@@ -295,7 +295,7 @@ def _unit_for_topic(topic: str) -> str:
 
 @app.get("/api/sensors/grouped")
 async def get_sensors_grouped():
-    """Sensoren gruppiert nach Kategorie/Quelle. Loest langfristig /api/sensors/list ab."""
+    """Sensors grouped by category/source. Intended to supersede /api/sensors/list long-term."""
     import time
     current_time = time.time()
 
@@ -366,7 +366,7 @@ async def get_sensors_grouped():
 
 @app.delete("/api/sensors/topic")
 async def delete_sensor_topic(topic: str):
-    """Einzelnes Topic aus known_topics entfernen (persistent)."""
+    """Remove a single topic from known_topics (persisted to disk)."""
     removed = False
     if topic in known_topics:
         del known_topics[topic]

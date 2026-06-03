@@ -2,15 +2,15 @@
 
 > **Modern Marine Navigation System — Open Source, Touch-Optimized, Offline-First**
 
-Ein vollständiges Marine-Navigationssystem für Binnenschifffahrt und Küstennavigation. Gebaut für Raspberry Pi mit Touchscreen, läuft komplett offline, keine Abos, keine Cloud-Zwänge.
+A complete marine navigation system for inland waterways and coastal navigation. Built for Raspberry Pi with touchscreen, runs completely offline, no subscriptions, no cloud lock-in.
 
 <div align="center">
 
-### 💾 Fertig-Image — einfach flashen, sofort lossegeln
+### 💾 Ready-to-Flash Image — flash it, start sailing
 
-**[⬇️ Download v1.5.21 (~7,5 GB)](https://archive.org/download/boatos-distri-image/boatos_v1.5.21.img.gz)**
+**[⬇️ Download v1.5.21 (~7.5 GB)](https://archive.org/download/boatos-distri-image/boatos_v1.5.21.img.gz)**
 
-*balenaEtcher oder Raspberry Pi Imager → ISO-Image auswählen → Flashen → fertig*
+*balenaEtcher or Raspberry Pi Imager → select custom image → Flash → done*
 
 </div>
 
@@ -18,28 +18,28 @@ Ein vollständiges Marine-Navigationssystem für Binnenschifffahrt und Küstenna
 
 <div align="center">
 
-## 📚 Logbuch ohne Pose — Buchserie & Bauserie
+## 📚 Logbuch ohne Pose — Book Series & Build Series
 
-**BoatOS ist Teil einer vollständigen Open-Source-Bauserie zur Bootstechnik-Optimierung.**  
-Dokumentiert als lebendiges Projekt — zum Nachbauen, Verstehen und Weiterentwickeln.
+**BoatOS is part of a complete open-source build series on marine technology optimization.**  
+Documented as a living project — to rebuild, understand, and extend.
 
-[![GitHub](https://img.shields.io/badge/Bauserie-logbuch--ohne--pose-181717?style=for-the-badge&logo=github)](https://github.com/bigbrainlabs/logbuch-ohne-pose)
+[![GitHub](https://img.shields.io/badge/Build_Series-logbuch--ohne--pose-181717?style=for-the-badge&logo=github)](https://github.com/bigbrainlabs/logbuch-ohne-pose)
 &nbsp;
-[![Amazon DE](https://img.shields.io/badge/Buch_🇩🇪-Amazon-FF9900?style=for-the-badge&logo=amazon)](https://www.amazon.de/dp/B0GLXGD8LB?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
+[![Amazon DE](https://img.shields.io/badge/Book_🇩🇪-Amazon-FF9900?style=for-the-badge&logo=amazon)](https://www.amazon.de/dp/B0GLXGD8LB?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
 &nbsp;
-[![Amazon EN](https://img.shields.io/badge/Buch_🇬🇧-Amazon-FF9900?style=for-the-badge&logo=amazon)](https://www.amazon.de/dp/B0GMD5JH28?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
+[![Amazon EN](https://img.shields.io/badge/Book_🇬🇧-Amazon-FF9900?style=for-the-badge&logo=amazon)](https://www.amazon.de/dp/B0GMD5JH28?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
 &nbsp;
-[![Facebook](https://img.shields.io/badge/Auf_dem_Laufenden_bleiben-Facebook-1877F2?style=for-the-badge&logo=facebook)](https://www.facebook.com/profile.php?id=61590360750363)
+[![Facebook](https://img.shields.io/badge/Stay_Updated-Facebook-1877F2?style=for-the-badge&logo=facebook)](https://www.facebook.com/profile.php?id=61590360750363)
 
-*Schritt-für-Schritt Dokumentation · Schaltpläne · Code · Erfahrungsberichte*
+*Step-by-step documentation · Circuit diagrams · Code · Field reports*
 
-> Wenn euch das Projekt gefällt: die Bücher sind der direkteste Weg mich zu unterstützen — und eine ehrliche Rezension auf Amazon hilft enorm, damit andere das Projekt entdecken. Freue mich über jedes Feedback! 🙏
+> If you like this project: the books are the most direct way to support me — and an honest review on Amazon helps enormously to help others discover it. I appreciate every piece of feedback! 🙏
 
 </div>
 
 ---
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![License](https://img.shields.io/badge/license-GPL%20v3-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Raspberry%20Pi-red.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![Flutter](https://img.shields.io/badge/flutter-3.x-blue.svg)
@@ -49,16 +49,16 @@ Dokumentiert als lebendiges Projekt — zum Nachbauen, Verstehen und Weiterentwi
 
 ## 🌟 Highlights
 
-> **Kein Touchscreen nötig.** BoatOS läuft vollständig über **Deck**, das browser-basierte Web-Frontend — erreichbar von Handy, Tablet oder Laptop im gleichen WLAN. Der Touchscreen mit Helm ist optional und macht die Installation zum vollwertigen Steuerstand.
+> **No touchscreen required.** BoatOS runs fully through **Deck**, the browser-based web frontend — accessible from any phone, tablet, or laptop on the same network. The touchscreen with Helm is optional and turns the setup into a full helm station.
 
-- 🗺️ **Zwei UIs** — Deck (browser-based Web-Frontend) + Helm (native Flutter-App, flutter-pi)
-- 🧭 **Binnengewässer-Routing** — OSRM-optimiert für Elbe, Kanäle & Schleusen
-- 📡 **Live AIS** — Echtzeit-Schiffsverkehr (Europa), via AISStream.io
-- ⚠️ **Wetter & Warnungen** — DWD API mit Unwetter-Alerts
-- 📖 **Digitales Logbuch** — GPS-Tracks, Crew, Pegelstände, Export
-- 🔌 **Sensor-Dashboard** — MQTT-Integration, DSL-konfigurierbares Layout, animierte Gauges
-- 🛰️ **Satellitenkarten** — ESRI World Imagery mit Offline-Caching
-- 👆 **Touch-optimiert** — Große Targets, kein 300ms-Delay, perfekt für unterwegs
+- 🗺️ **Two UIs** — Deck (browser-based web frontend) + Helm (native Flutter app, flutter-pi)
+- 🧭 **Inland waterway routing** — OSRM-optimized for rivers, canals & locks
+- 📡 **Live AIS** — Real-time vessel traffic (Europe) via AISStream.io
+- ⚠️ **Weather & alerts** — DWD API with severe weather warnings
+- 📖 **Digital logbook** — GPS tracks, crew, water levels, export
+- 🔌 **Sensor dashboard** — MQTT integration, DSL-configurable layout, animated gauges
+- 🛰️ **Satellite maps** — ESRI World Imagery with offline caching
+- 👆 **Touch-optimized** — Large targets, no 300ms delay, perfect for on-the-water use
 
 ---
 
@@ -71,15 +71,15 @@ Demos: Check Instagram @bigbrainlabs
 
 ---
 
-## 🏗️ Architektur
+## 🏗️ Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                        Raspberry Pi 4                            │
 │                                                                  │
 │   ┌──────────────────────┐   ┌──────────────────────────────┐   │
-│   │   Deck Web-Frontend  │   │    Helm Flutter-App (flutter-pi)│  │
-│   │   (Nginx + HTTPS)    │   │    Nativer Kiosk, lightdm    │   │
+│   │   Deck Web Frontend  │   │  Helm Flutter App (flutter-pi) │  │
+│   │   (Nginx + HTTPS)    │   │  Native Kiosk, lightdm       │   │
 │   └──────────┬───────────┘   └──────────────┬───────────────┘   │
 │              │  HTTP/WS                      │  HTTP/WS          │
 │              └─────────────┬─────────────────┘                  │
@@ -103,141 +103,141 @@ Demos: Check Instagram @bigbrainlabs
 │                                    └─────────────────┘          │
 │                                                                  │
 │   ┌────────────────────────────┐                                │
-│   │  Martin Tile Server        │  Port 8081, lokale Vektorkarten│
-│   │  OSRM Routing Server       │  Port 5000, Binnengewässer     │
+│   │  Martin Tile Server        │  Port 8081, local vector maps  │
+│   │  OSRM Routing Server       │  Port 5000, inland waterways   │
 │   └────────────────────────────┘                                │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## ✨ Features im Detail
+## ✨ Features in Detail
 
-### 🗺️ Karte & Navigation
-- **Vektor-Seekarten** — OpenMapTiles via Martin (lokal, offline), Deck-Light-Style
-- **Seemarken** — OpenSeaMap Overlay
-- **Satellitenkarten** — ESRI World Imagery mit passivem + aktivem Offline-Caching (SW/Cache-API)
-- **AIS** — Live Schiffsverkehr via AISStream.io, gefiltert auf Europa-Bounding-Box
-- **Schleusen-Datenbank** — OSM-basiert, 300m-Deduplizierung, VHF/Zeiten/Maße
-- **Pegeldaten** — PEGELONLINE API, live Wasserstände auf der Karte
-- **Auto-Follow** — EMA-gefiltertes GPS, smooth Marker-Animation (α=0.35, ~4s ease-out)
-- **Routing** — OSRM-Wasserwegrouting, Wegpunkte drag-and-drop, Routen speichern/laden
-- **Routensimulation** — ×1–×1000 Geschwindigkeit, Speed-Slider, GPS-Blocking während Sim
-- **Navigation** — Richtung & Distanz zum nächsten Wegpunkt, automatisches Vorschalten
+### 🗺️ Map & Navigation
+- **Vector nautical charts** — OpenMapTiles via Martin (local, offline), Deck Light style
+- **Sea marks** — OpenSeaMap overlay
+- **Satellite maps** — ESRI World Imagery with passive + active offline caching (SW/Cache API)
+- **AIS** — Live vessel traffic via AISStream.io, filtered to Europe bounding box
+- **Lock database** — OSM-based, 300m deduplication, VHF/hours/dimensions
+- **Water level data** — PEGELONLINE API, live water levels on the map
+- **Auto-follow** — EMA-filtered GPS, smooth marker animation (α=0.35, ~4s ease-out)
+- **Routing** — OSRM waterway routing, drag-and-drop waypoints, save/load routes
+- **Route simulation** — ×1–×1000 speed, speed slider, GPS blocked during simulation
+- **Navigation** — Bearing & distance to next waypoint, automatic advance
 
 ### 📊 Dashboard
-- **DSL-Layout** — Textbasierte Konfiguration (GRID, GAUGE, SENSOR, ROW)
-- **Gauge-Stile** — arc180, arc270, arc360, bar — alle mit animierter Nadel (500ms ease-out)
-- **SensorCards** — card, hero, compact — mit SHOW/HIDE-Filter, Status-LED
-- **MQTT-Daten** — alle Sensor-Topics automatisch erkannt, String-Werte korrekt geparsed
-- **Visual Editor** (Deck) — Drag & Drop, Undo/Redo, Bi-direktionale DSL-Sync
+- **DSL layout** — Text-based configuration (GRID, GAUGE, SENSOR, ROW)
+- **Gauge styles** — arc180, arc270, arc360, bar — all with animated needle (500ms ease-out)
+- **SensorCards** — card, hero, compact — with SHOW/HIDE filter, status LED
+- **MQTT data** — all sensor topics auto-discovered, string values correctly parsed
+- **Visual Editor** (Deck) — Drag & drop, undo/redo, bi-directional DSL sync
 
-### 📖 Logbuch
-- **GPS-Track-Recording** — Start/Stop, Pause, Pegelstände pro Track-Punkt
-- **Crew Management** — Emoji-Avatare, Rollen (Skipper/Crew/Gast), Kontaktdaten
-- **Archiv** — Alle Fahrten mit Detailansicht: Statistik, Track auf Karte, Wetter, Pegel, Sensoren
-- **Pegel-Tracking** — Alle 15 min werden nächstgelegene Stationen mitgeschrieben
-- **Logbuch-Einträge** — Manuell & automatisch (Fahrtstart/-ende mit Wetter-Snapshot)
+### 📖 Logbook
+- **GPS track recording** — Start/stop, pause, water levels per track point
+- **Crew management** — Emoji avatars, roles (Skipper/Crew/Guest), contact details
+- **Archive** — All trips with detail view: stats, track on map, weather, water levels, sensors
+- **Water level tracking** — Nearby stations recorded every 15 min
+- **Logbook entries** — Manual & automatic (trip start/end with weather snapshot)
 
-### 🔌 Sensoren & MQTT
-- **Auto-Discovery** — Alle MQTT-Topics werden automatisch erkannt und gespeichert
-- **Persistent Topics** — `known_topics.json` — Sensordaten bleiben über Neustarts erhalten
-- **MQTT Auto-Reconnect** — loop_forever()-Thread mit 5s Retry — überlebt Broker-Neustarts
-- **GPS Synthetic Sensors** — Altitude, HDOP, Satelliten als Dashboard-Sensoren
-- **SignalK Bridge** — GPS & Navigationsdaten über SignalK, konfigurierbar in Einstellungen
+### 🔌 Sensors & MQTT
+- **Auto-discovery** — All MQTT topics automatically detected and stored
+- **Persistent topics** — `known_topics.json` — sensor data survives restarts
+- **MQTT auto-reconnect** — loop_forever() thread with 5s retry — survives broker restarts
+- **GPS synthetic sensors** — Altitude, HDOP, satellites as dashboard sensors
+- **SignalK bridge** — GPS & navigation data via SignalK, configurable in settings
 
-### 🌦️ Wetter & Umwelt
-- **DWD Integration** — Deutscher Wetterdienst, automatisch nach Bootsposition
-- **Unwetter-Warnungen** — Live Alerts mit Schweregrad, auf Karte
-- **Pegeldaten** — PEGELONLINE, Tracking während der Fahrt für Flachwasseranalyse
+### 🌦️ Weather & Environment
+- **DWD integration** — German Weather Service, automatically follows boat position
+- **Severe weather alerts** — Live alerts with severity level, displayed on map
+- **Water level data** — PEGELONLINE, tracked during trips for shallow-water analysis
 
 ---
 
 ## 📱 Deck vs Helm
 
-| | Deck — Web-Frontend | Helm — Flutter-App |
+| | Deck — Web Frontend | Helm — Flutter App |
 |---|---|---|
-| **Basis** | Vanilla JS, MapLibre GL | Flutter 3.x, flutter-pi |
+| **Base** | Vanilla JS, MapLibre GL | Flutter 3.x, flutter-pi |
 | **Kiosk** | cog (WPE WebKit) | flutter-pi + lightdm |
-| **Karten** | MapLibre GL JS v4.7.1 | flutter_map + vector_map_tiles |
-| **Status** | ✅ Produktiv, aktiv | ✅ Produktiv, in Entwicklung |
-| **Stärken** | Vollständiger Feature-Set, Visual Editor | Native Performance, animierte Gauges |
+| **Maps** | MapLibre GL JS v4.7.1 | flutter_map + vector_map_tiles |
+| **Status** | ✅ Production, active | ✅ Production, in development |
+| **Strengths** | Full feature set, visual editor | Native performance, animated gauges |
 
-Beide UIs teilen dasselbe Backend und die gleiche REST/WebSocket-API.
+Both UIs share the same backend and REST/WebSocket API.
 
 ---
 
 ## 🚀 Tech Stack
 
 ### Backend
-- **FastAPI** — High-Performance Python API
-- **paho-mqtt** — MQTT-Client mit Auto-Reconnect
-- **SignalK** — Marine Data Server (GPS)
-- **uvicorn** — ASGI Server
+- **FastAPI** — High-performance Python API
+- **paho-mqtt** — MQTT client with auto-reconnect
+- **SignalK** — Marine data server (GPS)
+- **uvicorn** — ASGI server
 
 ### Deck Frontend
-- **Vanilla JavaScript** — ES Modules, kein Framework-Bloat
-- **MapLibre GL JS** v4.7.1 — Vektorkarten (lokal)
-- **WebSocket** — Echtzeit GPS & Sensordaten
-- **Service Worker** — Offline-Caching (Karten, Satellitenkacheln)
+- **Vanilla JavaScript** — ES Modules, no framework bloat
+- **MapLibre GL JS** v4.7.1 — Vector maps (local)
+- **WebSocket** — Real-time GPS & sensor data
+- **Service Worker** — Offline caching (maps, satellite tiles)
 
-### Helm Flutter-App
-- **Flutter** 3.x + **flutter-pi** — Native ARM64 AOT-Build
-- **flutter_map** — Interaktive Karten
-- **vector_map_tiles** — Vektorkacheln aus lokalem Martin
-- **provider** — State Management
-- **web_socket_channel** — WebSocket-Verbindung zum Backend
+### Helm Flutter App
+- **Flutter** 3.x + **flutter-pi** — Native ARM64 AOT build
+- **flutter_map** — Interactive maps
+- **vector_map_tiles** — Vector tiles from local Martin
+- **provider** — State management
+- **web_socket_channel** — WebSocket connection to backend
 
-### Infrastruktur
-- **Nginx** — Reverse Proxy & SSL (Deck)
-- **Martin** — Vektortile-Server (Port 8081)
-- **OSRM** — Routing-Engine (Port 5000, IPv4-only)
-- **Mosquitto** — MQTT Broker (Port 1883)
-- **Raspberry Pi 4** — Hardware-Plattform
+### Infrastructure
+- **Nginx** — Reverse proxy & SSL (Deck)
+- **Martin** — Vector tile server (Port 8081)
+- **OSRM** — Routing engine (Port 5000, IPv4-only)
+- **Mosquitto** — MQTT broker (Port 1883)
+- **Raspberry Pi 4** — Hardware platform
 
-### Datenquellen
-- **OpenSeaMap** — Seemarken-Overlay
-- **OpenStreetMap / OMT** — Vektorkarten & Routing
-- **ESRI World Imagery** — Satellitenkarten
-- **DWD API** — Deutscher Wetterdienst
-- **PEGELONLINE** — Wasserstandsdaten
-- **AISStream.io** — Live AIS Schiffsdaten
-- **SignalK** — Marine-Datenstandard
+### Data Sources
+- **OpenSeaMap** — Sea marks overlay
+- **OpenStreetMap / OMT** — Vector maps & routing
+- **ESRI World Imagery** — Satellite maps
+- **DWD API** — German Weather Service
+- **PEGELONLINE** — Water level data
+- **AISStream.io** — Live AIS vessel data
+- **SignalK** — Marine data standard
 
 ---
 
-## 📋 Systemanforderungen
+## 📋 System Requirements
 
 ### Hardware
-- **Raspberry Pi 4** (min. 2 GB RAM, 4 GB empfohlen)
-- **GPS Empfänger** — USB, z. B. BU-353N5 (`/dev/ttyUSB0`, 4800 baud)
-- **Touchscreen** — z. B. QDtech MPI1001 10.1" (1280×800)
-- **SD Card** — Min. 32 GB
-- **Optional** — ESP32/Arduino Sensorboard via MQTT
+- **Raspberry Pi 4** (min. 2 GB RAM, 4 GB recommended)
+- **GPS receiver** — USB, e.g. BU-353N5 (`/dev/ttyUSB0`, 4800 baud)
+- **Touchscreen** — e.g. QDtech MPI1001 10.1" (1280×800)
+- **SD card** — Min. 32 GB
+- **Optional** — ESP32/Arduino sensor board via MQTT
 
 ### Software
 - **Raspberry Pi OS** Bookworm (64-bit)
 - **Python** 3.9+
-- **Node.js** (für SignalK)
-- **Flutter SDK** + flutter-pi (nur für Helm-Build)
+- **Node.js** (for SignalK)
+- **Flutter SDK** + flutter-pi (only needed for Helm build)
 
 ---
 
-## 💾 Fertig-Image (empfohlen)
+## 💾 Ready-to-Flash Image (recommended)
 
-Das schnellste Setup — einfach flashen, fertig:
+The fastest setup — just flash and go:
 
-1. **Image herunterladen** (v1.5.21): [boatos_v1.5.21.img.gz](https://archive.org/download/boatos-distri-image/boatos_v1.5.21.img.gz) (~7,5 GB)
-2. **balenaEtcher** oder **Raspberry Pi Imager** öffnen → ISO-Image auswählen
-3. Flashen → Pi booten → Helm startet automatisch
+1. **Download image** (v1.5.21): [boatos_v1.5.21.img.gz](https://archive.org/download/boatos-distri-image/boatos_v1.5.21.img.gz) (~7.5 GB)
+2. Open **balenaEtcher** or **Raspberry Pi Imager** → select custom image
+3. Flash → boot Pi → Helm starts automatically
 
-> Mindestens 32 GB SD-Karte oder USB-SSD. Partition wird beim ersten Boot automatisch auf die volle Größe erweitert.
+> Minimum 32 GB SD card or USB SSD. Partition is automatically expanded to full size on first boot.
 
 ---
 
-## ⚡ Schnellstart (manuelle Installation)
+## ⚡ Quick Start (manual installation)
 
-### 1. Repository klonen & installieren
+### 1. Clone & install
 
 ```bash
 git clone https://github.com/bigbrainlabs/BoatOS.git
@@ -246,79 +246,78 @@ chmod +x install.sh
 ./install.sh
 ```
 
-### 2. Deck aufrufen
+### 2. Open Deck
 
 ```
 https://<pi-ip>/
 ```
 
-### 3. Helm bauen & deployen
+### 3. Build & deploy Helm
 
 ```bash
-# Auf dem Entwicklungs-PC (Flutter SDK + flutterpi_tool erforderlich):
+# On the development PC (Flutter SDK + flutterpi_tool required):
 cd flutter_app
 flutterpi_tool build --arch=arm64 --cpu=pi4 --release
 
-# Deploy auf Pi:
+# Deploy to Pi:
 scp build/flutter-pi/aarch64-generic/app.so boatos@<pi-ip>:/home/boatos/BoatOS/flutter_app/app.so
 ssh boatos@<pi-ip> "sudo systemctl restart lightdm"
 ```
 
-Detaillierte Anleitung: [INSTALL.md](INSTALL.md)
+Full instructions: [docs/installation.md](docs/installation.md)
 
 ---
 
-## 📁 Verzeichnisstruktur
+## 📁 Directory Structure
 
 ```
 BoatOS/
-├── backend/                    # FastAPI Backend
+├── backend/                    # FastAPI backend
 │   ├── app/
-│   │   ├── main.py             # Haupt-API, WebSocket, MQTT
+│   │   ├── main.py             # Main API, WebSocket, MQTT
 │   │   ├── gps_service.py      # GPS via SignalK
-│   │   ├── logbook_storage.py  # Logbuch & Tracks
-│   │   ├── locks_storage.py    # Schleusen-Datenbank
+│   │   ├── logbook_storage.py  # Logbook & tracks
+│   │   ├── locks_storage.py    # Lock database
 │   │   ├── crew_management.py  # Crew CRUD
-│   │   ├── pegelonline.py      # Pegeldaten
+│   │   ├── pegelonline.py      # Water level data
 │   │   ├── ais_service.py      # AIS via AISStream
 │   │   └── ...
 │   └── requirements.txt
-├── frontend/                   # Deck Web-Frontend
+├── frontend/                   # Deck web frontend
 │   ├── index.html
 │   ├── js/
-│   │   ├── main.js             # ES Module Entry
-│   │   ├── map.js              # Karte, Marker, GPS-Smoothing
-│   │   ├── navigation.js       # Routing & Simulation
-│   │   ├── logbook.js          # Logbuch & Crew
-│   │   ├── sensors.js          # GPS Fallbacks
-│   │   ├── ais.js              # AIS-Schiffe
+│   │   ├── main.js             # ES module entry
+│   │   ├── map.js              # Map, markers, GPS smoothing
+│   │   ├── navigation.js       # Routing & simulation
+│   │   ├── logbook.js          # Logbook & crew
+│   │   ├── sensors.js          # GPS fallbacks
+│   │   ├── ais.js              # AIS vessels
 │   │   └── ...
 │   ├── css/
-│   └── sw.js                   # Service Worker (Offline-Caching)
-├── flutter_app/                # Helm Native Flutter-App
+│   └── sw.js                   # Service worker (offline caching)
+├── flutter_app/                # Helm native Flutter app
 │   ├── lib/
 │   │   ├── main.dart
 │   │   ├── screens/
-│   │   │   ├── map_screen.dart       # Karte, GPS, Routing, Sim
-│   │   │   ├── dashboard_screen.dart # DSL-Dashboard, Gauges
-│   │   │   ├── logbook_screen.dart   # Logbuch, Crew, Archiv
+│   │   │   ├── map_screen.dart       # Map, GPS, routing, simulation
+│   │   │   ├── dashboard_screen.dart # DSL dashboard, gauges
+│   │   │   ├── logbook_screen.dart   # Logbook, crew, archive
 │   │   │   └── settings_screen.dart
 │   │   ├── widgets/
-│   │   │   ├── gauge_widget.dart     # Animierte Gauges
-│   │   │   └── route_planner.dart    # Wegpunkte, RoutePanel
+│   │   │   ├── gauge_widget.dart     # Animated gauges
+│   │   │   └── route_planner.dart    # Waypoints, route panel
 │   │   └── services/
 │   │       ├── websocket_service.dart
 │   │       ├── settings_service.dart
 │   │       └── logbook_service.dart
 │   ├── assets/fonts/NotoColorEmoji.ttf
 │   └── pubspec.yaml
-├── data/                       # Laufzeitdaten (nicht im Repo)
+├── data/                       # Runtime data (not in repo)
 │   ├── settings.json
 │   ├── known_topics.json
 │   └── crew.json
 ├── docs/
 ├── scripts/
-├── INSTALL.md
 ├── DASHBOARD_DSL.md
 └── README.md
 ```
@@ -327,7 +326,7 @@ BoatOS/
 
 ## 🎯 Dashboard DSL
 
-BoatOS nutzt eine eigene **Domain Specific Language** für Dashboards:
+BoatOS uses its own **Domain Specific Language** for dashboards:
 
 ```
 GRID 4
@@ -340,39 +339,39 @@ SENSOR boot/sensoren/lage SIZE 2 STYLE hero
 SENSOR boot/sensoren/tank/diesel SIZE 2
 ```
 
-Gauge-Stile: `arc180`, `arc270` (Standard), `arc360`, `bar`
-Sensor-Stile: `card` (Standard), `hero`, `compact`
+Gauge styles: `arc180`, `arc270` (default), `arc360`, `bar`  
+Sensor styles: `card` (default), `hero`, `compact`
 
-Dokumentation: [DASHBOARD_DSL.md](DASHBOARD_DSL.md)
+Documentation: [DASHBOARD_DSL.md](DASHBOARD_DSL.md)
 
 ---
 
-## 📡 API (Auswahl)
+## 📡 API (selection)
 
-Vollständige Dokumentation: `http://<pi-ip>:8000/docs`
+Full documentation: `http://<pi-ip>:8000/docs`
 
-| Endpoint | Beschreibung |
+| Endpoint | Description |
 |---|---|
-| `WS /ws` | WebSocket — GPS, Sensoren, Echtzeit |
-| `GET /api/sensors/list` | Alle MQTT-Sensoren mit Status & Werten |
-| `GET /api/mqtt/topics` | Rohe MQTT-Topics mit Timestamps |
-| `POST /api/route` | Route berechnen (OSRM) |
-| `GET /api/locks/bounds` | Schleusen in Bounding Box |
-| `GET /api/gauges` | Pegelstände in Bounding Box |
-| `GET /api/ais/vessels` | AIS-Schiffe in Bounding Box |
-| `GET /api/logbook/trips` | Alle Fahrten |
-| `GET /api/logbook/trips/{id}` | Fahrt-Detail mit Track & Einträgen |
-| `POST /api/logbook/start` | Fahrt starten |
-| `POST /api/logbook/stop` | Fahrt beenden |
-| `GET /api/crew` | Crew-Mitglieder |
-| `GET /api/settings` | Systemeinstellungen |
-| `GET /api/saved-routes` | Gespeicherte Routen |
+| `WS /ws` | WebSocket — GPS, sensors, real-time |
+| `GET /api/sensors/list` | All MQTT sensors with status & values |
+| `GET /api/mqtt/topics` | Raw MQTT topics with timestamps |
+| `POST /api/route` | Calculate route (OSRM) |
+| `GET /api/locks/bounds` | Locks in bounding box |
+| `GET /api/gauges` | Water level gauges in bounding box |
+| `GET /api/ais/vessels` | AIS vessels in bounding box |
+| `GET /api/logbook/trips` | All trips |
+| `GET /api/logbook/trips/{id}` | Trip detail with track & entries |
+| `POST /api/logbook/start` | Start trip |
+| `POST /api/logbook/stop` | End trip |
+| `GET /api/crew` | Crew members |
+| `GET /api/settings` | System settings |
+| `GET /api/saved-routes` | Saved routes |
 
 ---
 
-## 🛠️ Entwicklung
+## 🛠️ Development
 
-### Backend (auf dem Pi oder lokal)
+### Backend (on Pi or locally)
 
 ```bash
 cd backend
@@ -383,15 +382,15 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ### Deck Frontend
 
 ```bash
-# Kein Build nötig — Dateien direkt bearbeiten
-# Browser: https://localhost/ (kiosk) oder https://<pi-ip>/
+# No build needed — edit files directly
+# Browser: https://localhost/ (kiosk) or https://<pi-ip>/
 ```
 
-### Helm (Build auf dem Entwicklungs-PC)
+### Helm (build on development PC)
 
 ```bash
 cd flutter_app
-# Build für Pi 4 (ARM64)
+# Build for Pi 4 (ARM64)
 flutterpi_tool build --arch=arm64 --cpu=pi4 --release
 
 # Deploy
@@ -402,10 +401,10 @@ ssh boatos@<pi-ip> "sudo systemctl restart lightdm"
 ### MQTT Debugging
 
 ```bash
-# Alle Topics live verfolgen
+# Follow all topics live
 mosquitto_sub -h localhost -t '#' -v
 
-# Testdaten senden
+# Send test data
 mosquitto_pub -h <pi-ip> -t 'boot/sensoren/motor/drehzahl' -m '2500'
 ```
 
@@ -413,123 +412,115 @@ mosquitto_pub -h <pi-ip> -t 'boot/sensoren/motor/drehzahl' -m '2500'
 
 ## 🗺️ Roadmap
 
-### ✅ Abgeschlossen
-- GPS Integration (SignalK, USB, Phone-Fallback)
-- Interaktive Vektorkarten (MapLibre / flutter_map, lokal)
-- Wasserweg-Routing (OSRM)
-- AIS Live-Schiffsverkehr
-- Wetter-Warnungen (DWD)
-- Digitales Logbuch mit Crew & Pegeltracking
-- Dashboard DSL + Visual Editor (Deck)
-- Animierte Gauge-Widgets (Helm)
-- Schleusen-Datenbank (OSM)
-- Satellitenkarten + Offline-Caching
-- Routensimulation
-- Smooth GPS-Marker (EMA + Interpolation)
-- MQTT Auto-Reconnect
+### ✅ Done
+- GPS integration (SignalK, USB, phone fallback)
+- Interactive vector maps (MapLibre / flutter_map, local)
+- Waterway routing (OSRM)
+- AIS live vessel traffic
+- Weather alerts (DWD)
+- Digital logbook with crew & water level tracking
+- Dashboard DSL + visual editor (Deck)
+- Animated gauge widgets (Helm)
+- Lock database (OSM)
+- Satellite maps + offline caching
+- Route simulation
+- Smooth GPS marker (EMA + interpolation)
+- MQTT auto-reconnect
 
-### 🚧 In Arbeit
-- Helm Feature-Parität mit Deck
-- ~~Verteilbares Pi-Image~~ ✅ [Fertig-Image verfügbar](https://archive.org/download/boatos-distri-image/boatos_v1.5.21.img.gz)
+### 🚧 In Progress
+- Helm feature parity with Deck
+- ~~Distributable Pi image~~ ✅ [Ready-to-flash image available](https://archive.org/download/boatos-distri-image/boatos_v1.5.21.img.gz)
 
-### 🔮 Geplant
-- Anker-Alarm mit Geofencing
-- Tide-Vorhersagen (BSH API)
-- GPX Import/Export
-- AIS Target CPA-Berechnung
-- MOB (Man Over Board) Alert
+### 🔮 Planned
+- Anchor alarm with geofencing
+- Tide predictions (BSH API)
+- GPX import/export
+- AIS target CPA calculation
+- MOB (Man Over Board) alert
 
 ---
 
 ## 🤝 Contributing
 
-Pull Requests sind willkommen!
+Pull requests are welcome!
 
-1. Fork → Branch → Commit → PR
-2. Code Style: PEP8 (Python), Standard JS / Dart
-3. Commit Messages: Conventional Commits
-4. Bitte auf echter Pi-Hardware testen
+1. Fork → branch → commit → PR
+2. Code style: PEP8 (Python), standard JS / Dart
+3. Commit messages: Conventional Commits
+4. Please test on real Pi hardware
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Backend startet nicht
+### Backend won't start
 ```bash
 sudo systemctl status boatos
 sudo journalctl -u boatos -f
 ```
 
-### GPS keine Daten
+### GPS no data
 ```bash
 ls -la /dev/ttyUSB* /dev/ttyACM*
 curl http://localhost:3000/signalk/v1/api/vessels/self/navigation/position
 sudo systemctl status signalk
 ```
 
-### MQTT Sensoren erscheinen nicht
+### MQTT sensors not appearing
 ```bash
 sudo systemctl status mosquitto
 mosquitto_sub -h localhost -t '#' -v
-# Backend-Status:
+# Backend status:
 curl http://localhost:8000/api/mqtt/topics
 ```
 
-### Flutter-App startet nicht
+### Flutter app won't start
 ```bash
 sudo systemctl status lightdm
 # Logs:
 sudo journalctl -u lightdm -f
 ```
 
-Mehr: [INSTALL.md](INSTALL.md)
+More: [docs/installation.md](docs/installation.md)
 
 ---
 
-## 📜 Lizenz
+## 📜 License
 
-**MIT License** — frei nutzbar, modifizierbar, verteilbar. Copyright-Notice behalten.
+BoatOS is open source and licensed under the **[GNU General Public License v3.0](LICENSE)**.
+
+This means: you can freely use, study, and modify the code. Derivatives must also be released under GPL v3.
 
 ---
 
-## 📚 Buchserie
+## 📚 Book Series
 
-BoatOS entsteht als Teil der **„Logbuch ohne Pose"**-Reihe — einer Bauserie rund um Bootstechnik, Sensorik und Selbstbau-Elektronik.
+BoatOS is being developed as part of the **"Logbuch ohne Pose"** series — a build series on marine electronics, sensors, and DIY boat tech.
 
-- 🔧 **Bauserie auf GitHub**: [github.com/bigbrainlabs/logbuch-ohne-pose](https://github.com/bigbrainlabs/logbuch-ohne-pose)
-- 📖 **Buch auf Amazon** (🇩🇪): [Logbuch ohne Pose — Deutsch](https://www.amazon.de/dp/B0GLXGD8LB?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
-- 📖 **Buch auf Amazon** (🇬🇧): [Logbuch ohne Pose — English](https://www.amazon.de/dp/B0GMD5JH28?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
+- 🔧 **Build series on GitHub**: [github.com/bigbrainlabs/logbuch-ohne-pose](https://github.com/bigbrainlabs/logbuch-ohne-pose)
+- 📖 **Book on Amazon** (🇩🇪): [Logbuch ohne Pose — Deutsch](https://www.amazon.de/dp/B0GLXGD8LB?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
+- 📖 **Book on Amazon** (🇬🇧): [Logbuch ohne Pose — English](https://www.amazon.de/dp/B0GMD5JH28?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
 
-> Wer das Projekt unterstützen möchte: Buch lesen, Rezension hinterlassen — das hilft mehr als man denkt und motiviert, weiterzumachen. Ich freue mich über jedes Feedback! 🙏
+> If you want to support the project: read the book, leave a review — that helps more than you'd think and motivates me to keep going. I appreciate every piece of feedback! 🙏
 
 ---
 
 ## 👏 Credits
 
-- **Entwicklung**: bigbrainlabs — [Logbuch ohne Pose](https://github.com/bigbrainlabs/logbuch-ohne-pose)
-- **AI-Pair-Programming**: Claude Code (Anthropic)
-- **Karten**: OpenSeaMap, OpenStreetMap, ESRI
-- **Daten**: DWD, PEGELONLINE, AISStream.io
+- **Development**: bigbrainlabs — [Logbuch ohne Pose](https://github.com/bigbrainlabs/logbuch-ohne-pose)
+- **AI pair programming**: Claude Code (Anthropic)
+- **Maps**: OpenSeaMap, OpenStreetMap, ESRI
+- **Data**: DWD, PEGELONLINE, AISStream.io
 - **Libraries**: FastAPI, flutter_map, MapLibre GL, SignalK, OSRM
-
----
-
----
-
-## Lizenz
-
-BoatOS ist Open Source und steht unter der **[GNU General Public License v3.0](LICENSE)**.
-
-Das bedeutet: du kannst den Code frei nutzen, studieren und modifizieren. Ableitungen müssen ebenfalls unter der GPL v3 veröffentlicht werden.
 
 ---
 
 <div align="center">
 
-**Gebaut mit ❤️ für die Schifffahrt**
+**Built with ❤️ for the water**
 
-*Von Skippern, für Skipper*
+*By sailors, for sailors*
 
-[⬆ Nach oben](#-boatos)
+[⬆ Back to top](#-boatos)
 
 </div>

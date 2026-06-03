@@ -118,8 +118,9 @@ PLAN_*.md
 *_PLANUNG.md
 PROJECT_STATUS.md
 
-# Development documentation (except main README.md)
+# Development documentation (except main README.md and translations)
 README_*.md
+!README_DE.md
 
 # Internal docs (not for public repo)
 docs/v2-flutter-pi.md

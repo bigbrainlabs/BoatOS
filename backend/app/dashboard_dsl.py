@@ -20,7 +20,7 @@ _FALLBACK_TEMPLATES = [
     {
         "id": "full",
         "name": "Vollbild",
-        "description": "Ein Widget füllt den ganzen Screen",
+        "description": "One widget fills the entire screen",
         "builtin": True,
         "slots": ["A"],
         "cols": "1fr",
