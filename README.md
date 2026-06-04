@@ -515,6 +515,16 @@ BoatOS is being developed as part of the **"Logbuch ohne Pose"** series — a bu
 
 ---
 
+## 🔗 Links
+
+- 🌐 **Open Boat Projects**: [open-boat-projects.org/de/boatos](https://open-boat-projects.org/de/boatos/)
+- 🔧 **Build series**: [github.com/bigbrainlabs/logbuch-ohne-pose](https://github.com/bigbrainlabs/logbuch-ohne-pose)
+- 📦 **GitHub**: [github.com/bigbrainlabs/BoatOS](https://github.com/bigbrainlabs/BoatOS)
+- 📖 **Book (🇩🇪)**: [Logbuch ohne Pose — Deutsch](https://www.amazon.de/dp/B0GLXGD8LB?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
+- 📖 **Book (🇬🇧)**: [Logbuch ohne Pose — English](https://www.amazon.de/dp/B0GMD5JH28?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
+
+---
+
 <div align="center">
 
 **Built with ❤️ for the water**
