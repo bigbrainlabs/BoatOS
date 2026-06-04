@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
+import 'l10n/l10n_ext.dart';
 import 'screens/map_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/logbook_screen.dart';
@@ -39,6 +41,16 @@ class BoatOSApp extends StatelessWidget {
     return MaterialApp(
       title: 'BoatOS',
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('de'),
+        Locale('en'),
+      ],
       theme: ThemeData(
         brightness: Brightness.dark,
         colorScheme: const ColorScheme.dark(
@@ -150,6 +162,7 @@ class MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final hotspot = _hotspotInfo;
     return Scaffold(
       body: Stack(
@@ -185,9 +198,9 @@ class MainShellState extends State<MainShell> {
                       Row(children: [
                         const Icon(Icons.wifi_tethering, size: 16, color: Color(0xFFFF9800)),
                         const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text('Hotspot aktiv',
-                              style: TextStyle(
+                        Expanded(
+                          child: Text(l.hotspotActive,
+                              style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
                                   color: Color(0xFFFF9800))),
@@ -204,7 +217,7 @@ class MainShellState extends State<MainShell> {
                                 .timeout(const Duration(seconds: 10));
                             if (mounted) setState(() { _hotspotInfo = null; _hotspotDismissed = false; });
                           },
-                          child: const Text('Stoppen', style: TextStyle(fontSize: 12)),
+                          child: Text(l.btnStop, style: const TextStyle(fontSize: 12)),
                         ),
                         const SizedBox(width: 4),
                         GestureDetector(
@@ -213,11 +226,11 @@ class MainShellState extends State<MainShell> {
                         ),
                       ]),
                       const SizedBox(height: 10),
-                      _HotspotInfoRow(label: 'SSID', value: hotspot['ssid'] as String? ?? ''),
+                      _HotspotInfoRow(label: l.hotspotSsid, value: hotspot['ssid'] as String? ?? ''),
                       const SizedBox(height: 4),
-                      _HotspotInfoRow(label: 'Passwort', value: hotspot['password'] as String? ?? ''),
+                      _HotspotInfoRow(label: l.hotspotPassword, value: hotspot['password'] as String? ?? ''),
                       const SizedBox(height: 4),
-                      _HotspotInfoRow(label: 'IP', value: hotspot['ip'] as String? ?? '192.168.4.1'),
+                      _HotspotInfoRow(label: l.hotspotIp, value: hotspot['ip'] as String? ?? '192.168.4.1'),
                     ],
                   ),
                 ),
@@ -233,21 +246,21 @@ class MainShellState extends State<MainShell> {
             indicatorColor: Color.fromRGBO(79, 195, 247, 0.2),
             selectedIndex: _currentIndex,
             onDestinationSelected: (i) => setState(() => _currentIndex = i),
-            destinations: const [
+            destinations: [
               NavigationDestination(
-                icon: Icon(Icons.map_outlined),
-                selectedIcon: Icon(Icons.map),
-                label: 'Karte',
+                icon: const Icon(Icons.map_outlined),
+                selectedIcon: const Icon(Icons.map),
+                label: l.navTabMap,
               ),
               NavigationDestination(
-                icon: Icon(Icons.speed_outlined),
-                selectedIcon: Icon(Icons.speed),
-                label: 'Dashboard',
+                icon: const Icon(Icons.speed_outlined),
+                selectedIcon: const Icon(Icons.speed),
+                label: l.navTabDashboard,
               ),
               NavigationDestination(
-                icon: Icon(Icons.book_outlined),
-                selectedIcon: Icon(Icons.book),
-                label: 'Logbuch',
+                icon: const Icon(Icons.book_outlined),
+                selectedIcon: const Icon(Icons.book),
+                label: l.navTabLogbook,
               ),
             ],
           ),
@@ -259,17 +272,17 @@ class MainShellState extends State<MainShell> {
               child: Center(
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF59E0B),
-                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF59E0B),
+                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(10)),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.system_update_alt, size: 12, color: Color(0xFF1A1200)),
-                      SizedBox(width: 5),
-                      Text('Update verfügbar',
-                          style: TextStyle(
+                      const Icon(Icons.system_update_alt, size: 12, color: Color(0xFF1A1200)),
+                      const SizedBox(width: 5),
+                      Text(l.updateAvailable,
+                          style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                               color: Color(0xFF1A1200))),
@@ -307,25 +320,26 @@ class _ShutdownNavButtonState extends State<_ShutdownNavButton> {
   bool _busy = false;
 
   Future<void> _confirmAction() async {
+    final l = context.l10n;
     final action = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Row(children: [
-          Icon(Icons.power_settings_new, color: Color(0xFFEF5350), size: 20),
-          SizedBox(width: 10),
-          Text('System', style: TextStyle(fontSize: 16, color: Color(0xFFE6EDF3))),
+        title: Row(children: [
+          const Icon(Icons.power_settings_new, color: Color(0xFFEF5350), size: 20),
+          const SizedBox(width: 10),
+          Text(l.systemDialogTitle, style: const TextStyle(fontSize: 16, color: Color(0xFFE6EDF3))),
         ]),
-        content: const Text(
-          'Was soll das BoatOS-System jetzt tun?',
-          style: TextStyle(fontSize: 13, color: Color(0xFF8B949E), height: 1.5),
+        content: Text(
+          l.systemDialogBody,
+          style: const TextStyle(fontSize: 13, color: Color(0xFF8B949E), height: 1.5),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, null),
-            child: const Text('Abbrechen',
-                style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text(l.btnCancel,
+                style: const TextStyle(color: Color(0xFF8B949E))),
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
@@ -335,7 +349,7 @@ class _ShutdownNavButtonState extends State<_ShutdownNavButton> {
                   borderRadius: BorderRadius.circular(8)),
             ),
             icon: const Icon(Icons.restart_alt, size: 16),
-            label: const Text('Neu starten'),
+            label: Text(l.systemRestart),
             onPressed: () => Navigator.pop(context, 'reboot'),
           ),
           ElevatedButton.icon(
@@ -346,7 +360,7 @@ class _ShutdownNavButtonState extends State<_ShutdownNavButton> {
                   borderRadius: BorderRadius.circular(8)),
             ),
             icon: const Icon(Icons.power_settings_new, size: 16),
-            label: const Text('Herunterfahren'),
+            label: Text(l.systemShutdown),
             onPressed: () => Navigator.pop(context, 'shutdown'),
           ),
         ],

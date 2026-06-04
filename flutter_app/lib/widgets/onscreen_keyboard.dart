@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/l10n_ext.dart';
 
 Future<void> showKeyboard(
   BuildContext context,
@@ -106,9 +107,9 @@ class _KbSheetState extends State<_KbSheet> with SingleTickerProviderStateMixin 
 
   void _toggleShift() {
     setState(() {
-      if (!_shift && !_caps)       _shift = true;        // 1st tap → shift
-      else if (_shift && !_caps) { _shift = false; _caps = true; }  // 2nd → caps
-      else                       { _caps  = false; _shift = false; } // 3rd → off
+      if (!_shift && !_caps)       _shift = true;
+      else if (_shift && !_caps) { _shift = false; _caps = true; }
+      else                       { _caps  = false; _shift = false; }
     });
   }
 
@@ -134,7 +135,7 @@ class _KbSheetState extends State<_KbSheet> with SingleTickerProviderStateMixin 
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          _inputBar(),
+          _inputBar(context),
           Padding(
             padding: const EdgeInsets.fromLTRB(3, 2, 3, 12),
             child: widget.numeric ? _numpad() : _qwertz(),
@@ -144,97 +145,100 @@ class _KbSheetState extends State<_KbSheet> with SingleTickerProviderStateMixin 
     );
   }
 
-  Widget _inputBar() => Padding(
-        padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
-        child: Row(children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0A0E1A),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF4FC3F7), width: 1.5),
-              ),
-              child: Row(children: [
-                if (widget.label.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: Text('${widget.label}:',
-                        style: const TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
-                  ),
-                Expanded(
-                  child: AnimatedBuilder(
-                    animation: Listenable.merge([_ctrl, _cursorBlink]),
-                    builder: (_, __) {
-                      final v = _ctrl.value;
-                      final raw = widget.obscure ? '•' * v.text.length : v.text;
-                      final showCursor = _cursorBlink.value > 0.5;
-                      final cursorPos = v.selection.isValid
-                          ? v.selection.baseOffset.clamp(0, raw.length)
-                          : raw.length;
-                      final before = raw.substring(0, cursorPos);
-                      final after  = raw.substring(cursorPos);
-                      const cursorStyle = TextStyle(
-                        fontSize: 15,
-                        color: Color(0xFF4FC3F7),
-                        fontWeight: FontWeight.w300,
-                      );
-                      const textStyle = TextStyle(
-                        fontSize: 15,
-                        color: Color(0xFFE6EDF3),
-                        fontWeight: FontWeight.w500,
-                      );
-                      if (raw.isEmpty) {
-                        return Text.rich(
-                          TextSpan(children: [
-                            TextSpan(
-                              text: showCursor ? '|' : '​',
-                              style: cursorStyle,
-                            ),
-                            const TextSpan(
-                              text: 'Eingabe…',
-                              style: TextStyle(
-                                  fontSize: 15, color: Color(0xFF555555)),
-                            ),
-                          ]),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        );
-                      }
+  Widget _inputBar(BuildContext context) {
+    final l = context.l10n;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
+      child: Row(children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0A0E1A),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFF4FC3F7), width: 1.5),
+            ),
+            child: Row(children: [
+              if (widget.label.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Text('${widget.label}:',
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
+                ),
+              Expanded(
+                child: AnimatedBuilder(
+                  animation: Listenable.merge([_ctrl, _cursorBlink]),
+                  builder: (_, __) {
+                    final v = _ctrl.value;
+                    final raw = widget.obscure ? '•' * v.text.length : v.text;
+                    final showCursor = _cursorBlink.value > 0.5;
+                    final cursorPos = v.selection.isValid
+                        ? v.selection.baseOffset.clamp(0, raw.length)
+                        : raw.length;
+                    final before = raw.substring(0, cursorPos);
+                    final after  = raw.substring(cursorPos);
+                    const cursorStyle = TextStyle(
+                      fontSize: 15,
+                      color: Color(0xFF4FC3F7),
+                      fontWeight: FontWeight.w300,
+                    );
+                    const textStyle = TextStyle(
+                      fontSize: 15,
+                      color: Color(0xFFE6EDF3),
+                      fontWeight: FontWeight.w500,
+                    );
+                    if (raw.isEmpty) {
                       return Text.rich(
-                        TextSpan(style: textStyle, children: [
-                          TextSpan(text: before),
+                        TextSpan(children: [
                           TextSpan(
                             text: showCursor ? '|' : '​',
                             style: cursorStyle,
                           ),
-                          TextSpan(text: after),
+                          TextSpan(
+                            text: l.keyboardHint,
+                            style: const TextStyle(
+                                fontSize: 15, color: Color(0xFF555555)),
+                          ),
                         ]),
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
                       );
-                    },
-                  ),
+                    }
+                    return Text.rich(
+                      TextSpan(style: textStyle, children: [
+                        TextSpan(text: before),
+                        TextSpan(
+                          text: showCursor ? '|' : '​',
+                          style: cursorStyle,
+                        ),
+                        TextSpan(text: after),
+                      ]),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    );
+                  },
                 ),
-              ]),
-            ),
-          ),
-          const SizedBox(width: 10),
-          GestureDetector(
-            onTap: _done,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1565C0),
-                borderRadius: BorderRadius.circular(8),
               ),
-              child: const Text('Fertig',
-                  style: TextStyle(
-                      fontSize: 15, color: Colors.white, fontWeight: FontWeight.w600)),
-            ),
+            ]),
           ),
-        ]),
-      );
+        ),
+        const SizedBox(width: 10),
+        GestureDetector(
+          onTap: _done,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1565C0),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(l.btnDone,
+                style: const TextStyle(
+                    fontSize: 15, color: Colors.white, fontWeight: FontWeight.w600)),
+          ),
+        ),
+      ]),
+    );
+  }
 
   // ── Numpad ──────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/l10n_ext.dart';
 import '../services/favorites_service.dart';
 import 'onscreen_keyboard.dart';
 
@@ -60,6 +61,7 @@ class _FavoritesSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     return DraggableScrollableSheet(
       initialChildSize: 0.55,
       minChildSize: 0.35,
@@ -91,7 +93,7 @@ class _FavoritesSheet extends StatelessWidget {
                   const Icon(Icons.star, color: Color(0xFFF0C040), size: 20),
                   const SizedBox(width: 10),
                   Text(
-                    'Favoriten (${favs.length})',
+                    l.favoritesTitle(favs.length),
                     style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.w600,
                         color: Color(0xFFE6EDF3)),
@@ -110,9 +112,9 @@ class _FavoritesSheet extends StatelessWidget {
                 child: svc.loading
                     ? const Center(child: CircularProgressIndicator())
                     : favs.isEmpty
-                        ? const Center(
-                            child: Text('Keine Favoriten gespeichert',
-                                style: TextStyle(
+                        ? Center(
+                            child: Text(l.favoritesEmpty,
+                                style: const TextStyle(
                                     fontSize: 14, color: Color(0xFF8B949E))),
                           )
                         : ListView.separated(
@@ -161,6 +163,7 @@ class _FavoriteListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -176,7 +179,7 @@ class _FavoriteListItem extends StatelessWidget {
                       color: Color(0xFFE6EDF3))),
               const SizedBox(height: 2),
               Text(
-                '${fav.categoryName}  ·  ${fav.lat.toStringAsFixed(4)}, ${fav.lon.toStringAsFixed(4)}',
+                '${_localizedCategoryName(fav.category, l)}  ·  ${fav.lat.toStringAsFixed(4)}, ${fav.lon.toStringAsFixed(4)}',
                 style: const TextStyle(fontSize: 11, color: Color(0xFF8B949E)),
               ),
               if (fav.notes != null && fav.notes!.isNotEmpty)
@@ -243,7 +246,7 @@ class _AddFavoriteSheetState extends State<_AddFavoriteSheet> {
       Navigator.pop(context);
       if (!ok) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Fehler beim Speichern')),
+          SnackBar(content: Text(context.l10n.favoritesSaveFailed)),
         );
       }
     }
@@ -251,6 +254,7 @@ class _AddFavoriteSheetState extends State<_AddFavoriteSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     return Padding(
       padding: MediaQuery.of(context).viewInsets,
       child: Container(
@@ -275,8 +279,8 @@ class _AddFavoriteSheetState extends State<_AddFavoriteSheet> {
           Row(children: [
             const Icon(Icons.star, color: Color(0xFFF0C040), size: 20),
             const SizedBox(width: 10),
-            const Text('Favorit hinzufügen',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
+            Text(l.favoritesAdd,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
                     color: Color(0xFFE6EDF3))),
             const Spacer(),
             Text(
@@ -291,16 +295,16 @@ class _AddFavoriteSheetState extends State<_AddFavoriteSheet> {
           // Name field
           GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => showKeyboard(context, _nameCtrl, label: 'Name'),
-            child: _inputField(_nameCtrl, 'Name *'),
+            onTap: () => showKeyboard(context, _nameCtrl, label: l.crewName),
+            child: _inputField(_nameCtrl, '${l.crewName} *'),
           ),
           const SizedBox(height: 12),
 
           // Category grid
-          const Align(
+          Align(
             alignment: Alignment.centerLeft,
-            child: Text('Kategorie',
-                style: TextStyle(fontSize: 12, color: Color(0xFF8B949E))),
+            child: Text(l.favoritesCategory,
+                style: const TextStyle(fontSize: 12, color: Color(0xFF8B949E))),
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -327,7 +331,7 @@ class _AddFavoriteSheetState extends State<_AddFavoriteSheet> {
                     Text(Favorite.categoryIcons[cat]!,
                         style: const TextStyle(fontSize: 14)),
                     const SizedBox(width: 6),
-                    Text(Favorite.categoryNames[cat]!,
+                    Text(_localizedCategoryName(cat, l),
                         style: TextStyle(
                             fontSize: 12,
                             color: selected
@@ -343,8 +347,8 @@ class _AddFavoriteSheetState extends State<_AddFavoriteSheet> {
           // Notes field
           GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => showKeyboard(context, _notesCtrl, label: 'Notizen'),
-            child: _inputField(_notesCtrl, 'Notizen (optional)'),
+            onTap: () => showKeyboard(context, _notesCtrl, label: l.favoritesNotes),
+            child: _inputField(_notesCtrl, l.favoritesNotes),
           ),
           const SizedBox(height: 20),
 
@@ -363,8 +367,8 @@ class _AddFavoriteSheetState extends State<_AddFavoriteSheet> {
                   ? const SizedBox(
                       width: 20, height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Speichern',
-                      style: TextStyle(
+                  : Text(l.btnSave,
+                      style: const TextStyle(
                           fontSize: 15, fontWeight: FontWeight.w600)),
             ),
           ),
@@ -417,6 +421,7 @@ class _FavoriteDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final svc = context.read<FavoritesService>();
     return Container(
       decoration: const BoxDecoration(
@@ -446,7 +451,7 @@ class _FavoriteDetailSheet extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 18, fontWeight: FontWeight.w700,
                       color: Color(0xFFE6EDF3))),
-              Text(fav.categoryName,
+              Text(_localizedCategoryName(fav.category, l),
                   style: const TextStyle(
                       fontSize: 12, color: Color(0xFF8B949E))),
             ]),
@@ -457,11 +462,11 @@ class _FavoriteDetailSheet extends StatelessWidget {
         const SizedBox(height: 16),
 
         // Coordinates
-        _infoRow(Icons.location_on, 'Position',
+        _infoRow(Icons.location_on, l.favoritesPosition,
             '${fav.lat.toStringAsFixed(5)}, ${fav.lon.toStringAsFixed(5)}'),
         if (fav.notes != null && fav.notes!.isNotEmpty) ...[
           const SizedBox(height: 12),
-          _infoRow(Icons.notes, 'Notizen', fav.notes!),
+          _infoRow(Icons.notes, l.favoritesNotes, fav.notes!),
         ],
         const SizedBox(height: 24),
 
@@ -471,7 +476,7 @@ class _FavoriteDetailSheet extends StatelessWidget {
             child: _actionBtn(
               context,
               icon: Icons.my_location,
-              label: 'Zur Position',
+              label: l.favoritesGoTo,
               color: const Color(0xFF1565C0),
               onTap: () {
                 Navigator.pop(context);
@@ -484,7 +489,7 @@ class _FavoriteDetailSheet extends StatelessWidget {
             child: _actionBtn(
               context,
               icon: Icons.flag,
-              label: 'Als Wegpunkt',
+              label: l.favoritesAsWaypoint,
               color: const Color(0xFF1A472A),
               onTap: () {
                 Navigator.pop(context);
@@ -497,7 +502,7 @@ class _FavoriteDetailSheet extends StatelessWidget {
             child: _actionBtn(
               context,
               icon: Icons.delete_outline,
-              label: 'Löschen',
+              label: l.btnDelete,
               color: const Color(0xFF6B1A1A),
               onTap: () async {
                 Navigator.pop(context);
@@ -549,5 +554,21 @@ class _FavoriteDetailSheet extends StatelessWidget {
         ]),
       ),
     );
+  }
+}
+
+// ─── Helper: localized category names ───────────────────────────────────────
+
+String _localizedCategoryName(String category, AppLocalizations l) {
+  switch (category) {
+    case 'marina':     return l.favoritesMarina;
+    case 'anchorage':  return l.favoritesAnchor;
+    case 'fuel':       return l.favoritesFuel;
+    case 'lock':       return l.favoritesLock;
+    case 'bridge':     return l.favoritesBridge;
+    case 'restaurant': return l.favoritesRestaurant;
+    case 'shop':       return l.favoritesShop;
+    case 'danger':     return l.favoritesDanger;
+    default:           return l.favoritesOther;
   }
 }

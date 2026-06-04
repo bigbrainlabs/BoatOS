@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../l10n/l10n_ext.dart';
 import 'onscreen_keyboard.dart';
 
 const _base = 'http://localhost:8000';
@@ -220,6 +221,7 @@ class _WifiSheetState extends State<_WifiSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     return DraggableScrollableSheet(
       initialChildSize: 0.65,
       minChildSize: 0.4,
@@ -290,8 +292,8 @@ class _WifiSheetState extends State<_WifiSheet> {
                 ],
                 const SizedBox(height: 20),
                 Row(children: [
-                  const Text('Verfügbare Netzwerke',
-                      style: TextStyle(
+                  Text(l.wifiAvailableNetworks,
+                      style: const TextStyle(
                           fontSize: 11, fontWeight: FontWeight.w700,
                           color: Color(0xFF4FC3F7), letterSpacing: 0.8)),
                   const Spacer(),
@@ -319,8 +321,8 @@ class _WifiSheetState extends State<_WifiSheet> {
                       child: Column(children: [
                         CircularProgressIndicator(color: Color(0xFF4FC3F7)),
                         SizedBox(height: 12),
-                        Text('Suche Netzwerke…',
-                            style: TextStyle(
+                        Text(l.wifiSearching,
+                            style: const TextStyle(
                                 fontSize: 13, color: Color(0xFF8B949E))),
                       ]),
                     ),

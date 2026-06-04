@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 import 'package:vector_map_tiles/vector_map_tiles.dart';
 import 'package:vector_tile_renderer/vector_tile_renderer.dart' hide TileLayer;
 
+import '../l10n/l10n_ext.dart';
 import '../services/favorites_service.dart';
 import '../services/logbook_service.dart';
 import '../services/settings_service.dart';
@@ -302,6 +303,7 @@ class _MapScreenState extends State<MapScreen> {
   // -------------------------------------------------------------------------
 
   void _activateMOB() {
+    final l = context.l10n;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -311,17 +313,17 @@ class _MapScreenState extends State<MapScreen> {
           borderRadius: BorderRadius.circular(12),
           side: const BorderSide(color: Color(0xFFB71C1C), width: 2),
         ),
-        title: const Text('🆘 SOS / Man Over Board',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: const Text(
-          'GPS-Position jetzt als MOB-Marker setzen?',
-          style: TextStyle(color: Color(0xFFB0BEC5)),
+        title: Text(l.mapMobTitle,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text(
+          l.mapMobConfirm,
+          style: const TextStyle(color: Color(0xFFB0BEC5)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Abbrechen',
-                style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text(l.btnCancel,
+                style: const TextStyle(color: Color(0xFF8B949E))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -330,8 +332,8 @@ class _MapScreenState extends State<MapScreen> {
               Navigator.pop(ctx);
               _doActivateMOB();
             },
-            child: const Text('MOB SETZEN',
-                style: TextStyle(
+            child: Text(l.mapMobSet,
+                style: const TextStyle(
                     color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
@@ -740,16 +742,16 @@ class _MapScreenState extends State<MapScreen> {
         _ => const Color(0xFF95A5A6),
       };
 
-  String _navstatText(int ns) => switch (ns) {
-        0 => 'Unter Maschine',
-        1 => 'Geankert',
-        2 => 'Nicht manövrierfähig',
-        3 => 'Eingeschränkt manövrierfähig',
-        5 => 'Festgemacht',
-        6 => 'Auf Grund',
-        7 => 'Fischerei',
+  String _navstatText(int ns, AppLocalizations l) => switch (ns) {
+        0 => l.navstatEngine,
+        1 => l.navstatAnchored,
+        2 => l.navstatNUC,
+        3 => l.navstatRestricted,
+        5 => l.navstatMoored,
+        6 => l.navstatAground,
+        7 => l.navstatFishing,
         8 => 'Under sail',
-        _ => 'Unbekannt',
+        _ => l.navstatUnknown,
       };
 
   // -------------------------------------------------------------------------
@@ -1228,6 +1230,7 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final ws = context.watch<WebSocketService>();
     final settings = context.watch<SettingsService>();
     final (tripTrack, tripLabel) = context.select<LogbookService, (List<LatLng>?, String?)>(
@@ -1649,7 +1652,7 @@ class _MapScreenState extends State<MapScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               // Route mode button — first in column
-              _layerBtn(Icons.edit_road, 'Route planen', _routeMode, (v) {
+              _layerBtn(Icons.edit_road, l.mapPlanRoute, _routeMode, (v) {
                 if (!v) _clearRoute();
                 setState(() => _routeMode = v);
               }, scale: scale),
@@ -1665,7 +1668,7 @@ class _MapScreenState extends State<MapScreen> {
                   setState(() => _aisVessels = []);
                 }
               }, scale: scale),
-              _layerBtn(Icons.lock, 'Schleusen', _showLocks, (v) {
+              _layerBtn(Icons.lock, l.mapLayerLocks, _showLocks, (v) {
                 setState(() => _showLocks = v);
                 if (v) {
                   _fetchInfra();
@@ -1673,7 +1676,7 @@ class _MapScreenState extends State<MapScreen> {
                   setState(() => _infraPois = []);
                 }
               }, scale: scale),
-              _layerBtn(Icons.water, 'Pegel', _showPegel, (v) {
+              _layerBtn(Icons.water, l.mapLayerGauge, _showPegel, (v) {
                 setState(() => _showPegel = v);
                 if (v) {
                   _fetchPegel();
@@ -1683,7 +1686,7 @@ class _MapScreenState extends State<MapScreen> {
               }, scale: scale),
               _layerBtn(Icons.route, 'Track', _showTrack,
                   (v) => setState(() => _showTrack = v), scale: scale),
-              _layerBtn(Icons.star, 'Favoriten', _showFavorites, (v) {
+              _layerBtn(Icons.star, l.mapLayerFavorites, _showFavorites, (v) {
                 setState(() => _showFavorites = v);
                 if (v) context.read<FavoritesService>().fetch();
               }, scale: scale),
@@ -1748,7 +1751,7 @@ class _MapScreenState extends State<MapScreen> {
                   border: Border.all(color: const Color(0x55FFB74D)),
                 ),
                 child: Text(
-                  '⚠ Offline-Karten nicht verfügbar · Online-Fallback (OpenStreetMap)',
+                  l.mapOfflineFallback,
                   style: TextStyle(color: const Color(0xFFFFB74D), fontSize: sc(11)),
                 ),
               ),
@@ -1915,7 +1918,7 @@ class _MapScreenState extends State<MapScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Wegpunkt ${_confirmDeleteWp!.index + 1} löschen?',
+                    l.mapDeleteWaypointTitle(_confirmDeleteWp!.index + 1),
                     style: TextStyle(
                         fontSize: 15 * scale,
                         color: const Color(0xFFE6EDF3),
@@ -1937,7 +1940,7 @@ class _MapScreenState extends State<MapScreen> {
                               color: const Color(0xFF30363D),
                               borderRadius: BorderRadius.circular(8 * scale),
                             ),
-                            child: Center(child: Text('Abbrechen',
+                            child: Center(child: Text(l.btnCancel,
                                 style: TextStyle(fontSize: 14 * scale, color: const Color(0xFFE6EDF3)))),
                           ),
                         ),
@@ -1956,7 +1959,7 @@ class _MapScreenState extends State<MapScreen> {
                               color: const Color(0xFFB71C1C),
                               borderRadius: BorderRadius.circular(8 * scale),
                             ),
-                            child: Center(child: Text('Löschen',
+                            child: Center(child: Text(l.btnDelete,
                                 style: TextStyle(fontSize: 14 * scale,
                                     color: Colors.white, fontWeight: FontWeight.bold))),
                           ),
@@ -1981,7 +1984,7 @@ class _MapScreenState extends State<MapScreen> {
         if (_selectedVessel != null)
           _AisDetailPanel(
             vessel: _selectedVessel!,
-            navstatText: _navstatText(_selectedVessel!.navstat),
+            navstatText: _navstatText(_selectedVessel!.navstat, l),
             onClose: () => setState(() => _selectedVessel = null),
             scale: scale,
           ),
