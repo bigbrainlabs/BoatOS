@@ -1,71 +1,70 @@
-# BoatOS aktualisieren
+# Updating BoatOS
 
-> **⚠️ Hinweis für Image v1.5.21:** Das Update hängt beim ersten Versuch. Einmaliger Workaround per SSH erforderlich — siehe [Bekannte Probleme](#bekannte-probleme) unten.
+> **⚠️ Note for Image v1.5.21:** The update hangs on the first attempt. A one-time SSH workaround is required — see [Known Issues](#known-issues) below.
 
-## Weg 1 — Update-Button (empfohlen)
+## Method 1 — Update Button (recommended)
 
-Der einfachste Weg — keine Kommandozeile nötig.
+The easiest way — no command line required.
 
-Wenn eine neue Version verfügbar ist, erscheint in **Deck** und **Helm** automatisch ein Hinweis-Banner.
+When a new version is available, a notification banner appears automatically in **Deck** and **Helm**.
 
-**Deck:** Einstellungen → Bereich "System" → **"Update installieren"**  
-**Helm:** Bernstein-Banner in der Navigationsleiste antippen → Update starten
+**Deck:** Settings → System section → **"Install Update"**  
+**Helm:** Tap the amber banner in the navigation bar → Start update
 
-Der Pi lädt die neue Version herunter, installiert sie und startet neu. Der Vorgang dauert je nach Internetverbindung 1–3 Minuten.
+The Pi downloads the new version, installs it, and restarts. The process takes 1–3 minutes depending on your internet connection.
 
 ---
 
-## Weg 2 — Manuell per SSH
+## Method 2 — Manual via SSH
 
-Für technisch versierte Nutzer oder wenn der Update-Button nicht funktioniert.
+For technically experienced users or when the update button is not working.
 
-### Verbinden
+### Connect
 
 ```bash
 ssh boatos@boatos.local
-# oder mit IP:
-ssh boatos@<IP-Adresse>
+# or with IP:
+ssh boatos@<IP-address>
 ```
 
-### Update durchführen
+### Run update
 
 ```bash
 cd ~/BoatOS
-git pull
 bash scripts/update.sh
 ```
 
-Das Update-Script:
-- Zieht die aktuelle Version aus GitHub
-- Aktualisiert Backend-Dependencies
-- Deployt das neue Flutter-Binary (Helm)
-- Startet alle Dienste neu
+The update script:
+- Downloads the latest version from GitHub
+- Updates backend dependencies
+- Deploys the new Flutter binary (Helm)
+- Restarts all services
 
-### Aktuelle Version prüfen
+### Check current version
 
 ```bash
 cat ~/BoatOS/VERSION
 ```
 
-Oder in Deck: Einstellungen → System → Versionsanzeige.
+Or in Deck: Settings → System → version display.
 
 ---
 
-## Hinweise
+## Notes
 
-- **Karten und Routing-Daten** werden durch ein Update **nicht** überschrieben — eigene Kartendaten bleiben erhalten.
-- **Einstellungen und Logbuch** bleiben ebenfalls erhalten.
-- Bei Problemen nach einem Update: `sudo systemctl status boatos.service` zeigt die Backend-Logs.
+- **Charts and routing data** are **not** overwritten by an update — your own map data is preserved.
+- **Settings and logbook** are also preserved.
+- If there are problems after an update: `sudo systemctl status boatos.service` shows the backend logs.
 
 ---
 
-## Bekannte Probleme
+## Known Issues
 
-### Update hängt bei `[1/6]` — Image v1.5.21
+### Update hangs at `[1/6]` — Image v1.5.21
 
-Das Update-Script im v1.5.21-Image enthält einen Bug der zum Hängen führt. Einmaliger Workaround: das Script per SSH löschen, damit es beim nächsten Update-Klick automatisch frisch von GitHub geladen wird.
+The update script in the v1.5.21 image contains a bug that causes it to hang. One-time workaround: delete the script via SSH so it is automatically re-downloaded fresh from GitHub on the next update click.
 
-**Voraussetzung:** Pi und PC im gleichen Netzwerk. Passwort: Standard-Passwort (sofern nicht geändert, siehe [Sicherheitshinweis in der Installation](installation.md#-sicherheit--standard-passwörter-ändern)).
+**Requirement:** Pi and PC on the same network. Password: default password (if not changed, see [security note in the installation guide](installation.md#-security--change-default-passwords)).
 
 **Windows (PowerShell):**
 ```powershell
@@ -77,4 +76,4 @@ ssh boatos@boatos.local "rm ~/BoatOS/scripts/update.sh"
 ssh boatos@boatos.local "rm ~/BoatOS/scripts/update.sh"
 ```
 
-Danach im Deck auf **Einstellungen → System → Update starten** klicken. Das Update läuft jetzt vollständig durch. Dieser Schritt ist nur einmal nötig — ab v1.6.2 funktioniert das Update direkt.
+Then click **Settings → System → Start Update** in Deck. The update will now run through completely. This step is only needed once — from v1.6.2 onwards the update works directly.
