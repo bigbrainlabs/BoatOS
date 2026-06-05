@@ -38,9 +38,11 @@ class BoatOSApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<SettingsService>().getNested('ui', 'language') as String? ?? 'de';
     return MaterialApp(
       title: 'BoatOS',
       debugShowCheckedModeBanner: false,
+      locale: Locale(lang),
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
