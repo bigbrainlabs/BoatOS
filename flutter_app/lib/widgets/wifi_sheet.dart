@@ -315,12 +315,12 @@ class _WifiSheetState extends State<_WifiSheet> {
                 ]),
                 const Divider(color: Color(0xFF30363D), height: 8),
                 if (_scanning && _networks.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 32),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 32),
                     child: Center(
                       child: Column(children: [
-                        CircularProgressIndicator(color: Color(0xFF4FC3F7)),
-                        SizedBox(height: 12),
+                        const CircularProgressIndicator(color: Color(0xFF4FC3F7)),
+                        const SizedBox(height: 12),
                         Text(l.wifiSearching,
                             style: const TextStyle(
                                 fontSize: 13, color: Color(0xFF8B949E))),
