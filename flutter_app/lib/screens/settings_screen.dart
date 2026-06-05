@@ -729,7 +729,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         value: (s.raw['language'] as String?) ?? 'de',
         items: const ['de', 'en'],
         labels: [l.unitsLangDE, l.unitsLangEN],
-        onChanged: (v) { if (v != null) { s.raw['language'] = v; s.save(); } },
+        onChanged: (v) { if (v != null) { s.setRaw('language', v); s.save(); } },
       ),
     ];
   }
