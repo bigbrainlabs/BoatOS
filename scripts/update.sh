@@ -11,31 +11,37 @@ log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
 log "=== BoatOS Update gestartet ==="
 
-# 1. Git initialisieren falls kein Repo vorhanden
-log "[1/6] Prüfe Git-Repository..."
+# 1. Code via GitHub-Tarball aktualisieren (kein Git-State nötig)
+log "[1/6] Prüfe neueste Version..."
 cd "$REPO_DIR"
-if [ ! -d ".git" ]; then
-    log "       Kein Git-Repo gefunden — initialisiere..."
-    git init -q
-    git remote add origin "$GITHUB_URL"
+
+LATEST_TAG=$(curl -sf --max-time 15 \
+    "https://api.github.com/repos/$GITHUB_REPO/git/refs/tags" | \
+    python3 -c "
+import sys, json, re
+try:
+    refs = json.load(sys.stdin)
+    tags = [r['ref'].split('/')[-1] for r in refs
+            if r['ref'].startswith('refs/tags/v') and not r['ref'].endswith('{}')]
+    def sv(t):
+        m = re.match(r'v(\d+)\.(\d+)\.(\d+)', t)
+        return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else (0,0,0)
+    print(sorted(tags, key=sv)[-1])
+except: pass
+" 2>/dev/null || echo "")
+
+if [ -z "$LATEST_TAG" ]; then
+    log "       Konnte neueste Version nicht ermitteln — überspringe Code-Update"
 else
-    git remote set-url origin "$GITHUB_URL" 2>/dev/null || true
-fi
-# --force --prune-tags damit Tags nach History-Rewrite korrekt aktualisiert werden
-if ! timeout 45 git fetch origin -q --force --prune --prune-tags --tags 2>/dev/null; then
-    log "       Fetch fehlgeschlagen/timeout (veraltetes Repo?) — re-initialisiere..."
-    rm -rf .git
-    git init -q
-    git remote add origin "$GITHUB_URL"
-    git fetch origin -q --force --tags
-fi
-LATEST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.' | head -1)
-if [ -n "$LATEST_TAG" ]; then
-    git reset --hard "$LATEST_TAG" -q
-    log "       Code aktualisiert auf Tag: $LATEST_TAG"
-else
-    git reset --hard origin/main -q
-    log "       Kein Tag gefunden — Fallback auf main"
+    log "       Lade $LATEST_TAG von GitHub..."
+    ARCHIVE_URL="https://github.com/$GITHUB_REPO/archive/refs/tags/$LATEST_TAG.tar.gz"
+    if curl -sfL --max-time 120 -o /tmp/boatos_update.tar.gz "$ARCHIVE_URL"; then
+        tar -xzf /tmp/boatos_update.tar.gz --strip-components=1 -C "$REPO_DIR"
+        rm -f /tmp/boatos_update.tar.gz
+        log "       Code aktualisiert auf $LATEST_TAG"
+    else
+        log "       Download fehlgeschlagen — überspringe Code-Update"
+    fi
 fi
 
 # 2. Python dependencies
