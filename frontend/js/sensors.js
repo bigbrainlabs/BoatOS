@@ -1,3 +1,5 @@
+import { t } from './i18n.js';
+
 /**
  * BoatOS Sensors Modul
  *
@@ -158,11 +160,11 @@ export function updateGpsStatus(gps) {
     if (fixEl) {
         const hasFix = gps.fix || (gps.lat && gps.lon && gps.lat !== 0 && gps.lon !== 0);
         if (hasFix) {
-            fixEl.textContent = 'GPS Fix';
+            fixEl.textContent = t('gpsFix');
         } else if (gps.satellites >= 1) {
-            fixEl.textContent = 'Suche... (' + gps.satellites + ' Sat)';
+            fixEl.textContent = t('gpsSearching', { count: gps.satellites });
         } else {
-            fixEl.textContent = 'Kein Signal';
+            fixEl.textContent = t('gpsNoSignal');
         }
     }
 
@@ -484,7 +486,7 @@ export function updateGpsInfo(gps) {
         if (satCount >= 4) {
             // Gute Satellitenanzahl - sofort verbunden anzeigen
             gpsStatus.classList.add('connected');
-            gpsStatus.title = `GPS: ${satCount} Satelliten`;
+            gpsStatus.title = t('gpsSatellites', { count: satCount });
             // Timer zuruecksetzen
             lowSatelliteStartTime = null;
         } else {
@@ -497,13 +499,13 @@ export function updateGpsInfo(gps) {
                 gpsStatus.classList.remove('connected');
             }
             // Titel immer mit aktueller Anzahl aktualisieren
-            gpsStatus.title = `GPS: ${satCount} Satelliten (kein Fix)`;
+            gpsStatus.title = t('gpsSatellitesNoFix', { count: satCount });
         }
     } else if (gpsSource === "browser") {
         // Browser-GPS - keine Satellitendaten verfuegbar
         // Verbunden annehmen wenn Browser-GPS Daten empfangen werden
         gpsStatus.classList.add('connected');
-        gpsStatus.title = `GPS: Browser/Phone`;
+        gpsStatus.title = t('gpsBrowserPhone');
         lowSatelliteStartTime = null; // Timer fuer Browser-GPS zuruecksetzen
     }
 
@@ -583,10 +585,10 @@ function updateGpsPanelDetails(gps) {
     const fixStatusEl = document.getElementById('gps-fix-status');
     if (fixStatusEl) {
         if (gps.fix) {
-            fixStatusEl.textContent = typeof window.t === 'function' ? window.t('gps_fix') : 'Fix';
+            fixStatusEl.textContent = t('gpsFix');
             fixStatusEl.style.color = '#2ecc71';
         } else {
-            fixStatusEl.textContent = typeof window.t === 'function' ? window.t('gps_no_fix') : 'Kein Fix';
+            fixStatusEl.textContent = t('gpsNoFix');
             fixStatusEl.style.color = '#e74c3c';
         }
     }
@@ -633,17 +635,17 @@ export function updateGpsSourceIndicator() {
     // Nur Icon/Emoji basierend auf GPS-Quelle aktualisieren
     if (gpsSource === "backend") {
         if (gpsStatus) gpsStatus.textContent = "GPS";
-        if (gpsSourceEl) gpsSourceEl.textContent = "Backend Module";
+        if (gpsSourceEl) gpsSourceEl.textContent = t('gpsBackendModule');
         if (gpsAccuracyEl) gpsAccuracyEl.textContent = "High";
     } else if (gpsSource === "browser") {
         if (gpsStatus) gpsStatus.textContent = "GPS";
-        if (gpsSourceEl) gpsSourceEl.textContent = "Browser/Phone";
+        if (gpsSourceEl) gpsSourceEl.textContent = t('gpsBrowserSource');
         if (gpsAccuracyEl && browserGpsAccuracy) {
             gpsAccuracyEl.textContent = Math.round(browserGpsAccuracy) + " m";
         }
     } else {
         if (gpsStatus) gpsStatus.textContent = "GPS";
-        if (gpsSourceEl) gpsSourceEl.textContent = "No Signal";
+        if (gpsSourceEl) gpsSourceEl.textContent = t('gpsNoSignalSource');
         if (gpsAccuracyEl) gpsAccuracyEl.textContent = "-- m";
     }
 }
@@ -889,7 +891,7 @@ export function togglePhoneGps() {
 
 function _startPhoneGps() {
     if (!navigator.geolocation) {
-        alert('Geolocation wird von diesem Browser nicht unterstützt.');
+        alert(t('gpsNoGeolocation'));
         return;
     }
     phoneGpsActive = true;

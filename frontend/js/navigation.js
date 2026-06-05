@@ -11,6 +11,7 @@
  */
 
 // ==================== IMPORTS ====================
+import { t } from './i18n.js';
 // Hinweis: Diese Variablen müssen aus den Hauptmodulen importiert werden
 // wenn core.js und map.js als Module verfügbar sind
 
@@ -90,13 +91,13 @@ export function startRoutePlanning() {
     // Wenn Route-Modus bereits aktiv, deaktivieren
     if (mapInteractionMode === 'route') {
         setMapInteractionMode('none');
-        showNotificationSafe('🛤️ Routenplanung beendet');
+        showNotificationSafe(t('navRouteEnded'));
         return;
     }
 
     // Route-Modus aktivieren
     setMapInteractionMode('route');
-    showNotificationSafe('🛤️ Routenplanung aktiv - Tippe auf Karte für Wegpunkte');
+    showNotificationSafe(t('navRouteActive'));
 }
 
 /**
@@ -107,13 +108,13 @@ export function startPoiPlacement() {
     // Wenn POI-Modus bereits aktiv, deaktivieren
     if (mapInteractionMode === 'poi') {
         setMapInteractionMode('none');
-        showNotificationSafe('📍 POI-Modus beendet');
+        showNotificationSafe(t('navPoiEnded'));
         return;
     }
 
     // POI-Modus aktivieren
     setMapInteractionMode('poi');
-    showNotificationSafe('📍 POI-Modus aktiv - Tippe auf Karte um Favorit zu setzen');
+    showNotificationSafe(t('navPoiActive'));
 }
 
 /**
@@ -268,15 +269,15 @@ function openPoiDialog(lat, lon) {
     `;
 
     const categories = [
-        { id: 'marina', icon: '⚓', name: 'Marina' },
-        { id: 'anchorage', icon: '🔱', name: 'Ankerplatz' },
-        { id: 'fuel', icon: '⛽', name: 'Tankstelle' },
-        { id: 'lock', icon: '🚧', name: 'Schleuse' },
-        { id: 'bridge', icon: '🌉', name: 'Brücke' },
-        { id: 'restaurant', icon: '🍽️', name: 'Restaurant' },
-        { id: 'shop', icon: '🏪', name: 'Geschäft' },
-        { id: 'danger', icon: '⚠️', name: 'Gefahrenstelle' },
-        { id: 'other', icon: '📍', name: 'Sonstiges' }
+        { id: 'marina', icon: '⚓', name: t('poiMarina') },
+        { id: 'anchorage', icon: '🔱', name: t('poiAnchor') },
+        { id: 'fuel', icon: '⛽', name: t('poiFuel') },
+        { id: 'lock', icon: '🚧', name: t('poiLock') },
+        { id: 'bridge', icon: '🌉', name: t('poiBridge') },
+        { id: 'restaurant', icon: '🍽️', name: t('poiRestaurant') },
+        { id: 'shop', icon: '🏪', name: t('poiShop') },
+        { id: 'danger', icon: '⚠️', name: t('poiDanger') },
+        { id: 'other', icon: '📍', name: t('poiOther') }
     ];
 
     modal.innerHTML = `
@@ -291,12 +292,12 @@ function openPoiDialog(lat, lon) {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         ">
             <h3 style="margin: 0 0 16px 0; color: #64ffda; font-size: 18px;">
-                📍 Neuer POI / Favorit
+                ${t('navPoiTitle')}
             </h3>
 
             <div style="margin-bottom: 16px;">
-                <label style="display: block; font-size: 12px; color: #8892b0; margin-bottom: 6px;">Name *</label>
-                <input type="text" id="poi-name" placeholder="z.B. Schöner Ankerplatz" style="
+                <label style="display: block; font-size: 12px; color: #8892b0; margin-bottom: 6px;">${t('poiName')}</label>
+                <input type="text" id="poi-name" placeholder="${t('poiExample')}" style="
                     width: 100%;
                     padding: 12px;
                     background: rgba(42, 82, 152, 0.3);
@@ -309,7 +310,7 @@ function openPoiDialog(lat, lon) {
             </div>
 
             <div style="margin-bottom: 16px;">
-                <label style="display: block; font-size: 12px; color: #8892b0; margin-bottom: 6px;">Kategorie</label>
+                <label style="display: block; font-size: 12px; color: #8892b0; margin-bottom: 6px;">${t('poiCategory')}</label>
                 <div id="poi-categories" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
                     ${categories.map((cat, index) => `
                         <button type="button" class="poi-category-btn ${index === 0 ? 'active' : ''}" data-category="${cat.id}" style="
@@ -330,8 +331,8 @@ function openPoiDialog(lat, lon) {
             </div>
 
             <div style="margin-bottom: 20px;">
-                <label style="display: block; font-size: 12px; color: #8892b0; margin-bottom: 6px;">Notizen</label>
-                <textarea id="poi-notes" placeholder="Optionale Beschreibung..." rows="3" style="
+                <label style="display: block; font-size: 12px; color: #8892b0; margin-bottom: 6px;">${t('poiNotes')}</label>
+                <textarea id="poi-notes" placeholder="${t('poiDescription')}" rows="3" style="
                     width: 100%;
                     padding: 12px;
                     background: rgba(42, 82, 152, 0.3);
@@ -358,7 +359,7 @@ function openPoiDialog(lat, lon) {
                     color: white;
                     font-size: 14px;
                     cursor: pointer;
-                ">Abbrechen</button>
+                ">${t('btnCancel')}</button>
                 <button id="poi-save" style="
                     flex: 1;
                     padding: 12px;
@@ -369,7 +370,7 @@ function openPoiDialog(lat, lon) {
                     font-size: 14px;
                     font-weight: 600;
                     cursor: pointer;
-                ">Speichern</button>
+                ">${t('btnSave')}</button>
             </div>
         </div>
     `;
@@ -415,7 +416,7 @@ function openPoiDialog(lat, lon) {
         if (window.saveFavorite) {
             const success = await window.saveFavorite(name, lat, lon, category, notes);
             if (success) {
-                showNotificationSafe(`✅ POI "${name}" gespeichert`);
+                showNotificationSafe(t('navPoiSaved', { name }));
                 modal.remove();
 
                 // POI-Modus beenden
@@ -791,7 +792,7 @@ export async function calculateRoute(context) {
                 const routingType = routeData.properties?.routing_type || 'waterway';
 
                 if (routingType === 'direct' || !isWaterwayRouted) {
-                    if (showNotification) showNotification('Wasserweg-Routing nicht verfügbar — Luftlinie wird verwendet', 'warning');
+                    if (showNotification) showNotification(t('navWaterwayUnavailable'), 'warning');
                     drawDirectRoute(context);
                     if (hideRoutingLoader) hideRoutingLoader();
                     return;
@@ -1268,7 +1269,7 @@ export function startNavigation(context) {
 
     if (!waypoints || waypoints.length < 2) {
         if (showNotification) {
-            showNotification('Erstelle zuerst eine Route mit mindestens 2 Wegpunkten', 'warning');
+            showNotification(t('navCreateRouteFirst'), 'warning');
         }
         return;
     }
@@ -1281,7 +1282,7 @@ export function startNavigation(context) {
         navigationStartButton.style.background = '#27ae60';
     }
 
-    if (showNotification) showNotification('Navigation gestartet', 'success');
+    if (showNotification) showNotification(t('navStarted'), 'success');
     console.log('Navigation GESTARTET');
 
     // Anzeigen aktualisieren
@@ -1312,7 +1313,7 @@ export function stopNavigation(context) {
         resetNavHeader();
 
         const showNotification = context?.showNotification;
-        if (showNotification) showNotification('Navigation beendet', 'info');
+        if (showNotification) showNotification(t('navEnded'), 'info');
         console.log('Navigation BEENDET');
     }
 }
@@ -1326,7 +1327,7 @@ export function toggleNavigation(context) {
 
     if (!waypoints || waypoints.length < 2) {
         if (showNotification) {
-            showNotification('Erstelle zuerst eine Route mit mindestens 2 Wegpunkten', 'warning');
+            showNotification(t('navCreateRouteFirst'), 'warning');
         }
         return;
     }
@@ -1340,7 +1341,7 @@ export function toggleNavigation(context) {
             navigationStartButton.title = 'Navigation pausieren';
             navigationStartButton.style.background = '#27ae60';
         }
-        if (showNotification) showNotification('Navigation gestartet', 'success');
+        if (showNotification) showNotification(t('navStarted'), 'success');
         console.log('Navigation GESTARTET');
 
         // Anzeigen aktualisieren
@@ -1569,7 +1570,7 @@ export function updateLiveETA(context) {
     }
     if (distLabelEl) {
         const unit = window.getUnitSettings ? window.getUnitSettings().distance.toUpperCase() : 'NM';
-        distLabelEl.textContent = `REST ${unit}`;
+        distLabelEl.textContent = `${t('navRest')} ${unit}`;
     }
 
     const gpsSpeed = window.lastSensorData?.gps?.speed || 0;
@@ -1596,8 +1597,8 @@ export function updateLiveETA(context) {
 
     const liveEtaDisplay = document.getElementById('live-eta-display');
     if (liveEtaDisplay) {
-        const speedNote = usingPlanned ? ' (Plan)' : '';
-        liveEtaDisplay.innerHTML = `<strong>Live ETA:</strong> ${etaText} @ ${speedFormatted}${speedNote} | Ankunft: ${arrivalTimeStr}`;
+        const speedNote = usingPlanned ? ` (${t('navPlan')})` : '';
+        liveEtaDisplay.innerHTML = `<strong>${t('navLiveETA')}</strong> ${etaText} @ ${speedFormatted}${speedNote} | ${t('navArrival')} ${arrivalTimeStr}`;
         liveEtaDisplay.style.display = 'block';
     }
 }
@@ -1709,12 +1710,12 @@ export function updateCourseDeviationWarning(boatLat, boatLon, context) {
             ? `${Math.round(xte.distance)} m`
             : `${(xte.distance / 1000).toFixed(2)} km`;
 
-        const sideText = xte.side === 'port' ? 'Backbord ←' : 'Steuerbord →';
+        const sideText = xte.side === 'port' ? t('navPort') : t('navStarboard');
         const sideColor = xte.side === 'port' ? '#e74c3c' : '#27ae60';
 
         const isCritical = xte.distance > CRITICAL_THRESHOLD;
         const warningIcon = isCritical ? '&#x26A0;' : '&#x26A1;';
-        const warningText = isCritical ? 'KRITISCHE ABWEICHUNG' : 'Kursabweichung';
+        const warningText = isCritical ? t('navCriticalDeviation') : t('navDeviation');
         const bgColor = isCritical ? 'rgba(231, 76, 60, 0.95)' : 'rgba(243, 156, 18, 0.95)';
 
         if (!xteWarningDisplay) {
@@ -1749,13 +1750,13 @@ export function updateCourseDeviationWarning(boatLat, boatLon, context) {
                 ${distanceFormatted}
             </div>
             <div style="background: rgba(255, 255, 255, 0.2); padding: 10px; border-radius: 8px; text-align: center;">
-                <div style="font-size: 11px; margin-bottom: 4px;">RICHTUNG</div>
+                <div style="font-size: 11px; margin-bottom: 4px;">${t('navDirection')}</div>
                 <div style="font-size: 18px; font-weight: 600; color: ${sideColor};">
                     ${sideText}
                 </div>
             </div>
             <div style="margin-top: 12px; font-size: 11px; text-align: center; opacity: 0.9;">
-                Zurück zum Kurs navigieren
+                ${t('navReturnToCourse')}
             </div>
         `;
     } else {
@@ -1788,31 +1789,31 @@ export function calculateTurnDirection(currentBearing, nextBearing) {
     if (Math.abs(turnAngle) < 10) {
         turnType = 'straight';
         turnIcon = '&#x2B06;';
-        turnText = 'Geradeaus';
+        turnText = t('navStraight');
     } else if (turnAngle > 0 && turnAngle < 45) {
         turnType = 'slight-right';
         turnIcon = '&#x2197;';
-        turnText = 'Leicht rechts';
+        turnText = t('navSlightRight');
     } else if (turnAngle >= 45 && turnAngle < 135) {
         turnType = 'right';
         turnIcon = '&#x27A1;';
-        turnText = 'Rechts abbiegen';
+        turnText = t('navRight');
     } else if (turnAngle >= 135) {
         turnType = 'sharp-right';
         turnIcon = '&#x21AA;';
-        turnText = 'Scharf rechts';
+        turnText = t('navSharpRight');
     } else if (turnAngle < 0 && turnAngle > -45) {
         turnType = 'slight-left';
         turnIcon = '&#x2196;';
-        turnText = 'Leicht links';
+        turnText = t('navSlightLeft');
     } else if (turnAngle <= -45 && turnAngle > -135) {
         turnType = 'left';
         turnIcon = '&#x2B05;';
-        turnText = 'Links abbiegen';
+        turnText = t('navLeft');
     } else {
         turnType = 'sharp-left';
         turnIcon = '&#x21A9;';
-        turnText = 'Scharf links';
+        turnText = t('navSharpLeft');
     }
 
     return { turnType, turnIcon, turnText, turnAngle };
@@ -2390,7 +2391,7 @@ export function displayLocksTimeline(context) {
 
     let html = `
         <div style="font-size: 13px; color: #8892b0; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; font-weight: 700;">
-            &#x1F512; Schleusen auf Route (${locksOnRoute.length})
+            &#x1F512; ${t('navLocksOnRoute')} (${locksOnRoute.length})
         </div>
     `;
 

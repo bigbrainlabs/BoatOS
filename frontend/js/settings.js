@@ -5,6 +5,8 @@
  * @module settings
  */
 
+import { t } from './i18n.js';
+
 // ==================== STATE ====================
 let moduleContext = null;
 
@@ -219,7 +221,7 @@ export function saveAllSettings() {
 
     // Notification anzeigen
     if (ui?.showNotification) {
-        ui.showNotification('Einstellungen gespeichert', 'success');
+        ui.showNotification(t('settingsSaved'), 'success');
     }
 
     console.log('Einstellungen gespeichert:', settings);
@@ -510,12 +512,12 @@ function showMsg(message, duration = 3000) {
  * Einstellungen auf Standardwerte zurücksetzen
  */
 export function resetSettings() {
-    if (!confirm('Alle Einstellungen auf Standardwerte zurücksetzen?')) {
+    if (!confirm(t('settingsResetConfirm'))) {
         return;
     }
 
     localStorage.removeItem('boatos_settings');
-    showMsg('🔄 Einstellungen zurückgesetzt');
+    showMsg(t('settingsReset'));
 
     // Seite neu laden um Defaults anzuwenden
     setTimeout(() => location.reload(), 1000);
@@ -525,7 +527,7 @@ export function resetSettings() {
  * Einstellungen als JSON exportieren (kompletter Backend-Export)
  */
 export async function exportSettings() {
-    showMsg('⏳ Export wird erstellt…');
+    showMsg(t('settingsExporting'));
     try {
         const res = await fetch(`${API_URL}/api/data/export`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -538,9 +540,9 @@ export async function exportSettings() {
         link.download = match ? match[1] : `boatos_export_${new Date().toISOString().slice(0,10)}.json`;
         link.click();
         URL.revokeObjectURL(url);
-        showMsg('✅ Export heruntergeladen');
+        showMsg(t('settingsExported'));
     } catch (e) {
-        showMsg(`❌ Export fehlgeschlagen: ${e.message}`);
+        showMsg(t('settingsExportError', { error: e.message }));
     }
 }
 
@@ -556,7 +558,7 @@ export function importSettings() {
         const file = event.target.files[0];
         if (!file) return;
 
-        showMsg('⏳ Import läuft…');
+        showMsg(t('settingsImporting'));
         try {
             const text = await file.text();
             const data = JSON.parse(text);
@@ -578,7 +580,8 @@ export function importSettings() {
             if (imp.crew_members > 0)  parts.push(`${imp.crew_members} Crewmitglieder`);
             if (imp.fuel_entries > 0)  parts.push(`${imp.fuel_entries} Tankeinträge`);
 
-            showMsg(`✅ Importiert: ${parts.join(', ') || 'nichts'}`);
+            const items = parts.join(', ') || t('settingsImportNothing');
+            showMsg(t('settingsImported', { items }));
 
             if (result.errors?.length) {
                 console.warn('Import-Warnungen:', result.errors);
@@ -588,7 +591,7 @@ export function importSettings() {
             setTimeout(() => location.reload(), 1500);
         } catch (error) {
             console.error('Import error:', error);
-            showMsg(`❌ Import fehlgeschlagen: ${error.message}`);
+            showMsg(t('settingsImportError', { error: error.message }));
         }
     };
 
@@ -601,11 +604,11 @@ export function importSettings() {
  * Schleusen aus OpenStreetMap importieren
  */
 export async function importLocksFromOSM() {
-    if (!confirm('Möchten Sie neue Schleusen aus OpenStreetMap importieren?\n\nDieser Vorgang kann einige Minuten dauern.')) {
+    if (!confirm(t('settingsLocksImportConfirm'))) {
         return;
     }
 
-    showMsg('🌍 Starte OSM-Import...');
+    showMsg(t('settingsLocksImportStart'));
 
     try {
         const response = await fetch(`${API_URL}/api/locks/import-osm`, {
@@ -619,18 +622,18 @@ export async function importLocksFromOSM() {
         const result = await response.json();
 
         if (result.success) {
-            showMsg(`✅ ${result.imported} Schleusen importiert, ${result.updated} aktualisiert!`);
+            showMsg(t('settingsLocksImported', { imported: result.imported, updated: result.updated }));
 
             // Schleusen auf der Karte aktualisieren
             if (typeof window.updateLocksOnMap === 'function') {
                 window.updateLocksOnMap();
             }
         } else {
-            showMsg(`❌ Import fehlgeschlagen: ${result.error}`);
+            showMsg(t('settingsLocksImportError', { error: result.error }));
         }
     } catch (error) {
         console.error('OSM Import error:', error);
-        showMsg(`❌ Fehler beim Import: ${error.message}`);
+        showMsg(t('settingsLocksImportError', { error: error.message }));
     }
 }
 
@@ -642,7 +645,7 @@ export async function enrichLocksData() {
         return;
     }
 
-    showMsg('✨ Starte Datenanreicherung...');
+    showMsg(t('settingsLocksEnrichStart'));
 
     try {
         const response = await fetch(`${API_URL}/api/locks/enrich`, {
@@ -656,7 +659,7 @@ export async function enrichLocksData() {
         const result = await response.json();
 
         if (result.success) {
-            showMsg(`✅ ${result.enriched} Schleusen angereichert! VHF: ${result.vhf_coverage}`);
+            showMsg(t('settingsLocksEnriched', { enriched: result.enriched }));
 
             // Schleusen auf der Karte aktualisieren
             if (typeof window.updateLocksOnMap === 'function') {
@@ -666,11 +669,11 @@ export async function enrichLocksData() {
             // Qualitätsbericht automatisch anzeigen
             setTimeout(() => checkLocksQuality(), 1000);
         } else {
-            showMsg(`❌ Anreicherung fehlgeschlagen: ${result.error}`);
+            showMsg(t('settingsLocksEnrichError', { error: result.error }));
         }
     } catch (error) {
         console.error('Enrichment error:', error);
-        showMsg(`❌ Fehler bei Anreicherung: ${error.message}`);
+        showMsg(t('settingsLocksEnrichError', { error: error.message }));
     }
 }
 
@@ -678,7 +681,7 @@ export async function enrichLocksData() {
  * Qualitätsbericht der Schleusen-Datenbank anzeigen
  */
 export async function checkLocksQuality() {
-    showMsg('📊 Lade Qualitätsbericht...');
+    showMsg(t('settingsQualityLoading'));
 
     try {
         const response = await fetch(`${API_URL}/api/locks/quality`);
@@ -720,13 +723,13 @@ Datenstand: ${new Date().toLocaleString('de-DE')}
             if (contentEl) contentEl.textContent = report;
             if (reportEl) reportEl.style.display = 'block';
 
-            showMsg('✅ Qualitätsbericht geladen');
+            showMsg(t('settingsQualityLoaded'));
         } else {
-            showMsg(`❌ Fehler: ${result.error}`);
+            showMsg(t('settingsQualityError', { error: result.error }));
         }
     } catch (error) {
         console.error('Quality check error:', error);
-        showMsg(`❌ Fehler beim Laden: ${error.message}`);
+        showMsg(t('settingsQualityError', { error: error.message }));
     }
 }
 
@@ -734,11 +737,11 @@ Datenstand: ${new Date().toLocaleString('de-DE')}
  * Schleusen-Positionen gegen OpenStreetMap überprüfen und korrigieren
  */
 export async function verifyLocksPositions() {
-    if (!confirm('Möchten Sie alle Schleusen-Positionen überprüfen und korrigieren?\n\nDies kann 2-3 Minuten dauern und korrigiert automatisch Positionen mit >500m Abweichung von OpenStreetMap.')) {
+    if (!confirm(t('settingsPosConfirm'))) {
         return;
     }
 
-    showMsg('📍 Starte Positions-Überprüfung (2-3 Min.)...');
+    showMsg(t('settingsPosStart'));
 
     try {
         const response = await fetch(`${API_URL}/api/locks/verify-positions`, {
@@ -752,22 +755,18 @@ export async function verifyLocksPositions() {
         const result = await response.json();
 
         if (result.success) {
-            const message = result.fixed > 0
-                ? `✅ ${result.checked} Schleusen geprüft, ${result.fixed} Positionen korrigiert (Ø ${result.avg_distance_fixed}m Abweichung)`
-                : `✅ ${result.checked} Schleusen geprüft - alle Positionen korrekt!`;
-
-            showMsg(message);
+            showMsg(t('settingsPosChecked', { checked: result.checked }));
 
             // Schleusen auf der Karte aktualisieren
             if (typeof window.updateLocksOnMap === 'function') {
                 setTimeout(() => window.updateLocksOnMap(), 1000);
             }
         } else {
-            showMsg(`❌ Überprüfung fehlgeschlagen: ${result.error}`);
+            showMsg(t('settingsLocksImportError', { error: result.error }));
         }
     } catch (error) {
         console.error('Position verification error:', error);
-        showMsg(`❌ Fehler bei Überprüfung: ${error.message}`);
+        showMsg(t('settingsLocksImportError', { error: error.message }));
     }
 }
 

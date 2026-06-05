@@ -5,6 +5,7 @@
  * @module logbook
  */
 
+import { t } from './i18n.js';
 import * as ui from './ui.js';
 import * as navigation from './navigation.js';
 
@@ -52,7 +53,7 @@ export async function startTrip() {
                     </label>
                 `).join('');
             } else {
-                crewList.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-dim);">Keine Crew-Mitglieder. Fahrt wird ohne Crew gestartet.</div>';
+                crewList.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-dim);">${t('logNoCrew')}</div>`;
             }
         }
 
@@ -60,7 +61,7 @@ export async function startTrip() {
         if (modal) modal.style.display = 'flex';
 
     } catch (error) {
-        console.log('Crew laden fehlgeschlagen, starte ohne Crew-Auswahl');
+        console.log(t('logCrewLoadError'));
         confirmStartTrip();
     }
 }
@@ -91,20 +92,20 @@ export async function confirmStartTrip() {
 
         if (response.ok) {
             if (ui.showNotification) {
-                ui.showNotification('🚢 Fahrt gestartet - Aufzeichnung läuft', 'success');
+                ui.showNotification(t('logTripStarted'), 'success');
             }
             updateTripUI(true, false);
             loadLogEntries();
 
         } else {
             if (ui.showNotification) {
-                ui.showNotification('Fehler beim Starten', 'error');
+                ui.showNotification(t('logStartError'), 'error');
             }
         }
     } catch (error) {
         console.error('Fehler beim Starten:', error);
         if (ui.showNotification) {
-            ui.showNotification('Fehler beim Starten der Fahrt', 'error');
+            ui.showNotification(t('logStartError'), 'error');
         }
     }
 }
@@ -133,11 +134,11 @@ export async function stopTrip() {
                 ? window.formatDistance(parseFloat(result.distance))
                 : result.distance + ' NM';
             if (ui.showNotification) {
-                ui.showNotification(`⚓ Fahrt beendet - ${dist} aufgezeichnet`, 'success');
+                ui.showNotification(t('logTripEnded', { dist }), 'success');
             }
         } else {
             if (ui.showNotification) {
-                ui.showNotification('⚓ Fahrt beendet', 'info');
+                ui.showNotification(t('logTripEndedTitle'), 'info');
             }
         }
 
@@ -152,24 +153,24 @@ export async function stopTrip() {
             logEntriesContainer.innerHTML = `
                 <div style="background: linear-gradient(135deg, var(--accent), var(--success)); border-radius: 12px; padding: 20px; color: white; text-align: center;">
                     <div style="font-size: 32px; margin-bottom: 10px;">⚓</div>
-                    <div style="font-size: 18px; font-weight: 600; margin-bottom: 15px;">Fahrt beendet!</div>
+                    <div style="font-size: 18px; font-weight: 600; margin-bottom: 15px;">${t('logTripEndedTitle')}</div>
                     <div style="display: flex; justify-content: center; gap: 20px;">
                         <div>
                             <div style="font-size: 24px; font-weight: 700;">${distFormatted}</div>
-                            <div style="font-size: 12px; opacity: 0.8;">Distanz</div>
+                            <div style="font-size: 12px; opacity: 0.8;">${t('logStatDistance')}</div>
                         </div>
                         <div>
                             <div style="font-size: 24px; font-weight: 700;">${result.duration || '0:00'}</div>
-                            <div style="font-size: 12px; opacity: 0.8;">Dauer</div>
+                            <div style="font-size: 12px; opacity: 0.8;">${t('logStatDuration')}</div>
                         </div>
                         <div>
                             <div style="font-size: 24px; font-weight: 700;">${result.points || 0}</div>
-                            <div style="font-size: 12px; opacity: 0.8;">Punkte</div>
+                            <div style="font-size: 12px; opacity: 0.8;">${t('logStatPoints')}</div>
                         </div>
                     </div>
                     <button onclick="BoatOS.showLogbookTab('archive', document.querySelector('#section-logbook .logbook-tab:last-child'))"
                             style="margin-top: 15px; padding: 10px 20px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; color: white; font-size: 14px; cursor: pointer;">
-                        📁 Im Archiv ansehen
+                        ${t('logViewArchive')}
                     </button>
                 </div>
             `;
@@ -227,7 +228,7 @@ export async function pauseTrip() {
         const response = await fetch(`${getApiUrl()}/api/track/pause`, { method: 'POST' });
         if (response.ok) {
             if (ui.showNotification) {
-                ui.showNotification('⏸️ Aufzeichnung pausiert - Anker gesetzt', 'info');
+                ui.showNotification(t('logPaused'), 'info');
             }
             updateTripUI(true, true);
             loadLogEntries();
@@ -248,7 +249,7 @@ export async function resumeTrip() {
         const response = await fetch(`${getApiUrl()}/api/track/resume`, { method: 'POST' });
         if (response.ok) {
             if (ui.showNotification) {
-                ui.showNotification('▶️ Aufzeichnung fortgesetzt - Anker gelichtet', 'success');
+                ui.showNotification(t('logResumed'), 'success');
             }
             updateTripUI(true, false);
             loadLogEntries();
@@ -303,7 +304,7 @@ export async function submitManualEntry() {
 
     if (!notes || notes.trim() === '') {
         if (ui.showNotification) {
-            ui.showNotification('Bitte Notizen eingeben', 'warning');
+            ui.showNotification(t('logNoteRequired'), 'warning');
         }
         return;
     }
@@ -321,19 +322,19 @@ export async function submitManualEntry() {
 
         if (response.ok) {
             if (ui.showNotification) {
-                ui.showNotification('📝 Eintrag gespeichert', 'success');
+                ui.showNotification(t('logNoteSaved'), 'success');
             }
             closeManualEntryModal();
             loadLogEntries();
         } else {
             if (ui.showNotification) {
-                ui.showNotification('Fehler beim Speichern', 'error');
+                ui.showNotification(t('logSaveError'), 'error');
             }
         }
     } catch (error) {
         console.error('Fehler:', error);
         if (ui.showNotification) {
-            ui.showNotification('Fehler beim Speichern', 'error');
+            ui.showNotification(t('logSaveError'), 'error');
         }
     }
 }
@@ -409,7 +410,7 @@ export async function loadLogEntries() {
         if (!container) return;
 
         if (entries.length === 0) {
-            container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-dim);">Noch keine Einträge</div>';
+            container.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-dim);">${t('logNoEntries')}</div>`;
             return;
         }
 
@@ -425,11 +426,11 @@ export async function loadLogEntries() {
  */
 export function renderLogEntry(entry) {
     const types = {
-        'trip_start': { icon: '🚢', label: 'Fahrt gestartet', color: 'var(--success)' },
-        'trip_end': { icon: '⚓', label: 'Fahrt beendet', color: 'var(--accent)' },
-        'manual': { icon: '📝', label: 'Notiz', color: 'var(--accent)' },
-        'trip_pause': { icon: '⏸️', label: 'Pause (Anker)', color: 'var(--warning)' },
-        'trip_resume': { icon: '▶️', label: 'Fortgesetzt', color: 'var(--success)' }
+        'trip_start': { icon: '🚢', label: t('logTypeStart'), color: 'var(--success)' },
+        'trip_end': { icon: '⚓', label: t('logTypeEnd'), color: 'var(--accent)' },
+        'manual': { icon: '📝', label: t('logTypeNote'), color: 'var(--accent)' },
+        'trip_pause': { icon: '⏸️', label: t('logTypePause'), color: 'var(--warning)' },
+        'trip_resume': { icon: '▶️', label: t('logTypeResumed'), color: 'var(--success)' }
     };
     const type = types[entry.type] || types['manual'];
     const time = new Date(entry.timestamp).toLocaleString('de-DE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
@@ -496,7 +497,7 @@ export async function loadArchivedTrips() {
         }
 
         if (!trips || trips.length === 0) {
-            container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-dim);">Noch keine archivierten Fahrten</div>';
+            container.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-dim);">${t('logNoTrips')}</div>`;
             return;
         }
 
@@ -514,7 +515,7 @@ export async function loadArchivedTrips() {
     } catch (error) {
         console.error('Fehler beim Laden der Fahrten:', error);
         const container = document.getElementById('trips-list');
-        if (container) container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-dim);">Fehler beim Laden</div>';
+        if (container) container.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-dim);">${t('logLoadError')}</div>`;
     }
 }
 
@@ -531,13 +532,13 @@ export function renderTripCard(trip) {
         <div style="background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); overflow: hidden;">
             <div onclick="BoatOS.openTripDetail(${trip.id})"
                  style="padding: 15px 15px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: start; gap: 8px;"
-                 title="Details anzeigen">
+                 title="${t('logShowDetails')}">
                 <div style="flex: 1; min-width: 0;">
                     <div style="font-size: 16px; font-weight: 600;">🚢 ${dateStr}</div>
                     <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;">${timeStr} Uhr</div>
                     <div style="display: flex; gap: 14px; flex-wrap: wrap;">
                         <div><span style="font-size: 17px; font-weight: 700; color: var(--accent);">${dist}</span></div>
-                        <div><span style="font-size: 17px; font-weight: 700; color: var(--accent);">${trip.duration || '0:00'}</span> <span style="font-size: 12px; color: var(--text-dim);">Dauer</span></div>
+                        <div><span style="font-size: 17px; font-weight: 700; color: var(--accent);">${trip.duration || '0:00'}</span> <span style="font-size: 12px; color: var(--text-dim);">${t('logStatDuration')}</span></div>
                         <div><span style="font-size: 17px; font-weight: 700; color: var(--accent);">${trip.points || 0}</span> <span style="font-size: 12px; color: var(--text-dim);">Pkt</span></div>
                     </div>
                 </div>
@@ -547,8 +548,8 @@ export function renderTripCard(trip) {
                 </div>
             </div>
             <div style="display: flex; gap: 0; border-top: 1px solid var(--border);">
-                <button onclick="event.stopPropagation(); BoatOS.exportTrip(${trip.id})" style="flex: 1; padding: 9px 4px; border: none; border-right: 1px solid var(--border); border-radius: 0; background: var(--bg-panel); color: var(--text); font-size: 12px; cursor: pointer;">💾 GPX</button>
-                <button id="btn-view-map-${trip.id}" onclick="event.stopPropagation(); BoatOS.viewTripOnMap(${trip.id})" style="flex: 1; padding: 9px 4px; border: none; border-right: 1px solid var(--border); border-radius: 0; background: var(--bg-panel); color: var(--text); font-size: 12px; cursor: pointer;">🗺️ Karte</button>
+                <button onclick="event.stopPropagation(); BoatOS.exportTrip(${trip.id})" style="flex: 1; padding: 9px 4px; border: none; border-right: 1px solid var(--border); border-radius: 0; background: var(--bg-panel); color: var(--text); font-size: 12px; cursor: pointer;">${t('logGpxExport')}</button>
+                <button id="btn-view-map-${trip.id}" onclick="event.stopPropagation(); BoatOS.viewTripOnMap(${trip.id})" style="flex: 1; padding: 9px 4px; border: none; border-right: 1px solid var(--border); border-radius: 0; background: var(--bg-panel); color: var(--text); font-size: 12px; cursor: pointer;">${t('logMapView')}</button>
                 <button onclick="event.stopPropagation(); BoatOS.deleteTrip(${trip.id})" style="padding: 9px 14px; border: none; border-radius: 0; background: var(--bg-panel); color: var(--danger); font-size: 12px; cursor: pointer;">🗑️</button>
             </div>
         </div>
@@ -583,7 +584,7 @@ export async function openTripDetail(tripId) {
     const body = document.getElementById('trip-detail-body');
     if (!modal || !body) return;
 
-    body.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-dim);">⏳ Laden…</div>';
+    body.innerHTML = `<div style="text-align:center; padding: 40px; color: var(--text-dim);">${t('loading')}</div>`;
     modal.style.display = 'flex';
 
     try {
@@ -595,7 +596,7 @@ export async function openTripDetail(tripId) {
         const allCrew = await crewResp.json();
 
         if (trip.error) {
-            body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger);">Fehler beim Laden</div>';
+            body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--danger);">${t('logLoadError')}</div>`;
             return;
         }
 
@@ -845,11 +846,11 @@ export async function openTripDetail(tripId) {
                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-sm);">
                     <div style="background:rgba(255,255,255,0.04); border-radius:var(--radius-md); padding:var(--space-sm) var(--space-md); text-align:center;">
                         <div style="font-size:var(--fs-xl); font-weight:700; color:var(--accent);">${dist}</div>
-                        <div style="font-size:var(--fs-sm); color:var(--text-dim);">Distanz</div>
+                        <div style="font-size:var(--fs-sm); color:var(--text-dim);">${t('logStatDistance')}</div>
                     </div>
                     <div style="background:rgba(255,255,255,0.04); border-radius:var(--radius-md); padding:var(--space-sm) var(--space-md); text-align:center;">
                         <div style="font-size:var(--fs-xl); font-weight:700; color:var(--accent);">${trip.duration || '--'}</div>
-                        <div style="font-size:var(--fs-sm); color:var(--text-dim);">Dauer</div>
+                        <div style="font-size:var(--fs-sm); color:var(--text-dim);">${t('logStatDuration')}</div>
                     </div>
                     <div style="background:rgba(255,255,255,0.04); border-radius:var(--radius-md); padding:var(--space-sm) var(--space-md); text-align:center;">
                         <div style="font-size:var(--fs-xl); font-weight:700; color:var(--accent);">${avgSpeedFmt}</div>
@@ -869,14 +870,14 @@ export async function openTripDetail(tripId) {
             ${entriesHtml}
             <!-- Action buttons -->
             <div style="display: flex; gap: var(--space-md);">
-                <button onclick="BoatOS.exportTrip(${trip.id})" style="flex:1; padding: var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-panel); color: var(--text); font-size: var(--fs-base); cursor: pointer;">💾 GPX</button>
-                <button onclick="BoatOS.closeTripDetailModal(); BoatOS.viewTripOnMap(${trip.id})" style="flex:1; padding: var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-panel); color: var(--text); font-size: var(--fs-base); cursor: pointer;">🗺️ Karte</button>
-                <button onclick="BoatOS.closeTripDetailModal(); if(confirm('Diese Fahrt wirklich löschen?')) BoatOS.deleteTrip(${trip.id})" style="padding: var(--space-md) var(--space-lg); border: 1px solid var(--danger); border-radius: var(--radius-lg); background: transparent; color: var(--danger); font-size: var(--fs-base); cursor: pointer;">🗑️</button>
+                <button onclick="BoatOS.exportTrip(${trip.id})" style="flex:1; padding: var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-panel); color: var(--text); font-size: var(--fs-base); cursor: pointer;">${t('logGpxExport')}</button>
+                <button onclick="BoatOS.closeTripDetailModal(); BoatOS.viewTripOnMap(${trip.id})" style="flex:1; padding: var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-panel); color: var(--text); font-size: var(--fs-base); cursor: pointer;">${t('logMapView')}</button>
+                <button onclick="BoatOS.closeTripDetailModal(); if(confirm(${JSON.stringify(t('logDeleteTripConfirm'))})) BoatOS.deleteTrip(${trip.id})" style="padding: var(--space-md) var(--space-lg); border: 1px solid var(--danger); border-radius: var(--radius-lg); background: transparent; color: var(--danger); font-size: var(--fs-base); cursor: pointer;">${t('btnDelete')}</button>
             </div>
         `;
 
     } catch (error) {
-        body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger);">Fehler beim Laden</div>';
+        body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--danger);">${t('logLoadError')}</div>`;
     }
 }
 
@@ -908,7 +909,7 @@ export async function viewTripOnMap(tripId) {
 
     const btn = document.getElementById(`btn-view-map-${tripId}`);
     const origText = btn ? btn.textContent : null;
-    if (btn) { btn.textContent = '⏳ Laden…'; btn.disabled = true; }
+    if (btn) { btn.textContent = t('loading'); btn.disabled = true; }
 
     try {
         const response = await fetch(`${getApiUrl()}/api/logbook/trip/${tripId}`);
@@ -935,7 +936,7 @@ export async function viewTripOnMap(tripId) {
             ui.showNotification(`🗺️ Track mit ${entry.track_data.length} Punkten`, 'info');
         }
     } catch (error) {
-        if (ui.showNotification) ui.showNotification('Fehler beim Laden', 'error');
+        if (ui.showNotification) ui.showNotification(t('logLoadError'), 'error');
     } finally {
         _viewTripOnMapBusy = false;
         if (btn) { btn.textContent = origText; btn.disabled = false; }
@@ -959,19 +960,19 @@ function decimateTrack(trackData, maxPoints) {
  * Fahrt löschen
  */
 export async function deleteTrip(tripId) {
-    if (!confirm('Diese Fahrt wirklich löschen?')) return;
+    if (!confirm(t('logDeleteTripConfirm'))) return;
 
     try {
         const response = await fetch(`${getApiUrl()}/api/logbook/${tripId}`, { method: 'DELETE' });
         if (response.ok) {
             if (ui.showNotification) {
-                ui.showNotification('🗑️ Fahrt gelöscht', 'info');
+                ui.showNotification(t('logTripDeleted'), 'info');
             }
             loadArchivedTrips();
         }
     } catch (error) {
         if (ui.showNotification) {
-            ui.showNotification('Fehler beim Löschen', 'error');
+            ui.showNotification(t('logDeleteError'), 'error');
         }
     }
 }
@@ -1014,8 +1015,8 @@ function renderCrewManageList() {
         container.innerHTML = `
             <div style="text-align: center; padding: var(--space-2xl); color: var(--text-dim);">
                 <div style="font-size: 40px; margin-bottom: var(--space-md);">👥</div>
-                <div>Noch keine Crew-Mitglieder</div>
-                <div style="font-size: var(--fs-sm); margin-top: var(--space-xs);">Tippe auf "+ Hinzufügen"</div>
+                <div>${t('logNoCrewMembers')}</div>
+                <div style="font-size: var(--fs-sm); margin-top: var(--space-xs);">${t('logCrewTapAdd')}</div>
             </div>`;
         return;
     }
@@ -1066,7 +1067,7 @@ export function showCrewManageModal(member = null) {
         `).join('');
     }
 
-    if (title) title.textContent = member ? 'Crew-Mitglied bearbeiten' : 'Neues Crew-Mitglied';
+    if (title) title.textContent = member ? t('logEditCrew') : t('logAddCrew');
     modal.style.display = 'flex';
 }
 
@@ -1092,17 +1093,17 @@ export function editCrewMember(id) {
 export async function deleteCrewMemberConfirm(id) {
     const member = crewManageList.find(m => m.id === id);
     if (!member) return;
-    if (!confirm(`"${member.name}" wirklich löschen?`)) return;
+    if (!confirm(t('logCrewDeleteConfirm', { name: member.name }))) return;
 
     try {
         const response = await fetch(`${getApiUrl()}/api/crew/${id}`, { method: 'DELETE' });
         if (response.ok) {
             crewManageList = crewManageList.filter(m => m.id !== id);
             renderCrewManageList();
-            if (ui.showNotification) ui.showNotification('Crew-Mitglied gelöscht', 'info');
+            if (ui.showNotification) ui.showNotification(t('logCrewDeleted'), 'info');
         }
     } catch (error) {
-        if (ui.showNotification) ui.showNotification('Fehler beim Löschen', 'error');
+        if (ui.showNotification) ui.showNotification(t('logDeleteError'), 'error');
     }
 }
 
@@ -1114,7 +1115,7 @@ export async function submitCrewManageForm() {
     const editId = document.getElementById('crew-manage-form').dataset.editId;
 
     if (!name) {
-        if (ui.showNotification) ui.showNotification('Bitte Namen eingeben', 'warning');
+        if (ui.showNotification) ui.showNotification(t('logNameRequired'), 'warning');
         return;
     }
 
@@ -1138,11 +1139,11 @@ export async function submitCrewManageForm() {
         if (response.ok) {
             closeCrewManageModal();
             await loadCrewManagement();
-            if (ui.showNotification) ui.showNotification(editId ? 'Crew-Mitglied aktualisiert' : 'Crew-Mitglied hinzugefügt', 'success');
+            if (ui.showNotification) ui.showNotification(editId ? t('logCrewUpdated') : t('logCrewAdded'), 'success');
         } else {
-            if (ui.showNotification) ui.showNotification('Fehler beim Speichern', 'error');
+            if (ui.showNotification) ui.showNotification(t('logSaveError'), 'error');
         }
     } catch (error) {
-        if (ui.showNotification) ui.showNotification('Fehler beim Speichern', 'error');
+        if (ui.showNotification) ui.showNotification(t('logSaveError'), 'error');
     }
 }

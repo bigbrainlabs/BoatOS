@@ -5,6 +5,8 @@
  * Dieses Modul extrahiert UI-spezifische Funktionalitäten aus app.js
  */
 
+import { t } from './i18n.js';
+
 // ===========================================
 // Konstanten und State
 // ===========================================
@@ -32,26 +34,26 @@ const PANEL_IDS = [
     'layer-panel'
 ];
 
-// Layer-Konfiguration
+// Layer-Konfiguration (names resolved at runtime via t() for i18n)
 const LAYER_CONFIG = {
     seamark: {
         id: 'seamark-overlay',
-        name: 'Seezeichen (OpenSeaMap)',
+        get name() { return t('layerSeamarks'); },
         defaultVisible: true
     },
     inland: {
         id: 'inland-overlay',
-        name: 'Binnenschifffahrt',
+        get name() { return t('layerInland'); },
         defaultVisible: true
     },
     satellite: {
         id: 'satellite-layer',
-        name: 'Satellitenansicht',
+        get name() { return t('layerSatellite'); },
         defaultVisible: false
     },
     track: {
         id: 'track-line',
-        name: 'Track-Historie',
+        get name() { return t('layerTrack'); },
         defaultVisible: true
     }
 };
@@ -1014,16 +1016,16 @@ export async function showFavorites() {
         const favBtn = document.querySelector('.quick-action[onclick*="showFavorites"]');
         if (favBtn) favBtn.classList.remove('active');
 
-        showToast('Favoriten ausgeblendet', 'info');
+        showToast(t('layerFavoritesHidden'), 'info');
         return;
     }
 
     // Favoriten laden
-    showToast('Favoriten werden geladen...', 'info');
+    showToast(t('layerFavoritesLoading'), 'info');
     await loadFavorites();
 
     if (favorites.length === 0) {
-        showToast('Keine Favoriten vorhanden', 'warning');
+        showToast(t('layerFavoritesNone'), 'warning');
         return;
     }
 
@@ -1041,7 +1043,7 @@ export async function showFavorites() {
     const favBtn = document.querySelector('.quick-action[onclick*="showFavorites"]');
     if (favBtn) favBtn.classList.add('active');
 
-    showToast(`${favorites.length} Favoriten geladen`, 'success');
+    showToast(t('layerFavoritesLoaded'), 'success');
 }
 
 /**
@@ -1172,7 +1174,7 @@ function openFavoritesPanel() {
         align-items: center;
     `;
     header.innerHTML = `
-        <span style="color: #64ffda; font-weight: 600; font-size: 16px;">⭐ Favoriten (${favorites.length})</span>
+        <span style="color: #64ffda; font-weight: 600; font-size: 16px;">${t('layerFavoritesTitle')} (${favorites.length})</span>
         <button onclick="window.closeFavoritesPanel()" style="
             background: none; border: none; color: #ccd6f6;
             font-size: 20px; cursor: pointer; padding: 0;
@@ -1371,7 +1373,7 @@ export function showLogbookTab(tabId, tabElement) {
  */
 export function showSettingsTab(tabId, tabElement) {
     // Alle Settings-Sektionen verstecken
-    const sections = ['settings-general', 'settings-boat', 'settings-map', 'settings-nav', 'settings-ais', 'settings-charts', 'settings-gps', 'settings-data', 'settings-routing', 'settings-wifi'];
+    const sections = ['settings-general', 'settings-boat', 'settings-map', 'settings-nav', 'settings-ais', 'settings-charts', 'settings-gps', 'settings-data', 'settings-routing', 'settings-wifi', 'settings-system'];
     sections.forEach(id => {
         const section = document.getElementById(id);
         if (section) {
@@ -1524,7 +1526,7 @@ export function toggleLocks() {
         settingsToggle.classList.toggle('active', locksVisible);
     }
 
-    showToast(locksVisible ? '🚧 Schleusen eingeblendet' : '🚧 Schleusen ausgeblendet', 'info');
+    showToast(locksVisible ? t('layerLocksOn') : t('layerLocksOff'), 'info');
 }
 
 /**
@@ -1540,7 +1542,7 @@ export function togglePegel() {
         settingsToggle.classList.toggle('active', pegelVisible);
     }
 
-    showToast(pegelVisible ? '📊 Pegelstände eingeblendet' : '📊 Pegelstände ausgeblendet', 'info');
+    showToast(pegelVisible ? t('layerGaugesOn') : t('layerGaugesOff'), 'info');
 }
 
 /**
