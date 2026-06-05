@@ -6,12 +6,12 @@ set -euo pipefail
 SUDOERS_FILE=/etc/sudoers.d/boatos-update
 
 cat > "$SUDOERS_FILE" << 'EOF'
-arielle ALL=(ALL) NOPASSWD: /bin/systemctl restart boatos.service
-arielle ALL=(ALL) NOPASSWD: /bin/systemctl restart boatos-remote.service
-arielle ALL=(ALL) NOPASSWD: /bin/systemctl restart mosquitto
-arielle ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/mosquitto/conf.d/boatos.conf
-arielle ALL=(ALL) NOPASSWD: /sbin/reboot
-arielle ALL=(ALL) NOPASSWD: /sbin/shutdown
+boatos ALL=(ALL) NOPASSWD: /bin/systemctl restart boatos.service
+boatos ALL=(ALL) NOPASSWD: /bin/systemctl restart boatos-remote.service
+boatos ALL=(ALL) NOPASSWD: /bin/systemctl restart mosquitto
+boatos ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/mosquitto/conf.d/boatos.conf
+boatos ALL=(ALL) NOPASSWD: /sbin/reboot
+boatos ALL=(ALL) NOPASSWD: /sbin/shutdown
 EOF
 
 chmod 440 "$SUDOERS_FILE"

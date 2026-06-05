@@ -117,11 +117,11 @@ After=network.target
 
 [Service]
 Type=simple
-User=arielle
+User=boatos
 ExecStart=/usr/local/bin/osrm-routed \
   --algorithm=MLD \
   --port 5000 \
-  /home/arielle/BoatOS/data/osrm/germany-latest.osrm
+  /home/boatos/BoatOS/data/osrm/germany-latest.osrm
 Restart=always
 RestartSec=5
 StandardOutput=journal

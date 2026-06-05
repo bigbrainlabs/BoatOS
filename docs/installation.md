@@ -16,7 +16,7 @@ Alles ist vorkonfiguriert: Dienste, Karten, Routing, Flutter-App. Flashen, einsc
 
 ### Schritt 1 — Image herunterladen
 
-**[⬇️ Download v1.5.21 (archive.org, ~15 GB)](https://archive.org/download/boatos-distri-image/boatos_v1.5.21.img.gz)**
+**[⬇️ Download v1.6.1 (archive.org, ~15 GB)](https://archive.org/download/boatos-distri-image/boatos_v1.6.1.img.gz)**
 
 ### Schritt 2 — SD-Karte flashen
 

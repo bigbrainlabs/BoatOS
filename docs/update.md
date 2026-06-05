@@ -20,9 +20,9 @@ Für technisch versierte Nutzer oder wenn der Update-Button nicht funktioniert.
 ### Verbinden
 
 ```bash
-ssh arielle@boatos.local
+ssh boatos@boatos.local
 # oder mit IP:
-ssh arielle@<IP-Adresse>
+ssh boatos@<IP-Adresse>
 ```
 
 ### Update durchführen

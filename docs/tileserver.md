@@ -142,7 +142,7 @@ Dann den Service anpassen:
 ```bash
 sudo systemctl edit tileserver.service
 # ExecStart überschreiben:
-# ExecStart=/usr/local/bin/martin --listen-addresses 0.0.0.0:8081 /home/arielle/BoatOS/data/sachsen-anhalt.mbtiles
+# ExecStart=/usr/local/bin/martin --listen-addresses 0.0.0.0:8081 /home/boatos/BoatOS/data/sachsen-anhalt.mbtiles
 sudo systemctl restart tileserver.service
 ```
 
