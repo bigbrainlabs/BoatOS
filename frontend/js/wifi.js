@@ -3,6 +3,8 @@
  * WLAN-Netzwerke scannen, verbinden, verwalten via NetworkManager API
  */
 
+import { t } from './i18n.js';
+
 let _pendingSsid = null;
 let _pendingSecurity = null;
 let _statusInterval = null;
@@ -57,7 +59,7 @@ function _renderHotspotBanner(hotspot) {
         'padding:12px 14px;border-radius:8px;margin-bottom:12px;font-size:13px;line-height:1.6;';
     banner.innerHTML =
         `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">` +
-        `<span style="color:#FF9800;font-weight:700;">📡 Hotspot aktiv</span></div>` +
+        `<span style="color:#FF9800;font-weight:700;">${t('wifiHotspotActive')}</span></div>` +
         `<div class="hotspot-info" style="font-size:12px;color:#CCC;">${_hotspotInfoHtml(hotspot)}</div>`;
     const group = document.querySelector('#settings-wifi .setting-group');
     if (group) group.prepend(banner);
@@ -84,7 +86,7 @@ function renderStatus(data) {
         if (btnDis) btnDis.style.display = 'block';
     } else {
         dot.style.background = 'var(--text-dim)';
-        ssid.textContent = 'Nicht verbunden';
+        ssid.textContent = t('wifiNotConnected');
         ip.textContent   = '';
         bars.textContent = '';
         if (btnDis) btnDis.style.display = 'none';
@@ -107,9 +109,9 @@ export async function scan() {
     const list = document.getElementById('wifi-scan-list');
     if (!list) return;
 
-    btn.textContent = 'Scanne…';
+    btn.textContent = t('wifiScanning');
     btn.disabled = true;
-    list.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:8px 0">Suche Netzwerke…</div>';
+    list.innerHTML = `<div style="color:var(--text-dim);font-size:13px;padding:8px 0">${t('wifiSearching')}</div>`;
 
     try {
         const res  = await fetch('/api/wifi/scan');
@@ -118,7 +120,7 @@ export async function scan() {
     } catch (e) {
         list.innerHTML = '<div style="color:var(--danger);font-size:13px;">Scan fehlgeschlagen</div>';
     } finally {
-        btn.textContent = 'Netzwerke scannen';
+        btn.textContent = t('wifiScanBtn');
         btn.disabled = false;
     }
 }
@@ -128,22 +130,22 @@ function renderScanList(networks) {
     if (!list) return;
 
     if (networks.length === 0) {
-        list.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:8px 0">Keine Netzwerke gefunden</div>';
+        list.innerHTML = `<div style="color:var(--text-dim);font-size:13px;padding:8px 0">${t('wifiNoneFound')}</div>`;
         return;
     }
 
     list.innerHTML = networks.map(n => {
         const bars      = signalBars(n.signal);
         const lock      = n.security === 'wpa' && !n.saved ? ' 🔒' : '';
-        const savedTag  = n.saved ? ' <span style="color:var(--accent);font-size:10px;">💾 gespeichert</span>' : '';
-        const activeTag = n.in_use ? ' <span style="color:#2ecc71;font-size:11px;">● verbunden</span>' : '';
+        const savedTag  = n.saved ? ` <span style="color:var(--accent);font-size:10px;">${t('wifiSavedTag')}</span>` : '';
+        const activeTag = n.in_use ? ` <span style="color:#2ecc71;font-size:11px;">${t('wifiConnectedTag')}</span>` : '';
         const border    = n.in_use ? 'border-color:#2ecc71' : n.saved ? 'border-color:var(--accent)' : '';
         const forgetBtn = n.saved ? `
             <button onclick='BoatOS.wifi.forgetNetwork(${attrJson(n.uuid)}, ${attrJson(n.ssid)})'
                 title="Gespeichertes Profil löschen"
                 style="padding:6px 10px;background:transparent;color:var(--danger);border:1px solid var(--danger);
                        border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap;">
-                Vergessen
+                ${t('wifiForget')}
             </button>` : '';
         return `
         <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;
@@ -222,7 +224,7 @@ async function doConnect(ssid, password) {
             await Promise.all([loadStatus(), loadSaved(), scan()]);
         } else {
             msg.style.color = 'var(--danger)';
-            msg.textContent = `Fehler: ${data.message}`;
+            msg.textContent = t('wifiConnectError', { message: data.message });
         }
     } catch (e) {
         msg.style.color = 'var(--danger)';
@@ -241,7 +243,7 @@ export async function loadSaved() {
         const data = await res.json();
         renderSaved(data.networks || []);
     } catch (e) {
-        list.innerHTML = '<div style="color:var(--danger);font-size:13px;">Fehler beim Laden</div>';
+        list.innerHTML = `<div style="color:var(--danger);font-size:13px;">${t('wifiLoadError')}</div>`;
     }
 }
 
@@ -250,7 +252,7 @@ function renderSaved(networks) {
     if (!list) return;
 
     if (networks.length === 0) {
-        list.innerHTML = '<div style="color:var(--text-dim);font-size:13px;">Keine gespeicherten Netzwerke</div>';
+        list.innerHTML = `<div style="color:var(--text-dim);font-size:13px;">${t('wifiNoSaved')}</div>`;
         return;
     }
 
@@ -296,7 +298,7 @@ export async function connectSaved(name) {
             await loadSaved();
         } else {
             msg.style.color = 'var(--danger)';
-            msg.textContent = `Fehler: ${data.message}`;
+            msg.textContent = t('wifiConnectError', { message: data.message });
         }
     } catch (e) {
         msg.style.color = 'var(--danger)';
@@ -331,7 +333,7 @@ export async function startHotspot() {
         await loadStatus();
     } catch (e) { /* ignore */ }
     finally {
-        if (btn) { btn.disabled = false; btn.textContent = '📡 Hotspot starten'; }
+        if (btn) { btn.disabled = false; btn.textContent = t('wifiStartHotspot'); }
     }
 }
 

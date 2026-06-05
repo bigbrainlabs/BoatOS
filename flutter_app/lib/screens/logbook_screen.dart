@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:latlong2/latlong.dart';
 
+import '../l10n/l10n_ext.dart';
 import '../models/logbook_models.dart';
 import '../services/logbook_service.dart';
 import '../services/settings_service.dart';
@@ -77,22 +78,23 @@ class _LogbookScreenState extends State<LogbookScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final settings = context.watch<SettingsService>();
     return Scaffold(
       backgroundColor: _kBg,
       appBar: AppBar(
         backgroundColor: _kCard,
         elevation: 0,
-        title: const Text('Logbuch', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(l.logbookTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
         bottom: TabBar(
           controller: _tab,
           indicatorColor: _kPrimary,
           labelColor: _kPrimary,
           unselectedLabelColor: _kMuted,
-          tabs: const [
-            Tab(icon: Icon(Icons.anchor), text: 'Fahrt'),
-            Tab(icon: Icon(Icons.list_alt), text: 'Archiv'),
-            Tab(icon: Icon(Icons.people), text: 'Crew'),
+          tabs: [
+            Tab(icon: const Icon(Icons.anchor), text: l.logbookTabTrip),
+            Tab(icon: const Icon(Icons.list_alt), text: l.logbookTabArchive),
+            Tab(icon: const Icon(Icons.people), text: l.logbookTabCrew),
           ],
         ),
       ),
@@ -163,64 +165,72 @@ class _TripTabState extends State<_TripTab> {
   }
 
   void _confirmStop(BuildContext context, LogbookService svc) {
+    final l = context.l10n;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _kCard,
-        title: const Text('Fahrt beenden?'),
-        content: const Text('Die Aufzeichnung wird gestoppt und gespeichert.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Abbrechen')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final ok = await svc.stopTrip();
-              if (!ok && context.mounted) _showSnack(context, 'Stop fehlgeschlagen');
-            },
-            child: const Text('Beenden'),
-          ),
-        ],
-      ),
+      builder: (ctx) {
+        final lCtx = ctx.l10n;
+        return AlertDialog(
+          backgroundColor: _kCard,
+          title: Text(lCtx.logbookEndTripTitle),
+          content: Text(lCtx.logbookEndTripBody),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(lCtx.btnCancel)),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final ok = await svc.stopTrip();
+                if (!ok && context.mounted) _showSnack(context, l.logbookStopFailed);
+              },
+              child: Text(lCtx.btnEnd),
+            ),
+          ],
+        );
+      },
     );
   }
 
   void _addNote(BuildContext context, LogbookService svc) {
+    final l = context.l10n;
     final ctrl = TextEditingController();
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _kCard,
-        title: const Text('Notiz hinzufügen'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          maxLines: 3,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
-            hintText: 'Notiz...',
-            hintStyle: TextStyle(color: _kMuted),
-            border: OutlineInputBorder(),
-            enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _kBorder)),
-            focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: _kPrimary)),
+      builder: (ctx) {
+        final lCtx = ctx.l10n;
+        return AlertDialog(
+          backgroundColor: _kCard,
+          title: Text(lCtx.logbookAddNote),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            maxLines: 3,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: lCtx.logbookNoteHint,
+              hintStyle: const TextStyle(color: _kMuted),
+              border: const OutlineInputBorder(),
+              enabledBorder: const OutlineInputBorder(borderSide: BorderSide(color: _kBorder)),
+              focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: _kPrimary)),
+            ),
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Abbrechen')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.black87),
-            onPressed: () async {
-              final text = ctrl.text.trim();
-              Navigator.pop(ctx);
-              if (text.isNotEmpty) {
-                final ok = await svc.addManualEntry(text);
-                if (!ok && context.mounted) _showSnack(context, 'Notiz konnte nicht gespeichert werden');
-              }
-            },
-            child: const Text('Speichern'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(lCtx.btnCancel)),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.black87),
+              onPressed: () async {
+                final text = ctrl.text.trim();
+                Navigator.pop(ctx);
+                if (text.isNotEmpty) {
+                  final ok = await svc.addManualEntry(text);
+                  if (!ok && context.mounted) _showSnack(context, l.logbookNoteSaveFailed);
+                }
+              },
+              child: Text(lCtx.btnSave),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -265,6 +275,7 @@ class _IdleView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -273,8 +284,8 @@ class _IdleView extends StatelessWidget {
           children: [
             Icon(Icons.anchor, size: 80, color: _kMuted.withAlpha(80)),
             const SizedBox(height: 24),
-            const Text('Keine aktive Fahrtaufzeichnung',
-                style: TextStyle(fontSize: 18, color: _kMuted), textAlign: TextAlign.center),
+            Text(l.logbookNoActiveTrip,
+                style: const TextStyle(fontSize: 18, color: _kMuted), textAlign: TextAlign.center),
             const SizedBox(height: 32),
             SizedBox(
               width: 220,
@@ -286,8 +297,8 @@ class _IdleView extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: const Icon(Icons.play_arrow),
-                label: const Text('Fahrt starten',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                label: Text(l.logbookStartTrip,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 onPressed: onStart,
               ),
             ),
@@ -321,6 +332,7 @@ class _RecordingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -334,10 +346,10 @@ class _RecordingView extends StatelessWidget {
               spacing: 12,
               runSpacing: 8,
               children: [
-                _StatChip(label: 'Distanz', value: distStr, width: w),
-                _StatChip(label: 'Dauer', value: elapsedStr, width: w),
-                _StatChip(label: 'Punkte', value: status.points.toString(), width: w),
-                _StatChip(label: 'Ø Geschw.', value: speedStr, width: w),
+                _StatChip(label: l.logbookDistance, value: distStr, width: w),
+                _StatChip(label: l.logbookDuration, value: elapsedStr, width: w),
+                _StatChip(label: l.logbookPoints, value: status.points.toString(), width: w),
+                _StatChip(label: l.logbookAvgSpeed, value: speedStr, width: w),
               ],
             );
           }),
@@ -353,7 +365,7 @@ class _RecordingView extends StatelessWidget {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   icon: Icon(status.paused ? Icons.play_arrow : Icons.pause),
-                  label: Text(status.paused ? 'Weiter' : 'Pause'),
+                  label: Text(status.paused ? l.logbookResume : l.logbookPause),
                   onPressed: status.paused ? onResume : onPause,
                 ),
               ),
@@ -367,7 +379,7 @@ class _RecordingView extends StatelessWidget {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   icon: const Icon(Icons.stop),
-                  label: const Text('Fahrt beenden'),
+                  label: Text(l.logbookEndTrip),
                   onPressed: onStop,
                 ),
               ),
@@ -377,7 +389,7 @@ class _RecordingView extends StatelessWidget {
           TextButton.icon(
             style: TextButton.styleFrom(foregroundColor: _kMuted),
             icon: const Icon(Icons.edit_note, size: 18),
-            label: const Text('Notiz hinzufügen'),
+            label: Text(l.logbookAddNote),
             onPressed: onAddNote,
           ),
         ],
@@ -393,8 +405,9 @@ class _StatusHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final color = paused ? Colors.orange : Colors.green;
-    final label = paused ? 'Pausiert' : 'Aufzeichnung läuft';
+    final label = paused ? l.logbookPaused : l.logbookRecording;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -461,6 +474,7 @@ class _CrewSelectionSheetState extends State<_CrewSelectionSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final crew = context.watch<LogbookService>().crew;
     return Padding(
       padding: EdgeInsets.only(
@@ -471,16 +485,16 @@ class _CrewSelectionSheetState extends State<_CrewSelectionSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Crew für diese Fahrt',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(l.logbookCrewForTrip,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          const Text('Optional — kann leer bleiben',
-              style: TextStyle(fontSize: 12, color: _kMuted)),
+          Text(l.logbookCrewOptional,
+              style: const TextStyle(fontSize: 12, color: _kMuted)),
           const SizedBox(height: 12),
           if (crew.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('Keine Crew-Mitglieder vorhanden.', style: TextStyle(color: _kMuted)),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(l.logbookNoCrewAvailable, style: const TextStyle(color: _kMuted)),
             )
           else
             ...crew.map((m) => CheckboxListTile(
@@ -506,7 +520,7 @@ class _CrewSelectionSheetState extends State<_CrewSelectionSheet> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             icon: const Icon(Icons.play_arrow),
-            label: const Text('Fahrt starten', style: TextStyle(fontWeight: FontWeight.bold)),
+            label: Text(l.logbookStartTrip, style: const TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () {
               Navigator.pop(context);
               widget.onStart(_selected.toList());
@@ -527,6 +541,7 @@ class _ArchiveTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final svc = context.watch<LogbookService>();
 
     if (svc.loadingTrips) {
@@ -540,7 +555,7 @@ class _ArchiveTab extends StatelessWidget {
           children: [
             Icon(Icons.list_alt, size: 64, color: _kMuted.withAlpha(80)),
             const SizedBox(height: 16),
-            const Text('Keine Fahrten gespeichert', style: TextStyle(color: _kMuted)),
+            Text(l.logbookNoTrips, style: const TextStyle(color: _kMuted)),
           ],
         ),
       );
@@ -587,6 +602,7 @@ class _TripCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -616,7 +632,7 @@ class _TripCard extends StatelessWidget {
               const SizedBox(width: 14),
               const Icon(Icons.location_on, size: 13, color: _kMuted),
               const SizedBox(width: 4),
-              Text('$points Punkte', style: const TextStyle(color: _kMuted, fontSize: 13)),
+              Text('$points ${l.logbookPoints}', style: const TextStyle(color: _kMuted, fontSize: 13)),
             ]),
           ],
         ),
@@ -654,12 +670,13 @@ class _TripDetailSheetState extends State<_TripDetailSheet> {
   }
 
   Future<void> _downloadGpx(BuildContext context, int tripId) async {
+    final l = context.l10n;
     final svc = context.read<LogbookService>();
     final path = await svc.downloadGpx(tripId);
     if (!mounted) return;
     _showSnack(context, path != null
-        ? 'GPX gespeichert: $path'
-        : 'GPX-Export fehlgeschlagen');
+        ? l.logbookGpxSaved(path)
+        : l.logbookGpxFailed);
   }
 
   double? _maxSpeed(List<TrackPoint> pts) {
@@ -679,6 +696,7 @@ class _TripDetailSheetState extends State<_TripDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final crew = context.watch<LogbookService>().crew;
 
     return DraggableScrollableSheet(
@@ -691,7 +709,7 @@ class _TripDetailSheetState extends State<_TripDetailSheet> {
           return const Center(child: CircularProgressIndicator(color: _kPrimary));
         }
         if (_detail == null) {
-          return const Center(child: Text('Fehler beim Laden.', style: TextStyle(color: _kMuted)));
+          return Center(child: Text(l.logbookLoadError, style: const TextStyle(color: _kMuted)));
         }
         final d = _detail!;
         final startEntry = d.entries.where((e) => e.type == 'trip_start').firstOrNull;
@@ -729,7 +747,7 @@ class _TripDetailSheetState extends State<_TripDetailSheet> {
                     padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
                   icon: const Icon(Icons.map_outlined, size: 16),
-                  label: const Text('Auf Karte', style: TextStyle(fontSize: 13)),
+                  label: Text(l.logbookOnMap, style: const TextStyle(fontSize: 13)),
                   onPressed: () {
                     final points = d.trackData
                         .map((p) => LatLng(p.lat, p.lon))
@@ -754,7 +772,7 @@ class _TripDetailSheetState extends State<_TripDetailSheet> {
             const SizedBox(height: 16),
 
             if (d.crewIds.isNotEmpty) ...[
-              _SectionHeader('Crew'),
+              _SectionHeader(l.logbookTabCrew),
               Wrap(
                 spacing: 8, runSpacing: 8,
                 children: d.crewIds.map((id) {
@@ -775,33 +793,33 @@ class _TripDetailSheetState extends State<_TripDetailSheet> {
             ],
 
             if (startEntry?.weather != null) ...[
-              _SectionHeader('Wetter (Start)'),
+              _SectionHeader(l.logbookWeatherStart),
               _WeatherBlock(weather: startEntry!.weather!, isKmh: widget.isKmh),
               const SizedBox(height: 16),
             ],
 
             if (startEntry?.pegelNearby != null && startEntry!.pegelNearby!.isNotEmpty) ...[
-              _SectionHeader('Pegelstände'),
+              _SectionHeader(l.logbookWaterLevels),
               _PegelBlock(pegel: startEntry.pegelNearby!),
               const SizedBox(height: 16),
             ],
 
             if (maxSpd != null || avgSpd != null) ...[
-              _SectionHeader('Statistiken'),
+              _SectionHeader(l.logbookStats),
               Row(children: [
                 if (maxSpd != null)
                   Expanded(child: _DetailStat(
-                      label: 'Max Speed', value: _speedStr(maxSpd, widget.isKmh))),
+                      label: l.logbookMaxSpeed, value: _speedStr(maxSpd, widget.isKmh))),
                 if (maxSpd != null && avgSpd != null) const SizedBox(width: 10),
                 if (avgSpd != null)
                   Expanded(child: _DetailStat(
-                      label: 'Ø Speed', value: _speedStr(avgSpd, widget.isKmh))),
+                      label: l.logbookAvgSpeedStat, value: _speedStr(avgSpd, widget.isKmh))),
               ]),
               const SizedBox(height: 16),
             ],
 
             if (d.entries.isNotEmpty) ...[
-              _SectionHeader('Logeinträge'),
+              _SectionHeader(l.logbookEntries),
               () {
                 final start = d.entries.where((e) => e.type == 'trip_start').firstOrNull;
                 final end   = d.entries.where((e) => e.type == 'trip_end').firstOrNull;
@@ -946,10 +964,11 @@ class _StartEndChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final isStart = entry.type == 'trip_start';
     final color   = isStart ? Colors.green : Colors.red;
     final icon    = isStart ? Icons.play_circle : Icons.stop_circle;
-    final label   = isStart ? 'Start' : 'Ende';
+    final label   = isStart ? l.logbookStart : l.logbookEnd;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -982,17 +1001,18 @@ class _LogEntryTile extends StatelessWidget {
     _             => const Icon(Icons.circle, color: Colors.grey, size: 20),
   };
 
-  String _typeLabel(String type) => switch (type) {
-    'trip_start'  => 'Start',
-    'trip_end'    => 'Ende',
-    'trip_pause'  => 'Pause',
-    'trip_resume' => 'Weiterfahrt',
-    'manual'      => 'Notiz',
+  String _typeLabel(String type, AppLocalizations l) => switch (type) {
+    'trip_start'  => l.logbookStart,
+    'trip_end'    => l.logbookEnd,
+    'trip_pause'  => l.logbookPause,
+    'trip_resume' => l.logbookContinue,
+    'manual'      => l.logbookNote,
     _ => type,
   };
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
@@ -1004,7 +1024,7 @@ class _LogEntryTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(children: [
-                Text(_typeLabel(entry.type),
+                Text(_typeLabel(entry.type, l),
                     style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                 const Spacer(),
                 Text(_fmtTime(entry.timestamp),
@@ -1031,6 +1051,7 @@ class _CrewTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final svc = context.watch<LogbookService>();
 
     if (svc.loadingCrew) {
@@ -1043,7 +1064,7 @@ class _CrewTab extends StatelessWidget {
           ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.people, size: 64, color: _kMuted.withAlpha(80)),
               const SizedBox(height: 16),
-              const Text('Keine Crew-Mitglieder', style: TextStyle(color: _kMuted)),
+              Text(l.crewEmpty, style: const TextStyle(color: _kMuted)),
             ]))
           : ListView.builder(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
@@ -1081,6 +1102,7 @@ class _CrewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final svc = context.read<LogbookService>();
     return GestureDetector(
       onTap: () => _openEdit(context),
@@ -1099,7 +1121,7 @@ class _CrewCard extends StatelessWidget {
             Text(member.name,
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 2),
-            Text('${member.trips} Fahrten',
+            Text('${member.trips} ${l.logbookTripsCount}',
                 style: const TextStyle(fontSize: 12, color: _kMuted)),
           ])),
           Container(
@@ -1128,23 +1150,26 @@ class _CrewCard extends StatelessWidget {
   void _confirmDelete(BuildContext context, LogbookService svc) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _kCard,
-        title: Text('${member.name} löschen?'),
-        content: const Text('Crew-Mitglied wird entfernt.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Abbrechen')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final ok = await svc.deleteCrewMember(member.id);
-              if (!ok && ctx.mounted) _showSnack(ctx, 'Löschen fehlgeschlagen');
-            },
-            child: const Text('Löschen'),
-          ),
-        ],
-      ),
+      builder: (ctx) {
+        final lCtx = ctx.l10n;
+        return AlertDialog(
+          backgroundColor: _kCard,
+          title: Text(lCtx.crewDeleteTitle(member.name)),
+          content: Text(lCtx.crewDeleteBody),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(lCtx.btnCancel)),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final ok = await svc.deleteCrewMember(member.id);
+                if (!ok && ctx.mounted) _showSnack(ctx, lCtx.crewDeleteFailed);
+              },
+              child: Text(lCtx.btnDelete),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -1186,6 +1211,7 @@ class _CrewModalState extends State<_CrewModal> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final isEdit = widget.member != null;
     return Padding(
       padding: EdgeInsets.only(
@@ -1199,11 +1225,11 @@ class _CrewModalState extends State<_CrewModal> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(isEdit ? 'Crew bearbeiten' : 'Crew hinzufügen',
+              Text(isEdit ? l.crewEditTitle : l.crewAddTitle,
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
 
-              const Text('Avatar', style: TextStyle(fontSize: 12, color: _kMuted)),
+              Text(l.crewAvatar, style: const TextStyle(fontSize: 12, color: _kMuted)),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8, runSpacing: 8,
@@ -1228,8 +1254,8 @@ class _CrewModalState extends State<_CrewModal> {
               TextFormField(
                 controller: _name,
                 style: const TextStyle(color: Colors.white),
-                decoration: _fieldDeco('Name *'),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Name erforderlich' : null,
+                decoration: _fieldDeco(l.crewName),
+                validator: (v) => (v == null || v.trim().isEmpty) ? l.crewNameRequired : null,
               ),
               const SizedBox(height: 12),
 
@@ -1237,7 +1263,7 @@ class _CrewModalState extends State<_CrewModal> {
                 value: _role,
                 dropdownColor: _kCard,
                 style: const TextStyle(color: Colors.white),
-                decoration: _fieldDeco('Rolle'),
+                decoration: _fieldDeco(l.crewRole),
                 items: ['Captain', 'Crew', 'Guest']
                     .map((r) => DropdownMenuItem(value: r, child: Text(r)))
                     .toList(),
@@ -1248,7 +1274,7 @@ class _CrewModalState extends State<_CrewModal> {
               TextFormField(
                 controller: _email,
                 style: const TextStyle(color: Colors.white),
-                decoration: _fieldDeco('E-Mail (optional)'),
+                decoration: _fieldDeco(l.crewEmail),
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 12),
@@ -1256,7 +1282,7 @@ class _CrewModalState extends State<_CrewModal> {
               TextFormField(
                 controller: _phone,
                 style: const TextStyle(color: Colors.white),
-                decoration: _fieldDeco('Telefon (optional)'),
+                decoration: _fieldDeco(l.crewPhone),
                 keyboardType: TextInputType.phone,
               ),
               const SizedBox(height: 20),
@@ -1272,7 +1298,7 @@ class _CrewModalState extends State<_CrewModal> {
                 child: _saving
                     ? const SizedBox(width: 20, height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2))
-                    : Text(isEdit ? 'Speichern' : 'Hinzufügen',
+                    : Text(isEdit ? l.btnSave : l.btnAdd,
                         style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
@@ -1309,7 +1335,7 @@ class _CrewModalState extends State<_CrewModal> {
     if (mounted) {
       setState(() => _saving = false);
       if (ok) Navigator.pop(context);
-      else _showSnack(context, 'Speichern fehlgeschlagen');
+      else _showSnack(context, context.l10n.crewDeleteFailed);
     }
   }
 }

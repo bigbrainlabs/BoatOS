@@ -10,6 +10,7 @@
  */
 
 // ==================== IMPORTS ====================
+import { t } from './i18n.js';
 // Diese Variablen müssen aus dem Hauptmodul importiert werden
 // import { map, currentPosition, API_URL } from './core.js';
 
@@ -355,19 +356,19 @@ function closeAISDetails() {
  */
 function getNavstatText(navstat) {
     const statuses = {
-        0: "In Fahrt mit Motor",
-        1: "Vor Anker",
-        2: "Manövrierunfähig",
-        3: "Manövrierbeschränkt",
-        4: "Durch Tiefgang beschränkt",
-        5: "Vertäut",
-        6: "Auf Grund",
-        7: "Beim Fischen",
-        8: "In Fahrt unter Segel",
-        14: "AIS-SART aktiv",
-        15: "Undefiniert"
+        0: t('aisNavstatEngine'),
+        1: t('aisNavstatAnchor'),
+        2: t('aisNavstatNUC'),
+        3: t('aisNavstatRestricted'),
+        4: t('aisNavstatDraught'),
+        5: t('aisNavstatMoored'),
+        6: t('aisNavstatAground'),
+        7: t('aisNavstatFishing'),
+        8: t('aisNavstatSailing'),
+        14: t('aisNavstatSART'),
+        15: t('aisNavstatUndefined')
     };
-    return statuses[navstat] || "Unbekannt";
+    return statuses[navstat] || t('aisNavstatUndefined');
 }
 
 /**
@@ -376,17 +377,17 @@ function getNavstatText(navstat) {
  * @returns {string} Beschreibung des Schiffstyps
  */
 function getShipTypeText(type) {
-    if (type == 0) return "Unbekannt";
-    if (type >= 20 && type <= 29) return "Bodeneffektfahrzeug";
-    if (type == 30) return "Fischereifahrzeug";
-    if (type >= 31 && type <= 32) return "Schlepper";
-    if (type == 36) return "Segelboot";
-    if (type == 37) return "Sportboot";
-    if (type >= 40 && type <= 49) return "Hochgeschwindigkeitsfahrzeug";
-    if (type >= 60 && type <= 69) return "Passagierschiff";
-    if (type >= 70 && type <= 79) return "Frachtschiff";
-    if (type >= 80 && type <= 89) return "Tankschiff";
-    return "Sonstiges";
+    if (type == 0) return t('aisNavstatUndefined');
+    if (type >= 20 && type <= 29) return t('aisTypeWIG');
+    if (type == 30) return t('aisTypeFishing');
+    if (type >= 31 && type <= 32) return t('aisTypeTug');
+    if (type == 36) return t('aisTypeSailboat');
+    if (type == 37) return t('aisTypePleasure');
+    if (type >= 40 && type <= 49) return t('aisTypeHSC');
+    if (type >= 60 && type <= 69) return t('aisTypePassenger');
+    if (type >= 70 && type <= 79) return t('aisTypeCargo');
+    if (type >= 80 && type <= 89) return t('aisTypeTanker');
+    return t('aisTypeOther');
 }
 
 /**
@@ -502,11 +503,11 @@ function updateInfrastructureMarkers(pois) {
  */
 function createInfrastructureElement(type) {
     const icons = {
-        'lock': '\uD83D\uDD12',     // Schloss-Emoji
-        'bridge': '\uD83C\uDF09',   // Brücken-Emoji
-        'harbor': '\u2693',         // Anker-Emoji
-        'weir': '\u3030\uFE0F',     // Wellen-Emoji
-        'dam': '\uD83C\uDFD7\uFE0F' // Baustellen-Emoji
+        'lock': '🔒',     // Schloss-Emoji
+        'bridge': '🌉',   // Brücken-Emoji
+        'harbor': '⚓',         // Anker-Emoji
+        'weir': '〰️',     // Wellen-Emoji
+        'dam': '🏗️' // Baustellen-Emoji
     };
 
     const colors = {
@@ -517,7 +518,7 @@ function createInfrastructureElement(type) {
         'dam': '#f39c12'
     };
 
-    const emoji = icons[type] || '\uD83D\uDCCD'; // Standard: Pin
+    const emoji = icons[type] || '📍'; // Standard: Pin
     const color = colors[type] || '#95a5a6';
 
     const el = document.createElement('div');
@@ -535,11 +536,11 @@ function createInfrastructureElement(type) {
  */
 function createInfrastructurePopup(poi) {
     const typeNames = {
-        'lock': '\uD83D\uDD12 Schleuse',
-        'bridge': '\uD83C\uDF09 Brücke',
-        'harbor': '\u2693 Hafen',
-        'weir': '\u3030\uFE0F Wehr',
-        'dam': '\uD83C\uDFD7\uFE0F Damm'
+        'lock': t('infraLock'),
+        'bridge': t('infraBridge'),
+        'harbor': t('infraHarbor'),
+        'weir': t('infraWeir'),
+        'dam': t('infraDam')
     };
 
     let html = `<div style="min-width: 150px;">
@@ -548,16 +549,16 @@ function createInfrastructurePopup(poi) {
 
     // Wichtige Eigenschaften hinzufügen
     if (poi.properties.height) {
-        html += `<p style="margin: 4px 0; font-size: 12px;">Höhe: ${poi.properties.height}</p>`;
+        html += `<p style="margin: 4px 0; font-size: 12px;">${t('infraHeight')}: ${poi.properties.height}</p>`;
     }
     if (poi.properties.clearance_height || poi.properties.max_height) {
-        html += `<p style="margin: 4px 0; font-size: 12px;">Durchfahrtshöhe: ${poi.properties.clearance_height || poi.properties.max_height}</p>`;
+        html += `<p style="margin: 4px 0; font-size: 12px;">${t('infraClearance')}: ${poi.properties.clearance_height || poi.properties.max_height}</p>`;
     }
     if (poi.properties.length) {
-        html += `<p style="margin: 4px 0; font-size: 12px;">Länge: ${poi.properties.length}</p>`;
+        html += `<p style="margin: 4px 0; font-size: 12px;">${t('infraLength')}: ${poi.properties.length}</p>`;
     }
     if (poi.properties.vhf_channel) {
-        html += `<p style="margin: 4px 0; font-size: 12px;">VHF: ${poi.properties.vhf_channel}</p>`;
+        html += `<p style="margin: 4px 0; font-size: 12px;">${t('infraVHF')}: ${poi.properties.vhf_channel}</p>`;
     }
 
     html += `</div>`;
@@ -573,11 +574,11 @@ async function showInfrastructureDetails(poi) {
     if (!panel) return;
 
     const typeNames = {
-        'lock': '\uD83D\uDD12 Schleuse',
-        'bridge': '\uD83C\uDF09 Brücke',
-        'harbor': '\u2693 Hafen/Marina',
-        'weir': '\u3030\uFE0F Wehr',
-        'dam': '\uD83C\uDFD7\uFE0F Damm'
+        'lock': t('infraLock'),
+        'bridge': t('infraBridge'),
+        'harbor': t('infraHarborMarina'),
+        'weir': t('infraWeir'),
+        'dam': t('infraDam')
     };
 
     // Titel aktualisieren
@@ -597,7 +598,7 @@ async function showInfrastructureDetails(poi) {
     if (props.operator) {
         detailsHtml += `
             <div class="info-item" style="grid-column: span 2;">
-                <div class="info-label">Betreiber</div>
+                <div class="info-label">${t('infraOperator')}</div>
                 <div class="info-value">${escapeHTML(props.operator)}</div>
             </div>
         `;
@@ -630,8 +631,8 @@ async function showInfrastructureDetails(poi) {
         if (lockStatus) {
             const isOpen = lockStatus.is_open;
             const statusColor = isOpen ? '#2ecc71' : '#e74c3c';
-            const statusIcon = isOpen ? '\u2705' : '\uD83D\uDD12';
-            const statusText = isOpen ? 'OFFEN' : 'GESCHLOSSEN';
+            const statusIcon = isOpen ? '✅' : '🔒';
+            const statusText = isOpen ? t('infraOpen') : t('infraClosed');
 
             detailsHtml += `
                 <div class="info-item" style="grid-column: span 2;">
@@ -646,12 +647,12 @@ async function showInfrastructureDetails(poi) {
                         ` : ''}
                         ${!isOpen && lockStatus.opens_at ? `
                             <div style="font-size: 11px; color: #64ffda; margin-top: 6px; font-weight: 600;">
-                                Öffnet um: ${escapeHTML(lockStatus.opens_at)}
+                                ${t('infraOpensAt')} ${escapeHTML(lockStatus.opens_at)}
                             </div>
                         ` : ''}
                         ${isOpen && lockStatus.closes_at ? `
                             <div style="font-size: 11px; color: #ffa07a; margin-top: 6px;">
-                                Schließt um: ${escapeHTML(lockStatus.closes_at)}
+                                ${t('infraClosesAt')} ${escapeHTML(lockStatus.closes_at)}
                             </div>
                         ` : ''}
                     </div>
@@ -660,14 +661,14 @@ async function showInfrastructureDetails(poi) {
         }
 
         if (props.height) detailsHtml += `<div class="info-item"><div class="info-label">Hubhöhe</div><div class="info-value">${props.height}</div></div>`;
-        if (props.length) detailsHtml += `<div class="info-item"><div class="info-label">Länge</div><div class="info-value">${props.length}</div></div>`;
-        if (props.width) detailsHtml += `<div class="info-item"><div class="info-label">Breite</div><div class="info-value">${props.width}</div></div>`;
+        if (props.length) detailsHtml += `<div class="info-item"><div class="info-label">${t('infraLength')}</div><div class="info-value">${props.length}</div></div>`;
+        if (props.width) detailsHtml += `<div class="info-item"><div class="info-label">${t('infraWidth')}</div><div class="info-value">${props.width}</div></div>`;
         if (props.lock_type) detailsHtml += `<div class="info-item"><div class="info-label">Typ</div><div class="info-value">${props.lock_type}</div></div>`;
     }
 
     if (poi.type === 'bridge') {
-        if (props.clearance_height) detailsHtml += `<div class="info-item"><div class="info-label">Durchfahrtshöhe</div><div class="info-value">${props.clearance_height}</div></div>`;
-        if (props.max_height) detailsHtml += `<div class="info-item"><div class="info-label">Max. Höhe</div><div class="info-value">${props.max_height}</div></div>`;
+        if (props.clearance_height) detailsHtml += `<div class="info-item"><div class="info-label">${t('infraClearance')}</div><div class="info-value">${props.clearance_height}</div></div>`;
+        if (props.max_height) detailsHtml += `<div class="info-item"><div class="info-label">${t('infraMaxHeight')}</div><div class="info-value">${props.max_height}</div></div>`;
         if (props.structure) detailsHtml += `<div class="info-item"><div class="info-label">Bauart</div><div class="info-value">${props.structure}</div></div>`;
         if (props.movable) detailsHtml += `<div class="info-item"><div class="info-label">Beweglich</div><div class="info-value">${props.movable === 'yes' ? 'Ja' : 'Nein'}</div></div>`;
     }
@@ -680,19 +681,19 @@ async function showInfrastructureDetails(poi) {
     }
 
     if (props.opening_hours) {
-        detailsHtml += `<div class="info-item" style="grid-column: span 2;"><div class="info-label">Öffnungszeiten</div><div class="info-value">${props.opening_hours}</div></div>`;
+        detailsHtml += `<div class="info-item" style="grid-column: span 2;"><div class="info-label">${t('infraHours')}</div><div class="info-value">${props.opening_hours}</div></div>`;
     }
 
     if (props.vhf_channel) {
-        detailsHtml += `<div class="info-item"><div class="info-label">VHF Kanal</div><div class="info-value">${props.vhf_channel}</div></div>`;
+        detailsHtml += `<div class="info-item"><div class="info-label">${t('infraVHF')}</div><div class="info-value">${props.vhf_channel}</div></div>`;
     }
 
     if (props.phone) {
-        detailsHtml += `<div class="info-item"><div class="info-label">Telefon</div><div class="info-value">${props.phone}</div></div>`;
+        detailsHtml += `<div class="info-item"><div class="info-label">${t('infraPhone')}</div><div class="info-value">${props.phone}</div></div>`;
     }
 
     if (props.website) {
-        detailsHtml += `<div class="info-item" style="grid-column: span 2;"><div class="info-label">Website</div><div class="info-value"><a href="${props.website}" target="_blank" style="color: #64ffda;">${props.website}</a></div></div>`;
+        detailsHtml += `<div class="info-item" style="grid-column: span 2;"><div class="info-label">${t('infraWebsite')}</div><div class="info-value"><a href="${props.website}" target="_blank" style="color: #64ffda;">${props.website}</a></div></div>`;
     }
 
     // Position
@@ -818,7 +819,7 @@ function updateWaterLevelMarkers(gauges) {
             marker.setLngLat([gauge.lon, gauge.lat]); // MapLibre verwendet [lon, lat]
             // Wasserstand-Text aktualisieren
             if (element) {
-                element.innerHTML = `\uD83D\uDCCA ${gauge.water_level_cm} cm`;
+                element.innerHTML = `📊 ${gauge.water_level_cm} cm`;
             }
             waterLevelGauges[gauge.id].data = gauge;
         } else {
@@ -859,7 +860,7 @@ function createWaterLevelElement(gauge) {
     el.className = 'water-level-icon';
     el.title = gauge.name;
     el.style.cssText = 'background: rgba(10, 14, 39, 0.95); border: 2px solid #3498db; border-radius: 8px; padding: 4px 8px; font-size: 11px; font-weight: bold; color: #64ffda; text-align: center; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.4); cursor: pointer;';
-    el.innerHTML = `\uD83D\uDCCA ${level} cm`;
+    el.innerHTML = `📊 ${level} cm`;
 
     return el;
 }
@@ -875,10 +876,10 @@ function createWaterLevelPopup(gauge) {
 
     return `
         <div style="min-width: 200px;">
-            <h4 style="margin: 0 0 8px 0; color: #2c3e50;">\uD83D\uDCCA Pegel</h4>
+            <h4 style="margin: 0 0 8px 0; color: #2c3e50;">📊 ${t('gaugesTitle')}</h4>
             <p style="margin: 0; font-weight: 600;">${escapeHTML(gauge.name)}</p>
-            <p style="margin: 4px 0; font-size: 12px;"><strong>Gewässer:</strong> ${escapeHTML(gauge.water)}</p>
-            <p style="margin: 4px 0; font-size: 14px; color: #3498db;"><strong>Wasserstand:</strong> ${gauge.water_level_m} m (${gauge.water_level_cm} cm)</p>
+            <p style="margin: 4px 0; font-size: 12px;"><strong>${t('gaugeWater')}</strong> ${escapeHTML(gauge.water)}</p>
+            <p style="margin: 4px 0; font-size: 14px; color: #3498db;"><strong>${t('gaugeLevel')}</strong> ${gauge.water_level_m} m (${gauge.water_level_cm} cm)</p>
             <p style="margin: 4px 0; font-size: 11px; color: #7f8c8d;">${timeStr}</p>
         </div>
     `;
@@ -1030,7 +1031,7 @@ function displayLocksTimeline() {
 
     let html = `
         <div style="font-size: 13px; color: #8892b0; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; font-weight: 700;">
-            \uD83D\uDD12 Schleusen auf Route (${locksOnRoute.length})
+            🔒 ${t('navLocksOnRoute')} (${locksOnRoute.length})
         </div>
     `;
 
@@ -1064,7 +1065,7 @@ function displayLocksTimeline() {
             : `${distanceNM.toFixed(1)} NM`;
 
         // Schleusenname
-        const lockName = lock.name || `Schleuse ${index + 1}`;
+        const lockName = lock.name || t('infraLockName', { n: index + 1 });
 
         // Prüfen ob Warnung für diese Schleuse existiert
         const warning = lockWarnings.find(w => w.lock_id === lock.id);
@@ -1076,38 +1077,38 @@ function displayLocksTimeline() {
         if (warning && !isPassed) {
             // Schleuse wird bei Ankunft geschlossen sein
             statusColor = '#e74c3c'; // Rot
-            statusIcon = '\u26A0\uFE0F';
+            statusIcon = '⚠️';
             warningHtml = `
                 <div style="background: rgba(231, 76, 60, 0.2); padding: 8px; border-radius: 6px; margin-top: 8px; border-left: 3px solid #e74c3c;">
                     <div style="font-size: 12px; font-weight: 600; color: #e74c3c; margin-bottom: 4px;">
-                        GESCHLOSSEN
+                        ${t('infraClosed')}
                     </div>
                     <div style="font-size: 11px; color: #ffa07a;">
                         ${escapeHTML(warning.reason)}
                     </div>
                     ${warning.opens_at ? `
                         <div style="font-size: 11px; color: #8892b0; margin-top: 4px;">
-                            Öffnet um: ${escapeHTML(warning.opens_at)}
+                            ${t('infraOpensAt')} ${escapeHTML(warning.opens_at)}
                         </div>
                     ` : ''}
                     ${warning.delay_formatted ? `
                         <div style="font-size: 11px; color: #ff6b6b; margin-top: 4px; font-weight: 600;">
-                            \u23F1\uFE0F Wartezeit: ${escapeHTML(warning.delay_formatted)}
+                            ⏱️ Wartezeit: ${escapeHTML(warning.delay_formatted)}
                         </div>
                     ` : ''}
                     ${warning.suggested_departure_formatted ? `
                         <div style="font-size: 11px; color: #64ffda; margin-top: 4px;">
-                            \uD83D\uDCA1 Empfohlene Abfahrt: ${escapeHTML(warning.suggested_departure_formatted)}
+                            💡 Empfohlene Abfahrt: ${escapeHTML(warning.suggested_departure_formatted)}
                         </div>
                     ` : ''}
                 </div>
             `;
         } else if (isPassed) {
             statusColor = '#2ecc71'; // Grün
-            statusIcon = '\u2713';
+            statusIcon = '✓';
         } else {
             statusColor = '#f39c12'; // Gelb
-            statusIcon = '\u2192';
+            statusIcon = '→';
         }
 
         // VHF-Kanal und Kontaktinformationen
@@ -1117,12 +1118,12 @@ function displayLocksTimeline() {
                 <div style="background: rgba(100, 255, 218, 0.1); padding: 8px; border-radius: 6px; margin-top: 8px; font-size: 11px;">
                     ${lock.vhf_channel ? `
                         <div style="color: #64ffda; font-weight: 600; margin-bottom: 4px;">
-                            \uD83D\uDCFB VHF: ${escapeHTML(lock.vhf_channel)}
+                            📻 VHF: ${escapeHTML(lock.vhf_channel)}
                         </div>
                     ` : ''}
                     ${lock.phone ? `
                         <div style="color: #8892b0; margin-bottom: 2px;">
-                            \uD83D\uDCDE ${escapeHTML(lock.phone)}
+                            📞 ${escapeHTML(lock.phone)}
                         </div>
                     ` : ''}
                     ${lock.email ? `
@@ -1138,7 +1139,7 @@ function displayLocksTimeline() {
                                 font-weight: 600;
                                 width: 100%;
                             ">
-                                \uD83D\uDCE7 Anmelden
+                                📧 ${t('infraRegister')}
                             </button>
                         </div>
                     ` : ''}
@@ -1154,7 +1155,7 @@ function displayLocksTimeline() {
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
                     <div>
-                        <div style="color: #8892b0;">DISTANZ</div>
+                        <div style="color: #8892b0;">${t('distance').toUpperCase()}</div>
                         <div style="color: white; font-weight: 600;">${distanceFormatted}</div>
                     </div>
                     <div>
@@ -1191,7 +1192,7 @@ async function prepareLockNotification(lockId) {
         // Schleusen-Details abrufen
         const lockResponse = await fetch(`${API_URL}/api/locks/${lockId}`);
         if (!lockResponse.ok) {
-            alert('Fehler beim Laden der Schleusen-Details');
+            alert(t('infraLoadError'));
             return;
         }
         const lock = await lockResponse.json();
@@ -1245,7 +1246,7 @@ Mit freundlichen Grüßen`;
         console.log(`Email-Vorlage vorbereitet für ${lock.name}`);
     } catch (error) {
         console.error('Fehler beim Vorbereiten der Anmeldung:', error);
-        alert('Fehler beim Vorbereiten der Email-Vorlage');
+        alert(t('infraLoadError'));
     }
 }
 
@@ -1331,7 +1332,7 @@ function toggleAIS() {
             window.BoatOS.ui.showSection('ais', document.querySelector('.sheet-tab[onclick*="ais"]'));
         }
         if (window.BoatOS?.ui?.showNotification) {
-            window.BoatOS.ui.showNotification('📡 AIS aktiviert', 'info');
+            window.BoatOS.ui.showNotification(t('aisEnabled'), 'info');
         }
     } else {
         // AIS deaktivieren: Interval stoppen + Marker entfernen
@@ -1342,7 +1343,7 @@ function toggleAIS() {
         Object.values(aisVessels).forEach(({ marker }) => marker.remove());
         aisVessels = {};
         if (window.BoatOS?.ui?.showNotification) {
-            window.BoatOS.ui.showNotification('📡 AIS deaktiviert', 'info');
+            window.BoatOS.ui.showNotification(t('aisDisabled'), 'info');
         }
     }
 }

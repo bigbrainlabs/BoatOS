@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/l10n_ext.dart';
 import '../services/websocket_service.dart';
 
 Future<void> showGpsPanel(BuildContext context, GpsData? gps) {
@@ -15,6 +16,7 @@ class _GpsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final fix = gps?.hasFix == true;
     final sat = gps?.satellites ?? 0;
 
@@ -42,8 +44,8 @@ class _GpsPanel extends StatelessWidget {
               color: fix ? const Color(0xFF4FC3F7) : const Color(0xFF8B949E),
               size: 20),
           const SizedBox(width: 10),
-          const Text('GPS Status',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
+          Text(l.gpsStatusTitle,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
                   color: Color(0xFFE6EDF3))),
           const Spacer(),
           Container(
@@ -59,7 +61,7 @@ class _GpsPanel extends StatelessWidget {
                   size: 8,
                   color: fix ? const Color(0xFF4CAF50) : const Color(0xFFEF5350)),
               const SizedBox(width: 6),
-              Text(fix ? 'Fix' : 'Kein Fix',
+              Text(fix ? l.gpsFix : l.gpsNoFix,
                   style: TextStyle(
                       fontSize: 12, fontWeight: FontWeight.w600,
                       color: fix
@@ -73,17 +75,17 @@ class _GpsPanel extends StatelessWidget {
         const SizedBox(height: 16),
         // Stats grid
         if (gps == null)
-          const Center(
+          Center(
             child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('Keine GPS-Daten empfangen',
-                  style: TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
+              padding: const EdgeInsets.all(16),
+              child: Text(l.gpsNoData,
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
             ),
           )
         else
           Column(children: [
             Row(children: [
-              _tile('Satelliten', '$sat', Icons.satellite_alt),
+              _tile(l.gpsSatellites, '$sat', Icons.satellite_alt),
               const SizedBox(width: 12),
               _tile('SOG', fix ? '${(gps!.speed * 1.852).toStringAsFixed(1)} km/h' : '--', Icons.speed),
             ]),
@@ -91,13 +93,13 @@ class _GpsPanel extends StatelessWidget {
             Row(children: [
               _tile('COG', fix ? '${gps!.heading.toStringAsFixed(0)}°' : '--', Icons.explore),
               const SizedBox(width: 12),
-              _tile('Höhe', fix ? '${gps!.altitude.toStringAsFixed(0)} m' : '--', Icons.terrain),
+              _tile(l.gpsAltitude, fix ? '${gps!.altitude.toStringAsFixed(0)} m' : '--', Icons.terrain),
             ]),
             const SizedBox(height: 12),
             Row(children: [
-              _tile('HDOP', _hdopText(gps!.hdop), Icons.gps_fixed),
+              _tile('HDOP', _hdopText(gps!.hdop, l), Icons.gps_fixed),
               const SizedBox(width: 12),
-              _tile('Position', fix
+              _tile(l.gpsPosition, fix
                   ? '${gps!.lat.toStringAsFixed(5)}\n${gps!.lon.toStringAsFixed(5)}'
                   : '--', Icons.location_on),
             ]),
@@ -106,12 +108,12 @@ class _GpsPanel extends StatelessWidget {
     );
   }
 
-  String _hdopText(double? hdop) {
+  String _hdopText(double? hdop, AppLocalizations l) {
     if (hdop == null) return '--';
-    if (hdop <= 1.0) return '${hdop.toStringAsFixed(1)} (sehr gut)';
-    if (hdop <= 2.0) return '${hdop.toStringAsFixed(1)} (gut)';
-    if (hdop <= 5.0) return '${hdop.toStringAsFixed(1)} (ok)';
-    return '${hdop.toStringAsFixed(1)} (schlecht)';
+    if (hdop <= 1.0) return '${hdop.toStringAsFixed(1)} (${l.gpsQualityVeryGood})';
+    if (hdop <= 2.0) return '${hdop.toStringAsFixed(1)} (${l.gpsQualityGood})';
+    if (hdop <= 5.0) return '${hdop.toStringAsFixed(1)} (${l.gpsQualityOk})';
+    return '${hdop.toStringAsFixed(1)} (${l.gpsQualityBad})';
   }
 
   Widget _tile(String label, String value, IconData icon) {

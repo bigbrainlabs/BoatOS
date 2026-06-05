@@ -19,6 +19,7 @@ import * as settings from './settings.js';
 import * as wifi from './wifi.js';
 import * as system from './system.js';
 import { initKeyboard } from './keyboard.js';
+import { t, setLang } from './i18n.js';
 
 // ==================== UNIT SYSTEM ====================
 let unitSettings = {
@@ -181,8 +182,8 @@ function updateWaypointList(context) {
     if (context.waypoints.length === 0) {
         listEl.innerHTML = `
             <div style="text-align: center; padding: 20px; color: var(--text-dim);">
-                Keine Route geplant.<br>
-                <small>Klicke auf die Karte um Wegpunkte hinzuzufügen.</small>
+                ${t('routeNoWaypoints')}<br>
+                <small>${t('routeClickToAdd')}</small>
             </div>`;
         updateSimButton();
         return;
@@ -196,7 +197,7 @@ function updateWaypointList(context) {
                 <div class="waypoint-details">${wp.lat.toFixed(5)}, ${wp.lon.toFixed(5)}</div>
             </div>
             <div class="waypoint-actions">
-                <button class="wp-btn" onclick="BoatOS.removeWaypoint(${i})" title="Löschen"
+                <button class="wp-btn" onclick="BoatOS.removeWaypoint(${i})" title="${t('btnDelete')}"
                     ${navigation.isNavigationActive && navigation.isNavigationActive() ? 'disabled style="opacity:0.3;cursor:not-allowed;"' : ''}>🗑️</button>
             </div>
         </div>
@@ -257,7 +258,7 @@ function simTick() {
     const pos = interpolateAlongRoute(routeCoords, simDistanceTraveled);
     if (!pos) {
         stopSimulation();
-        if (ui.showNotification) ui.showNotification('🏁 Simulation beendet', 'info');
+        if (ui.showNotification) ui.showNotification(t('simEnded'), 'info');
         return;
     }
 
@@ -270,7 +271,7 @@ function startSimulation() {
         ? navigation.getCurrentRouteCoordinates()
         : null;
     if (!routeCoords || routeCoords.length < 2) {
-        if (ui.showNotification) ui.showNotification('Keine berechnete Route für Simulation', 'warning');
+        if (ui.showNotification) ui.showNotification(t('simNoRoute'), 'warning');
         return;
     }
     simSavedPosition = window.currentPosition ? { ...window.currentPosition } : null;
@@ -279,7 +280,7 @@ function startSimulation() {
     setSimButtonState(true);
     mapModule.setAutoFollow(true);
     mapModule.updateFollowButton && mapModule.updateFollowButton(true);
-    if (ui.showNotification) ui.showNotification('▶ Simulation gestartet', 'info');
+    if (ui.showNotification) ui.showNotification(t('simStarted'), 'info');
 }
 
 function stopSimulation() {
@@ -296,7 +297,7 @@ function setSimButtonState(running) {
     const btn = document.getElementById('btn-simulation');
     const bar = document.getElementById('sim-speed-bar');
     if (btn) {
-        btn.textContent = running ? '⏹ Stop' : '▶ Simulation';
+        btn.textContent = running ? t('simStop') : t('simStart');
         btn.style.background = running ? 'var(--danger)' : 'var(--success)';
     }
     if (bar) bar.style.display = running ? 'flex' : 'none';
@@ -426,7 +427,7 @@ window.BoatOS = {
         if (navigation.editRoute) {
             navigation.editRoute();
         }
-        ui.showNotification('Route bearbeiten - Wegpunkte verschieben', 'info');
+        ui.showNotification(t('routeEditMode'), 'info');
     },
 
     // === WAYPOINT FROM CLICK (for navigation module) ===
@@ -460,8 +461,8 @@ window.BoatOS = {
         if (waypointList) {
             waypointList.innerHTML = `
                 <div style="text-align: center; padding: 20px; color: var(--text-dim);">
-                    Keine Route geplant.<br>
-                    <small>Klicke auf die Karte um Wegpunkte hinzuzufügen.</small>
+                    ${t('routeNoWaypoints')}<br>
+                    <small>${t('routeClickToAdd')}</small>
                 </div>
             `;
         }
@@ -485,7 +486,7 @@ window.BoatOS = {
 
         this.stopNavigation();
         updateSimButton();
-        ui.showNotification('Route gelöscht', 'info');
+        ui.showNotification(t('routeDeleted'), 'info');
     },
 
     removeWaypoint: function(index) {
@@ -539,18 +540,18 @@ window.BoatOS = {
         const ctx = this.context || {};
         const wps = ctx.waypoints || [];
         if (wps.length < 2) {
-            ui.showNotification('Mindestens 2 Wegpunkte benötigt', 'warning');
+            ui.showNotification(t('routeMinTwo'), 'warning');
             return;
         }
         const distNM = navigation.getCurrentRouteData?.()?.totalDistanceNM || 0;
         const autoName = wps.map(w => w.name).join(' → ');
-        const name = prompt('Routenname:', autoName);
+        const name = prompt(t('routeNamePrompt'), autoName);
         if (name === null) return; // cancelled
         try {
             await navigation.saveCurrentRoute(name || autoName, wps, distNM);
-            ui.showNotification(`Route gespeichert: ${name || autoName}`, 'success');
+            ui.showNotification(t('routeSaved', { name: name || autoName }), 'success');
         } catch(e) {
-            ui.showNotification('Fehler beim Speichern', 'error');
+            ui.showNotification(t('routeSaveError'), 'error');
         }
     },
 
@@ -562,7 +563,7 @@ window.BoatOS = {
         try {
             routes = await navigation.loadSavedRoutesList();
         } catch(e) {
-            ui.showNotification('Fehler beim Laden der Routen', 'error');
+            ui.showNotification(t('routeLoadError'), 'error');
             return;
         }
 
@@ -579,11 +580,11 @@ window.BoatOS = {
         const renderPanel = (routeList) => {
             panel.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-md);">
-                    <span style="font-size:var(--fs-xl); font-weight:600; color:var(--accent);">📂 Gespeicherte Routen (${routeList.length})</span>
+                    <span style="font-size:var(--fs-xl); font-weight:600; color:var(--accent);">${t('routeSavedTitle')} (${routeList.length})</span>
                     <button onclick="document.getElementById('saved-routes-panel').remove()"
                             style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;padding:4px 8px;">✕</button>
                 </div>
-                ${routeList.length === 0 ? `<div style="text-align:center;padding:var(--space-2xl);color:var(--text-dim);">Keine gespeicherten Routen</div>` :
+                ${routeList.length === 0 ? `<div style="text-align:center;padding:var(--space-2xl);color:var(--text-dim);">${t('routeNoSaved')}</div>` :
                     routeList.map(r => {
                         const date = new Date(r.created).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'2-digit' });
                         const dist = r.totalDistanceNM
@@ -594,12 +595,12 @@ window.BoatOS = {
                         <div style="display:flex; align-items:center; gap:var(--space-md); padding:var(--space-sm) 0; border-bottom:1px solid var(--border);">
                             <div style="flex:1; min-width:0;">
                                 <div style="font-weight:600; font-size:var(--fs-base); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${r.name}</div>
-                                <div style="font-size:var(--fs-sm); color:var(--text-dim);">${wps} Wegpunkte${dist} · ${date}</div>
+                                <div style="font-size:var(--fs-sm); color:var(--text-dim);">${wps} ${t('routeWaypoints')}${dist} · ${date}</div>
                             </div>
                             <button onclick="window.BoatOS._loadSavedRoute(${JSON.stringify(r).replace(/"/g, '&quot;')})"
                                     style="padding:var(--space-xs) var(--space-md); background:var(--accent); color:white;
                                            border:none; border-radius:var(--radius-md); font-size:var(--fs-sm); cursor:pointer; white-space:nowrap; touch-action:manipulation;">
-                                Laden
+                                ${t('btnLoad')}
                             </button>
                             <button onclick="window.BoatOS._deleteSavedRoute('${r.id}', this)"
                                     style="padding:var(--space-xs) var(--space-sm); background:none; color:var(--text-dim);
@@ -630,7 +631,7 @@ window.BoatOS = {
     },
 
     _deleteSavedRoute: async function(routeId, btnEl) {
-        if (!confirm('Route löschen?')) return;
+        if (!confirm(t('routeDeleteConfirm'))) return;
         try {
             await navigation.deleteSavedRoute(routeId);
             // refresh panel
@@ -756,6 +757,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             unitSettings.speed = loadedSettings.units.speed === 'knots' ? 'kn' :
                                  loadedSettings.units.speed === 'kmh' ? 'kmh' : 'kn';
         }
+        // Sprache initialisieren
+        const lang = loadedSettings?.ui?.language || loadedSettings?.language || 'de';
+        setLang(lang);
         // AIS-Modul mit gespeicherten Settings initialisieren (API-Key etc.)
         if (loadedSettings.ais && ais.updateAISSettings) {
             ais.updateAISSettings(loadedSettings.ais);
@@ -913,6 +917,44 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Globale Funktionen für Navigation-Modul
     window.updateWaypointList = () => updateWaypointList(context);
+
+    // ── Language sync: Deck ↔ Helm ─────────────────────────────────────────────
+    // When language changes in Deck, persist to backend so Helm picks it up.
+    // When Helm changes language, Deck polls and updates automatically.
+    const _apiUrl = core.API_URL || '';
+
+    // Override global setLanguage to also persist to backend
+    const _origSetLanguage = window.setLanguage;
+    window.setLanguage = async function(lang) {
+        if (_origSetLanguage) _origSetLanguage(lang);
+        try {
+            // Read → merge → write to avoid overwriting unrelated settings
+            const res = await fetch(`${_apiUrl}/api/settings`);
+            const s = res.ok ? await res.json() : {};
+            s.ui = { ...(s.ui || {}), language: lang };
+            await fetch(`${_apiUrl}/api/settings`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(s)
+            });
+        } catch (_) {}
+    };
+
+    // Poll backend every 15 s for language changes written by Helm
+    let _syncedLang = getLang();
+    setInterval(async () => {
+        try {
+            const res = await fetch(`${_apiUrl}/api/settings`, { cache: 'no-store' });
+            if (!res.ok) return;
+            const s = await res.json();
+            const remote = s?.ui?.language || s?.language || 'de';
+            if (remote !== _syncedLang) {
+                _syncedLang = remote;
+                // Only call if actually different from what's currently active
+                if (remote !== getLang()) setLang(remote);
+            }
+        } catch (_) {}
+    }, 15000);
 
     console.log('BoatOS bereit!');
 });

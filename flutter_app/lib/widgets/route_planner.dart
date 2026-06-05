@@ -7,6 +7,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
+import '../l10n/l10n_ext.dart';
 import 'onscreen_keyboard.dart';
 
 // ---------------------------------------------------------------------------
@@ -163,6 +164,7 @@ class _RoutePanelState extends State<RoutePanel> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final s = widget.scale;
     final hasRoute = widget.routeResult != null;
     final hasWps   = widget.waypoints.isNotEmpty;
@@ -240,7 +242,7 @@ class _RoutePanelState extends State<RoutePanel> {
                               size: 14 * s, color: _sec),
                           SizedBox(width: 6 * s),
                           Text(
-                            'Langer Tipp auf die Karte → Wegpunkt setzen',
+                            l.mapLongTapHint,
                             style: TextStyle(fontSize: 11 * s, color: _sec),
                           ),
                         ]),
@@ -272,18 +274,18 @@ class _RoutePanelState extends State<RoutePanel> {
                     // ── Route stats ────────────────────────────────────
                     if (hasRoute) ...[
                       SizedBox(height: 8 * s),
-                      _buildStatsRow(s),
+                      _buildStatsRow(s, l),
                     ],
 
                     // ── Departure row ──────────────────────────────────
                     if (hasRoute) ...[
                       SizedBox(height: 6 * s),
-                      _buildDepartureRow(s),
+                      _buildDepartureRow(s, l),
                     ],
 
                     // ── Action buttons ─────────────────────────────────
                     SizedBox(height: 8 * s),
-                    _buildActionRow(s, hasRoute),
+                    _buildActionRow(s, hasRoute, l),
                   ],
                 ),
               ),
@@ -296,7 +298,7 @@ class _RoutePanelState extends State<RoutePanel> {
 
   // ── Stats row ─────────────────────────────────────────────────────────────
 
-  Widget _buildStatsRow(double s) {
+  Widget _buildStatsRow(double s, AppLocalizations l) {
     final r = widget.routeResult!;
     final totalMin = (r.durationH * 60).round();
     final h = totalMin ~/ 60;
@@ -312,7 +314,7 @@ class _RoutePanelState extends State<RoutePanel> {
         eta.month == now.month &&
         eta.year == now.year;
     final etaStr = isToday
-        ? 'heute ${_twoDigit(eta.hour)}:${_twoDigit(eta.minute)}'
+        ? '${l.mapToday} ${_twoDigit(eta.hour)}:${_twoDigit(eta.minute)}'
         : '${_weekday(eta.weekday)}. ${_twoDigit(eta.hour)}:${_twoDigit(eta.minute)}';
 
     final isKm = widget.distanceUnit == 'km';
@@ -330,7 +332,7 @@ class _RoutePanelState extends State<RoutePanel> {
         if (r.locks.isNotEmpty)
           _statChip(Icons.lock, '${r.locks.length} Schleuse${r.locks.length > 1 ? 'n' : ''}', const Color(0xFFFFB74D), s),
         if (r.routingType != 'osrm')
-          _statChip(Icons.alt_route, 'Direkt', const Color(0xFFE74C3C), s),
+          _statChip(Icons.alt_route, l.mapDirect, const Color(0xFFE74C3C), s),
       ],
     );
   }
@@ -347,7 +349,7 @@ class _RoutePanelState extends State<RoutePanel> {
 
   // ── Departure row ─────────────────────────────────────────────────────────
 
-  Widget _buildDepartureRow(double s) {
+  Widget _buildDepartureRow(double s, AppLocalizations l) {
     final dep = widget.departure;
     final depStr =
         '${_weekday(dep.weekday)}. ${_twoDigit(dep.day)}.${_twoDigit(dep.month)}  ${_twoDigit(dep.hour)}:${_twoDigit(dep.minute)}';
@@ -355,7 +357,7 @@ class _RoutePanelState extends State<RoutePanel> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('Abfahrt:', style: TextStyle(fontSize: 10 * s, color: _sec)),
+        Text(l.mapDeparture, style: TextStyle(fontSize: 10 * s, color: _sec)),
         SizedBox(width: 6 * s),
         Text(depStr,
             style: TextStyle(
@@ -380,7 +382,7 @@ class _RoutePanelState extends State<RoutePanel> {
             // reset to now
             widget.onDepartureHourDelta(0); // triggers a "now" reset in parent
           },
-          child: Text('Jetzt',
+          child: Text(l.mapNow,
               style: TextStyle(
                   fontSize: 10 * s,
                   color: _blue,
@@ -407,14 +409,14 @@ class _RoutePanelState extends State<RoutePanel> {
 
   // ── Action buttons ────────────────────────────────────────────────────────
 
-  Widget _buildActionRow(double s, bool hasRoute) => SingleChildScrollView(
+  Widget _buildActionRow(double s, bool hasRoute, AppLocalizations l) => SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
             if (hasRoute)
               _actionBtn(
                 icon: widget.navActive ? Icons.stop : Icons.navigation,
-                label: widget.navActive ? 'Stopp' : 'Navigation',
+                label: widget.navActive ? l.mapNavStop : l.mapNavigation,
                 color: _green,
                 onTap:
                     widget.navActive ? widget.onStopNav : widget.onStartNav,
@@ -426,7 +428,7 @@ class _RoutePanelState extends State<RoutePanel> {
                 icon: widget.simRunning
                     ? Icons.stop_circle
                     : Icons.play_circle_outline,
-                label: widget.simRunning ? 'Sim Stop' : 'Simulation',
+                label: widget.simRunning ? l.mapSimStop : l.mapSimulation,
                 color: _blue,
                 onTap:
                     widget.simRunning ? widget.onStopSim : widget.onStartSim,
@@ -436,7 +438,7 @@ class _RoutePanelState extends State<RoutePanel> {
             if (hasRoute)
               _actionBtn(
                 icon: Icons.save_outlined,
-                label: 'Speichern',
+                label: l.btnSave,
                 color: _teal,
                 onTap: widget.onSave,
                 scale: s,
@@ -444,7 +446,7 @@ class _RoutePanelState extends State<RoutePanel> {
             if (hasRoute) SizedBox(width: 8 * s),
             _actionBtn(
               icon: Icons.folder_open_outlined,
-              label: 'Gespeicherte',
+              label: l.mapSavedRoutesTitle,
               color: _sec,
               onTap: widget.onShowSaved,
               scale: s,
@@ -452,7 +454,7 @@ class _RoutePanelState extends State<RoutePanel> {
             SizedBox(width: 8 * s),
             _actionBtn(
               icon: Icons.delete_outline,
-              label: 'Löschen',
+              label: l.btnDelete,
               color: const Color(0xFFE74C3C),
               onTap: widget.onClearAll,
               scale: s,
@@ -690,7 +692,7 @@ class NavCard extends StatelessWidget {
     final s = scale;
     final label = nextWaypoint!.name.isNotEmpty
         ? nextWaypoint!.name
-        : 'Wegpunkt ${nextWaypoint!.index + 1}';
+        : 'Waypoint ${nextWaypoint!.index + 1}';
     final String distStr;
     if (distToNextNm < 0.1) {
       distStr = '${(distToNextNm * 1852).round()} m';
@@ -776,6 +778,7 @@ class SavedRoutesSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final s = scale;
     return Positioned(
       bottom: 0,
@@ -798,7 +801,7 @@ class SavedRoutesSheet extends StatelessWidget {
                   Icon(Icons.folder_open_outlined,
                       size: 16 * s, color: const Color(0xFF4FC3F7)),
                   SizedBox(width: 6 * s),
-                  Text('Gespeicherte Routen',
+                  Text(l.mapSavedRoutesTitle,
                       style: TextStyle(
                           fontSize: 14 * s,
                           color: const Color(0xFFE6EDF3),
@@ -823,7 +826,7 @@ class SavedRoutesSheet extends StatelessWidget {
             else if (routes.isEmpty)
               Padding(
                 padding: EdgeInsets.all(24 * s),
-                child: Text('Keine gespeicherten Routen.',
+                child: Text(l.mapNoSavedRoutes,
                     style: TextStyle(
                         fontSize: 13 * s,
                         color: const Color(0xFF8B949E))),
@@ -974,6 +977,7 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final s = widget.scale;
     return Positioned(
       bottom: 0,
@@ -989,7 +993,7 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Route speichern',
+            Text(l.mapSaveRoute,
                 style: TextStyle(
                     fontSize: 15 * s,
                     color: const Color(0xFFE6EDF3),
@@ -1007,7 +1011,7 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
                     border: Border.all(color: const Color(0xFF4FC3F7), width: 1.5),
                   ),
                   child: Text(
-                    v.text.isEmpty ? 'Name eingeben…' : v.text,
+                    v.text.isEmpty ? l.mapRouteNameHint : v.text,
                     style: TextStyle(
                         fontSize: 14 * s,
                         color: v.text.isEmpty
@@ -1031,7 +1035,7 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
                           color: const Color(0xFF30363D)),
                       borderRadius: BorderRadius.circular(8 * s),
                     ),
-                    child: Text('Abbrechen',
+                    child: Text(l.btnCancel,
                         style: TextStyle(
                             fontSize: 12 * s,
                             color: const Color(0xFF8B949E))),
@@ -1052,7 +1056,7 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
                           color: const Color(0xFF4FC3F7)),
                       borderRadius: BorderRadius.circular(8 * s),
                     ),
-                    child: Text('Speichern',
+                    child: Text(l.btnSave,
                         style: TextStyle(
                             fontSize: 12 * s,
                             color: const Color(0xFF4FC3F7),

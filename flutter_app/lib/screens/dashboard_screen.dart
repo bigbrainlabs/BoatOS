@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
+import '../l10n/l10n_ext.dart';
 import '../services/settings_service.dart';
 import '../widgets/dashboard/dash_widget.dart';
 import '../widgets/dashboard/registry.dart';
@@ -461,12 +462,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final settings = context.watch<SettingsService>();
     final dsl = settings.raw['dashboard_layout'] as String? ?? '';
 
     final anyImpactActive = _computeImpactActive(dsl);
 
-    // Rising-edge detection — new alarm event resets mute so it fires again
     if (anyImpactActive != _impactWasActive) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -478,7 +479,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
     }
 
-    final content = _buildContent(context, dsl);
+    final content = _buildContent(context, dsl, l);
     if (!anyImpactActive && !_impactMuted) return content;
 
     return Stack(
@@ -488,7 +489,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (anyImpactActive && !_impactMuted)
           Positioned(
             bottom: 24, left: 0, right: 0,
-            child: Center(child: _buildMuteButton()),
+            child: Center(child: _buildMuteButton(l)),
           ),
       ],
     );
@@ -515,7 +516,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _isTruthy(_getRawString(_sensors, w.impactSensor!, w.impactField ?? 'aktiv')));
   }
 
-  Widget _buildMuteButton() => GestureDetector(
+  Widget _buildMuteButton(AppLocalizations l) => GestureDetector(
     onTap: () => setState(() => _impactMuted = true),
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -530,13 +531,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.notifications_off_outlined, color: Colors.white, size: 18),
-          SizedBox(width: 8),
-          Text('Alarm stumm',
-              style: TextStyle(
+          const Icon(Icons.notifications_off_outlined, color: Colors.white, size: 18),
+          const SizedBox(width: 8),
+          Text(l.dashboardAlarmMute,
+              style: const TextStyle(
                   color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
         ],
       ),
@@ -547,18 +548,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Content dispatcher
   // ─────────────────────────────────────────────────────────────────────────────
 
-  Widget _buildContent(BuildContext context, String dsl) {
+  Widget _buildContent(BuildContext context, String dsl, AppLocalizations l) {
     if (_firstLoad) {
       return const Center(child: CircularProgressIndicator(color: Color(0xFF4FC3F7)));
     }
     if (dsl.isEmpty) {
-      return const Center(
-        child: Text('Kein Dashboard-Layout konfiguriert.',
-            style: TextStyle(color: Color(0xFF8B949E))),
+      return Center(
+        child: Text(l.dashboardNoLayout,
+            style: const TextStyle(color: Color(0xFF8B949E))),
       );
     }
 
-    // Detect format from first non-comment line
     bool isScreen = false;
     for (final line in dsl.split('\n')) {
       final t = line.trim();
@@ -570,20 +570,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (isScreen) {
       final screens = _parseScreenDSL(dsl);
       if (screens.isEmpty) {
-        return const Center(
-          child: Text('Keine Screens im Layout.',
-              style: TextStyle(color: Color(0xFF8B949E))),
+        return Center(
+          child: Text(l.dashboardNoScreens,
+              style: const TextStyle(color: Color(0xFF8B949E))),
         );
       }
       return LayoutBuilder(
           builder: (ctx, bc) => _buildScreenLayout(screens, bc));
     } else {
-      // ROW/GRID format
       final layout = _parseDSL(dsl);
       if (layout.rows.isEmpty || layout.rows.every((r) => r.widgets.isEmpty)) {
-        return const Center(
-          child: Text('Keine Widgets im Layout.',
-              style: TextStyle(color: Color(0xFF8B949E))),
+        return Center(
+          child: Text(l.dashboardNoWidgets,
+              style: const TextStyle(color: Color(0xFF8B949E))),
         );
       }
 
@@ -595,7 +594,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final totalW = constraints.maxWidth - 24.0;
         final colW = (totalW - gap * (layout.columns - 1)) / layout.columns;
 
-        // Break DSL rows into visual lines that respect column overflow
         final lineWidgets = <List<DashWidget>>[];
         final lineHeights = <double>[];
         for (final row in layout.rows) {
@@ -617,7 +615,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (cur.isNotEmpty) { lineWidgets.add(cur); lineHeights.add(rowH); }
         }
 
-        // Group lines into pages that fit within available height
         final pageH = constraints.maxHeight - 24.0 - kDotsH;
         final pageStarts = <int>[];
         final pageEnds = <int>[];

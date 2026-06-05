@@ -10,6 +10,7 @@ import '../widgets/dashboard/dash_widget.dart';
 import '../widgets/dashboard/registry.dart';
 import '../widgets/dashboard/sensor_widget.dart' show SensorDashWidget;
 import '../main.dart' show MainShellState;
+import '../l10n/l10n_ext.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -18,20 +19,20 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  static const _sections = <(IconData, String)>[
-    (Icons.directions_boat, 'Schiff'),
-    (Icons.map_outlined, 'Karte'),
-    (Icons.navigation, 'Navigation'),
-    (Icons.gps_fixed, 'GPS'),
-    (Icons.radar, 'AIS'),
-    (Icons.straighten, 'Einheiten'),
-    (Icons.sensors, 'MQTT'),
-    (Icons.lock, 'Schleusen'),
-    (Icons.layers_outlined, 'ENC-Karten'),
-    (Icons.dashboard_customize, 'Dashboard'),
-    (Icons.storage, 'Daten'),
-    (Icons.brightness_2, 'Display'),
-    (Icons.system_update_alt, 'System'),
+  List<(IconData, String)> _buildSections(AppLocalizations l) => [
+    (Icons.directions_boat, l.settingsSectionShip),
+    (Icons.map_outlined, l.settingsSectionMap),
+    (Icons.navigation, l.settingsSectionNavigation),
+    (Icons.gps_fixed, l.settingsSectionGPS),
+    (Icons.radar, l.settingsSectionAIS),
+    (Icons.straighten, l.settingsSectionUnits),
+    (Icons.sensors, l.settingsSectionMQTT),
+    (Icons.lock, l.settingsSectionLocks),
+    (Icons.layers_outlined, l.settingsSectionENC),
+    (Icons.dashboard_customize, l.settingsSectionDashboard),
+    (Icons.storage, l.settingsSectionData),
+    (Icons.brightness_2, l.settingsSectionDisplay),
+    (Icons.system_update_alt, l.settingsSectionSystem),
   ];
 
   int _sel = 0;
@@ -55,11 +56,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _boatName, _boatLength, _boatBeam, _boatDraft,
       _boatHeight, _boatSpeed, _boatFuel, _boatFuelConsumption;
   String _boatIcon = 'yacht';
-  static const _boatIcons = <(String, IconData, String)>[
-    ('yacht',     Icons.anchor,          'Yacht'),
-    ('motorboat', Icons.directions_boat, 'Motorboot'),
-    ('sailboat',  Icons.sailing,         'Segelboot'),
-    ('kayak',     Icons.kayaking,        'Kajak'),
+  List<(String, IconData, String)> _buildBoatIcons(AppLocalizations l) => [
+    ('yacht',     Icons.anchor,          l.shipYacht),
+    ('motorboat', Icons.directions_boat, l.shipMotorboat),
+    ('sailboat',  Icons.sailing,         l.shipSailboat),
+    ('kayak',     Icons.kayaking,        l.shipKayak),
   ];
 
   // GPS
@@ -73,7 +74,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _defaultSpeed, _dayStartTime, _osrmUrl;
   static const _rivers = ['Rhein', 'Mosel', 'Main', 'Elbe', 'Saale', 'Donau'];
   static const _riverTypes = ['river', 'canal', 'stream', 'lake'];
-  static const _riverTypeLabels = ['Fluss', 'Kanal', 'Bach', 'See'];
+  List<String> _buildRiverTypeLabels(AppLocalizations l) =>
+      [l.navRiverTypeFluss, l.navRiverTypeKanal, l.navRiverTypeBach, l.navRiverTypeSee];
   final Map<String, TextEditingController> _riverCtrl = {};
   final Map<String, TextEditingController> _riverTypeCtrl = {};
 
@@ -251,9 +253,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _applyText(s);
     final ok = await s.save();
     if (mounted) {
+      final l = context.l10n;
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ok ? 'Gespeichert' : 'Fehler beim Speichern'),
+        content: Text(ok ? l.settingsSaved : 'Fehler beim Speichern'),
         duration: const Duration(seconds: 2),
         backgroundColor: ok ? const Color(0xFF1A472A) : const Color(0xFF7D1A1A),
       ));
@@ -264,6 +267,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
+    final sections = _buildSections(l);
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E1A),
       appBar: AppBar(
@@ -273,8 +278,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           icon: const Icon(Icons.close, color: Color(0xFF8B949E)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Einstellungen',
-            style: TextStyle(color: Color(0xFFE6EDF3), fontSize: 16, fontWeight: FontWeight.w600)),
+        title: Text(l.settingsTitle,
+            style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 16, fontWeight: FontWeight.w600)),
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
           child: Divider(color: Color(0xFF30363D), height: 1),
@@ -290,8 +295,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             TextButton.icon(
               onPressed: _save,
               icon: const Icon(Icons.save_outlined, size: 16, color: Color(0xFF4FC3F7)),
-              label: const Text('Speichern',
-                  style: TextStyle(color: Color(0xFF4FC3F7), fontSize: 14)),
+              label: Text(l.btnSave,
+                  style: const TextStyle(color: Color(0xFF4FC3F7), fontSize: 14)),
             ),
           const SizedBox(width: 8),
         ],
@@ -301,26 +306,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
           : LayoutBuilder(builder: (_, constraints) {
               if (constraints.maxWidth >= 600) {
                 return Row(children: [
-                  SizedBox(width: 220, child: _sidebar()),
+                  SizedBox(width: 220, child: _sidebar(sections)),
                   const VerticalDivider(color: Color(0xFF30363D), width: 1, thickness: 1),
                   Expanded(child: _content()),
                 ]);
               }
               return Column(children: [
-                SizedBox(height: 52, child: _tabBar()),
+                SizedBox(height: 52, child: _tabBar(sections)),
                 Expanded(child: _content()),
               ]);
             }),
     );
   }
 
-  Widget _sidebar() => Container(
+  Widget _sidebar(List<(IconData, String)> sections) => Container(
         color: const Color(0xFF0D1117),
         child: ListView.builder(
           padding: const EdgeInsets.symmetric(vertical: 8),
-          itemCount: _sections.length,
+          itemCount: sections.length,
           itemBuilder: (_, i) {
-            final (icon, label) = _sections[i];
+            final (icon, label) = sections[i];
             final sel = i == _sel;
             return InkWell(
               onTap: () { setState(() => _sel = i); if (i == 12) _checkVersion(); if (i == 6) _fetchPiIps(); },
@@ -353,14 +358,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       );
 
-  Widget _tabBar() => Container(
+  Widget _tabBar(List<(IconData, String)> sections) => Container(
         color: const Color(0xFF0D1117),
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          itemCount: _sections.length,
+          itemCount: sections.length,
           itemBuilder: (_, i) {
-            final (icon, label) = _sections[i];
+            final (icon, label) = sections[i];
             final sel = i == _sel;
             return Padding(
               padding: const EdgeInsets.only(right: 4),
@@ -430,24 +435,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // ── Section: Schiff ─────────────────────────────────────────────────────────
 
   List<Widget> _schiff(SettingsService s) {
+    final l = context.l10n;
     final boat = s.raw['boat'] as Map? ?? {};
+    final boatIcons = _buildBoatIcons(l);
     return [
-      _header('Schiff'),
+      _header(l.settingsSectionShip),
       _textRow('Name', _boatName),
       _dropRow<String>(
         label: 'Typ',
         value: (boat['type'] as String?) ?? 'motorboat',
         items: const ['motorboat', 'sailboat', 'kayak'],
-        labels: const ['Motorboot', 'Segelboot', 'Kajak'],
+        labels: [l.shipMotorboat, l.shipSailboat, l.shipKayak],
         onChanged: (v) { if (v != null) { s.set('boat', 'type', v); s.save(); } },
       ),
-      _header('Boot-Icon'),
+      _header(l.shipIconLabel),
       Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Wrap(
           spacing: 12,
           runSpacing: 12,
-          children: _boatIcons.map(((String, IconData, String) opt) {
+          children: boatIcons.map(((String, IconData, String) opt) {
             final (key, icon, label) = opt;
             final sel = _boatIcon == key;
             return GestureDetector(
@@ -483,34 +490,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
           }).toList(),
         ),
       ),
-      _header('Abmessungen'),
-      _textRow('Länge (m)',    _boatLength, numeric: true),
-      _textRow('Breite (m)',   _boatBeam,   numeric: true),
-      _textRow('Tiefgang (m)', _boatDraft,  numeric: true),
-      _textRow('Höhe (m)',     _boatHeight, numeric: true),
-      _header('Antrieb'),
-      _textRow('Reisegeschw. (km/h)',  _boatSpeed,          numeric: true),
-      _textRow('Kraftstoff (L)',       _boatFuel,           numeric: true),
-      _textRow('Verbrauch (L/h)',      _boatFuelConsumption, numeric: true),
+      _header(l.shipDimensions),
+      _textRow(l.shipLength,    _boatLength, numeric: true),
+      _textRow(l.shipBeam,      _boatBeam,   numeric: true),
+      _textRow(l.shipDraft,     _boatDraft,  numeric: true),
+      _textRow(l.shipHeight,    _boatHeight, numeric: true),
+      _header(l.shipDrive),
+      _textRow(l.shipCruiseSpeed,      _boatSpeed,           numeric: true),
+      _textRow(l.shipFuelCapacity,     _boatFuel,            numeric: true),
+      _textRow(l.shipFuelConsumption,  _boatFuelConsumption, numeric: true),
     ];
   }
 
   // ── Section: Karte ──────────────────────────────────────────────────────────
 
   List<Widget> _karte(SettingsService s) {
+    final l = context.l10n;
     final m = s.raw['map'] as Map? ?? {};
     bool b(String k, bool def) => (m[k] as bool?) ?? def;
     return [
-      _header('Karte'),
-      _switchRow('OpenSeaMap',             b('openSeaMap', true),  (v) { s.set('map', 'openSeaMap', v);  s.save(); }),
-      _switchRow('Schleusen anzeigen',     b('showLocks',  true),  (v) { s.set('map', 'showLocks',  v);  s.save(); }),
-      _switchRow('Pegelstände anzeigen',   b('showPegel',  false), (v) { s.set('map', 'showPegel',  v);  s.save(); }),
-      _switchRow('Track anzeigen',         b('showTrack',  true),  (v) { s.set('map', 'showTrack',  v);  s.save(); }),
-      _switchRow('Auto-Zentrieren',        b('autoCenter', true),  (v) { s.set('map', 'autoCenter', v);  s.save(); }),
-      _switchRow('Kurs-Oben (Heading-Up)', b('headingUp',  true),  (v) { s.set('map', 'headingUp',  v);  s.save(); }),
-      _header('Anzeige'),
+      _header(l.settingsSectionMap),
+      _switchRow(l.mapSettingsOpenSeaMap,   b('openSeaMap', true),  (v) { s.set('map', 'openSeaMap', v);  s.save(); }),
+      _switchRow(l.mapSettingsShowLocks,    b('showLocks',  true),  (v) { s.set('map', 'showLocks',  v);  s.save(); }),
+      _switchRow(l.mapSettingsShowGauges,   b('showPegel',  false), (v) { s.set('map', 'showPegel',  v);  s.save(); }),
+      _switchRow(l.mapSettingsShowTrack,    b('showTrack',  true),  (v) { s.set('map', 'showTrack',  v);  s.save(); }),
+      _switchRow(l.mapSettingsAutoCenter,   b('autoCenter', true),  (v) { s.set('map', 'autoCenter', v);  s.save(); }),
+      _switchRow(l.mapSettingsHeadingUp,    b('headingUp',  true),  (v) { s.set('map', 'headingUp',  v);  s.save(); }),
+      _header(l.mapSettingsDisplay),
       _sliderRow(
-        'UI-Skalierung',
+        l.mapSettingsUiScale,
         s.uiScale,
         min: 0.7, max: 1.3,
         divisions: 6,
@@ -523,54 +531,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // ── Section: Navigation ─────────────────────────────────────────────────────
 
   List<Widget> _navigation(SettingsService s) {
+    final l = context.l10n;
     final nav     = s.raw['navigation'] as Map? ?? {};
     final routing = s.raw['routing']    as Map? ?? {};
     bool   b(String k, bool   def) => (nav[k] as bool?)   ?? def;
     int    i(String k, int    def) => (nav[k] as int?)    ?? def;
     double d(String k, double def) => ((nav[k] as num?)?.toDouble()) ?? def;
+    final riverTypeLabels = _buildRiverTypeLabels(l);
     return [
-      _header('Track'),
-      _switchRow('Auto-Track', b('autoTrack', false),
+      _header(l.navSettingsTrack),
+      _switchRow(l.navSettingsAutoTrack, b('autoTrack', false),
           (v) { s.set('navigation', 'autoTrack', v); s.save(); }),
       _dropRow<int>(
-        label: 'Track-Intervall',
+        label: l.navSettingsTrackInterval,
         value: i('trackInterval', 10),
         items: const [5, 10, 30, 60],
         labels: const ['5 s', '10 s', '30 s', '60 s'],
         onChanged: (v) { if (v != null) { s.set('navigation', 'trackInterval', v); s.save(); } },
       ),
-      _header('Ankunft'),
-      _switchRow('Ankunftsalarm', b('arrivalAlarm', true),
+      _header(l.navSettingsArrival),
+      _switchRow(l.navSettingsArrivalAlarm, b('arrivalAlarm', true),
           (v) { s.set('navigation', 'arrivalAlarm', v); s.save(); }),
       _dropRow<double>(
-        label: 'Alarm-Radius',
+        label: l.navSettingsAlarmRadius,
         value: d('alarmDistance', 0.1),
         items: const [0.05, 0.1, 0.2, 0.5],
         labels: const ['50 m', '100 m', '200 m', '500 m'],
         onChanged: (v) { if (v != null) { s.set('navigation', 'alarmDistance', v); s.save(); } },
       ),
-      _header('Tagesplanung'),
-      _textRow('Standardgeschw. (km/h)', _defaultSpeed, numeric: true),
+      _header(l.navSettingsDayPlanning),
+      _textRow(l.navSettingsDefaultSpeed, _defaultSpeed, numeric: true),
       _dropRow<int>(
-        label: 'Tagesreise max.',
+        label: l.navSettingsMaxDayTrip,
         value: i('dailyTravelHours', 8),
         items: const [4, 6, 8, 10, 12],
         labels: const ['4 h', '6 h', '8 h', '10 h', '12 h'],
         onChanged: (v) { if (v != null) { s.set('navigation', 'dailyTravelHours', v); s.save(); } },
       ),
-      _textRow('Tagesstart (HH:MM)', _dayStartTime),
-      _header('Routing'),
-      _switchRow('Wasserstraßen bevorzugen', b('preferWaterways', true),
+      _textRow(l.navSettingsDayStart, _dayStartTime),
+      _header(l.navSettingsRouting),
+      _switchRow(l.navSettingsPreferWaterways, b('preferWaterways', true),
           (v) { s.set('navigation', 'preferWaterways', v); s.save(); }),
-      _switchRow('Strömung berücksichtigen',
+      _switchRow(l.navSettingsConsiderCurrent,
           (routing['waterCurrentEnabled'] as bool?) ?? true,
           (v) { s.set('routing', 'waterCurrentEnabled', v); s.save(); }),
-      _textRow('OSRM URL', _osrmUrl),
-      _header('Strömungen nach Gewässer (km/h)'),
+      _textRow(l.navSettingsOsrmUrl, _osrmUrl),
+      _header(l.navSettingsCurrentByRiver),
       ..._rivers.map((r) => _textRow(r, _riverCtrl[r]!, numeric: true)),
-      _header('Strömungen nach Typ (km/h)'),
+      _header(l.navSettingsCurrentByType),
       ...List.generate(_riverTypes.length, (i) =>
-          _textRow(_riverTypeLabels[i], _riverTypeCtrl[_riverTypes[i]]!, numeric: true)),
+          _textRow(riverTypeLabels[i], _riverTypeCtrl[_riverTypes[i]]!, numeric: true)),
       const SizedBox(height: 8),
       const _TrackSensorsSection(),
     ];
@@ -579,10 +589,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // ── Section: GPS ────────────────────────────────────────────────────────────
 
   List<Widget> _gps(SettingsService s) {
+    final l = context.l10n;
     final gps = s.raw['gps'] as Map? ?? {};
     return [
-      _header('GPS-Gerät (SignalK)'),
-      _textRow('Port (device)', _gpsPort),
+      _header(l.gpsSettingsDevice),
+      _textRow(l.gpsSettingsPort, _gpsPort),
       Padding(
         padding: const EdgeInsets.only(left: 180, bottom: 8),
         child: Wrap(
@@ -600,7 +611,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
       _dropRow<int>(
-        label: 'Baudrate',
+        label: l.gpsSettingsBaudrate,
         value: _gpsBaud,
         items: const [4800, 9600, 38400, 115200],
         labels: const ['4800', '9600', '38400', '115200'],
@@ -617,12 +628,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
           icon: const Icon(Icons.refresh, size: 18),
-          label: const Text('Übernehmen & SignalK neu starten'),
+          label: Text(l.gpsSettingsApply),
           onPressed: () async {
             final ok = await s.saveGpsConfig(_gpsPort.text, _gpsBaud);
             if (mounted) {
+              final l2 = context.l10n;
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(ok ? 'GPS-Konfiguration gespeichert' : 'Fehler beim Speichern'),
+                content: Text(ok ? l2.gpsSettingsConfigSaved : 'Fehler beim Speichern'),
                 duration: const Duration(seconds: 2),
                 backgroundColor: ok ? const Color(0xFF1A472A) : const Color(0xFF7D1A1A),
               ));
@@ -633,89 +645,91 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _header('SignalK'),
       _textRow('SignalK URL', _signalkUrl),
       _dropRow<String>(
-        label: 'GPS-Quelle',
+        label: l.gpsSettingsSource,
         value: (gps['source'] as String?) ?? 'signalk',
         items: const ['signalk', 'gpsd', 'manual'],
         labels: const ['SignalK', 'GPSD', 'Manuell'],
         onChanged: (v) { if (v != null) { s.set('gps', 'source', v); s.save(); } },
       ),
-      _textRow('Mindest-Satelliten (Alarm)', _lowSatThreshold, numeric: true),
+      _textRow(l.gpsSettingsMinSat, _lowSatThreshold, numeric: true),
     ];
   }
 
   // ── Section: AIS ────────────────────────────────────────────────────────────
 
   List<Widget> _ais(SettingsService s) {
+    final l = context.l10n;
     final ais = s.raw['ais'] as Map? ?? {};
     bool b(String k, bool def) => (ais[k] as bool?) ?? def;
     return [
-      _header('AIS'),
-      _switchRow('AIS aktiviert', b('enabled', true),
+      _header(l.settingsSectionAIS),
+      _switchRow(l.aisSettingsEnabled, b('enabled', true),
           (v) { s.set('ais', 'enabled', v); s.save(); }),
       _dropRow<String>(
-        label: 'Anbieter',
+        label: l.aisSettingsProvider,
         value: (ais['provider'] as String?) ?? 'aisstream',
         items: const ['aisstream'],
         labels: const ['AISStream'],
         onChanged: (v) { if (v != null) { s.set('ais', 'provider', v); s.save(); } },
       ),
-      _textRow('API-Key', _aisKey),
-      _textRow('Reichweite (NM)', _aisRange, numeric: true),
+      _textRow(l.aisSettingsApiKey, _aisKey),
+      _textRow(l.aisSettingsRange, _aisRange, numeric: true),
       _dropRow<int>(
-        label: 'Update-Intervall',
+        label: l.aisSettingsInterval,
         value: (ais['updateInterval'] as int?) ?? 60,
         items: const [30, 60, 120, 300],
         labels: const ['30 s', '60 s', '2 min', '5 min'],
         onChanged: (v) { if (v != null) { s.set('ais', 'updateInterval', v); s.save(); } },
       ),
-      _switchRow('Schiff-Beschriftungen', b('showLabels', true),
+      _switchRow(l.aisSettingsLabels, b('showLabels', true),
           (v) { s.set('ais', 'showLabels', v); s.save(); }),
-      _header('Kollisionsalarm (CPA)'),
-      _switchRow('CPA-Alarm aktiviert', b('cpaAlarm', true),
+      _header(l.aisSettingsCpaAlarm),
+      _switchRow(l.aisSettingsCpaEnabled, b('cpaAlarm', true),
           (v) { s.set('ais', 'cpaAlarm', v); s.save(); }),
-      _textRow('Min. CPA-Distanz (NM)', _minCpa, numeric: true),
+      _textRow(l.aisSettingsCpaDistance, _minCpa, numeric: true),
     ];
   }
 
   // ── Section: Einheiten ──────────────────────────────────────────────────────
 
   List<Widget> _einheiten(SettingsService s) {
+    final l = context.l10n;
     final u = s.raw['units'] as Map? ?? {};
     String v(String k, String def) => (u[k] as String?) ?? def;
     return [
-      _header('Einheiten'),
-      _segRow('Geschwindigkeit', v('speed', 'kmh'),
+      _header(l.settingsSectionUnits),
+      _segRow(l.unitsSpeed, v('speed', 'kmh'),
           const [('kmh', 'km/h'), ('kn', 'Knoten')],
           (x) { s.set('units', 'speed', x); s.save(); }),
-      _segRow('Distanz', v('distance', 'km'),
+      _segRow(l.unitsDistance, v('distance', 'km'),
           const [('km', 'km'), ('nm', 'NM')],
           (x) { s.set('units', 'distance', x); s.save(); }),
-      _segRow('Tiefe', v('depth', 'm'),
+      _segRow(l.unitsDepth, v('depth', 'm'),
           const [('m', 'm'), ('ft', 'ft')],
           (x) { s.set('units', 'depth', x); s.save(); }),
-      _segRow('Temperatur', v('temperature', 'c'),
+      _segRow(l.unitsTemperature, v('temperature', 'c'),
           const [('c', '°C'), ('f', '°F')],
           (x) { s.set('units', 'temperature', x); s.save(); }),
-      _segRow('Druck', v('pressure', 'hpa'),
+      _segRow(l.unitsPressure, v('pressure', 'hpa'),
           const [('hpa', 'hPa'), ('bar', 'bar')],
           (x) { s.set('units', 'pressure', x); s.save(); }),
-      _segRow('Volumen', v('volume', 'l'),
+      _segRow(l.unitsVolume, v('volume', 'l'),
           const [('l', 'L'), ('gal', 'gal')],
           (x) { s.set('units', 'volume', x); s.save(); }),
-      _header('Anzeige'),
+      _header(l.mapSettingsDisplay),
       _dropRow<String>(
-        label: 'Koordinatenformat',
+        label: l.unitsCoordFormat,
         value: (s.raw['coordFormat'] as String?) ?? 'decimal',
         items: const ['decimal', 'dm', 'dms'],
-        labels: const ['Dezimal (51.856°)', 'Grad/Min (51° 51.3\')', 'Grad/Min/Sek'],
+        labels: [l.unitsCoordDecimal, l.unitsCoordDegMin, l.unitsCoordDegMinSec],
         onChanged: (v) { if (v != null) { s.raw['coordFormat'] = v; s.save(); } },
       ),
       _dropRow<String>(
-        label: 'Sprache',
+        label: l.unitsLanguage,
         value: (s.raw['language'] as String?) ?? 'de',
         items: const ['de', 'en'],
-        labels: const ['Deutsch', 'English'],
-        onChanged: (v) { if (v != null) { s.raw['language'] = v; s.save(); } },
+        labels: [l.unitsLangDE, l.unitsLangEN],
+        onChanged: (v) { if (v != null) { s.setRaw('language', v); s.save(); } },
       ),
     ];
   }
@@ -733,9 +747,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   List<Widget> _mqtt(SettingsService s) {
+    final l = context.l10n;
     final sensors = s.raw['sensors'] as Map? ?? {};
     return [
-      _header('Externer Zugriff (Sensor-Board)'),
+      _header(l.mqttExternalAccess),
       Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -744,20 +759,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
           border: Border.all(color: const Color(0xFF30363D)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Row(children: [
-            Icon(Icons.sensors, size: 14, color: Color(0xFF4FC3F7)),
-            SizedBox(width: 8),
-            Text('Sensor-Board Verbindung',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+          Row(children: [
+            const Icon(Icons.sensors, size: 14, color: Color(0xFF4FC3F7)),
+            const SizedBox(width: 8),
+            Text(l.mqttSensorBoardConn,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
                     color: Color(0xFFE6EDF3))),
           ]),
           const SizedBox(height: 10),
-          const Text('Broker-Adresse im Sensor eintragen:',
-              style: TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
+          Text(l.mqttBrokerHint,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
           const SizedBox(height: 6),
           if (_piIps.isEmpty)
-            const Text('— (MQTT-Tab antippen zum Laden)',
-                style: TextStyle(fontSize: 13, color: Color(0xFF6A737D)))
+            Text(l.mqttBrokerLoading,
+                style: const TextStyle(fontSize: 13, color: Color(0xFF6A737D)))
           else
             ...(_piIps.map((ip) => Padding(
               padding: const EdgeInsets.only(bottom: 4),
@@ -772,10 +787,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ))),
         ]),
       ),
-      _header('MQTT-Broker'),
-      _textRow('Broker URL',   _mqttUrl),
-      _textRow('Benutzername', _mqttUser),
-      _textRow('Passwort',     _mqttPass, obscure: true),
+      _header(l.mqttBrokerSection),
+      _textRow(l.mqttBrokerUrl,   _mqttUrl),
+      _textRow(l.mqttUsername,    _mqttUser),
+      _textRow(l.mqttPassword,    _mqttPass, obscure: true),
       const SizedBox(height: 12),
       Row(children: [
         Expanded(
@@ -787,7 +802,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             icon: const Icon(Icons.wifi_tethering, size: 16),
-            label: const Text('Verbindung testen'),
+            label: Text(l.mqttTestBtn),
             onPressed: () {
               var urlText = _mqttUrl.text.trim();
               if (urlText.startsWith('mqtt://'))  urlText = urlText.substring(7);
@@ -804,7 +819,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'port': port,
                 'username': _mqttUser.text,
                 'password': _mqttPass.text,
-              }, 'MQTT-Test');
+              }, l.mqttTestBtn, successMsg: l.mqttTestSuccess, failMsg: l.mqttTestFailed);
             },
           ),
         ),
@@ -818,8 +833,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             icon: const Icon(Icons.cleaning_services, size: 16),
-            label: const Text('Bereinigen'),
-            onPressed: () => _mqttAction('/api/mqtt/cleanup', null, 'MQTT-Bereinigung'),
+            label: Text(l.mqttCleanBtn),
+            onPressed: () => _mqttAction('/api/mqtt/cleanup', null, l.mqttCleanBtn,
+                successMsg: l.mqttCleanSuccess, failMsg: l.mqttCleanFailed),
           ),
         ),
       ]),
@@ -834,19 +850,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
           icon: const Icon(Icons.settings_ethernet, size: 16),
-          label: const Text('Externen Zugriff aktivieren'),
+          label: Text(l.mqttEnableExternal),
           onPressed: _fixMqttExternal,
         ),
       ),
-      _header('Tiefen-Alarm'),
-      _textRow('Alarm bei < (m)', _depthAlarm, numeric: true),
-      _switchRow('Tiefenalarm aktiv',
+      _header(l.mqttDepthAlarm),
+      _textRow(l.mqttDepthThreshold, _depthAlarm, numeric: true),
+      _switchRow(l.mqttDepthAlarmEnabled,
           (sensors['depthAlarmEnable'] as bool?) ?? false,
           (v) { s.set('sensors', 'depthAlarmEnable', v); s.save(); }),
     ];
   }
 
-  Future<void> _mqttAction(String path, Map<String, dynamic>? body, String label) async {
+  Future<void> _mqttAction(String path, Map<String, dynamic>? body, String label,
+      {String? successMsg, String? failMsg}) async {
     try {
       final response = body != null
           ? await http.post(Uri.parse('http://localhost:8000$path'),
@@ -854,11 +871,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               body: json.encode(body))
           : await http.post(Uri.parse('http://localhost:8000$path'));
       if (mounted) {
-        final msg = response.statusCode == 200 ? '$label erfolgreich' : '$label fehlgeschlagen (${response.statusCode})';
+        final ok = response.statusCode == 200;
+        final msg = ok
+            ? (successMsg ?? '$label erfolgreich')
+            : (failMsg != null ? '$failMsg (${response.statusCode})' : '$label fehlgeschlagen (${response.statusCode})');
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(msg),
           duration: const Duration(seconds: 3),
-          backgroundColor: response.statusCode == 200 ? const Color(0xFF1A472A) : const Color(0xFF7D1A1A),
+          backgroundColor: ok ? const Color(0xFF1A472A) : const Color(0xFF7D1A1A),
         ));
       }
     } catch (e) {
@@ -872,23 +892,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _fixMqttExternal() async {
+    final l = context.l10n;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
-        title: const Text('Externen MQTT-Zugriff aktivieren?',
-            style: TextStyle(color: Color(0xFFE6EDF3))),
-        content: const Text(
-          'Mosquitto wird so konfiguriert, dass externe Geräte (z.B. Sensorboard) '
-          'sich auf Port 1883 verbinden können.\n\n'
-          'Sudo-Berechtigung muss einmalig per SSH eingerichtet sein.',
-          style: TextStyle(color: Color(0xFF8B949E))),
+        title: Text(l.mqttEnableExternalTitle,
+            style: const TextStyle(color: Color(0xFFE6EDF3))),
+        content: Text(l.mqttEnableExternalBody,
+            style: const TextStyle(color: Color(0xFF8B949E))),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Abbrechen')),
+              child: Text(l.btnCancel)),
           ElevatedButton(onPressed: () => Navigator.pop(ctx, true),
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4CAF50)),
-              child: const Text('Aktivieren')),
+              child: Text(l.mqttActivate)),
         ],
       ),
     );
@@ -919,13 +937,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // ── Section: Display / Screensaver ──────────────────────────────────────────
 
   List<Widget> _display(SettingsService s) {
+    final l = context.l10n;
     return [
-      _header('Bildschirmschoner'),
+      _header(l.displayScreensaver),
       _dropRow<int>(
-        label: 'Timeout',
+        label: l.displayTimeout,
         value: s.screensaverTimeout,
         items: const [0, 5, 10, 15, 30],
-        labels: const ['Aus', '5 Min', '10 Min', '15 Min', '30 Min'],
+        labels: [l.displayTimeoutOff, l.displayTimeout5, l.displayTimeout10, l.displayTimeout15, l.displayTimeout30],
         onChanged: (v) {
           if (v != null) {
             s.set('ui', 'screensaverTimeout', v);
@@ -941,19 +960,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: const Color(0xFF30363D)),
         ),
-        child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Icon(Icons.info_outline, size: 14, color: Color(0xFF4FC3F7)),
-            SizedBox(width: 8),
-            Text('Zweistufiger Bildschirmschoner',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFE6EDF3))),
+            const Icon(Icons.info_outline, size: 14, color: Color(0xFF4FC3F7)),
+            const SizedBox(width: 8),
+            Text(l.displayTwoStage,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFE6EDF3))),
           ]),
-          SizedBox(height: 8),
-          Text(
-            'Stufe 1: App-Overlay (schwarz) nach dem Timeout.\n'
-            'Stufe 2: Display aus (Hardware) 60 Sekunden später.\n'
-            'Jede Berührung weckt beides wieder auf.',
-            style: TextStyle(fontSize: 12, color: Color(0xFF8B949E), height: 1.6),
+          const SizedBox(height: 8),
+          Text(l.displayTwoStageInfo,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF8B949E), height: 1.6),
           ),
         ]),
       ),
@@ -963,8 +979,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // ── Section: System / Update ────────────────────────────────────────────────
 
   List<Widget> _system() {
+    final l = context.l10n;
     return [
-      _header('Software-Version'),
+      _header(l.systemVersionTitle),
       Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -973,15 +990,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           border: Border.all(color: const Color(0xFF30363D)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _verRow('Installiert', _verCurrent),
+          _verRow(l.systemInstalled, _verCurrent),
           const SizedBox(height: 8),
-          _verRow('Verfügbar',   _verLatest),
+          _verRow(l.systemAvailable, _verLatest),
           if (!_verLoading) ...[
             const SizedBox(height: 10),
             Text(
               _verUpToDate
-                  ? '✅ System ist aktuell'
-                  : (_verLatest == '…' ? '' : '🆕 Update verfügbar'),
+                  ? l.updateUpToDate
+                  : (_verLatest == '…' ? '' : l.updateAvailableStatus),
               style: TextStyle(
                 fontSize: 12,
                 color: _verUpToDate
@@ -995,7 +1012,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       const SizedBox(height: 12),
       _sysBtn(
         icon: Icons.refresh,
-        label: _verLoading ? 'Prüfe…' : 'Auf Updates prüfen',
+        label: _verLoading ? l.updateChecking : l.updateCheck,
         color: const Color(0xFF21262D),
         textColor: const Color(0xFFE6EDF3),
         onTap: _verLoading ? null : _checkVersion,
@@ -1004,7 +1021,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 10),
         _sysBtn(
           icon: Icons.system_update_alt,
-          label: 'Jetzt aktualisieren',
+          label: l.updateNow,
           color: const Color(0xFF1565C0),
           textColor: Colors.white,
           onTap: _startUpdate,
@@ -1012,7 +1029,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ],
 
       if (_updateRunning || _updateLog.isNotEmpty) ...[
-        _header('Update-Fortschritt'),
+        _header(l.updateProgress),
         Container(
           height: 220,
           decoration: BoxDecoration(
@@ -1033,22 +1050,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         if (_updateRunning)
-          const Padding(
-            padding: EdgeInsets.only(top: 10),
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
             child: Row(children: [
-              SizedBox(width: 14, height: 14,
+              const SizedBox(width: 14, height: 14,
                   child: CircularProgressIndicator(strokeWidth: 2)),
-              SizedBox(width: 10),
-              Text('Update läuft…',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF8B949E))),
+              const SizedBox(width: 10),
+              Text(l.updateRunning,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF8B949E))),
             ]),
           ),
       ],
 
-      _header('System'),
+      _header(l.settingsSectionSystem),
       _sysBtn(
         icon: Icons.power_settings_new,
-        label: 'Pi herunterfahren',
+        label: l.systemShutdownPiBtn,
         color: const Color(0xFF6B1A1A),
         textColor: Colors.white,
         onTap: _shutdown,
@@ -1116,18 +1133,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _startUpdate() async {
+    final l = context.l10n;
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
-        title: const Text('System aktualisieren',
-            style: TextStyle(color: Color(0xFFE6EDF3))),
-        content: const Text(
-            'Der Pi lädt alle Änderungen und startet danach automatisch neu.',
-            style: TextStyle(color: Color(0xFF8B949E))),
+        title: Text(l.systemUpdateBtn,
+            style: const TextStyle(color: Color(0xFFE6EDF3))),
+        content: Text(l.systemShutdownBody,
+            style: const TextStyle(color: Color(0xFF8B949E))),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false),
-              child: const Text('Abbrechen')),
+              child: Text(l.btnCancel)),
           TextButton(onPressed: () => Navigator.pop(context, true),
               child: const Text('Aktualisieren',
                   style: TextStyle(color: Color(0xFF4FC3F7)))),
@@ -1166,8 +1183,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (_) {
       // Pi neugestartet
       if (mounted) {
+        final l = context.l10n;
         setState(() {
-          _updateLog.add('[System] Verbindung getrennt — Pi startet neu…');
+          _updateLog.add('[System] ${l.updateRestarting}');
           _updateRunning = false;
         });
       }
@@ -1176,17 +1194,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _shutdown() async {
+    final l = context.l10n;
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
-        title: const Text('Pi herunterfahren',
-            style: TextStyle(color: Color(0xFFE6EDF3))),
-        content: const Text('Jetzt herunterfahren?',
-            style: TextStyle(color: Color(0xFF8B949E))),
+        title: Text(l.systemShutdownPiBtn,
+            style: const TextStyle(color: Color(0xFFE6EDF3))),
+        content: Text(l.systemShutdownTitle,
+            style: const TextStyle(color: Color(0xFF8B949E))),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false),
-              child: const Text('Abbrechen')),
+              child: Text(l.btnCancel)),
           TextButton(onPressed: () => Navigator.pop(context, true),
               child: const Text('Herunterfahren',
                   style: TextStyle(color: Color(0xFFEF5350)))),
@@ -1489,16 +1508,17 @@ class _TrackSensorsSectionState extends State<_TrackSensorsSection> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Padding(
         padding: const EdgeInsets.only(top: 24, bottom: 10),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Track-Sensoren aufzeichnen',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+          Text(l.dashSettingsTrackSensors,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
                   color: Color(0xFF4FC3F7), letterSpacing: 0.8)),
           const SizedBox(height: 4),
-          const Text('Welche Dashboard-Sensoren sollen pro Track-Punkt gespeichert werden?',
-              style: TextStyle(fontSize: 12, color: Color(0xFF8B949E))),
+          Text(l.dashSettingsTrackSensorsDesc,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF8B949E))),
           const SizedBox(height: 6),
           const Divider(color: Color(0xFF30363D), height: 1, thickness: 1),
         ]),
@@ -1509,10 +1529,10 @@ class _TrackSensorsSectionState extends State<_TrackSensorsSection> {
           child: Center(child: CircularProgressIndicator(color: Color(0xFF4FC3F7), strokeWidth: 2)),
         )
       else if (_dashPaths.isEmpty)
-        const Padding(
-          padding: EdgeInsets.only(bottom: 8),
-          child: Text('Keine Sensoren im Dashboard konfiguriert.',
-              style: TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(l.dashSettingsNoSensors,
+              style: const TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
         )
       else
         ..._dashPaths.map((path) {
@@ -1563,17 +1583,18 @@ class _SchleusenSectionState extends State<_SchleusenSection> {
 
   Future<void> _run(String path, String label, {bool confirm = true}) async {
     if (confirm) {
+      final l = context.l10n;
       final ok = await showDialog<bool>(
         context: context,
         builder: (_) => AlertDialog(
           backgroundColor: const Color(0xFF161B22),
           title: Text(label, style: const TextStyle(color: Color(0xFFE6EDF3))),
-          content: Text('Vorgang starten?',
-              style: const TextStyle(color: Color(0xFF8B949E))),
+          content: const Text('Vorgang starten?',
+              style: TextStyle(color: Color(0xFF8B949E))),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Abbrechen', style: TextStyle(color: Color(0xFF8B949E)))),
+                child: Text(l.btnCancel, style: const TextStyle(color: Color(0xFF8B949E)))),
             ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1565C0)),
                 onPressed: () => Navigator.pop(context, true),
@@ -1611,28 +1632,29 @@ class _SchleusenSectionState extends State<_SchleusenSection> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _h('Schleusen-Datenbank'),
+      _h(l.locksDb),
       const SizedBox(height: 8),
-      _btn('Aus OpenStreetMap importieren', Icons.download,
-          () => _run('/api/locks/import-osm', 'OSM-Import')),
+      _btn(l.locksImportOSM, Icons.download,
+          () => _run('/api/locks/import-osm', l.locksOSMImport)),
       const SizedBox(height: 10),
-      _btn('VHF & Kontaktdaten anreichern', Icons.auto_fix_high,
-          () => _run('/api/locks/enrich', 'Datenanreicherung')),
+      _btn(l.locksEnrich, Icons.auto_fix_high,
+          () => _run('/api/locks/enrich', l.locksDataEnrichment)),
       const SizedBox(height: 10),
-      _btn('Qualitätsbericht anzeigen', Icons.bar_chart,
-          () => _run('/api/locks/quality', 'Qualitätsbericht', confirm: false)),
+      _btn(l.locksQualityReport, Icons.bar_chart,
+          () => _run('/api/locks/quality', l.locksQualityTitle, confirm: false)),
       const SizedBox(height: 10),
-      _btn('Positionen überprüfen & korrigieren', Icons.my_location,
-          () => _run('/api/locks/verify-positions', 'Positions-Check')),
+      _btn(l.locksCheckPositions, Icons.my_location,
+          () => _run('/api/locks/verify-positions', l.locksPosCheck)),
       if (_busy) ...[
         const SizedBox(height: 20),
-        const Row(children: [
-          SizedBox(width: 20, height: 20,
+        Row(children: [
+          const SizedBox(width: 20, height: 20,
               child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4FC3F7))),
-          SizedBox(width: 12),
-          Text('Bitte warten…',
-              style: TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
+          const SizedBox(width: 12),
+          Text(l.locksPleaseWait,
+              style: const TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
         ]),
       ],
       if (_status.isNotEmpty) ...[
@@ -1755,6 +1777,7 @@ class _ENCSectionState extends State<_ENCSection> {
   }
 
   Future<void> _delete(String chartId, String name) async {
+    final l = context.l10n;
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -1766,11 +1789,11 @@ class _ENCSectionState extends State<_ENCSection> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Abbrechen', style: TextStyle(color: Color(0xFF8B949E)))),
+              child: Text(l.btnCancel, style: const TextStyle(color: Color(0xFF8B949E)))),
           ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7D1A1A)),
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Löschen')),
+              child: Text(l.btnDelete)),
         ],
       ),
     );
@@ -1783,24 +1806,25 @@ class _ENCSectionState extends State<_ENCSection> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _h('Installierte ENC-Karten'),
+      _h(l.encInstalled),
       if (_loadingInstalled)
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 16),
           child: Center(child: CircularProgressIndicator(color: Color(0xFF4FC3F7), strokeWidth: 2)),
         )
       else if (_installed.isEmpty)
-        const Padding(
-          padding: EdgeInsets.only(top: 8, bottom: 16),
-          child: Text('Keine Karten installiert.',
-              style: TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
+        Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 16),
+          child: Text(l.encNoCharts,
+              style: const TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
         )
       else
-        ..._installed.map((chart) => _chartTile(chart)),
+        ..._installed.map((chart) => _chartTile(chart, l)),
 
       const SizedBox(height: 16),
-      _h('Verfügbare Karten (ELWIS)'),
+      _h(l.encAvailable),
       if (!_catalogLoaded)
         SizedBox(
           width: double.infinity,
@@ -1815,12 +1839,12 @@ class _ENCSectionState extends State<_ENCSection> {
                 ? const SizedBox(width: 16, height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4FC3F7)))
                 : const Icon(Icons.cloud_download_outlined, size: 18),
-            label: Text(_loadingCatalog ? 'Lädt…' : 'Katalog laden'),
+            label: Text(_loadingCatalog ? l.encLoading : l.encLoadCatalog),
             onPressed: _loadingCatalog ? null : _loadCatalog,
           ),
         )
       else
-        ..._catalog.map((item) => _catalogTile(item)),
+        ..._catalog.map((item) => _catalogTile(item, l)),
     ]);
   }
 
@@ -1835,7 +1859,7 @@ class _ENCSectionState extends State<_ENCSection> {
         ]),
       );
 
-  Widget _chartTile(Map<String, dynamic> chart) {
+  Widget _chartTile(Map<String, dynamic> chart, AppLocalizations l) {
     final name     = chart['name'] as String? ?? chart['id'] as String? ?? '?';
     final id       = chart['id']   as String? ?? '';
     final files    = chart['enc_files'] as int? ?? 0;
@@ -1863,7 +1887,7 @@ class _ENCSectionState extends State<_ENCSection> {
         IconButton(
           icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFF8B949E)),
           onPressed: () => _delete(id, name),
-          tooltip: 'Löschen',
+          tooltip: l.btnDelete,
           constraints: const BoxConstraints(),
           padding: const EdgeInsets.all(6),
         ),
@@ -1871,7 +1895,7 @@ class _ENCSectionState extends State<_ENCSection> {
     );
   }
 
-  Widget _catalogTile(Map<String, dynamic> item) {
+  Widget _catalogTile(Map<String, dynamic> item, AppLocalizations l) {
     final id        = item['id']   as String? ?? '';
     final name      = item['name'] as String? ?? id;
     final installed = _isInstalled(id);
@@ -1913,8 +1937,8 @@ class _ENCSectionState extends State<_ENCSection> {
             ),
           ),
         if (installed)
-          const Text('Installiert',
-              style: TextStyle(fontSize: 12, color: Color(0xFF4CAF50))),
+          Text(l.encInstalledLabel,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF4CAF50))),
       ]),
     );
   }
@@ -2063,6 +2087,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
   }
 
   Future<void> _deleteSensorTopic(String topic, int groupIdx, int sensorIdx) async {
+    final l = context.l10n;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -2073,11 +2098,11 @@ class _DashboardSectionState extends State<_DashboardSection> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Abbrechen', style: TextStyle(color: Color(0xFF8B949E)))),
+              child: Text(l.btnCancel, style: const TextStyle(color: Color(0xFF8B949E)))),
           ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB71C1C)),
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Löschen')),
+              child: Text(l.btnDelete)),
         ],
       ),
     );
@@ -2342,6 +2367,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _h('Dashboard-Editor'),
       if (_loading)
@@ -2368,7 +2394,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 icon: const Icon(Icons.save_outlined, size: 16),
-                label: const Text('Speichern'),
+                label: Text(l.btnSave),
                 onPressed: _saveLayout,
               ),
           ] else
@@ -3192,7 +3218,7 @@ class _SimpleInputDialog extends StatelessWidget {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Abbrechen', style: TextStyle(color: Color(0xFF8B949E)))),
+            child: Text(context.l10n.btnCancel, style: const TextStyle(color: Color(0xFF8B949E)))),
         ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1565C0)),
             onPressed: onSave,
@@ -3227,8 +3253,8 @@ class _AddWidgetSheet extends StatelessWidget {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(dCtx),
-              child: const Text('Abbrechen',
-                  style: TextStyle(color: Color(0xFF8B949E)))),
+              child: Text(ctx.l10n.btnCancel,
+                  style: const TextStyle(color: Color(0xFF8B949E)))),
         ],
       ),
     );
@@ -3735,39 +3761,42 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
             ),
           ),
           // Footer
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: Color(0xFF30363D))),
-            ),
-            child: Row(children: [
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF8B949E),
-                    side: const BorderSide(color: Color(0xFF30363D)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Abbrechen'),
-                ),
+          Builder(builder: (ctx) {
+            final l = ctx.l10n;
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Color(0xFF30363D))),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1565C0),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              child: Row(children: [
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF8B949E),
+                      side: const BorderSide(color: Color(0xFF30363D)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(l.btnCancel),
                   ),
-                  onPressed: _commit,
-                  child: const Text('Speichern'),
                 ),
-              ),
-            ]),
-          ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1565C0),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: _commit,
+                    child: Text(l.btnSave),
+                  ),
+                ),
+              ]),
+            );
+          }),
         ]),
       ),
     );
@@ -4038,6 +4067,7 @@ class _DatenSectionState extends State<_DatenSection> {
   }
 
   Future<void> _resetToDefaults() async {
+    final l = context.l10n;
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -4051,7 +4081,7 @@ class _DatenSectionState extends State<_DatenSection> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Abbrechen', style: TextStyle(color: Color(0xFF8B949E)))),
+              child: Text(l.btnCancel, style: const TextStyle(color: Color(0xFF8B949E)))),
           ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7D1A1A)),
               onPressed: () => Navigator.pop(context, true),

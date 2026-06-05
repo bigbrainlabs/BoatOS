@@ -1,0 +1,948 @@
+{
+  "@@locale": "de",
+
+  "appTitle": "BoatOS",
+  "@appTitle": { "description": "Application title" },
+
+  "navTabMap": "Karte",
+  "@navTabMap": { "description": "Bottom nav tab: Map" },
+
+  "navTabDashboard": "Dashboard",
+  "@navTabDashboard": { "description": "Bottom nav tab: Dashboard" },
+
+  "navTabLogbook": "Logbuch",
+  "@navTabLogbook": { "description": "Bottom nav tab: Logbook" },
+
+  "btnCancel": "Abbrechen",
+  "@btnCancel": { "description": "Generic cancel button" },
+
+  "btnSave": "Speichern",
+  "@btnSave": { "description": "Generic save button" },
+
+  "btnDelete": "Löschen",
+  "@btnDelete": { "description": "Generic delete button" },
+
+  "btnAdd": "Hinzufügen",
+  "@btnAdd": { "description": "Generic add button" },
+
+  "btnStop": "Stoppen",
+  "@btnStop": { "description": "Generic stop button" },
+
+  "btnConnect": "Verbinden",
+  "@btnConnect": { "description": "Generic connect button" },
+
+  "btnDone": "Fertig",
+  "@btnDone": { "description": "Generic done button" },
+
+  "btnEnd": "Beenden",
+  "@btnEnd": { "description": "Generic end/finish button" },
+
+  "systemDialogTitle": "System",
+  "@systemDialogTitle": { "description": "Shutdown/restart dialog title" },
+
+  "systemDialogBody": "Was soll das BoatOS-System jetzt tun?",
+  "@systemDialogBody": { "description": "Shutdown/restart dialog body text" },
+
+  "systemRestart": "Neu starten",
+  "@systemRestart": { "description": "Restart button in system dialog" },
+
+  "systemShutdown": "Herunterfahren",
+  "@systemShutdown": { "description": "Shutdown button in system dialog" },
+
+  "updateAvailable": "Update verfügbar",
+  "@updateAvailable": { "description": "Update available badge in nav bar" },
+
+  "updateCheck": "Auf Updates prüfen",
+  "@updateCheck": { "description": "Check for updates button" },
+
+  "updateNow": "Jetzt aktualisieren",
+  "@updateNow": { "description": "Update now button" },
+
+  "updateProgress": "Update-Fortschritt",
+  "@updateProgress": { "description": "Update progress section title" },
+
+  "updateRunning": "Update läuft…",
+  "@updateRunning": { "description": "Shown while update is in progress" },
+
+  "updateChecking": "Prüfe…",
+  "@updateChecking": { "description": "Shown while checking for updates" },
+
+  "updateUpToDate": "✅ System ist aktuell",
+  "@updateUpToDate": { "description": "System is up to date status" },
+
+  "updateAvailableStatus": "🆕 Update verfügbar",
+  "@updateAvailableStatus": { "description": "Update available status text" },
+
+  "updateRestarting": "Verbindung getrennt — Pi startet neu…",
+  "@updateRestarting": { "description": "Shown after update triggers restart" },
+
+  "hotspotActive": "Hotspot aktiv",
+  "@hotspotActive": { "description": "Hotspot active banner title" },
+
+  "hotspotSsid": "SSID",
+  "@hotspotSsid": { "description": "Hotspot SSID label" },
+
+  "hotspotPassword": "Passwort",
+  "@hotspotPassword": { "description": "Hotspot password label" },
+
+  "hotspotIp": "IP",
+  "@hotspotIp": { "description": "Hotspot IP label" },
+
+  "wifiTitle": "WLAN",
+  "@wifiTitle": { "description": "WiFi sheet title" },
+
+  "wifiAdapterRestart": "Adapter neu starten",
+  "@wifiAdapterRestart": { "description": "Restart WiFi adapter tooltip" },
+
+  "wifiAvailableNetworks": "Verfügbare Netzwerke",
+  "@wifiAvailableNetworks": { "description": "Available networks section header" },
+
+  "wifiSearching": "Suche Netzwerke…",
+  "@wifiSearching": { "description": "Shown while scanning for networks" },
+
+  "wifiConnected": "Verbunden",
+  "@wifiConnected": { "description": "Connected status text" },
+
+  "wifiNotConnected": "Nicht verbunden",
+  "@wifiNotConnected": { "description": "Not connected status text" },
+
+  "wifiConnectedSaved": "Verbunden · Gespeichert",
+  "@wifiConnectedSaved": { "description": "Connected and saved network badge" },
+
+  "wifiSaved": "Gespeichert",
+  "@wifiSaved": { "description": "Saved network badge" },
+
+  "wifiStartHotspot": "Hotspot starten",
+  "@wifiStartHotspot": { "description": "Start hotspot button" },
+
+  "wifiDisconnect": "Trennen",
+  "@wifiDisconnect": { "description": "Disconnect from WiFi button" },
+
+  "wifiSignal": "Signal: {percent}%",
+  "@wifiSignal": {
+    "description": "WiFi signal strength",
+    "placeholders": { "percent": { "type": "int" } }
+  },
+
+  "wifiForget": "Vergessen",
+  "@wifiForget": { "description": "Forget saved network button" },
+
+  "wifiForgetTitle": "\"{ssid}\" vergessen?",
+  "@wifiForgetTitle": {
+    "description": "Forget network confirmation dialog title",
+    "placeholders": { "ssid": { "type": "String" } }
+  },
+
+  "wifiForgetBody": "Das gespeicherte Profil wird gelöscht.",
+  "@wifiForgetBody": { "description": "Forget network confirmation dialog body" },
+
+  "wifiConnectTo": "Verbinden mit \"{ssid}\"",
+  "@wifiConnectTo": {
+    "description": "Password dialog title",
+    "placeholders": { "ssid": { "type": "String" } }
+  },
+
+  "wifiPasswordLabel": "WLAN-Passwort",
+  "@wifiPasswordLabel": { "description": "WiFi password keyboard label" },
+
+  "wifiPasswordHint": "Passwort eingeben…",
+  "@wifiPasswordHint": { "description": "WiFi password field placeholder" },
+
+  "gpsStatusTitle": "GPS Status",
+  "@gpsStatusTitle": { "description": "GPS panel title" },
+
+  "gpsFix": "Fix",
+  "@gpsFix": { "description": "GPS fix status" },
+
+  "gpsNoFix": "Kein Fix",
+  "@gpsNoFix": { "description": "GPS no fix status" },
+
+  "gpsSatellites": "Satelliten",
+  "@gpsSatellites": { "description": "GPS satellites label" },
+
+  "gpsAltitude": "Höhe",
+  "@gpsAltitude": { "description": "GPS altitude label" },
+
+  "gpsPosition": "Position",
+  "@gpsPosition": { "description": "GPS position label" },
+
+  "gpsNoData": "Keine GPS-Daten empfangen",
+  "@gpsNoData": { "description": "No GPS data received message" },
+
+  "gpsQualityVeryGood": "sehr gut",
+  "@gpsQualityVeryGood": { "description": "HDOP quality: very good" },
+
+  "gpsQualityGood": "gut",
+  "@gpsQualityGood": { "description": "HDOP quality: good" },
+
+  "gpsQualityOk": "ok",
+  "@gpsQualityOk": { "description": "HDOP quality: ok" },
+
+  "gpsQualityBad": "schlecht",
+  "@gpsQualityBad": { "description": "HDOP quality: bad" },
+
+  "dashboardNoLayout": "Kein Dashboard-Layout konfiguriert.",
+  "@dashboardNoLayout": { "description": "No dashboard layout configured message" },
+
+  "dashboardNoScreens": "Keine Screens im Layout.",
+  "@dashboardNoScreens": { "description": "No screens in layout message" },
+
+  "dashboardNoWidgets": "Keine Widgets im Layout.",
+  "@dashboardNoWidgets": { "description": "No widgets in layout message" },
+
+  "dashboardAlarmMute": "Alarm stumm",
+  "@dashboardAlarmMute": { "description": "Mute impact alarm button" },
+
+  "mapOfflineFallback": "⚠ Offline-Karten nicht verfügbar · Online-Fallback (OpenStreetMap)",
+  "@mapOfflineFallback": { "description": "Offline maps unavailable banner" },
+
+  "mapLayerLocks": "Schleusen",
+  "@mapLayerLocks": { "description": "Map layer toggle: Locks" },
+
+  "mapLayerGauge": "Pegel",
+  "@mapLayerGauge": { "description": "Map layer toggle: Water levels" },
+
+  "mapLayerFavorites": "Favoriten",
+  "@mapLayerFavorites": { "description": "Map layer toggle: Favorites" },
+
+  "mapPlanRoute": "Route planen",
+  "@mapPlanRoute": { "description": "Plan route button" },
+
+  "mapDeleteWaypointTitle": "Wegpunkt {index} löschen?",
+  "@mapDeleteWaypointTitle": {
+    "description": "Delete waypoint confirmation title",
+    "placeholders": { "index": { "type": "int" } }
+  },
+
+  "mapSavedRoutesTitle": "Gespeicherte Routen",
+  "@mapSavedRoutesTitle": { "description": "Saved routes sheet title" },
+
+  "mapNoSavedRoutes": "Keine gespeicherten Routen.",
+  "@mapNoSavedRoutes": { "description": "No saved routes message" },
+
+  "mapSaveRoute": "Route speichern",
+  "@mapSaveRoute": { "description": "Save route button/dialog title" },
+
+  "mapRouteNameHint": "Name eingeben…",
+  "@mapRouteNameHint": { "description": "Route name input placeholder" },
+
+  "mapSimulation": "Simulation",
+  "@mapSimulation": { "description": "Simulation mode label" },
+
+  "mapSimStop": "Sim Stop",
+  "@mapSimStop": { "description": "Stop simulation button" },
+
+  "mapNavigation": "Navigation",
+  "@mapNavigation": { "description": "Navigation mode label" },
+
+  "mapNavStop": "Stopp",
+  "@mapNavStop": { "description": "Stop navigation button" },
+
+  "mapNow": "Jetzt",
+  "@mapNow": { "description": "Departure time: now" },
+
+  "mapToday": "heute",
+  "@mapToday": { "description": "Today label in route panel" },
+
+  "mapDeparture": "Abfahrt:",
+  "@mapDeparture": { "description": "Departure time label" },
+
+  "mapDirect": "Direkt",
+  "@mapDirect": { "description": "Direct route type" },
+
+  "mapLongTapHint": "Langer Tipp auf die Karte, um Wegpunkt zu setzen",
+  "@mapLongTapHint": { "description": "Long tap hint in route panel" },
+
+  "mapMobTitle": "🆘 SOS / Man Over Board",
+  "@mapMobTitle": { "description": "MOB confirmation dialog title" },
+
+  "mapMobConfirm": "GPS-Position jetzt als MOB-Marker setzen?",
+  "@mapMobConfirm": { "description": "MOB confirmation dialog body" },
+
+  "mapMobSet": "MOB SETZEN",
+  "@mapMobSet": { "description": "Set MOB button" },
+
+  "navstatEngine": "Unter Maschine",
+  "@navstatEngine": { "description": "AIS navstat: under way using engine" },
+
+  "navstatAnchored": "Geankert",
+  "@navstatAnchored": { "description": "AIS navstat: at anchor" },
+
+  "navstatNUC": "Nicht manövrierfähig",
+  "@navstatNUC": { "description": "AIS navstat: not under command" },
+
+  "navstatRestricted": "Eingeschränkt manövrierfähig",
+  "@navstatRestricted": { "description": "AIS navstat: restricted manoeuvrability" },
+
+  "navstatMoored": "Festgemacht",
+  "@navstatMoored": { "description": "AIS navstat: moored" },
+
+  "navstatAground": "Auf Grund",
+  "@navstatAground": { "description": "AIS navstat: aground" },
+
+  "navstatFishing": "Fischerei",
+  "@navstatFishing": { "description": "AIS navstat: fishing" },
+
+  "navstatUnknown": "Unbekannt",
+  "@navstatUnknown": { "description": "AIS navstat: unknown" },
+
+  "routePlannerHint": "Langer Tipp auf die Karte → Wegpunkt setzen",
+  "@routePlannerHint": { "description": "Route planner long-tap hint" },
+
+  "logbookTitle": "Logbuch",
+  "@logbookTitle": { "description": "Logbook screen title" },
+
+  "logbookTabTrip": "Fahrt",
+  "@logbookTabTrip": { "description": "Logbook tab: active trip" },
+
+  "logbookTabArchive": "Archiv",
+  "@logbookTabArchive": { "description": "Logbook tab: archive" },
+
+  "logbookTabCrew": "Crew",
+  "@logbookTabCrew": { "description": "Logbook tab: crew" },
+
+  "logbookNoActiveTrip": "Keine aktive Fahrtaufzeichnung",
+  "@logbookNoActiveTrip": { "description": "No active trip recording message" },
+
+  "logbookStartTrip": "Fahrt starten",
+  "@logbookStartTrip": { "description": "Start trip button" },
+
+  "logbookDistance": "Distanz",
+  "@logbookDistance": { "description": "Distance stat label" },
+
+  "logbookDuration": "Dauer",
+  "@logbookDuration": { "description": "Duration stat label" },
+
+  "logbookPoints": "Punkte",
+  "@logbookPoints": { "description": "Track points stat label" },
+
+  "logbookAvgSpeed": "Ø Geschw.",
+  "@logbookAvgSpeed": { "description": "Average speed stat label" },
+
+  "logbookPause": "Pause",
+  "@logbookPause": { "description": "Pause trip button" },
+
+  "logbookResume": "Weiter",
+  "@logbookResume": { "description": "Resume trip button" },
+
+  "logbookEndTrip": "Fahrt beenden",
+  "@logbookEndTrip": { "description": "End trip button" },
+
+  "logbookAddNote": "Notiz hinzufügen",
+  "@logbookAddNote": { "description": "Add note button" },
+
+  "logbookEndTripTitle": "Fahrt beenden?",
+  "@logbookEndTripTitle": { "description": "End trip confirmation dialog title" },
+
+  "logbookEndTripBody": "Die Aufzeichnung wird gestoppt und gespeichert.",
+  "@logbookEndTripBody": { "description": "End trip confirmation dialog body" },
+
+  "logbookStopFailed": "Stop fehlgeschlagen",
+  "@logbookStopFailed": { "description": "Trip stop failed error message" },
+
+  "logbookStartFailed": "Start fehlgeschlagen",
+  "@logbookStartFailed": { "description": "Trip start failed error message" },
+
+  "logbookPauseFailed": "Pause fehlgeschlagen",
+  "@logbookPauseFailed": { "description": "Trip pause failed error message" },
+
+  "logbookResumeFailed": "Fortsetzen fehlgeschlagen",
+  "@logbookResumeFailed": { "description": "Trip resume failed error message" },
+
+  "logbookNoteHint": "Notiz...",
+  "@logbookNoteHint": { "description": "Note input placeholder" },
+
+  "logbookNoteSaveFailed": "Notiz konnte nicht gespeichert werden",
+  "@logbookNoteSaveFailed": { "description": "Note save failed error message" },
+
+  "logbookPaused": "Pausiert",
+  "@logbookPaused": { "description": "Trip paused status" },
+
+  "logbookRecording": "Aufzeichnung läuft",
+  "@logbookRecording": { "description": "Trip recording status" },
+
+  "logbookNoTrips": "Keine Fahrten gespeichert",
+  "@logbookNoTrips": { "description": "No trips saved message" },
+
+  "logbookCrewForTrip": "Crew für diese Fahrt",
+  "@logbookCrewForTrip": { "description": "Crew selection sheet title" },
+
+  "logbookCrewOptional": "Optional — kann leer bleiben",
+  "@logbookCrewOptional": { "description": "Crew selection optional hint" },
+
+  "logbookNoCrewAvailable": "Keine Crew-Mitglieder vorhanden.",
+  "@logbookNoCrewAvailable": { "description": "No crew members available" },
+
+  "logbookLoadError": "Fehler beim Laden.",
+  "@logbookLoadError": { "description": "Load error message" },
+
+  "logbookWeatherStart": "Wetter (Start)",
+  "@logbookWeatherStart": { "description": "Trip detail: weather at start" },
+
+  "logbookWaterLevels": "Pegelstände",
+  "@logbookWaterLevels": { "description": "Trip detail: water levels section" },
+
+  "logbookStats": "Statistiken",
+  "@logbookStats": { "description": "Trip detail: statistics section" },
+
+  "logbookMaxSpeed": "Max Speed",
+  "@logbookMaxSpeed": { "description": "Trip stat: max speed" },
+
+  "logbookAvgSpeedStat": "Ø Speed",
+  "@logbookAvgSpeedStat": { "description": "Trip stat: average speed" },
+
+  "logbookEntries": "Logeinträge",
+  "@logbookEntries": { "description": "Trip detail: log entries section" },
+
+  "logbookOnMap": "Auf Karte",
+  "@logbookOnMap": { "description": "Show trip on map button" },
+
+  "logbookGpxSaved": "GPX gespeichert: {path}",
+  "@logbookGpxSaved": {
+    "description": "GPX export success message",
+    "placeholders": { "path": { "type": "String" } }
+  },
+
+  "logbookGpxFailed": "GPX-Export fehlgeschlagen",
+  "@logbookGpxFailed": { "description": "GPX export failed message" },
+
+  "logbookStart": "Start",
+  "@logbookStart": { "description": "Trip log entry type: start" },
+
+  "logbookEnd": "Ende",
+  "@logbookEnd": { "description": "Trip log entry type: end" },
+
+  "logbookContinue": "Weiterfahrt",
+  "@logbookContinue": { "description": "Trip log entry type: continue" },
+
+  "logbookNote": "Notiz",
+  "@logbookNote": { "description": "Trip log entry type: note" },
+
+  "logbookTripsCount": "Fahrten",
+  "@logbookTripsCount": { "description": "Crew trip count suffix" },
+
+  "crewAddTitle": "Crew hinzufügen",
+  "@crewAddTitle": { "description": "Add crew member dialog title" },
+
+  "crewEditTitle": "Crew bearbeiten",
+  "@crewEditTitle": { "description": "Edit crew member dialog title" },
+
+  "crewAvatar": "Avatar",
+  "@crewAvatar": { "description": "Crew avatar label" },
+
+  "crewName": "Name",
+  "@crewName": { "description": "Crew member name label" },
+
+  "crewRole": "Rolle",
+  "@crewRole": { "description": "Crew member role label" },
+
+  "crewEmail": "E-Mail (optional)",
+  "@crewEmail": { "description": "Crew member email label" },
+
+  "crewPhone": "Telefon (optional)",
+  "@crewPhone": { "description": "Crew member phone label" },
+
+  "crewNameRequired": "Name erforderlich",
+  "@crewNameRequired": { "description": "Name required validation error" },
+
+  "crewDeleteTitle": "{name} löschen?",
+  "@crewDeleteTitle": {
+    "description": "Delete crew member confirmation title",
+    "placeholders": { "name": { "type": "String" } }
+  },
+
+  "crewDeleteBody": "Crew-Mitglied wird entfernt.",
+  "@crewDeleteBody": { "description": "Delete crew member confirmation body" },
+
+  "crewDeleteFailed": "Löschen fehlgeschlagen",
+  "@crewDeleteFailed": { "description": "Delete crew member failed message" },
+
+  "crewEmpty": "Keine Crew-Mitglieder",
+  "@crewEmpty": { "description": "No crew members message" },
+
+  "favoritesTitle": "Favoriten ({count})",
+  "@favoritesTitle": {
+    "description": "Favorites sheet title with count",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "favoritesEmpty": "Keine Favoriten gespeichert",
+  "@favoritesEmpty": { "description": "No favorites saved message" },
+
+  "favoritesAdd": "Favorit hinzufügen",
+  "@favoritesAdd": { "description": "Add favorite sheet title" },
+
+  "favoritesCategory": "Kategorie",
+  "@favoritesCategory": { "description": "Favorite category label" },
+
+  "favoritesMarina": "Marina",
+  "@favoritesMarina": { "description": "Favorite category: marina" },
+
+  "favoritesAnchor": "Ankerplatz",
+  "@favoritesAnchor": { "description": "Favorite category: anchorage" },
+
+  "favoritesFuel": "Tankstelle",
+  "@favoritesFuel": { "description": "Favorite category: fuel station" },
+
+  "favoritesLock": "Schleuse",
+  "@favoritesLock": { "description": "Favorite category: lock" },
+
+  "favoritesBridge": "Brücke",
+  "@favoritesBridge": { "description": "Favorite category: bridge" },
+
+  "favoritesRestaurant": "Restaurant",
+  "@favoritesRestaurant": { "description": "Favorite category: restaurant" },
+
+  "favoritesShop": "Geschäft",
+  "@favoritesShop": { "description": "Favorite category: shop" },
+
+  "favoritesDanger": "Gefahrenstelle",
+  "@favoritesDanger": { "description": "Favorite category: hazard" },
+
+  "favoritesOther": "Sonstiges",
+  "@favoritesOther": { "description": "Favorite category: other" },
+
+  "favoritesNotes": "Notizen (optional)",
+  "@favoritesNotes": { "description": "Favorite notes field placeholder" },
+
+  "favoritesSaveFailed": "Fehler beim Speichern",
+  "@favoritesSaveFailed": { "description": "Favorite save failed message" },
+
+  "favoritesGoTo": "Zur Position",
+  "@favoritesGoTo": { "description": "Go to favorite position button" },
+
+  "favoritesAsWaypoint": "Als Wegpunkt",
+  "@favoritesAsWaypoint": { "description": "Add favorite as waypoint button" },
+
+  "favoritesPosition": "Position",
+  "@favoritesPosition": { "description": "Favorite position label" },
+
+  "keyboardHint": "Eingabe…",
+  "@keyboardHint": { "description": "Onscreen keyboard empty input placeholder" },
+
+  "settingsTitle": "Einstellungen",
+  "@settingsTitle": { "description": "Settings screen title" },
+
+  "settingsSaved": "Gespeichert",
+  "@settingsSaved": { "description": "Settings saved snackbar message" },
+
+  "settingsSectionShip": "Schiff",
+  "@settingsSectionShip": { "description": "Settings section: vessel" },
+
+  "settingsSectionMap": "Karte",
+  "@settingsSectionMap": { "description": "Settings section: map" },
+
+  "settingsSectionNavigation": "Navigation",
+  "@settingsSectionNavigation": { "description": "Settings section: navigation" },
+
+  "settingsSectionGPS": "GPS",
+  "@settingsSectionGPS": { "description": "Settings section: GPS" },
+
+  "settingsSectionAIS": "AIS",
+  "@settingsSectionAIS": { "description": "Settings section: AIS" },
+
+  "settingsSectionUnits": "Einheiten",
+  "@settingsSectionUnits": { "description": "Settings section: units" },
+
+  "settingsSectionMQTT": "MQTT",
+  "@settingsSectionMQTT": { "description": "Settings section: MQTT" },
+
+  "settingsSectionLocks": "Schleusen",
+  "@settingsSectionLocks": { "description": "Settings section: locks" },
+
+  "settingsSectionENC": "ENC-Karten",
+  "@settingsSectionENC": { "description": "Settings section: ENC charts" },
+
+  "settingsSectionDashboard": "Dashboard",
+  "@settingsSectionDashboard": { "description": "Settings section: dashboard" },
+
+  "settingsSectionData": "Daten",
+  "@settingsSectionData": { "description": "Settings section: data" },
+
+  "settingsSectionDisplay": "Display",
+  "@settingsSectionDisplay": { "description": "Settings section: display" },
+
+  "settingsSectionSystem": "System",
+  "@settingsSectionSystem": { "description": "Settings section: system" },
+
+  "shipIconLabel": "Boot-Icon",
+  "@shipIconLabel": { "description": "Boat icon selector label" },
+
+  "shipYacht": "Yacht",
+  "@shipYacht": { "description": "Boat type: yacht" },
+
+  "shipMotorboat": "Motorboot",
+  "@shipMotorboat": { "description": "Boat type: motorboat" },
+
+  "shipSailboat": "Segelboot",
+  "@shipSailboat": { "description": "Boat type: sailboat" },
+
+  "shipKayak": "Kajak",
+  "@shipKayak": { "description": "Boat type: kayak" },
+
+  "shipDimensions": "Abmessungen",
+  "@shipDimensions": { "description": "Boat dimensions section header" },
+
+  "shipLength": "Länge (m)",
+  "@shipLength": { "description": "Boat length field label" },
+
+  "shipBeam": "Breite (m)",
+  "@shipBeam": { "description": "Boat beam field label" },
+
+  "shipDraft": "Tiefgang (m)",
+  "@shipDraft": { "description": "Boat draft field label" },
+
+  "shipHeight": "Höhe (m)",
+  "@shipHeight": { "description": "Boat air draft field label" },
+
+  "shipDrive": "Antrieb",
+  "@shipDrive": { "description": "Boat propulsion section header" },
+
+  "shipCruiseSpeed": "Reisegeschw. (km/h)",
+  "@shipCruiseSpeed": { "description": "Cruise speed field label" },
+
+  "shipFuelCapacity": "Kraftstoff (L)",
+  "@shipFuelCapacity": { "description": "Fuel capacity field label" },
+
+  "shipFuelConsumption": "Verbrauch (L/h)",
+  "@shipFuelConsumption": { "description": "Fuel consumption field label" },
+
+  "mapSettingsOpenSeaMap": "OpenSeaMap",
+  "@mapSettingsOpenSeaMap": { "description": "OpenSeaMap toggle label" },
+
+  "mapSettingsShowLocks": "Schleusen anzeigen",
+  "@mapSettingsShowLocks": { "description": "Show locks toggle label" },
+
+  "mapSettingsShowGauges": "Pegelstände anzeigen",
+  "@mapSettingsShowGauges": { "description": "Show water levels toggle label" },
+
+  "mapSettingsShowTrack": "Track anzeigen",
+  "@mapSettingsShowTrack": { "description": "Show track toggle label" },
+
+  "mapSettingsAutoCenter": "Auto-Zentrieren",
+  "@mapSettingsAutoCenter": { "description": "Auto-center toggle label" },
+
+  "mapSettingsHeadingUp": "Kurs-Oben (Heading-Up)",
+  "@mapSettingsHeadingUp": { "description": "Heading-up mode toggle label" },
+
+  "mapSettingsDisplay": "Anzeige",
+  "@mapSettingsDisplay": { "description": "Map display section header" },
+
+  "mapSettingsUiScale": "UI-Skalierung",
+  "@mapSettingsUiScale": { "description": "UI scale slider label" },
+
+  "navSettingsTrack": "Track",
+  "@navSettingsTrack": { "description": "Navigation track section header" },
+
+  "navSettingsAutoTrack": "Auto-Track",
+  "@navSettingsAutoTrack": { "description": "Auto-track toggle label" },
+
+  "navSettingsTrackInterval": "Track-Intervall",
+  "@navSettingsTrackInterval": { "description": "Track interval label" },
+
+  "navSettingsArrival": "Ankunft",
+  "@navSettingsArrival": { "description": "Arrival section header" },
+
+  "navSettingsArrivalAlarm": "Ankunftsalarm",
+  "@navSettingsArrivalAlarm": { "description": "Arrival alarm toggle label" },
+
+  "navSettingsAlarmRadius": "Alarm-Radius",
+  "@navSettingsAlarmRadius": { "description": "Alarm radius label" },
+
+  "navSettingsDayPlanning": "Tagesplanung",
+  "@navSettingsDayPlanning": { "description": "Day planning section header" },
+
+  "navSettingsDefaultSpeed": "Standardgeschw. (km/h)",
+  "@navSettingsDefaultSpeed": { "description": "Default speed field label" },
+
+  "navSettingsMaxDayTrip": "Tagesreise max.",
+  "@navSettingsMaxDayTrip": { "description": "Max daily trip label" },
+
+  "navSettingsDayStart": "Tagesstart (HH:MM)",
+  "@navSettingsDayStart": { "description": "Day start time field label" },
+
+  "navSettingsRouting": "Routing",
+  "@navSettingsRouting": { "description": "Routing section header" },
+
+  "navSettingsPreferWaterways": "Wasserstraßen bevorzugen",
+  "@navSettingsPreferWaterways": { "description": "Prefer waterways toggle label" },
+
+  "navSettingsConsiderCurrent": "Strömung berücksichtigen",
+  "@navSettingsConsiderCurrent": { "description": "Consider current toggle label" },
+
+  "navSettingsOsrmUrl": "OSRM URL",
+  "@navSettingsOsrmUrl": { "description": "OSRM URL field label" },
+
+  "navSettingsCurrentByRiver": "Strömungen nach Gewässer (km/h)",
+  "@navSettingsCurrentByRiver": { "description": "Current by river section header" },
+
+  "navSettingsCurrentByType": "Strömungen nach Typ (km/h)",
+  "@navSettingsCurrentByType": { "description": "Current by type section header" },
+
+  "navRiverTypeFluss": "Fluss",
+  "@navRiverTypeFluss": { "description": "River type: river" },
+
+  "navRiverTypeKanal": "Kanal",
+  "@navRiverTypeKanal": { "description": "River type: canal" },
+
+  "navRiverTypeBach": "Bach",
+  "@navRiverTypeBach": { "description": "River type: stream" },
+
+  "navRiverTypeSee": "See",
+  "@navRiverTypeSee": { "description": "River type: lake" },
+
+  "gpsSettingsDevice": "GPS-Gerät (SignalK)",
+  "@gpsSettingsDevice": { "description": "GPS device section header" },
+
+  "gpsSettingsPort": "Port (device)",
+  "@gpsSettingsPort": { "description": "GPS port field label" },
+
+  "gpsSettingsBaudrate": "Baudrate",
+  "@gpsSettingsBaudrate": { "description": "GPS baud rate field label" },
+
+  "gpsSettingsApply": "Übernehmen & SignalK neu starten",
+  "@gpsSettingsApply": { "description": "Apply GPS config button" },
+
+  "gpsSettingsConfigSaved": "GPS-Konfiguration gespeichert",
+  "@gpsSettingsConfigSaved": { "description": "GPS config saved snackbar" },
+
+  "gpsSettingsSource": "GPS-Quelle",
+  "@gpsSettingsSource": { "description": "GPS source section header" },
+
+  "gpsSettingsMinSat": "Mindest-Satelliten (Alarm)",
+  "@gpsSettingsMinSat": { "description": "Min satellites alarm threshold label" },
+
+  "aisSettingsEnabled": "AIS aktiviert",
+  "@aisSettingsEnabled": { "description": "AIS enabled toggle label" },
+
+  "aisSettingsProvider": "Anbieter",
+  "@aisSettingsProvider": { "description": "AIS provider label" },
+
+  "aisSettingsApiKey": "API-Key",
+  "@aisSettingsApiKey": { "description": "AIS API key label" },
+
+  "aisSettingsRange": "Reichweite (NM)",
+  "@aisSettingsRange": { "description": "AIS range field label" },
+
+  "aisSettingsInterval": "Update-Intervall",
+  "@aisSettingsInterval": { "description": "AIS update interval label" },
+
+  "aisSettingsLabels": "Schiff-Beschriftungen",
+  "@aisSettingsLabels": { "description": "AIS vessel labels toggle" },
+
+  "aisSettingsCpaAlarm": "Kollisionsalarm (CPA)",
+  "@aisSettingsCpaAlarm": { "description": "AIS CPA alarm section header" },
+
+  "aisSettingsCpaEnabled": "CPA-Alarm aktiviert",
+  "@aisSettingsCpaEnabled": { "description": "AIS CPA alarm toggle label" },
+
+  "aisSettingsCpaDistance": "Min. CPA-Distanz (NM)",
+  "@aisSettingsCpaDistance": { "description": "AIS min CPA distance label" },
+
+  "unitsSpeed": "Geschwindigkeit",
+  "@unitsSpeed": { "description": "Units: speed" },
+
+  "unitsDistance": "Distanz",
+  "@unitsDistance": { "description": "Units: distance" },
+
+  "unitsDepth": "Tiefe",
+  "@unitsDepth": { "description": "Units: depth" },
+
+  "unitsTemperature": "Temperatur",
+  "@unitsTemperature": { "description": "Units: temperature" },
+
+  "unitsPressure": "Druck",
+  "@unitsPressure": { "description": "Units: pressure" },
+
+  "unitsVolume": "Volumen",
+  "@unitsVolume": { "description": "Units: volume" },
+
+  "unitsCoordFormat": "Koordinatenformat",
+  "@unitsCoordFormat": { "description": "Coordinate format label" },
+
+  "unitsCoordDecimal": "Dezimal (51.856°)",
+  "@unitsCoordDecimal": { "description": "Coordinate format: decimal" },
+
+  "unitsCoordDegMin": "Grad/Min (51° 51.3')",
+  "@unitsCoordDegMin": { "description": "Coordinate format: degrees/minutes" },
+
+  "unitsCoordDegMinSec": "Grad/Min/Sek",
+  "@unitsCoordDegMinSec": { "description": "Coordinate format: degrees/minutes/seconds" },
+
+  "unitsLanguage": "Sprache",
+  "@unitsLanguage": { "description": "Language selector label" },
+
+  "unitsLangDE": "Deutsch",
+  "@unitsLangDE": { "description": "Language option: German" },
+
+  "unitsLangEN": "English",
+  "@unitsLangEN": { "description": "Language option: English" },
+
+  "mqttExternalAccess": "Externer Zugriff (Sensor-Board)",
+  "@mqttExternalAccess": { "description": "MQTT external access section header" },
+
+  "mqttSensorBoardConn": "Sensor-Board Verbindung",
+  "@mqttSensorBoardConn": { "description": "Sensor board connection label" },
+
+  "mqttBrokerHint": "Broker-Adresse im Sensor eintragen:",
+  "@mqttBrokerHint": { "description": "MQTT broker address hint for sensor board" },
+
+  "mqttBrokerLoading": "— (MQTT-Tab antippen zum Laden)",
+  "@mqttBrokerLoading": { "description": "MQTT IP loading placeholder" },
+
+  "mqttBrokerSection": "MQTT-Broker",
+  "@mqttBrokerSection": { "description": "MQTT broker section header" },
+
+  "mqttBrokerUrl": "Broker URL",
+  "@mqttBrokerUrl": { "description": "MQTT broker URL field label" },
+
+  "mqttUsername": "Benutzername",
+  "@mqttUsername": { "description": "MQTT username field label" },
+
+  "mqttPassword": "Passwort",
+  "@mqttPassword": { "description": "MQTT password field label" },
+
+  "mqttTestBtn": "Verbindung testen",
+  "@mqttTestBtn": { "description": "Test MQTT connection button" },
+
+  "mqttCleanBtn": "Bereinigen",
+  "@mqttCleanBtn": { "description": "Clean up MQTT topics button" },
+
+  "mqttEnableExternal": "Externen Zugriff aktivieren",
+  "@mqttEnableExternal": { "description": "Enable external MQTT access button" },
+
+  "mqttTestSuccess": "MQTT-Test erfolgreich",
+  "@mqttTestSuccess": { "description": "MQTT test success snackbar" },
+
+  "mqttTestFailed": "MQTT-Test fehlgeschlagen",
+  "@mqttTestFailed": { "description": "MQTT test failed snackbar" },
+
+  "mqttCleanSuccess": "MQTT-Bereinigung erfolgreich",
+  "@mqttCleanSuccess": { "description": "MQTT cleanup success snackbar" },
+
+  "mqttCleanFailed": "MQTT-Bereinigung fehlgeschlagen",
+  "@mqttCleanFailed": { "description": "MQTT cleanup failed snackbar" },
+
+  "mqttEnableExternalTitle": "Externen MQTT-Zugriff aktivieren?",
+  "@mqttEnableExternalTitle": { "description": "Enable external MQTT dialog title" },
+
+  "mqttEnableExternalBody": "Mosquitto wird so konfiguriert, dass externe Geräte (z.B. Sensorboard) sich auf Port 1883 verbinden können.\n\nSudo-Berechtigung muss einmalig per SSH eingerichtet sein.",
+  "@mqttEnableExternalBody": { "description": "Enable external MQTT dialog body" },
+
+  "mqttActivate": "Aktivieren",
+  "@mqttActivate": { "description": "Activate button in MQTT dialog" },
+
+  "mqttDepthAlarm": "Tiefen-Alarm",
+  "@mqttDepthAlarm": { "description": "Depth alarm section header" },
+
+  "mqttDepthThreshold": "Alarm bei < (m)",
+  "@mqttDepthThreshold": { "description": "Depth alarm threshold label" },
+
+  "mqttDepthAlarmEnabled": "Tiefenalarm aktiv",
+  "@mqttDepthAlarmEnabled": { "description": "Depth alarm enabled toggle label" },
+
+  "displayScreensaver": "Bildschirmschoner",
+  "@displayScreensaver": { "description": "Screen saver section header" },
+
+  "displayTimeout": "Timeout",
+  "@displayTimeout": { "description": "Screen saver timeout label" },
+
+  "displayTimeoutOff": "Aus",
+  "@displayTimeoutOff": { "description": "Screen saver timeout: off" },
+
+  "displayTimeout5": "5 Min",
+  "@displayTimeout5": { "description": "Screen saver timeout: 5 minutes" },
+
+  "displayTimeout10": "10 Min",
+  "@displayTimeout10": { "description": "Screen saver timeout: 10 minutes" },
+
+  "displayTimeout15": "15 Min",
+  "@displayTimeout15": { "description": "Screen saver timeout: 15 minutes" },
+
+  "displayTimeout30": "30 Min",
+  "@displayTimeout30": { "description": "Screen saver timeout: 30 minutes" },
+
+  "displayTwoStage": "Zweistufiger Bildschirmschoner",
+  "@displayTwoStage": { "description": "Two-stage screen saver toggle label" },
+
+  "displayTwoStageInfo": "Stufe 1: App-Overlay (schwarz) nach dem Timeout.\nStufe 2: Display aus (Hardware) 60 Sekunden später.\nJede Berührung weckt beides wieder auf.",
+  "@displayTwoStageInfo": { "description": "Two-stage screen saver info text" },
+
+  "systemVersionTitle": "Software-Version",
+  "@systemVersionTitle": { "description": "Software version section header" },
+
+  "systemInstalled": "Installiert",
+  "@systemInstalled": { "description": "Installed version label" },
+
+  "systemAvailable": "Verfügbar",
+  "@systemAvailable": { "description": "Available version label" },
+
+  "systemShutdownPiBtn": "Pi herunterfahren",
+  "@systemShutdownPiBtn": { "description": "Shut down Pi button in settings" },
+
+  "systemShutdownTitle": "Jetzt herunterfahren?",
+  "@systemShutdownTitle": { "description": "Shutdown confirmation dialog title" },
+
+  "systemShutdownBody": "Der Pi lädt alle Änderungen und startet danach automatisch neu.",
+  "@systemShutdownBody": { "description": "Shutdown confirmation dialog body" },
+
+  "systemUpdateBtn": "System aktualisieren",
+  "@systemUpdateBtn": { "description": "Update system button" },
+
+  "locksDb": "Schleusen-Datenbank",
+  "@locksDb": { "description": "Lock database section header" },
+
+  "locksImportOSM": "Aus OpenStreetMap importieren",
+  "@locksImportOSM": { "description": "Import locks from OSM button" },
+
+  "locksOSMImport": "OSM-Import",
+  "@locksOSMImport": { "description": "OSM import dialog title" },
+
+  "locksEnrich": "VHF & Kontaktdaten anreichern",
+  "@locksEnrich": { "description": "Enrich lock data button" },
+
+  "locksDataEnrichment": "Datenanreicherung",
+  "@locksDataEnrichment": { "description": "Data enrichment dialog title" },
+
+  "locksQualityReport": "Qualitätsbericht anzeigen",
+  "@locksQualityReport": { "description": "Show quality report button" },
+
+  "locksQualityTitle": "Qualitätsbericht",
+  "@locksQualityTitle": { "description": "Quality report dialog title" },
+
+  "locksCheckPositions": "Positionen überprüfen & korrigieren",
+  "@locksCheckPositions": { "description": "Check and fix positions button" },
+
+  "locksPosCheck": "Positions-Check",
+  "@locksPosCheck": { "description": "Position check dialog title" },
+
+  "locksPleaseWait": "Bitte warten…",
+  "@locksPleaseWait": { "description": "Please wait message" },
+
+  "encInstalled": "Installierte ENC-Karten",
+  "@encInstalled": { "description": "Installed ENC charts section header" },
+
+  "encNoCharts": "Keine Karten installiert.",
+  "@encNoCharts": { "description": "No charts installed message" },
+
+  "encAvailable": "Verfügbare Karten (ELWIS)",
+  "@encAvailable": { "description": "Available ENC charts section header" },
+
+  "encLoadCatalog": "Katalog laden",
+  "@encLoadCatalog": { "description": "Load catalog button" },
+
+  "encLoading": "Lädt…",
+  "@encLoading": { "description": "Loading indicator text" },
+
+  "encInstalledLabel": "Installiert",
+  "@encInstalledLabel": { "description": "Installed label on ENC chart" },
+
+  "dashSettingsTrackSensors": "Track-Sensoren aufzeichnen",
+  "@dashSettingsTrackSensors": { "description": "Track sensors section header" },
+
+  "dashSettingsTrackSensorsDesc": "Welche Dashboard-Sensoren sollen pro Track-Punkt gespeichert werden?",
+  "@dashSettingsTrackSensorsDesc": { "description": "Track sensors description" },
+
+  "dashSettingsNoSensors": "Keine Sensoren im Dashboard konfiguriert.",
+  "@dashSettingsNoSensors": { "description": "No sensors in dashboard message" }
+}

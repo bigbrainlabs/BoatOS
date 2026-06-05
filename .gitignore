@@ -125,6 +125,7 @@ README_*.md
 # Internal docs (not for public repo)
 docs/v2-flutter-pi.md
 docs/distri-image.md
+docs/plugin-system-idea.md
 
 # Screenshots & local artifacts
 *screenshot*.png
