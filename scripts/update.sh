@@ -38,6 +38,7 @@ else
     if curl -sfL --max-time 120 -o /tmp/boatos_update.tar.gz "$ARCHIVE_URL"; then
         tar -xzf /tmp/boatos_update.tar.gz --strip-components=1 -C "$REPO_DIR"
         rm -f /tmp/boatos_update.tar.gz
+        printf '%s\n' "$LATEST_TAG" > "$REPO_DIR/VERSION"
         log "       Code aktualisiert auf $LATEST_TAG"
     else
         log "       Download fehlgeschlagen — überspringe Code-Update"

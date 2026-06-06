@@ -95,7 +95,8 @@ class MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
-    _checkForUpdate();
+    // Delay first check so backend + GitHub API are ready after (re)boot
+    Future.delayed(const Duration(seconds: 8), _checkForUpdate);
     _updateCheckTimer = Timer.periodic(const Duration(hours: 6), (_) => _checkForUpdate());
     _checkHotspot();
     _hotspotTimer = Timer.periodic(const Duration(seconds: 30), (_) => _checkHotspot());
@@ -117,7 +118,7 @@ class MainShellState extends State<MainShell> {
     } catch (_) {}
   }
 
-  Future<void> _checkForUpdate() async {
+  Future<void> _checkForUpdate({bool confirmed = false}) async {
     try {
       final res = await http
           .get(Uri.parse('http://localhost:8000/api/system/version'))
@@ -125,6 +126,12 @@ class MainShellState extends State<MainShell> {
       if (res.statusCode == 200) {
         final d = json.decode(res.body) as Map<String, dynamic>;
         final upToDate = d['up_to_date'] as bool? ?? true;
+        if (!upToDate && !confirmed) {
+          // Re-confirm after 30s — prevents false positives from transient GitHub API failures
+          Future.delayed(const Duration(seconds: 30),
+              () => _checkForUpdate(confirmed: true));
+          return;
+        }
         if (mounted) setState(() => _updateAvailable = !upToDate);
       }
     } catch (_) {}

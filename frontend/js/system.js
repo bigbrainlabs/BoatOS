@@ -64,6 +64,8 @@ async function _fetchVersion(updateUI) {
             }
         }
     } catch (e) {
+        // On error: never show badge (fail safe — don't claim update available)
+        _setBadge(false);
         if (updateUI && elStatus) {
             elStatus.textContent = '❌ Versionsabfrage fehlgeschlagen';
             elStatus.style.color = 'var(--danger)';

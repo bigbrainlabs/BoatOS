@@ -1123,7 +1123,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() {
         _verCurrent  = d['current'] as String? ?? '—';
         _verLatest   = d['latest']  as String? ?? '—';
-        _verUpToDate = d['up_to_date'] as bool? ?? false;
+        _verUpToDate = d['up_to_date'] as bool? ?? true;
       });
     } catch (_) {
       setState(() { _verCurrent = '—'; _verLatest = '—'; });
