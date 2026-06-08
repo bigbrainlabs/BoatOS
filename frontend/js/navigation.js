@@ -2717,14 +2717,7 @@ export function setNavigationStartButton(button) {
  * Öffnet den Routen-Editor
  */
 export function editRoute() {
-    console.log('Routen-Editor öffnen');
-
-    // Benachrichtigung anzeigen
-    if (window.BoatOS && window.BoatOS.ui && window.BoatOS.ui.showNotification) {
-        window.BoatOS.ui.showNotification('Route bearbeiten...', 'info');
-    }
-
-    // TODO: Routen-Editor-Modal öffnen
+    startRoutePlanning();
 }
 
 /**

@@ -1,10 +1,10 @@
 /**
  * BoatOS Service Worker - PWA Support
- * v15 - Dashboard widget log-in-logbook toggle
+ * v16 - Nominatim-Suche, toggleLayers, editRoute cleanup
  */
 
 // App shell cache — bump this version on any app update
-const CACHE_NAME = 'boatos-v15';
+const CACHE_NAME = 'boatos-v16';
 
 // Satellite tile cache — intentionally versioned separately so it is NEVER
 // wiped when the app cache version changes (tiles take a long time to download)

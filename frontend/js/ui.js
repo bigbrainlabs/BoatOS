@@ -940,8 +940,6 @@ export function toggleMode() {
  * Zeigt/versteckt das Layer-Panel
  */
 export function toggleLayers() {
-    // TODO: Implementieren oder Modal öffnen
-    showNotification('Layer-Einstellungen öffnen...', 'info');
     toggleSidebar();
     showSettingsTab('map', document.querySelector('[onclick*="showSettingsTab(\'map\'"]'));
 }
@@ -983,6 +981,8 @@ export function closeSearch(event) {
  * Verarbeitet Sucheingaben
  * @param {string} query - Suchbegriff
  */
+let _searchTimer = null;
+
 export function handleSearch(query) {
     const resultsContainer = document.getElementById('searchResults');
     if (!resultsContainer) return;
@@ -992,8 +992,62 @@ export function handleSearch(query) {
         return;
     }
 
-    // TODO: Echte Suche implementieren
-    resultsContainer.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-dim);">Suche nach "${escapeHTML(query)}"...</div>`;
+    resultsContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim);">Suche…</div>';
+
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(() => _doSearch(query, resultsContainer), 400);
+}
+
+async function _doSearch(query, resultsContainer) {
+    try {
+        const map = window.BoatOS?.map?.getMap?.();
+        let viewbox = '';
+        if (map) {
+            const b = map.getBounds();
+            viewbox = `&viewbox=${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}&bounded=0`;
+        }
+        const lang = document.documentElement.lang || 'de';
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=6&addressdetails=1&q=${encodeURIComponent(query)}${viewbox}`;
+        const resp = await fetch(url, { headers: { 'Accept-Language': lang, 'User-Agent': 'BoatOS/1.0' } });
+        if (!resp.ok) throw new Error();
+        const results = await resp.json();
+
+        if (!results.length) {
+            resultsContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim);">Keine Ergebnisse gefunden</div>';
+            return;
+        }
+        resultsContainer.innerHTML = results.map(r => {
+            const parts = r.display_name.split(',');
+            const title = parts.slice(0, 2).join(', ');
+            const sub   = parts.slice(2, 4).join(', ').trim();
+            const icon  = _searchIcon(r.class, r.type);
+            const safeTitle = escapeHTML(r.display_name).replace(/'/g, '&#39;');
+            return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border)"
+                        onmouseover="this.style.background='var(--bg-card)'" onmouseout="this.style.background=''"
+                        onclick="BoatOS.ui.selectSearchResult(${r.lat},${r.lon},'${safeTitle}')">
+                <span style="font-size:1.3em;flex-shrink:0">${icon}</span>
+                <div>
+                    <div style="font-weight:600;color:var(--text);font-size:var(--fs-lg)">${escapeHTML(title)}</div>
+                    ${sub ? `<div style="color:var(--text-dim);font-size:var(--fs-sm)">${escapeHTML(sub)}</div>` : ''}
+                </div>
+            </div>`;
+        }).join('');
+    } catch (_) {
+        resultsContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim);">Suche nicht verfügbar (offline?)</div>';
+    }
+}
+
+function _searchIcon(cls, type) {
+    const map = { waterway: '🚢', harbour: '⚓', marina: '⛵', lock: '🔒', dam: '🏗️',
+                  amenity: '📍', tourism: '🏛️', natural: '🌿', highway: '🛣️',
+                  place: '🏙️', building: '🏠', shop: '🛒', leisure: '⛱️', sport: '⚽' };
+    return map[type] || map[cls] || '📍';
+}
+
+export function selectSearchResult(lat, lon, name) {
+    const map = window.BoatOS?.map?.getMap?.();
+    if (map) map.flyTo({ center: [parseFloat(lon), parseFloat(lat)], zoom: 13 });
+    closeSearch();
 }
 
 // ===========================================
@@ -1340,8 +1394,7 @@ window.closeFavoritesPanel = closeFavoritesPanel;
  * Fügt einen Logbuch-Eintrag hinzu
  */
 export function addLogEntry() {
-    showNotification('Neuer Logbuch-Eintrag...', 'info');
-    // TODO: Logbuch-Eintrag-Modal öffnen
+    // delegated to logbook.js via BoatOS.addLogEntry
 }
 
 /**
@@ -1350,16 +1403,7 @@ export function addLogEntry() {
  * @param {HTMLElement} tabElement - Das angeklickte Tab-Element
  */
 export function showLogbookTab(tabId, tabElement) {
-    // Tab-Styling aktualisieren
-    document.querySelectorAll('.logbook-tab').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    if (tabElement) {
-        tabElement.classList.add('active');
-    }
-
-    // TODO: Entsprechenden Inhalt laden
-    console.log('Logbook Tab:', tabId);
+    // delegated to logbook.js via BoatOS.showLogbookTab
 }
 
 // ===========================================
