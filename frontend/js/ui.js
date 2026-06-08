@@ -1400,6 +1400,10 @@ export function showSettingsTab(tabId, tabElement) {
         window.BoatOS.wifi.loadStatus();
         window.BoatOS.wifi.loadSaved();
     }
+    if (tabId === 'system' && window.BoatOS?.system) {
+        window.BoatOS.system.checkVersion();
+        window.BoatOS.system.loadHelmStatus();
+    }
 }
 
 /**

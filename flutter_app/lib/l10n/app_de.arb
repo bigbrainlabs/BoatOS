@@ -944,5 +944,34 @@
   "@dashSettingsTrackSensorsDesc": { "description": "Track sensors description" },
 
   "dashSettingsNoSensors": "Keine Sensoren im Dashboard konfiguriert.",
-  "@dashSettingsNoSensors": { "description": "No sensors in dashboard message" }
+  "@dashSettingsNoSensors": { "description": "No sensors in dashboard message" },
+
+  "mobDistance": "Distanz",
+  "@mobDistance": { "description": "MOB panel: distance stat label" },
+
+  "mobBearing": "Peilung",
+  "@mobBearing": { "description": "MOB panel: bearing stat label" },
+
+  "mobTime": "Zeit",
+  "@mobTime": { "description": "MOB panel: elapsed time stat label" },
+
+  "mobNavigate": "Navigieren",
+  "@mobNavigate": { "description": "MOB panel: navigate to MOB button" },
+
+  "mobClear": "MOB Löschen",
+  "@mobClear": { "description": "MOB panel: clear MOB button" },
+
+  "aisCallsign": "Rufzeichen",
+  "@aisCallsign": { "description": "AIS popup: callsign label" },
+
+  "aisDestination": "Ziel",
+  "@aisDestination": { "description": "AIS popup: destination label" },
+
+  "aisVesselLength": "Länge",
+  "@aisVesselLength": { "description": "AIS popup: vessel length label" },
+
+  "dashWidgetLog": "Im Logbuch aufzeichnen",
+  "@dashWidgetLog": { "description": "Dashboard widget editor: log sensor toggle label" },
+  "dashWidgetLogHint": "Wert wird pro Track-Punkt mitgespeichert",
+  "@dashWidgetLogHint": { "description": "Dashboard widget editor: log sensor hint" }
 }

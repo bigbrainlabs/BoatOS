@@ -1,10 +1,10 @@
 /**
  * BoatOS Service Worker - PWA Support
- * v10 - Network-First for app files + persistent Cache-First for satellite tiles
+ * v15 - Dashboard widget log-in-logbook toggle
  */
 
 // App shell cache — bump this version on any app update
-const CACHE_NAME = 'boatos-v10';
+const CACHE_NAME = 'boatos-v15';
 
 // Satellite tile cache — intentionally versioned separately so it is NEVER
 // wiped when the app cache version changes (tiles take a long time to download)
@@ -80,6 +80,22 @@ self.addEventListener('fetch', event => {
 
     // --- API and WebSocket requests: pass through, never cache ---
     if (url.pathname.startsWith('/api') || url.pathname.startsWith('/ws')) {
+        return;
+    }
+
+    // --- Vendor libs (/lib/): Cache-First — large files that never change ---
+    if (url.pathname.startsWith('/lib/')) {
+        event.respondWith(
+            caches.open(SATELLITE_CACHE_NAME).then(cache =>
+                cache.match(event.request).then(cached => {
+                    if (cached) return cached;
+                    return fetch(event.request).then(response => {
+                        cache.put(event.request, response.clone());
+                        return response;
+                    });
+                })
+            )
+        );
         return;
     }
 

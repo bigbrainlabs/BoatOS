@@ -581,8 +581,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _header(l.navSettingsCurrentByType),
       ...List.generate(_riverTypes.length, (i) =>
           _textRow(riverTypeLabels[i], _riverTypeCtrl[_riverTypes[i]]!, numeric: true)),
-      const SizedBox(height: 8),
-      const _TrackSensorsSection(),
     ];
   }
 
@@ -729,7 +727,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         value: (s.raw['language'] as String?) ?? 'de',
         items: const ['de', 'en'],
         labels: [l.unitsLangDE, l.unitsLangEN],
-        onChanged: (v) { if (v != null) { s.setRaw('language', v); s.save(); } },
+        onChanged: (v) { if (v != null) { s.setRaw('language', v); s.set('ui', 'language', v); s.save(); } },
       ),
     ];
   }
@@ -1402,171 +1400,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
 }
 
-// ── Track Sensors Section ────────────────────────────────────────────────────
-
-class _TrackSensorsSection extends StatefulWidget {
-  const _TrackSensorsSection();
-  @override
-  State<_TrackSensorsSection> createState() => _TrackSensorsSectionState();
-}
-
-class _TrackSensorsSectionState extends State<_TrackSensorsSection> {
-  static const _base = 'http://localhost:8000';
-  static const _skipPaths = {
-    'navigation/position',
-    'navigation/speed',
-    'navigation/heading',
-  };
-
-  // path → display name (from /api/sensors/list)
-  Map<String, String> _sensorNames = {};
-  // path → unit
-  Map<String, String> _sensorUnits = {};
-  // paths found in dashboard layout (in order)
-  List<String> _dashPaths = [];
-  Set<String> _selected = {};
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      final results = await Future.wait([
-        http.get(Uri.parse('$_base/api/dashboard/layout')),
-        http.get(Uri.parse('$_base/api/sensors/list')),
-        http.get(Uri.parse('$_base/api/settings')),
-      ]);
-
-      // Parse layout DSL to extract sensor paths
-      if (results[0].statusCode == 200) {
-        final body = json.decode(results[0].body) as Map<String, dynamic>;
-        final dsl = (body['layout'] as String?) ?? '';
-        _dashPaths = _extractPathsFromDsl(dsl);
-      }
-
-      // Build name/unit lookup from sensor list
-      if (results[1].statusCode == 200) {
-        final body = json.decode(results[1].body) as Map<String, dynamic>;
-        final list = (body['sensors'] as List? ?? []).cast<Map<String, dynamic>>();
-        for (final e in list) {
-          final base = e['base_name'] as String?;
-          if (base != null) {
-            _sensorNames[base] = (e['name'] as String?) ?? base;
-            _sensorUnits[base] = (e['unit'] as String?) ?? '';
-          }
-        }
-      }
-
-      // Load currently saved track sensor selection
-      if (results[2].statusCode == 200) {
-        final settings = json.decode(results[2].body) as Map<String, dynamic>;
-        final track = settings['trackSensors'];
-        if (track is List) {
-          _selected = track.map((e) => e.toString()).toSet();
-        }
-      }
-    } catch (_) {}
-    if (mounted) setState(() => _loading = false);
-  }
-
-  List<String> _extractPathsFromDsl(String dsl) {
-    final paths = <String>[];
-    final seen = <String>{};
-    // Match SENSOR <path> or GAUGE <path> at start of trimmed line
-    final re = RegExp(r'^\s*(?:SENSOR|GAUGE)\s+(\S+)', multiLine: true);
-    for (final m in re.allMatches(dsl)) {
-      final path = m.group(1)!;
-      if (!_skipPaths.contains(path) && !seen.contains(path)) {
-        seen.add(path);
-        paths.add(path);
-      }
-    }
-    return paths;
-  }
-
-  Future<void> _save() async {
-    try {
-      final r = await http.get(Uri.parse('$_base/api/settings'));
-      if (r.statusCode != 200) return;
-      final settings = json.decode(r.body) as Map<String, dynamic>;
-      settings['trackSensors'] = _selected.toList();
-      await http.post(
-        Uri.parse('$_base/api/settings'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(settings),
-      );
-      // Keep SettingsService cache in sync so other saves don't overwrite
-      if (mounted) {
-        context.read<SettingsService>().setRaw('trackSensors', _selected.toList());
-      }
-    } catch (_) {}
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l = context.l10n;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(
-        padding: const EdgeInsets.only(top: 24, bottom: 10),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(l.dashSettingsTrackSensors,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                  color: Color(0xFF4FC3F7), letterSpacing: 0.8)),
-          const SizedBox(height: 4),
-          Text(l.dashSettingsTrackSensorsDesc,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF8B949E))),
-          const SizedBox(height: 6),
-          const Divider(color: Color(0xFF30363D), height: 1, thickness: 1),
-        ]),
-      ),
-      if (_loading)
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 12),
-          child: Center(child: CircularProgressIndicator(color: Color(0xFF4FC3F7), strokeWidth: 2)),
-        )
-      else if (_dashPaths.isEmpty)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(l.dashSettingsNoSensors,
-              style: const TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
-        )
-      else
-        ..._dashPaths.map((path) {
-          final name    = _sensorNames[path] ?? path;
-          final unit    = _sensorUnits[path] ?? '';
-          final enabled = _selected.contains(path);
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Row(children: [
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(name, style: const TextStyle(fontSize: 14, color: Color(0xFFE6EDF3))),
-                  Text(unit.isNotEmpty ? '$path · $unit' : path,
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
-                ]),
-              ),
-              Switch(
-                value: enabled,
-                onChanged: (v) {
-                  setState(() {
-                    if (v) _selected.add(path); else _selected.remove(path);
-                  });
-                  _save();
-                },
-                activeColor: const Color(0xFF4FC3F7),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ]),
-          );
-        }),
-    ]);
-  }
-}
-
 // ── Schleusen Section ────────────────────────────────────────────────────────
 
 class _SchleusenSection extends StatefulWidget {
@@ -1987,6 +1820,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
   List<Map<String, dynamic>> _sensorGroups = [];
   bool _sensorsLoading = false;
   String? _sensorsError;
+  Set<String> _trackedSensors = {};
 
   // screen-format editor
   bool _isScreenFormat = false;
@@ -2070,12 +1904,23 @@ class _DashboardSectionState extends State<_DashboardSection> {
     if (_sensorsLoading) return;
     setState(() { _sensorsLoading = true; _sensorsError = null; });
     try {
-      final r = await http.get(Uri.parse('$_base/api/sensors/grouped'));
+      final results = await Future.wait([
+        http.get(Uri.parse('$_base/api/sensors/grouped')),
+        http.get(Uri.parse('$_base/api/settings')),
+      ]);
+      final r = results[0];
+      final rs = results[1];
       if (r.statusCode == 200) {
         final body = json.decode(r.body) as Map<String, dynamic>;
         final groups = (body['groups'] as List?) ?? [];
+        Set<String> tracked = {};
+        if (rs.statusCode == 200) {
+          final s = json.decode(rs.body) as Map<String, dynamic>;
+          tracked = Set<String>.from(((s['trackSensors'] as List?) ?? []).map((e) => e.toString()));
+        }
         setState(() {
           _sensorGroups = groups.cast<Map<String, dynamic>>();
+          _trackedSensors = tracked;
           _sensorsLoading = false;
         });
       } else {
@@ -2084,6 +1929,42 @@ class _DashboardSectionState extends State<_DashboardSection> {
     } catch (e) {
       if (mounted) setState(() { _sensorsError = 'Fehler: $e'; _sensorsLoading = false; });
     }
+  }
+
+  Future<void> _toggleGroupLog(int groupIdx, bool enable) async {
+    final sensors = (_sensorGroups[groupIdx]['sensors'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final topics = sensors.map((s) => s['topic'] as String? ?? '').where((t) => t.isNotEmpty).toList();
+    setState(() {
+      if (enable) {
+        _trackedSensors.addAll(topics);
+      } else {
+        for (final t in topics) _trackedSensors.remove(t);
+      }
+    });
+    try {
+      final r = await http.get(Uri.parse('$_base/api/settings'));
+      if (r.statusCode != 200) return;
+      final s = json.decode(r.body) as Map<String, dynamic>;
+      s['trackSensors'] = _trackedSensors.toList();
+      await http.post(Uri.parse('$_base/api/settings'),
+          headers: {'Content-Type': 'application/json'}, body: json.encode(s));
+      if (mounted) context.read<SettingsService>().setRaw('trackSensors', _trackedSensors.toList());
+    } catch (_) {}
+  }
+
+  Future<void> _toggleSensorLog(String baseName, bool checked) async {
+    setState(() {
+      if (checked) { _trackedSensors.add(baseName); } else { _trackedSensors.remove(baseName); }
+    });
+    try {
+      final r = await http.get(Uri.parse('$_base/api/settings'));
+      if (r.statusCode != 200) return;
+      final s = json.decode(r.body) as Map<String, dynamic>;
+      s['trackSensors'] = _trackedSensors.toList();
+      await http.post(Uri.parse('$_base/api/settings'),
+          headers: {'Content-Type': 'application/json'}, body: json.encode(s));
+      if (mounted) context.read<SettingsService>().setRaw('trackSensors', _trackedSensors.toList());
+    } catch (_) {}
   }
 
   Future<void> _deleteSensorTopic(String topic, int groupIdx, int sensorIdx) async {
@@ -2345,6 +2226,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
     }
     if (mounted) setState(() => _saving = false);
   }
+
 
   Future<void> _parseDsl() async {
     setState(() { _parseMsg = null; });
@@ -3083,6 +2965,9 @@ class _DashboardSectionState extends State<_DashboardSection> {
         final group = groupEntry.value;
         final groupName = group['label'] as String? ?? 'Unbekannt';
         final sensors = (group['sensors'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        final allTopics = sensors.map((s) => s['topic'] as String? ?? '').where((t) => t.isNotEmpty).toList();
+        final loggedCount = allTopics.where((t) => _trackedSensors.contains(t)).length;
+        final bool? groupLogValue = loggedCount == 0 ? false : (loggedCount == allTopics.length ? true : null);
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
@@ -3112,6 +2997,25 @@ class _DashboardSectionState extends State<_DashboardSection> {
                   child: Text('${sensors.length}',
                       style: const TextStyle(fontSize: 11, color: Color(0xFF4FC3F7))),
                 ),
+                const Spacer(),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _toggleGroupLog(groupIdx, groupLogValue != true),
+                  child: Icon(
+                    groupLogValue == true
+                        ? Icons.check_box
+                        : groupLogValue == null
+                            ? Icons.indeterminate_check_box
+                            : Icons.check_box_outline_blank,
+                    size: 18,
+                    color: groupLogValue == true
+                        ? const Color(0xFF4FC3F7)
+                        : groupLogValue == null
+                            ? const Color(0xFFFFA726)
+                            : const Color(0xFF8B949E),
+                  ),
+                ),
+                const SizedBox(width: 4),
               ]),
               children: sensors.asMap().entries.map((sEntry) {
                 final sIdx = sEntry.key;
@@ -3120,6 +3024,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
                 final label = s['label'] as String? ?? topic.split('/').last;
                 final unit  = s['unit']  as String? ?? '';
                 final value = s['value'];
+                final topicLogged = _trackedSensors.contains(topic);
                 return Container(
                   decoration: const BoxDecoration(
                     border: Border(top: BorderSide(color: Color(0xFF30363D))),
@@ -3140,8 +3045,16 @@ class _DashboardSectionState extends State<_DashboardSection> {
                     if (value != null) ...[
                       Text('$value${unit.isNotEmpty ? ' $unit' : ''}',
                           style: const TextStyle(fontSize: 12, color: Color(0xFF4FC3F7))),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                     ],
+                    GestureDetector(
+                      onTap: () => _toggleSensorLog(topic, !topicLogged),
+                      child: Icon(
+                        topicLogged ? Icons.bookmark : Icons.bookmark_border,
+                        size: 18,
+                        color: topicLogged ? const Color(0xFF4FC3F7) : const Color(0xFF8B949E)),
+                    ),
+                    const SizedBox(width: 6),
                     GestureDetector(
                       onTap: () => _deleteSensorTopic(topic, groupIdx, sIdx),
                       child: const Icon(Icons.delete_outline, size: 18, color: Color(0xFF8B949E)),
@@ -3745,10 +3658,6 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                         const SizedBox(height: 6),
                         pathDropdown('impact', impactFull, 'Impact-Topic wählen…'),
                       ],
-                      const SizedBox(height: 10),
-                      _label('Breite (Spalten)'),
-                      const SizedBox(height: 6),
-                      _sizePicker(),
                     ]);
                   }),
                 ],

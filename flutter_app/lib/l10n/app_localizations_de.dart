@@ -953,4 +953,34 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get dashSettingsNoSensors =>
       'Keine Sensoren im Dashboard konfiguriert.';
+
+  @override
+  String get mobDistance => 'Distanz';
+
+  @override
+  String get mobBearing => 'Peilung';
+
+  @override
+  String get mobTime => 'Zeit';
+
+  @override
+  String get mobNavigate => 'Navigieren';
+
+  @override
+  String get mobClear => 'MOB Löschen';
+
+  @override
+  String get aisCallsign => 'Rufzeichen';
+
+  @override
+  String get aisDestination => 'Ziel';
+
+  @override
+  String get aisVesselLength => 'Länge';
+
+  @override
+  String get dashWidgetLog => 'Im Logbuch aufzeichnen';
+
+  @override
+  String get dashWidgetLogHint => 'Wert wird pro Track-Punkt mitgespeichert';
 }

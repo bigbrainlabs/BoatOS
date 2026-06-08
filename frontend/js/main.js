@@ -693,7 +693,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         initKeyboard();
     }
 
-    // Karte initialisieren (async — prüft Tileserver-Verfügbarkeit)
+    // Dashboard sofort laden — braucht keine Karte, Nutzer sieht Daten sofort
+    if (window.dashboardRenderer) window.dashboardRenderer.loadAndRender();
+
+    // Karte initialisieren (async — lädt maplibre-gl.js + prüft Tileserver)
+    // Dashboard und Wetter laufen parallel dazu im Hintergrund
     const mapInstance = await mapModule.initMap({
         container: 'map',
         center: { lat: 51.855, lon: 12.046 },
@@ -905,9 +909,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Trip-Status prüfen
     checkTripStatus(context);
 
-    // Dashboard initialisieren und laden
+    // Dashboard wurde bereits oben (vor initMap) geladen — hier nochmals für den Fall
+    // dass Kontext-abhängige Widgets nachträglich aktualisiert werden müssen
     if (window.dashboardRenderer) {
-        console.log('Dashboard wird geladen...');
         window.dashboardRenderer.loadAndRender();
     }
 
@@ -923,21 +927,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // When Helm changes language, Deck polls and updates automatically.
     const _apiUrl = core.API_URL || '';
 
-    // Override global setLanguage to also persist to backend
+    // Wrap global setLanguage so the UI switches immediately.
+    // Backend persistence is handled exclusively by saveAllSettings() to avoid race conditions.
     const _origSetLanguage = window.setLanguage;
-    window.setLanguage = async function(lang) {
+    window.setLanguage = function(lang) {
         if (_origSetLanguage) _origSetLanguage(lang);
-        try {
-            // Read → merge → write to avoid overwriting unrelated settings
-            const res = await fetch(`${_apiUrl}/api/settings`);
-            const s = res.ok ? await res.json() : {};
-            s.ui = { ...(s.ui || {}), language: lang };
-            await fetch(`${_apiUrl}/api/settings`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(s)
-            });
-        } catch (_) {}
     };
 
     // Poll backend every 15 s for language changes written by Helm

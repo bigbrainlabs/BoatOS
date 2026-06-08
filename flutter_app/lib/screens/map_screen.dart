@@ -1826,7 +1826,7 @@ class _MapScreenState extends State<MapScreen> {
                         color: const Color(0xFFFF9800)),
                     SizedBox(width: sc(8)),
                     Text(
-                      tripLabel ?? 'Fahrt',
+                      tripLabel ?? l.logbookTabTrip,
                       style: TextStyle(fontSize: sc(12), color: const Color(0xFFFF9800)),
                     ),
                     SizedBox(width: sc(8)),
@@ -2131,6 +2131,7 @@ class _MapScreenState extends State<MapScreen> {
 
   Widget _buildMOBPanel(double scale) {
     double sc(double v) => v * scale;
+    final l = context.l10n;
     final elapsed = DateTime.now().difference(_mobTime!);
     final distNm = _distNm(
       _lastBoatPos.latitude, _lastBoatPos.longitude,
@@ -2196,9 +2197,9 @@ class _MapScreenState extends State<MapScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                stat('Distanz', '${distNm.toStringAsFixed(2)} NM'),
-                stat('Peilung', '${bearing.toStringAsFixed(0)}°'),
-                stat('Zeit', _fmtMOBElapsed(elapsed)),
+                stat(l.mobDistance, '${distNm.toStringAsFixed(2)} NM'),
+                stat(l.mobBearing, '${bearing.toStringAsFixed(0)}°'),
+                stat(l.mobTime, _fmtMOBElapsed(elapsed)),
               ],
             ),
             SizedBox(height: sc(12)),
@@ -2214,7 +2215,7 @@ class _MapScreenState extends State<MapScreen> {
                         borderRadius: BorderRadius.circular(sc(6)),
                       ),
                       child: Center(
-                          child: Text('Navigieren',
+                          child: Text(l.mobNavigate,
                               style: TextStyle(
                                   color: Colors.white,
                                   fontSize: sc(13)))),
@@ -2232,7 +2233,7 @@ class _MapScreenState extends State<MapScreen> {
                         borderRadius: BorderRadius.circular(sc(6)),
                       ),
                       child: Center(
-                          child: Text('MOB Löschen',
+                          child: Text(l.mobClear,
                               style: TextStyle(
                                   color: const Color(0xFFE6EDF3),
                                   fontSize: sc(13)))),
@@ -2422,6 +2423,7 @@ class _AisDetailPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sc = scale;
+    final l = context.l10n;
     return Positioned(
       bottom: 0,
       left: 0,
@@ -2466,11 +2468,11 @@ class _AisDetailPanel extends StatelessWidget {
                     vessel.heading < 511 ? '${vessel.heading}°' : '—', sc),
                 _detail('Status', navstatText, sc),
                 if (vessel.callsign.isNotEmpty)
-                  _detail('Rufzeichen', vessel.callsign, sc),
+                  _detail(l.aisCallsign, vessel.callsign, sc),
                 if (vessel.destination.isNotEmpty)
-                  _detail('Ziel', vessel.destination, sc),
+                  _detail(l.aisDestination, vessel.destination, sc),
                 if (vessel.length > 0)
-                  _detail('Länge', '${vessel.length} m', sc),
+                  _detail(l.aisVesselLength, '${vessel.length} m', sc),
               ],
             ),
           ],

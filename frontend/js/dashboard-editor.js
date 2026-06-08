@@ -22,6 +22,8 @@ class DashboardEditor {
         this.screens = [];
         this.currentScreenIndex = 0;
         this.layout = null; // parsed layout response
+        this._trackedSensors = new Set(); // sensor base_names to log in logbook
+        this._sensorGroupsData = [];
     }
 
     /**
@@ -358,37 +360,120 @@ ROW main
         if (!container) return;
         try {
             const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
-            const resp = await fetch(`${apiUrl}/api/sensors/grouped`);
-            const data = await resp.json();
+            const [groupsResp, settingsResp] = await Promise.all([
+                fetch(`${apiUrl}/api/sensors/grouped`),
+                fetch(`${apiUrl}/api/settings`),
+            ]);
+            const data = await groupsResp.json();
+            const settings = settingsResp.ok ? await settingsResp.json() : {};
+            this._trackedSensors = new Set(settings.trackSensors || []);
+            this._sensorGroupsData = data.groups;
+
             if (!data.groups?.length) {
                 container.innerHTML = '<div style="color:var(--text-dim);padding:16px">Keine Sensoren bekannt.</div>';
                 return;
             }
-            container.innerHTML = data.groups.map(g => `
+            container.innerHTML = data.groups.map((g, gIdx) => `
                 <details style="margin-bottom:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
                     <summary style="padding:10px 14px;cursor:pointer;background:var(--bg-card);display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;list-style:none;user-select:none">
                         <span>${g.icon}</span>
-                        <span>${g.label}</span>
-                        <span style="color:var(--text-dim);font-weight:400;margin-left:auto;font-size:11px">${g.source} · ${g.sensors.length}</span>
+                        <span style="flex:1">${g.label}</span>
+                        <label onclick="event.stopPropagation()" title="Alle in Gruppe loggen" style="display:flex;align-items:center;cursor:pointer;flex-shrink:0">
+                            <input type="checkbox" data-group-cb="${gIdx}"
+                                   onclick="event.stopPropagation()"
+                                   onchange="window.dashboardEditor.toggleGroupLog(${gIdx},this.checked)"
+                                   style="width:14px;height:14px;accent-color:var(--accent);cursor:pointer;">
+                        </label>
+                        <span style="color:var(--text-dim);font-weight:400;font-size:11px">${g.source} · ${g.sensors.length}</span>
                     </summary>
                     <div>
-                        ${g.sensors.map(s => `
+                        ${g.sensors.map(s => {
+                            const isLogged = this._trackedSensors.has(s.topic);
+                            const safeTopic = s.topic.replace(/'/g, "\\'");
+                            return `
                             <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-top:1px solid var(--border);font-size:12px">
                                 <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:${s.status==='online'?'#3fb950':s.status==='offline'?'#ef5350':'#8b949e'}"></span>
                                 <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.topic}"><strong>${s.label}</strong></span>
                                 <span style="color:var(--text-dim);min-width:60px;text-align:right">${s.value||'—'} ${s.unit}</span>
+                                <label onclick="event.stopPropagation()" title="${t('widget_log_label')}" style="display:flex;align-items:center;gap:4px;cursor:pointer;flex-shrink:0">
+                                    <input type="checkbox" data-topic="${s.topic.replace(/"/g, '&quot;')}" ${isLogged ? 'checked' : ''}
+                                           onchange="window.dashboardEditor.toggleSensorLog('${safeTopic}',this.checked)"
+                                           style="width:14px;height:14px;accent-color:var(--accent);cursor:pointer;">
+                                    <span style="font-size:11px;color:${isLogged?'var(--accent)':'var(--text-dim)'}">Log</span>
+                                </label>
                                 <button onclick="window.dashboardEditor.showWidgetTypePicker('${s.topic.replace(/'/g,"\\'")}','${s.label.replace(/'/g,"\\'")}','${(s.unit||'').replace(/'/g,"\\'")}', true)"
                                     title="Als Widget hinzufügen"
                                     style="background:none;border:none;cursor:pointer;color:#4fc3f7;font-size:15px;padding:2px 4px;flex-shrink:0;line-height:1">➕</button>
                                 <button onclick="window.dashboardEditor.deleteSensorTopic('${s.topic.replace(/'/g,"\\'")}', this)"
                                     title="Topic entfernen"
                                     style="background:none;border:none;cursor:pointer;color:#ef5350;font-size:15px;padding:2px 4px;flex-shrink:0;line-height:1">🗑</button>
-                            </div>`).join('')}
+                            </div>`;
+                        }).join('')}
                     </div>
                 </details>`).join('');
+            this._applyGroupCheckboxStates();
         } catch(e) {
             container.innerHTML = `<div style="color:#ef5350;padding:16px">Fehler: ${e.message}</div>`;
         }
+    }
+
+    async toggleSensorLog(baseName, checked) {
+        if (checked) { this._trackedSensors.add(baseName); }
+        else { this._trackedSensors.delete(baseName); }
+        this._applyGroupCheckboxStates();
+        try {
+            const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
+            const sRes = await fetch(`${apiUrl}/api/settings`);
+            const s = sRes.ok ? await sRes.json() : {};
+            s.trackSensors = [...this._trackedSensors];
+            await fetch(`${apiUrl}/api/settings`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(s)
+            });
+        } catch (_) {}
+    }
+
+    async toggleGroupLog(gIdx, enable) {
+        const group = (this._sensorGroupsData || [])[gIdx];
+        if (!group) return;
+        group.sensors.forEach(s => {
+            if (enable) this._trackedSensors.add(s.topic);
+            else this._trackedSensors.delete(s.topic);
+            const cb = document.querySelector(`[data-topic="${CSS.escape(s.topic)}"]`);
+            if (cb) cb.checked = enable;
+        });
+        this._applyGroupCheckboxStates();
+        try {
+            const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
+            const sRes = await fetch(`${apiUrl}/api/settings`);
+            const settings = sRes.ok ? await sRes.json() : {};
+            settings.trackSensors = [...this._trackedSensors];
+            await fetch(`${apiUrl}/api/settings`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings)
+            });
+        } catch (_) {}
+    }
+
+    _applyGroupCheckboxStates() {
+        (this._sensorGroupsData || []).forEach((g, gIdx) => {
+            const cb = document.querySelector(`[data-group-cb="${gIdx}"]`);
+            if (!cb) return;
+            const topics = g.sensors.map(s => s.topic);
+            const loggedCount = topics.filter(t => this._trackedSensors.has(t)).length;
+            if (loggedCount === 0) {
+                cb.checked = false;
+                cb.indeterminate = false;
+            } else if (loggedCount === topics.length) {
+                cb.checked = true;
+                cb.indeterminate = false;
+            } else {
+                cb.checked = false;
+                cb.indeterminate = true;
+            }
+        });
     }
 
     renderSensorManager() {
@@ -1178,6 +1263,7 @@ SCREEN Wetter LAYOUT grid-4
                 </div>
                 ` : ''}
 
+
                 <!-- Row -->
                 <div>
                     <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Reihe</label>
@@ -1645,7 +1731,8 @@ ${isGauge ? `
                                         border-radius:6px;color:var(--text);font-size:12px;">
                                         <option value="">— Sensor / Feld wählen —</option>
                                         ${(this.sensors||[]).map(s => `<option value="${s.full_path}" ${w.sensor===s.full_path?'selected':''}>${s.name||s.full_path}</option>`).join('')}
-                                    </select>` : ''}
+                                    </select>
+` : ''}
                                     ${wtype === 'sensor' ? `
                                     <select onchange="window.dashboardEditor.setSlotSensor('${slot}',this.value)" style="
                                         width:100%;padding:6px 8px;background:var(--bg-panel);border:1px solid var(--border);
@@ -2084,6 +2171,8 @@ ${isGauge ? `
             if (response.ok) {
                 // Update stored DSL
                 this.dslText = dsl;
+
+
 
                 if (window.BoatOS?.ui?.showNotification) {
                     window.BoatOS.ui.showNotification('Dashboard gespeichert!', 'success');

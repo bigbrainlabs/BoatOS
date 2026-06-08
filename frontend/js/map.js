@@ -209,6 +209,17 @@ function _rasterFallbackStyle() {
 export async function initMap(options = {}) {
     console.log('Karte wird initialisiert...');
 
+    // maplibre-gl.js dynamisch laden falls noch nicht vorhanden
+    if (!window.maplibregl) {
+        await new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = '/lib/maplibre-gl.js';
+            s.onload = resolve;
+            s.onerror = reject;
+            document.head.appendChild(s);
+        });
+    }
+
     // Container pruefen
     const mapContainer = document.getElementById('map');
     if (!mapContainer) {

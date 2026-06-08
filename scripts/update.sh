@@ -75,6 +75,21 @@ else
     log "       Kein app.so im aktuellen Release — überspringe"
 fi
 
+# 4a. Display-Detection Service (Helm Auto-Start)
+log "[4a] Installiere Display-Detection Service..."
+sudo cp "$REPO_DIR/scripts/boatos-detect-display.sh" /usr/local/bin/boatos-detect-display.sh
+sudo chmod +x /usr/local/bin/boatos-detect-display.sh
+sudo cp "$REPO_DIR/scripts/boatos-detect-display.service" /etc/systemd/system/boatos-detect-display.service
+sudo mkdir -p /etc/systemd/system/lightdm.service.d
+sudo cp "$REPO_DIR/scripts/lightdm-helm-condition.conf" /etc/systemd/system/lightdm.service.d/helm-condition.conf
+# sudoers: allow lightdm start/stop for backend
+echo "boatos ALL=(ALL) NOPASSWD: /bin/systemctl start lightdm, /bin/systemctl stop lightdm" | \
+    sudo tee /etc/sudoers.d/boatos-lightdm > /dev/null
+sudo chmod 440 /etc/sudoers.d/boatos-lightdm
+sudo systemctl daemon-reload
+sudo systemctl enable boatos-detect-display.service
+log "       Display-Detection aktiv"
+
 # 4. WiFi Fallback Hotspot Service + Power Management
 log "[4/6] Installiere WiFi-Fallback-Service + deaktiviere Power Management..."
 SERVICE_SRC="$REPO_DIR/scripts/wifi-fallback.service"

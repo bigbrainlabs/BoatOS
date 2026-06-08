@@ -1945,6 +1945,66 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'Keine Sensoren im Dashboard konfiguriert.'**
   String get dashSettingsNoSensors;
+
+  /// MOB panel: distance stat label
+  ///
+  /// In de, this message translates to:
+  /// **'Distanz'**
+  String get mobDistance;
+
+  /// MOB panel: bearing stat label
+  ///
+  /// In de, this message translates to:
+  /// **'Peilung'**
+  String get mobBearing;
+
+  /// MOB panel: elapsed time stat label
+  ///
+  /// In de, this message translates to:
+  /// **'Zeit'**
+  String get mobTime;
+
+  /// MOB panel: navigate to MOB button
+  ///
+  /// In de, this message translates to:
+  /// **'Navigieren'**
+  String get mobNavigate;
+
+  /// MOB panel: clear MOB button
+  ///
+  /// In de, this message translates to:
+  /// **'MOB Löschen'**
+  String get mobClear;
+
+  /// AIS popup: callsign label
+  ///
+  /// In de, this message translates to:
+  /// **'Rufzeichen'**
+  String get aisCallsign;
+
+  /// AIS popup: destination label
+  ///
+  /// In de, this message translates to:
+  /// **'Ziel'**
+  String get aisDestination;
+
+  /// AIS popup: vessel length label
+  ///
+  /// In de, this message translates to:
+  /// **'Länge'**
+  String get aisVesselLength;
+
+  /// Dashboard widget editor: log sensor toggle label
+  ///
+  /// In de, this message translates to:
+  /// **'Im Logbuch aufzeichnen'**
+  String get dashWidgetLog;
+
+  /// Dashboard widget editor: log sensor hint
+  ///
+  /// In de, this message translates to:
+  /// **'Wert wird pro Track-Punkt mitgespeichert'**
+  String get dashWidgetLogHint;
 }
 
 class _AppLocalizationsDelegate

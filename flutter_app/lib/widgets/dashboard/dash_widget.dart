@@ -37,6 +37,8 @@ class DashWidget {
   String? impactSensor;
   String? impactField;
 
+  bool log;  // log this sensor's value per track point
+
   DashWidget({
     required this.type,
     this.sensor,
@@ -59,6 +61,7 @@ class DashWidget {
     this.pitchField,
     this.impactSensor,
     this.impactField,
+    this.log = false,
   });
 
   DashWidget copy() => DashWidget(
@@ -69,6 +72,7 @@ class DashWidget {
     rollSensor: rollSensor, rollField: rollField,
     pitchSensor: pitchSensor, pitchField: pitchField,
     impactSensor: impactSensor, impactField: impactField,
+    log: log,
   );
 }
 

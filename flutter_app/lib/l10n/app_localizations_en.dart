@@ -950,4 +950,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dashSettingsNoSensors => 'No sensors configured in dashboard.';
+
+  @override
+  String get mobDistance => 'Distance';
+
+  @override
+  String get mobBearing => 'Bearing';
+
+  @override
+  String get mobTime => 'Time';
+
+  @override
+  String get mobNavigate => 'Navigate';
+
+  @override
+  String get mobClear => 'Clear MOB';
+
+  @override
+  String get aisCallsign => 'Callsign';
+
+  @override
+  String get aisDestination => 'Destination';
+
+  @override
+  String get aisVesselLength => 'Length';
+
+  @override
+  String get dashWidgetLog => 'Log in logbook';
+
+  @override
+  String get dashWidgetLogHint => 'Value is saved per track point';
 }

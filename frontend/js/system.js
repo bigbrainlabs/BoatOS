@@ -125,6 +125,53 @@ export async function shutdown() {
     try { await fetch('/api/system/shutdown', { method: 'POST' }); } catch (_) {}
 }
 
+export async function loadHelmStatus() {
+    try {
+        const res = await fetch(`${API}/api/system/helm`, { cache: 'no-store' });
+        const d = await res.json();
+        const elDetected = document.getElementById('helm-display-detected');
+        const elRunning  = document.getElementById('helm-running');
+        const toggle     = document.getElementById('helm-enabled-toggle');
+        if (elDetected) elDetected.textContent = d.detected ? '✅ Ja' : '❌ Nein';
+        if (elRunning)  elRunning.textContent  = d.running  ? '✅ Läuft' : '⏹ Gestoppt';
+        if (toggle)     toggle.checked = d.enabled;
+    } catch (_) {}
+}
+
+export async function setHelmEnabled(enabled) {
+    try {
+        await fetch(`${API}/api/system/helm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled }),
+        });
+        setTimeout(loadHelmStatus, 1500);
+    } catch (_) {}
+}
+
+export async function helmStart() {
+    try {
+        await fetch(`${API}/api/system/helm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: true }),
+        });
+        setTimeout(loadHelmStatus, 2500);
+    } catch (_) {}
+}
+
+export async function helmStop() {
+    if (!confirm('Helm (Touchscreen-App) jetzt stoppen?\nDeck bleibt über den Browser erreichbar.')) return;
+    try {
+        await fetch(`${API}/api/system/helm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: false }),
+        });
+        setTimeout(loadHelmStatus, 2500);
+    } catch (_) {}
+}
+
 function _fmtDate(iso) {
     try {
         return new Date(iso).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });

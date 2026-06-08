@@ -356,5 +356,19 @@
 
   "dashSettingsTrackSensors": "Record track sensors",
   "dashSettingsTrackSensorsDesc": "Which dashboard sensors should be saved per track point?",
-  "dashSettingsNoSensors": "No sensors configured in dashboard."
+  "dashSettingsNoSensors": "No sensors configured in dashboard.",
+
+  "mobDistance": "Distance",
+  "mobBearing": "Bearing",
+  "mobTime": "Time",
+  "mobNavigate": "Navigate",
+  "mobClear": "Clear MOB",
+  "aisCallsign": "Callsign",
+  "aisDestination": "Destination",
+  "aisVesselLength": "Length",
+
+  "dashWidgetLog": "Log in logbook",
+  "@dashWidgetLog": { "description": "Dashboard widget editor: log sensor toggle label" },
+  "dashWidgetLogHint": "Value is saved per track point",
+  "@dashWidgetLogHint": { "description": "Dashboard widget editor: log sensor hint" }
 }

@@ -4555,6 +4555,33 @@ async def _run_update():
     finally:
         _update_running = False
 
+_HELM_DISABLED_FLAG = Path("/home/boatos/.boatos_helm_disabled")
+
+@app.get("/api/system/helm")
+async def helm_status():
+    detected = Path("/run/boatos/has-display").exists()
+    enabled  = not _HELM_DISABLED_FLAG.exists()
+    try:
+        r = subprocess.run(["systemctl", "is-active", "lightdm"],
+                           capture_output=True, text=True)
+        running = r.stdout.strip() == "active"
+    except Exception:
+        running = False
+    return {"detected": detected, "enabled": enabled, "running": running}
+
+@app.post("/api/system/helm")
+async def helm_set(body: dict):
+    enabled = body.get("enabled", True)
+    if enabled:
+        _HELM_DISABLED_FLAG.unlink(missing_ok=True)
+        subprocess.Popen(["sudo", "systemctl", "start", "lightdm"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        _HELM_DISABLED_FLAG.write_text("")
+        subprocess.Popen(["sudo", "systemctl", "stop", "lightdm"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return {"ok": True, "enabled": enabled}
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Save known topics on shutdown"""
