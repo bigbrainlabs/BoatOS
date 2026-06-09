@@ -277,6 +277,19 @@ const _DE = {
   settingsPosChecked:           '✅ {checked} Schleusen geprüft...',
   settingsPosConfirm:           'Möchten Sie alle Schleusen-Positionen überprüfen und ggf. korrigieren?\n\nDieser Vorgang kann einige Minuten dauern.',
 
+  // Offline Maps / Regions
+  mapRegionsLoading:          'Wird geladen…',
+  mapRegionsNone:             'Keine .mbtiles-Dateien in ~/BoatOS/data/ gefunden',
+  mapRegionsError:            'Fehler beim Laden der Regionen',
+  mapUploadLabel:             '.mbtiles-Datei hochladen (z.B. aus dem BoatOS Karten-Tool):',
+  mapUploadChoose:            '📂 Datei wählen',
+  mapUploadBtn:               '⬆ Hochladen',
+  mapUploadUploading:         'Hochladen…',
+  mapUploadDone:              '✓ Fertig',
+  mapUploadOverwrite:         'Datei existiert bereits — nochmals klicken zum Überschreiben',
+  mapUploadConnError:         'Verbindungsfehler',
+  mapUploadRefresh:           '↺ Aktualisieren',
+
   // WiFi
   wifiScanning:               'Scanne…',
   wifiScanBtn:                'Netzwerke scannen',
@@ -566,6 +579,19 @@ const _EN = {
   settingsPosStart:             '📍 Starting position check...',
   settingsPosChecked:           '✅ {checked} locks checked...',
   settingsPosConfirm:           'Check and fix all lock positions?\n\nThis may take a few minutes.',
+
+  // Offline Maps / Regions
+  mapRegionsLoading:          'Loading…',
+  mapRegionsNone:             'No .mbtiles files found in ~/BoatOS/data/',
+  mapRegionsError:            'Error loading regions',
+  mapUploadLabel:             'Upload .mbtiles file (e.g. from the BoatOS map tool):',
+  mapUploadChoose:            '📂 Choose file',
+  mapUploadBtn:               '⬆ Upload',
+  mapUploadUploading:         'Uploading…',
+  mapUploadDone:              '✓ Done',
+  mapUploadOverwrite:         'File already exists — click again to overwrite',
+  mapUploadConnError:         'Connection error',
+  mapUploadRefresh:           '↺ Refresh',
 
   // WiFi
   wifiScanning:               'Scanning…',

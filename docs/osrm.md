@@ -1,24 +1,24 @@
-# OSRM einrichten (Offline-Routing auf Wasserstraßen)
+# Setting up OSRM (Offline routing on waterways)
 
-BoatOS nutzt [OSRM](https://project-osrm.org/) für Wasserweg-Routing — schnell (<100 ms), vollständig offline, mit einem eigenen Wasserwege-Profil. Ohne OSRM fällt das Routing auf direkte Luftlinie zurück.
+BoatOS uses [OSRM](https://project-osrm.org/) for waterway routing — fast (<100 ms), fully offline, with a dedicated waterway profile. Without OSRM, routing falls back to a straight line.
 
 ---
 
-## Übersicht
+## Overview
 
 ```
-OSM-Rohdaten (.osm.pbf)
+OSM raw data (.osm.pbf)
     └─ osrm-extract (waterway.lua)
     └─ osrm-partition
     └─ osrm-customize
-         └─ osrm-routed (Port 5000) → BoatOS Routing
+         └─ osrm-routed (port 5000) → BoatOS routing
 ```
 
 ---
 
-## Schritt 1 — OSRM bauen (aus Quellcode)
+## Step 1 — Build OSRM (from source)
 
-Fertige ARM64-Binaries gibt es nicht — OSRM muss auf dem Pi selbst gebaut werden. Das dauert ca. 30–60 Minuten.
+Pre-built ARM64 binaries are not available — OSRM must be compiled on the Pi itself. This takes approximately 30–60 minutes.
 
 ```bash
 sudo apt install -y build-essential git cmake pkg-config \
@@ -34,81 +34,81 @@ make -j$(nproc)
 sudo make install
 ```
 
-Binaries landen in `/usr/local/bin/`: `osrm-extract`, `osrm-partition`, `osrm-customize`, `osrm-routed`.
+Binaries are installed to `/usr/local/bin/`: `osrm-extract`, `osrm-partition`, `osrm-customize`, `osrm-routed`.
 
 ---
 
-## Schritt 2 — Wasserweg-Profil einrichten
+## Step 2 — Set up the waterway profile
 
-Das Standard-OSRM-Profil routet auf Straßen. BoatOS braucht ein Wasserwege-Profil das nur `waterway=*`-Kanten nutzt.
+The default OSRM profile routes on roads. BoatOS needs a waterway profile that only uses `waterway=*` edges.
 
 ```bash
-# Profil in OSRM ablegen
+# Copy the profile into the OSRM directory
 cp ~/BoatOS/backend/app/waterway.lua ~/osrm-backend/profiles/waterway.lua
 ```
 
-> Das Profil `waterway.lua` liegt im BoatOS-Repo unter `backend/app/`. Es enthält Gewichtungen für Schleusen, Kanäle und Flüsse.
+> The `waterway.lua` profile lives in the BoatOS repo at `backend/app/`. It contains weights for locks, canals, and rivers.
 
 ---
 
-## Schritt 3 — OSM-Daten herunterladen
+## Step 3 — Download OSM data
 
 ```bash
 mkdir -p ~/osrm_data
 cd ~/osrm_data
 
-# Deutschland gesamt (~4 GB)
+# All of Germany (~4 GB)
 wget https://download.geofabrik.de/europe/germany-latest.osm.pbf
 
-# Oder ein Bundesland für Tests (z.B. Sachsen-Anhalt ~110 MB)
+# Or a single state for testing (e.g. Saxony-Anhalt ~110 MB)
 # wget https://download.geofabrik.de/europe/germany/sachsen-anhalt-latest.osm.pbf
 ```
 
 ---
 
-## Schritt 4 — Routing-Graph erstellen
+## Step 4 — Build the routing graph
 
 ```bash
 cd ~/osrm_data
 
-# 1. Extrahieren (~10–20 Min. für Deutschland)
+# 1. Extract (~10–20 min for Germany)
 osrm-extract -p ~/osrm-backend/profiles/waterway.lua germany-latest.osm.pbf
 
-# 2. Partitionieren
+# 2. Partition
 osrm-partition germany-latest.osrm
 
-# 3. Anpassen
+# 3. Customize
 osrm-customize germany-latest.osrm
 
-# Fertige Dateien in BoatOS-Datenverzeichnis kopieren
+# Copy the finished files to the BoatOS data directory
 mkdir -p ~/BoatOS/data/osrm
 cp germany-latest.osrm* ~/BoatOS/data/osrm/
 ```
 
-### Einzelne Bundesländer (empfohlen für Test-Pi)
+### Individual states (recommended for a test Pi)
 
-Das Skript `scripts/extract_regions.sh` automatisiert Download + Extraktion für alle deutschen Bundesländer:
+The script `scripts/extract_regions.sh` automates download + extraction for all German states:
 
 ```bash
-# Interaktiv — Menü zeigt alle Bundesländer
+# Interactive — menu shows all states
 bash ~/BoatOS/scripts/extract_regions.sh
 
-# Direkt ein Bundesland
+# Directly specify a state
 bash ~/BoatOS/scripts/extract_regions.sh sachsen-anhalt
 
-# Alle Bundesländer auf einmal
+# All states at once
 bash ~/BoatOS/scripts/extract_regions.sh all
 ```
 
 ---
 
-## Schritt 5 — Systemd-Service einrichten
+## Step 5 — Set up the systemd service
 
 ```bash
 sudo nano /etc/systemd/system/osrm.service
 ```
 
-Inhalt:
+Contents:
 
 ```ini
 [Unit]
@@ -136,41 +136,41 @@ WantedBy=multi-user.target
 sudo systemctl daemon-reload
 sudo systemctl enable --now osrm.service
 
-# Status prüfen
+# Check status
 sudo systemctl status osrm.service
 ```
 
-> **Wichtig:** OSRM bindet nur an IPv4 (`127.0.0.1:5000`). Das Backend nutzt explizit `127.0.0.1` statt `localhost` um IPv6-Auflösung zu vermeiden.
+> **Important:** OSRM binds to IPv4 only (`127.0.0.1:5000`). The backend explicitly uses `127.0.0.1` instead of `localhost` to avoid IPv6 resolution.
 
 ---
 
-## Routing testen
+## Test routing
 
 ```bash
-# Testroute: Magdeburg → Berlin (Elbe/Havel)
+# Test route: Magdeburg → Berlin (Elbe/Havel)
 curl "http://127.0.0.1:5000/route/v1/driving/11.6167,52.1205;13.4050,52.5200?overview=full&geometries=geojson"
-# Erwartet: JSON mit "code":"Ok" und einer Route entlang der Wasserstraßen
+# Expected: JSON with "code":"Ok" and a route along the waterways
 ```
 
 ---
 
-## Region wechseln
+## Switch region
 
-Im laufenden Betrieb kann die aktive Region über die BoatOS-API gewechselt werden — ohne SSH:
+The active region can be changed via the BoatOS API at runtime — no SSH required:
 
-**Deck:** Einstellungen → Navigation → OSRM-Region  
-**API:** `POST /api/routing/switch-region` mit `{"region": "sachsen-anhalt"}`
+**Deck:** Settings → Navigation → OSRM region  
+**API:** `POST /api/routing/switch-region` with `{"region": "sachsen-anhalt"}`
 
-Das Backend stoppt `osrm-routed`, startet ihn mit der neuen Region neu und wartet auf Health-Check.
+The backend stops `osrm-routed`, restarts it with the new region, and waits for a health check.
 
 ---
 
-## Mehrere Regionen gleichzeitig
+## Multiple regions simultaneously
 
-OSRM kann nur eine Region pro Prozess laden. Für mehrstufige Reisen (z.B. Hamburg → Berlin → Dresden) alle betroffenen Bundesländer zusammenführen:
+OSRM can only load one region per process. For multi-stage trips (e.g. Hamburg → Berlin → Dresden), merge all affected states first:
 
 ```bash
-# osmium muss installiert sein
+# osmium must be installed
 sudo apt install -y osmium-tool
 
 osmium merge \
@@ -179,17 +179,17 @@ osmium merge \
   ~/osrm_data/schleswig-holstein-latest.osm.pbf \
   -o ~/osrm_data/nordwest.osm.pbf
 
-# Dann nordwest.osm.pbf extrahieren wie in Schritt 4
+# Then extract nordwest.osm.pbf as in step 4
 ```
 
 ---
 
-## Häufige Probleme
+## Common problems
 
-| Problem | Lösung |
+| Problem | Solution |
 |---|---|
-| `osrm-routed` startet nicht | `systemctl status osrm` — Pfad zur `.osrm`-Datei prüfen |
-| Routing liefert Luftlinie | OSRM nicht erreichbar oder außerhalb geladener Region — `curl http://127.0.0.1:5000/...` testen |
-| `distance=0` in Antwort | Koordinaten außerhalb der geladenen Kartendaten |
-| Build bricht ab (OOM) | Swap vergrößern (s. tileserver.md) oder cross-kompilieren auf PC |
-| `NoSegment` Fehler | Wegpunkt liegt nicht auf einer Wasserstraße — OSRM snapped automatisch zum nächsten Knoten |
+| `osrm-routed` won't start | `systemctl status osrm` — check the path to the `.osrm` file |
+| Routing returns a straight line | OSRM not reachable or destination is outside the loaded region — test with `curl http://127.0.0.1:5000/...` |
+| `distance=0` in response | Coordinates are outside the loaded map data |
+| Build fails (OOM) | Increase swap (see tileserver.md) or cross-compile on a PC |
+| `NoSegment` error | Waypoint is not on a waterway — OSRM snaps automatically to the nearest node |

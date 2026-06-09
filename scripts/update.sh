@@ -82,8 +82,8 @@ sudo chmod +x /usr/local/bin/boatos-detect-display.sh
 sudo cp "$REPO_DIR/scripts/boatos-detect-display.service" /etc/systemd/system/boatos-detect-display.service
 sudo mkdir -p /etc/systemd/system/lightdm.service.d
 sudo cp "$REPO_DIR/scripts/lightdm-helm-condition.conf" /etc/systemd/system/lightdm.service.d/helm-condition.conf
-# sudoers: allow lightdm start/stop for backend
-echo "boatos ALL=(ALL) NOPASSWD: /bin/systemctl start lightdm, /bin/systemctl stop lightdm" | \
+# sudoers: allow lightdm start/stop + detect-display restart for backend
+echo "boatos ALL=(ALL) NOPASSWD: /bin/systemctl start lightdm, /bin/systemctl stop lightdm, /bin/systemctl restart boatos-detect-display" | \
     sudo tee /etc/sudoers.d/boatos-lightdm > /dev/null
 sudo chmod 440 /etc/sudoers.d/boatos-lightdm
 sudo systemctl daemon-reload

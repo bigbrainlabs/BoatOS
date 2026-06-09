@@ -31,7 +31,7 @@
                 <div class="value" id="sog-value">0.0</div>
                 <div class="label" id="sog-label">SOG kn</div>
             </div>
-            <div class="nav-value">
+            <div class="nav-value nav-val-cog">
                 <div class="value" id="cog-value">---°</div>
                 <div class="label">COG</div>
             </div>
@@ -39,7 +39,7 @@
                 <div class="value" id="dist-value">--</div>
                 <div class="label" id="dist-label">NM</div>
             </div>
-            <div class="nav-value">
+            <div class="nav-value nav-val-eta">
                 <div class="value" id="eta-value">--:--</div>
                 <div class="label">ETA</div>
             </div>
@@ -198,11 +198,16 @@
          FLOATING ACTION BUTTONS
          ============================================ -->
     <div class="fab-container" id="fabContainer">
-        <button class="fab" onclick="BoatOS.map.centerOnBoat()" title="Zentrieren">🎯</button>
-        <button class="fab" onclick="BoatOS.map.zoomIn()" title="Zoom +">+</button>
-        <button class="fab" onclick="BoatOS.map.zoomOut()" title="Zoom -">−</button>
-        <button class="fab" onclick="BoatOS.ui.toggleLayers()" title="Layer">🗂️</button>
-        <button class="fab danger" onclick="BoatOS.core.manOverBoard()" title="MOB">🆘</button>
+        <div class="fab-speed-dial" id="fabSpeedDial">
+            <div class="fab-speed-dial-items">
+                <button class="fab fab-sub" onclick="BoatOS.map.centerOnBoat()" title="Zentrieren">🎯</button>
+                <button class="fab fab-sub" onclick="BoatOS.map.zoomIn()" title="Zoom +">+</button>
+                <button class="fab fab-sub" onclick="BoatOS.map.zoomOut()" title="Zoom -">−</button>
+                <button class="fab fab-sub" onclick="BoatOS.ui.toggleLayers()" title="Layer">🗂️</button>
+            </div>
+            <button class="fab fab-trigger" id="fabTrigger" onclick="BoatOS.ui.toggleFabDial()" title="Werkzeuge">🗺️</button>
+        </div>
+        <button class="fab danger" onclick="BoatOS.core.manOverBoard()" title="Mann über Bord — Notruf">🆘</button>
     </div>
 
     <!-- ============================================
@@ -213,6 +218,7 @@
             <div class="sheet-handle-bar"></div>
         </div>
 
+        <div class="quick-actions-wrap">
         <div class="quick-actions">
             <div class="quick-action" data-mode="poi" onclick="BoatOS.navigation.startPoiPlacement()">
                 <span class="icon">📍</span>
@@ -251,6 +257,7 @@
                 <span class="label">Phone GPS</span>
             </div>
         </div>
+        </div><!-- /.quick-actions-wrap -->
 
         <div class="sheet-tabs">
             <div class="sheet-tab active" onclick="BoatOS.ui.showSection('route', this)">Route</div>
@@ -851,6 +858,44 @@
                         <span>Heading Up</span>
                         <div class="toggle" id="toggle-headingup" onclick="BoatOS.ui.toggleSettingToggle(this, 'headingUp')"></div>
                     </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4 data-i18n="settings_offline_maps">Offline-Karten</h4>
+                    <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;" data-i18n="settings_offline_maps_desc">
+                        Aktiviere mehrere Regionen für länderübergreifende Navigation. Regionen werden beim Laden einer Kachel der Reihe nach abgefragt.
+                    </p>
+                    <div id="map-regions-list" style="margin-bottom:10px;">
+                        <div style="color:var(--text-dim);font-size:13px;padding:8px 0;" data-i18n="settings_offline_maps_refresh">Wird geladen…</div>
+                    </div>
+                    <div style="margin-top:10px;">
+                        <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;"
+                               data-i18n="settings_offline_maps_upload_label">
+                            .mbtiles-Datei hochladen (z.B. aus dem BoatOS Karten-Tool):
+                        </label>
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                            <label id="map-upload-label" class="btn-secondary" style="cursor:pointer;flex:1;text-align:center;min-width:120px;">
+                                <span data-i18n="settings_offline_maps_choose">📂 Datei wählen</span>
+                                <input type="file" id="map-upload-input" accept=".mbtiles" style="display:none"
+                                       onchange="BoatOS.ui.onMbtilesFileSelected(this)">
+                            </label>
+                            <button id="map-upload-btn" class="btn-primary" style="flex:1;min-width:120px;display:none;"
+                                    onclick="BoatOS.ui.uploadMbtiles()"
+                                    data-i18n="settings_offline_maps_upload_btn">⬆ Hochladen</button>
+                        </div>
+                        <div id="map-upload-filename" style="font-size:11px;color:var(--accent);margin-top:4px;display:none;"></div>
+                        <div id="map-upload-progress" style="display:none;margin-top:8px;">
+                            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-bottom:3px;">
+                                <span id="map-upload-status">Hochladen…</span>
+                                <span id="map-upload-pct">0%</span>
+                            </div>
+                            <div style="background:var(--surface-2,rgba(0,0,0,0.3));border-radius:4px;overflow:hidden;height:6px;">
+                                <div id="map-upload-bar" style="height:100%;width:0%;background:var(--accent);transition:width 0.2s;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="BoatOS.ui.loadMapRegions()" class="btn-secondary" style="width:100%;margin-top:8px;"
+                            data-i18n="settings_offline_maps_refresh">↺ Aktualisieren</button>
                 </div>
             </div>
 

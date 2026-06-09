@@ -1,10 +1,10 @@
 /**
  * BoatOS Service Worker - PWA Support
- * v16 - Nominatim-Suche, toggleLayers, editRoute cleanup
+ * v17 - Responsive UI, FAB Speed Dial, Glassmorphism Bottom Sheet
  */
 
 // App shell cache — bump this version on any app update
-const CACHE_NAME = 'boatos-v16';
+const CACHE_NAME = 'boatos-v17';
 
 // Satellite tile cache — intentionally versioned separately so it is NEVER
 // wiped when the app cache version changes (tiles take a long time to download)

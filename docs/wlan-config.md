@@ -1,81 +1,81 @@
-# WLAN konfigurieren
+# WiFi Configuration
 
-BoatOS verwaltet WLAN über die eingebaute WiFi-Verwaltung — erreichbar in **Helm** (Touchscreen) und **Deck** (Browser).
-
----
-
-## Mit einem Netzwerk verbinden
-
-### Über Helm (Touchscreen)
-
-1. Einstellungen-Tab öffnen → **WLAN**
-2. **"Netzwerke scannen"** antippen
-3. Gewünschtes Netzwerk antippen
-4. Passwort eingeben (Auge-Icon zum Einblenden) → **"Verbinden"**
-
-### Über Deck (Browser)
-
-1. `https://boatos.local` im Browser öffnen
-2. Einstellungen → **WLAN**
-3. **"Netzwerke scannen"** → Netzwerk auswählen → Passwort eingeben → Verbinden
+BoatOS manages WiFi through the built-in WiFi manager — accessible in **Helm** (touchscreen) and **Deck** (browser).
 
 ---
 
-## Gespeicherte Netzwerke verwalten
+## Connect to a network
 
-Einmal verbundene Netzwerke werden automatisch gespeichert. Der Pi verbindet sich beim nächsten Start automatisch.
+### Via Helm (touchscreen)
 
-**Netzwerk vergessen:**
-- Helm: WLAN-Sheet öffnen → neben dem gespeicherten Netz auf **"Vergessen"** tippen
-- Deck: Einstellungen → WLAN → gespeichertes Netz → **"Löschen"**
+1. Open the Settings tab → **WiFi**
+2. Tap **"Scan networks"**
+3. Tap the desired network
+4. Enter the password (eye icon to reveal) → **"Connect"**
+
+### Via Deck (browser)
+
+1. Open `https://boatos.local` in your browser
+2. Settings → **WiFi**
+3. **"Scan networks"** → select network → enter password → Connect
+
+---
+
+## Manage saved networks
+
+Networks you connect to are saved automatically. The Pi will reconnect automatically on the next boot.
+
+**Forget a network:**
+- Helm: open the WiFi sheet → tap **"Forget"** next to the saved network
+- Deck: Settings → WiFi → saved network → **"Delete"**
 
 ---
 
 ## Hotspot
 
-Wenn kein bekanntes WLAN in Reichweite ist, kann der Pi einen eigenen Hotspot aufspannen. Andere Geräte verbinden sich dann direkt mit dem Pi.
+When no known WiFi is in range, the Pi can create its own hotspot. Other devices then connect directly to the Pi.
 
-**Hotspot starten:**
-- Helm: WLAN-Sheet öffnen → **"Hotspot starten"**
-- Deck: Einstellungen → WLAN → **"📡 Hotspot starten"**
+**Start hotspot:**
+- Helm: open WiFi sheet → **"Start hotspot"**
+- Deck: Settings → WiFi → **"📡 Start hotspot"**
 
-**Hotspot-Zugangsdaten** werden im Helm-Overlay und im Deck-Banner angezeigt:
+**Hotspot credentials** are shown in the Helm overlay and the Deck banner:
 
 | | |
 |---|---|
 | SSID | `BoatOS-Setup` |
-| Passwort | `boatos1234` |
+| Password | `boatos1234` |
 | IP (BoatOS) | `192.168.4.1` |
 
-Nach dem Verbinden mit dem Hotspot: `https://192.168.4.1` im Browser aufrufen.
+After connecting to the hotspot, open `https://192.168.4.1` in your browser.
 
-> ⚠️ **Sicherheitshinweis:** Das Hotspot-Passwort `boatos1234` ist ein öffentlich bekanntes Standard-Passwort. Ändere es nach der Ersteinrichtung unter **Einstellungen → WLAN → Hotspot-Passwort**, bevor du BoatOS in einem Hafen oder an einem anderen öffentlichen Liegeplatz verwendest.
+> ⚠️ **Security note:** The hotspot password `boatos1234` is a publicly known default. Change it after initial setup under **Settings → WiFi → Hotspot password** before using BoatOS at a marina or any public mooring.
 
-> **Hinweis:** Der Hotspot läuft auf 2,4 GHz. Auf kleinem Raum (z.B. in einem Hafen) kann er andere WLAN-Geräte kurzzeitig beeinflussen. Nach Gebrauch stoppen.
+> **Note:** The hotspot runs on 2.4 GHz. In confined spaces (e.g. a marina) it may briefly interfere with other WiFi devices. Stop it when not in use.
 
-**Hotspot stoppen:**
-- Helm: Banner antippen → **"Stoppen"**
-- Deck: **"Stoppen"**-Button
-
----
-
-## WLAN-Adapter neu starten
-
-Bei Verbindungsproblemen (z.B. nach langer Fahrt ohne WLAN) kann der Adapter neu initialisiert werden — ohne Pi-Neustart.
-
-- Helm: WLAN-Sheet öffnen → **↺-Button** (oben rechts im Header)
-- Deck: Einstellungen → WLAN → **"↺ Adapter neu starten"**
-
-Der Vorgang dauert ~10 Sekunden. Danach wird automatisch neu gescannt.
+**Stop hotspot:**
+- Helm: tap the banner → **"Stop"**
+- Deck: **"Stop"** button
 
 ---
 
-## Häufige Probleme
+## Restart the WiFi adapter
 
-| Problem | Lösung |
+If you have connection problems (e.g. after a long journey without WiFi), the adapter can be re-initialized — without rebooting the Pi.
+
+- Helm: open WiFi sheet → **↺ button** (top right in the header)
+- Deck: Settings → WiFi → **"↺ Restart adapter"**
+
+The process takes ~10 seconds. A new scan starts automatically afterwards.
+
+---
+
+## Common problems
+
+| Problem | Solution |
 |---|---|
-| Verbindung schlägt immer fehl | Passwort prüfen (Auge-Icon nutzen) — Groß-/Kleinschreibung beachten |
-| Pi verbindet sich nicht automatisch | Netzwerk vergessen und neu verbinden |
-| WLAN bricht immer wieder ab | Adapter neu starten (↺-Button) |
-| Hotspot startet aber Verbindung schlägt fehl | Statische IP am Gerät setzen: `192.168.4.2`, Maske `255.255.255.0`, Gateway `192.168.4.1` |
-| `boatos.local` nicht erreichbar | IP-Adresse direkt nutzen — Windows benötigt Bonjour für mDNS |
+| Connection always fails | Check the password (use the eye icon) — pay attention to upper/lower case |
+| Pi doesn't reconnect automatically | Forget the network and reconnect |
+| WiFi keeps dropping | Restart the adapter (↺ button) |
+| Hotspot starts but connection fails | Set a static IP on the device: `192.168.4.2`, mask `255.255.255.0`, gateway `192.168.4.1` |
+| `boatos.local` not reachable | Use the IP address directly — Windows requires Bonjour for mDNS |

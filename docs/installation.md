@@ -1,89 +1,89 @@
 # BoatOS Installation
 
-Es gibt zwei Wege: das fertige **Image** (empfohlen für Einsteiger) oder die **manuelle Installation** aus dem Repository (für Fortgeschrittene).
+There are two ways: the pre-built **image** (recommended for beginners) or **manual installation** from the repository (for advanced users).
 
 ---
 
-## Weg 1 — Fertig-Image flashen (empfohlen)
+## Option 1 — Flash the pre-built image (recommended)
 
-Alles ist vorkonfiguriert: Dienste, Karten, Routing, Flutter-App. Flashen, einschalten, fertig.
+Everything is pre-configured: services, maps, routing, Flutter app. Flash, power on, done.
 
-### Voraussetzungen
+### Requirements
 
-- Raspberry Pi 4 (2 GB RAM oder mehr)
-- SD-Karte ≥ 32 GB (Class 10 / A1)
-- [Raspberry Pi Imager](https://www.raspberrypi.com/software/) auf deinem PC/Mac
+- Raspberry Pi 4 (2 GB RAM or more)
+- SD card ≥ 32 GB (Class 10 / A1)
+- [Raspberry Pi Imager](https://www.raspberrypi.com/software/) on your PC/Mac
 
-### Schritt 1 — Image herunterladen
+### Step 1 — Download the image
 
 **[⬇️ Download v1.6.2 (archive.org, ~7.5 GB)](https://archive.org/download/boatos-distri-image/boatos_v1.6.2.img.gz)**
 
-### Schritt 2 — SD-Karte flashen
+### Step 2 — Flash the SD card
 
-1. Raspberry Pi Imager öffnen
-2. **"Choose OS"** → **"Use custom"** → heruntergeladene `.img.gz` auswählen
-3. **"Choose Storage"** → deine SD-Karte auswählen
-4. **"Write"** → warten bis fertig
+1. Open Raspberry Pi Imager
+2. **"Choose OS"** → **"Use custom"** → select the downloaded `.img.gz`
+3. **"Choose Storage"** → select your SD card
+4. **"Write"** → wait until finished
 
-> **Hinweis:** Die WLAN-Einstellungen im Zahnrad-Icon (⚙️) des Pi Imagers funktionieren mit dem BoatOS-Image **nicht** — WLAN wird im nächsten Schritt direkt auf der SD-Karte konfiguriert.
+> **Note:** The WiFi settings in the gear icon (⚙️) of Pi Imager do **not** work with the BoatOS image — WiFi is configured in the next step directly on the SD card.
 
-### Schritt 3 — WLAN auf der SD-Karte eintragen
+### Step 3 — Set up WiFi on the SD card
 
-Nach dem Flashen erscheint die Boot-Partition der SD-Karte als normales Laufwerk auf dem PC/Mac. Dort liegt eine Datei namens `wlan.txt`:
+After flashing, the boot partition of the SD card appears as a normal drive on your PC/Mac. It contains a file called `wlan.txt`:
 
-1. `wlan.txt` mit einem Texteditor öffnen
-2. SSID und Passwort eintragen:
+1. Open `wlan.txt` with a text editor
+2. Enter your SSID and password:
    ```
-   SSID=DeinNetzwerkname
-   PASSWORD=DeinPasswort
+   SSID=YourNetworkName
+   PASSWORD=YourPassword
    COUNTRY=DE
    ```
-3. Speichern, SD-Karte sicher auswerfen
+3. Save, safely eject the SD card
 
-Beim ersten Boot liest BoatOS diese Datei automatisch ein, verbindet sich mit dem WLAN und löscht `wlan.txt` danach (Passwort wird nicht dauerhaft auf der Boot-Partition gespeichert).
+On first boot, BoatOS reads this file automatically, connects to WiFi, and deletes `wlan.txt` afterwards (the password is not stored permanently on the boot partition).
 
-> Kein WLAN verfügbar? SD-Karte ohne `wlan.txt`-Eintrag starten — BoatOS ist dann per Ethernet (`https://boatos.local`) erreichbar. WLAN lässt sich jederzeit über **Deck → Einstellungen → WLAN** nachkonfigurieren.
+> No WiFi available? Boot without a `wlan.txt` entry — BoatOS will then be reachable via Ethernet (`https://boatos.local`). WiFi can be configured at any time via **Deck → Settings → WiFi**.
 
-### Schritt 4 — Einschalten
+### Step 4 — Power on
 
-SD-Karte in den Pi, Strom anlegen. Beim ersten Start dauert es ~60 Sekunden bis alle Dienste laufen.
+Insert the SD card into the Pi, apply power. On first boot it takes ~60 seconds until all services are running.
 
-### Schritt 5 — Deck aufrufen
+### Step 5 — Open Deck
 
-Im Browser (Handy, Tablet oder Laptop im gleichen WLAN):
+In a browser (phone, tablet, or laptop on the same network):
 
 ```
 https://boatos.local
 ```
 
-> Zertifikatswarnung einfach wegklicken — das Zertifikat ist selbst-signiert.
+> Just dismiss the certificate warning — the certificate is self-signed.
 
-Falls `boatos.local` nicht funktioniert (Windows ohne Bonjour): IP-Adresse des Pi im Router nachschauen.
+If `boatos.local` doesn't work (Windows without Bonjour): check the Pi's IP address in your router.
 
-### ⚠️ Sicherheit — Standard-Passwörter ändern
+### ⚠️ Security — Change default passwords
 
-Das Image wird mit öffentlich bekannten Standard-Passwörtern ausgeliefert. **Ändere diese vor dem ersten Einsatz in einem Hafen oder Netzwerk mit anderen Personen:**
+The image ships with publicly known default passwords. **Change these before first use in a marina or any network with other people:**
 
-| Zugang | Standard-Passwort | Ändern unter |
+| Access | Default password | Where to change |
 |---|---|---|
-| SSH-Login (`boatos`) | `boatos123` | `passwd` per SSH |
-| Hotspot WLAN | `boatos1234` | Deck/Helm → Einstellungen → WLAN → Hotspot |
+| SSH login (`boatos`) | `boatos123` | `passwd` via SSH |
+| Hotspot WiFi | `boatos1234` | Deck/Helm → Settings → WiFi → Hotspot |
 
-Solange der Pi nur im eigenen Heimnetz läuft, ist das Risiko überschaubar. An öffentlichen Liegeplätzen oder in Marinas sind Standard-Passwörter ein echtes Sicherheitsproblem.
+As long as the Pi runs only on your home network the risk is manageable. At public moorings or marinas, default passwords are a real security problem.
 
 ---
 
-## Weg 2 — Manuelle Installation aus dem Repository
+## Option 2 — Manual installation from the repository
 
-Für Nutzer die ein frisches Raspberry Pi OS aufsetzen und BoatOS manuell installieren möchten.
+For users who want to set up a fresh Raspberry Pi OS and install BoatOS manually.
 
-### Voraussetzungen
+### Requirements
 
-- Raspberry Pi 4 mit **Raspberry Pi OS Bookworm 64-bit** (Lite reicht)
-- SSH-Zugang oder Tastatur/Monitor am Pi
-- Internetverbindung am Pi
+- Raspberry Pi 4 with **Raspberry Pi OS Bookworm 64-bit** (Lite is sufficient)
+- SSH access or keyboard/monitor connected to the Pi
+- Internet connection on the Pi
 
-### Schritt 1 — System vorbereiten
+### Step 1 — Prepare the system
 
 ```bash
 sudo apt update && sudo apt upgrade -y
@@ -91,7 +91,7 @@ sudo apt install -y git python3-pip python3-venv nginx nodejs npm \
   mosquitto mosquitto-clients lightdm
 ```
 
-### Schritt 2 — Repository klonen
+### Step 2 — Clone the repository
 
 ```bash
 cd ~
@@ -99,7 +99,7 @@ git clone https://github.com/bigbrainlabs/BoatOS.git
 cd BoatOS
 ```
 
-### Schritt 3 — Backend einrichten
+### Step 3 — Set up the backend
 
 ```bash
 cd backend
@@ -108,14 +108,14 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Systemd-Service einrichten:
+Set up the systemd service:
 
 ```bash
 sudo cp scripts/boatos.service /etc/systemd/system/
 sudo systemctl enable --now boatos.service
 ```
 
-### Schritt 4 — Deck (Web-Frontend) einrichten
+### Step 4 — Set up Deck (web frontend)
 
 ```bash
 sudo cp scripts/nginx-boatos.conf /etc/nginx/sites-available/boatos
@@ -123,33 +123,33 @@ sudo ln -s /etc/nginx/sites-available/boatos /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-### Schritt 5 — Helm (Flutter-App) einrichten
+### Step 5 — Set up Helm (Flutter app)
 
-flutter-pi installieren:
+Install flutter-pi:
 
 ```bash
 sudo apt install -y libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
   libdrm-dev libgbm-dev fonts-noto-color-emoji
 ```
 
-Vorkompiliertes Binary herunterladen oder selbst bauen (siehe [v2-flutter-pi.md](v2-flutter-pi.md)).
+Download the pre-compiled binary or build it yourself (see [v2-flutter-pi.md](v2-flutter-pi.md)).
 
-lightdm Autologin konfigurieren:
+Configure lightdm auto-login:
 
 ```bash
 sudo raspi-config
 # System Options → Boot / Auto Login → Desktop Autologin
 ```
 
-Startscript einrichten:
+Set up the start script:
 
 ```bash
 cp scripts/boatos-v2.sh ~/boatos-v2.sh
 chmod +x ~/boatos-v2.sh
-# In ~/.config/labwc/autostart eintragen oder lightdm-Session konfigurieren
+# Add to ~/.config/labwc/autostart or configure the lightdm session
 ```
 
-### Schritt 6 — Weitere Dienste
+### Step 6 — Additional services
 
 **SignalK** (GPS):
 
@@ -164,11 +164,11 @@ sudo systemctl enable --now signalk
 sudo systemctl enable --now mosquitto
 ```
 
-**Tileserver** (Karten) und **OSRM** (Routing) sind für vollständige Offline-Navigation nötig — siehe [tileserver.md](tileserver.md) und [osrm.md](osrm.md).
+**Tileserver** (maps) and **OSRM** (routing) are required for full offline navigation — see [tileserver.md](tileserver.md) and [osrm.md](osrm.md).
 
-> **Online-Betrieb ohne Tileserver:** Das Satellitenbild (ESRI) und die nautischen Overlays (OpenSeaMap) laden aus dem Internet. Die Basiskarte (Flüsse, Straßen, Küsten) und das OSRM-Routing funktionieren **nur lokal** — ohne Tileserver/OSRM erscheint nur ein grauer Hintergrund, kein Routing.
+> **Online operation without tileserver:** The satellite image (ESRI) and nautical overlays (OpenSeaMap) load from the internet. The base map (rivers, roads, coastlines) and OSRM routing work **only locally** — without tileserver/OSRM you will see only a grey background and no routing.
 
-### Schritt 7 — Erster Start
+### Step 7 — First start
 
 ```bash
 sudo systemctl restart boatos.service
@@ -176,16 +176,16 @@ sudo systemctl restart nginx
 sudo reboot
 ```
 
-Nach dem Neustart: `https://boatos.local` im Browser aufrufen.
+After reboot: open `https://boatos.local` in your browser.
 
 ---
 
-## Häufige Probleme
+## Common problems
 
-| Problem | Lösung |
+| Problem | Solution |
 |---|---|
-| `boatos.local` nicht erreichbar | IP-Adresse im Router nachschauen, oder `https://<IP>` direkt aufrufen |
-| Zertifikatswarnung im Browser | Warnung bestätigen / "Trotzdem fortfahren" — das ist normal |
-| Helm zeigt Login-Screen | `sudo systemctl restart lightdm` per SSH |
-| Backend antwortet nicht | `sudo systemctl status boatos.service` — Logs prüfen |
-| Kein GPS | SignalK prüfen: `sudo systemctl status signalk` |
+| `boatos.local` not reachable | Check the IP address in your router, or use `https://<IP>` directly |
+| Certificate warning in browser | Confirm / "Continue anyway" — this is expected |
+| Helm shows login screen | `sudo systemctl restart lightdm` via SSH |
+| Backend not responding | `sudo systemctl status boatos.service` — check logs |
+| No GPS | Check SignalK: `sudo systemctl status signalk` |

@@ -239,12 +239,15 @@ class DashboardRenderer {
     /**
      * Load and render dashboard layout
      */
-    async loadAndRender() {
+    async loadAndRender(retryCount = 0) {
+        const MAX_RETRIES = 4;
+        const RETRY_DELAYS = [3000, 5000, 8000, 12000];
         try {
             const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
 
             // Load layout DSL
             const layoutResponse = await fetch(`${apiUrl}/api/dashboard/layout`);
+            if (!layoutResponse.ok) throw new Error(`HTTP ${layoutResponse.status}`);
             const layoutData = await layoutResponse.json();
             const dslText = layoutData.layout;
 
@@ -254,6 +257,7 @@ class DashboardRenderer {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ layout: dslText })
             });
+            if (!parseResponse.ok) throw new Error(`HTTP ${parseResponse.status}`);
             this.layout = await parseResponse.json();
 
             // Load current sensors
@@ -272,7 +276,14 @@ class DashboardRenderer {
             console.log('Dashboard initialized with smooth updates');
         } catch (error) {
             console.error('Error loading dashboard:', error);
-            this.renderError();
+            if (retryCount < MAX_RETRIES) {
+                const delay = RETRY_DELAYS[retryCount];
+                console.log(`Dashboard retry ${retryCount + 1}/${MAX_RETRIES} in ${delay / 1000}s…`);
+                this.renderRetrying(retryCount + 1, MAX_RETRIES);
+                setTimeout(() => this.loadAndRender(retryCount + 1), delay);
+            } else {
+                this.renderError();
+            }
         }
     }
 
@@ -500,6 +511,19 @@ class DashboardRenderer {
             if (rollEl)  rollEl.textContent = fmt(st.dispRoll);
             if (pitchEl) pitchEl.textContent = fmt(st.dispPitch);
         }
+    }
+
+    renderRetrying(attempt, max) {
+        const container = document.getElementById('sensor-dashboard');
+        if (!container) return;
+        container.innerHTML = `
+            <div style="text-align:center;padding:var(--space-4xl);color:var(--text-dim);">
+                <div style="font-size:var(--fs-5xl);margin-bottom:var(--space-lg);">⏳</div>
+                <div style="font-size:var(--fs-xl);color:var(--text);margin-bottom:var(--space-md);">
+                    Verbinde mit Backend…
+                </div>
+                <div style="font-size:var(--fs-md);">Versuch ${attempt} von ${max}</div>
+            </div>`;
     }
 
     /**

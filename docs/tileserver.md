@@ -1,25 +1,29 @@
-# Tileserver einrichten (Offline-Karten)
+# Setting up the Tileserver (Offline Maps)
 
-BoatOS nutzt [Martin](https://martin.maplibre.org/) als Tile-Server für Vektorkacheln. Die Basiskarte (Flüsse, Straßen, Küsten, Ortschaften) wird komplett lokal als `.mbtiles`-Datei bereitgestellt — kein Internet nötig.
+BoatOS uses [Martin](https://martin.maplibre.org/) as a tile server for vector tiles. The base map (rivers, roads, coastlines, settlements) is served entirely from a local `.mbtiles` file — no internet required.
 
-> **Hinweis:** Ohne Tileserver fehlt die Basiskarte. Das Satellitenbild (ESRI) und OpenSeaMap-Overlays funktionieren weiterhin, solange Internet vorhanden ist.
+> **Note:** Without the tileserver the base map is unavailable. Satellite imagery (ESRI) and OpenSeaMap overlays still work as long as an internet connection is present.
 
 ---
 
-## Übersicht
+## Overview
 
 ```
-OSM-Rohdaten (.osm.pbf)
+OSM raw data (.osm.pbf)
     └─ tilemaker → germany.mbtiles
-                       └─ martin (Port 8081) → BoatOS Karte
+                       └─ martin (port 8081) → BoatOS map
+                                               ↑
+                          Backend tile proxy  ──┘
+                          (/api/map/tiles)
+                          reads multiple .mbtiles
 ```
 
 ---
 
-## Schritt 1 — Martin installieren
+## Step 1 — Install Martin
 
 ```bash
-# Aktuelles Release von GitHub herunterladen (ARM64 für Pi)
+# Download the latest release from GitHub (ARM64 for Pi)
 MARTIN_VERSION="v0.14.4"
 wget "https://github.com/maplibre/martin/releases/download/${MARTIN_VERSION}/martin-aarch64-unknown-linux-musl.tar.gz"
 tar xzf martin-aarch64-unknown-linux-musl.tar.gz
@@ -32,24 +36,24 @@ martin --version
 
 ---
 
-## Schritt 2 — OSM-Rohdaten herunterladen
+## Step 2 — Download OSM raw data
 
 ```bash
 mkdir -p ~/osm_data
 cd ~/osm_data
 
-# Deutschland gesamt (~4 GB, dauert je nach Verbindung 15–30 Min.)
+# All of Germany (~4 GB, takes 15–30 min depending on connection)
 wget https://download.geofabrik.de/europe/germany-latest.osm.pbf
 
-# Alternativ: nur ein Bundesland (viel kleiner, schneller)
-# wget https://download.geofabrik.de/europe/germany/sachsen-anhalt-latest.osm.pbf
+# Alternative: a single federal state (much smaller, faster)
+# wget https://download.geofabrik.de/europe/germany/saxony-anhalt-latest.osm.pbf
 ```
 
 ---
 
-## Schritt 3 — tilemaker installieren
+## Step 3 — Install tilemaker
 
-[tilemaker](https://github.com/systemed/tilemaker) konvertiert OSM-Daten in MBTiles.
+[tilemaker](https://github.com/systemed/tilemaker) converts OSM data into MBTiles.
 
 ```bash
 sudo apt install -y build-essential libboost-dev libboost-filesystem-dev \
@@ -68,92 +72,147 @@ sudo make install
 
 ---
 
-## Schritt 4 — MBTiles erstellen
+## Step 4 — Create MBTiles
 
 ```bash
 cd ~/tilemaker
 
-# Küsten-Polygon herunterladen (nötig für Land/Wasser-Darstellung)
+# Download coastline polygons (required for land/water rendering)
 wget https://osmdata.openstreetmap.de/download/water-polygons-split-4326.zip
 unzip water-polygons-split-4326.zip
 
-# Konvertierung starten (~30–90 Min. je nach Region und Pi-Modell)
+# Start conversion (~30–90 min depending on region and Pi model)
 tilemaker \
   --input ~/osm_data/germany-latest.osm.pbf \
   --output ~/BoatOS/data/germany.mbtiles \
   --config resources/config-openmaptiles.json \
   --process resources/process-openmaptiles.lua
 
-# Fertig: ~/BoatOS/data/germany.mbtiles (~1–3 GB)
+# Result: ~/BoatOS/data/germany.mbtiles (~1–3 GB)
 ```
 
-> **Pi 4/5:** Der Prozess braucht ~1 GB RAM. Bei Pi 3 oder wenig RAM ggf. ein einzelnes Bundesland konvertieren.
+> **Pi 4/5:** The process requires ~1 GB RAM. On a Pi 3 or with limited RAM, convert a single federal state instead.
 
 ---
 
-## Schritt 5 — Systemd-Service einrichten
+## Step 5 — Set up the systemd service
 
 ```bash
 sudo cp ~/BoatOS/deploy/tileserver.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now tileserver.service
 
-# Status prüfen
+# Check status
 sudo systemctl status tileserver.service
 ```
 
-Der Service startet Martin auf Port 8081 mit `~/BoatOS/data/germany.mbtiles`.
+The service starts Martin on port 8081 with `~/BoatOS/data/germany.mbtiles`.
 
 ---
 
-## Karte testen
+## Test the map
 
 ```bash
-# Tile-Anfrage direkt testen (muss JSON zurückgeben)
-curl http://localhost:8081/catalog
+# Test the tile proxy (should return {"ok":true,...})
+curl http://localhost:8000/api/map/tiles
 
-# Kachelbeispiel (z=10, x=548, y=337 = Mitteldeutschland)
+# Test a specific tile via backend (z=10, x=548, y=337 = central Germany)
 curl -o /dev/null -w "%{http_code}" \
-  "http://localhost:8081/germany/10/548/337"
-# Erwartet: 200
+  "http://localhost:8000/api/map/tiles/10/548/337.pbf"
+# Expected: 200
 ```
 
-Danach `https://boatos.local` im Browser öffnen — die Karte sollte vollständig erscheinen.
+Then open `https://boatos.local` in a browser — the map should appear fully rendered.
 
 ---
 
-## Nur ein Bundesland / kleinere Region
+## Single federal state / smaller region
 
-Für den Test-Pi oder Regattafahrten reicht oft ein Bundesland:
+For a test Pi or regatta trips a single state is often sufficient:
 
 ```bash
-# Beispiel: Sachsen-Anhalt
-wget https://download.geofabrik.de/europe/germany/sachsen-anhalt-latest.osm.pbf
+# Example: Saxony-Anhalt
+wget https://download.geofabrik.de/europe/germany/saxony-anhalt-latest.osm.pbf
 
 tilemaker \
-  --input ~/osm_data/sachsen-anhalt-latest.osm.pbf \
-  --output ~/BoatOS/data/sachsen-anhalt.mbtiles \
+  --input ~/osm_data/saxony-anhalt-latest.osm.pbf \
+  --output ~/BoatOS/data/saxony-anhalt.mbtiles \
   --config resources/config-openmaptiles.json \
   --process resources/process-openmaptiles.lua
 ```
 
-Dann den Service anpassen:
-
-```bash
-sudo systemctl edit tileserver.service
-# ExecStart überschreiben:
-# ExecStart=/usr/local/bin/martin --listen-addresses 0.0.0.0:8081 /home/boatos/BoatOS/data/sachsen-anhalt.mbtiles
-sudo systemctl restart tileserver.service
-```
+Place the file in `~/BoatOS/data/` — it will appear automatically in the map settings.
 
 ---
 
-## Häufige Probleme
+## Multiple regions / cross-border navigation
 
-| Problem | Lösung |
+BoatOS can use several `.mbtiles` files simultaneously. The backend tile proxy queries all active regions in order for each tile request and returns the first match — geographically non-overlapping regions work seamlessly.
+
+### Activating regions (UI)
+
+**Settings → Map → Offline Maps**
+
+All `.mbtiles` files in `~/BoatOS/data/` are detected automatically and shown as toggles. Multiple regions can be active at the same time.
+
+### Downloading neighbouring countries
+
+All regions are available from [Geofabrik](https://download.geofabrik.de/):
+
+| Region | URL |
 |---|---|
-| `martin: command not found` | Binary nicht in `/usr/local/bin` — Pfad prüfen |
-| Karte erscheint grau | tileserver nicht gestartet — `systemctl status tileserver` prüfen |
-| `tilemaker` bricht mit OOM ab | Swap vergrößern: `sudo dphys-swapfile swapoff && sudo nano /etc/dphys-swapfile` → `CONF_SWAPSIZE=2048` |
-| Port 8081 belegt | `sudo ss -tlnp | grep 8081` → anderen Prozess beenden |
-| MBTiles-Datei zu groß | Nur benötigte Region konvertieren statt ganz Deutschland |
+| Netherlands | `https://download.geofabrik.de/europe/netherlands-latest.osm.pbf` |
+| Belgium | `https://download.geofabrik.de/europe/belgium-latest.osm.pbf` |
+| France | `https://download.geofabrik.de/europe/france-latest.osm.pbf` |
+| Poland | `https://download.geofabrik.de/europe/poland-latest.osm.pbf` |
+| Czech Republic | `https://download.geofabrik.de/europe/czech-republic-latest.osm.pbf` |
+| Austria | `https://download.geofabrik.de/europe/austria-latest.osm.pbf` |
+| Switzerland | `https://download.geofabrik.de/europe/switzerland-latest.osm.pbf` |
+| Denmark | `https://download.geofabrik.de/europe/denmark-latest.osm.pbf` |
+
+### Example: Rhine route (Germany + Netherlands)
+
+```bash
+# Download Netherlands (~900 MB)
+wget -P ~/osm_data https://download.geofabrik.de/europe/netherlands-latest.osm.pbf
+
+# Create MBTiles (~30–60 min)
+cd ~/tilemaker
+tilemaker \
+  --input ~/osm_data/netherlands-latest.osm.pbf \
+  --output ~/BoatOS/data/netherlands.mbtiles \
+  --config resources/config-openmaptiles.json \
+  --process resources/process-openmaptiles.lua
+```
+
+Then enable both regions under **Settings → Map → Offline Maps** — the map will show Germany and the Netherlands seamlessly.
+
+### Region order
+
+The order in which active regions are queried is alphabetical by default. For best performance, ensure the most frequently used region is listed first.
+
+### Disk space
+
+| Region | OSM PBF | MBTiles (approx.) |
+|---|---|---|
+| Germany | 4 GB | 3 GB |
+| Netherlands | 900 MB | 700 MB |
+| Belgium | 400 MB | 300 MB |
+| Austria | 700 MB | 550 MB |
+| France | 4 GB | 3 GB |
+
+> The OSM PBF files are no longer needed after conversion and can be deleted.
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| `martin: command not found` | Binary not in `/usr/local/bin` — check the path |
+| Map appears grey | Tileserver not running — check `systemctl status tileserver` |
+| `tilemaker` crashes with OOM | Increase swap: `sudo dphys-swapfile swapoff && sudo nano /etc/dphys-swapfile` → `CONF_SWAPSIZE=2048` |
+| Port 8081 in use | `sudo ss -tlnp | grep 8081` — stop the conflicting process |
+| MBTiles file too large | Convert only the required region instead of all of Germany |
+| Region not shown in settings | File is not in `~/BoatOS/data/` or does not have a `.mbtiles` extension |
+| Tiles missing at country borders | Enable both countries — each tile is loaded from exactly one file |

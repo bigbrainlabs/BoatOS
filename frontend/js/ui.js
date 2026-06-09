@@ -5,7 +5,7 @@
  * Dieses Modul extrahiert UI-spezifische Funktionalitäten aus app.js
  */
 
-import { t } from './i18n.js';
+import { t, getLang } from './i18n.js';
 
 // ===========================================
 // Konstanten und State
@@ -939,6 +939,28 @@ export function toggleMode() {
 /**
  * Zeigt/versteckt das Layer-Panel
  */
+export function toggleFabDial() {
+    const dial = document.getElementById('fabSpeedDial');
+    const trigger = document.getElementById('fabTrigger');
+    if (!dial) return;
+    const isOpen = dial.classList.toggle('open');
+    if (trigger) {
+        trigger.textContent = isOpen ? '✕' : '🗺️';
+        trigger.classList.toggle('open', isOpen);
+    }
+    if (isOpen) {
+        const close = (e) => {
+            const container = document.getElementById('fabContainer');
+            if (container && !container.contains(e.target)) {
+                dial.classList.remove('open');
+                if (trigger) { trigger.textContent = '🗺️'; trigger.classList.remove('open'); }
+                document.removeEventListener('click', close, true);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', close, true), 0);
+    }
+}
+
 export function toggleLayers() {
     toggleSidebar();
     showSettingsTab('map', document.querySelector('[onclick*="showSettingsTab(\'map\'"]'));
@@ -1448,6 +1470,9 @@ export function showSettingsTab(tabId, tabElement) {
         window.BoatOS.system.checkVersion();
         window.BoatOS.system.loadHelmStatus();
     }
+    if (tabId === 'map') {
+        loadMapRegions();
+    }
 }
 
 /**
@@ -1455,6 +1480,195 @@ export function showSettingsTab(tabId, tabElement) {
  * @param {HTMLElement} toggleElement - Das Toggle-Element
  * @param {string} settingKey - Der Setting-Key
  */
+// Known region display names — fallback to title-cased id for unknown regions
+const _REGION_NAMES = {
+    germany:               { de: 'Deutschland',          en: 'Germany' },
+    netherlands:           { de: 'Niederlande',          en: 'Netherlands' },
+    belgium:               { de: 'Belgien',              en: 'Belgium' },
+    france:                { de: 'Frankreich',           en: 'France' },
+    poland:                { de: 'Polen',                en: 'Poland' },
+    'czech-republic':      { de: 'Tschechien',          en: 'Czech Republic' },
+    austria:               { de: 'Österreich',          en: 'Austria' },
+    switzerland:           { de: 'Schweiz',             en: 'Switzerland' },
+    denmark:               { de: 'Dänemark',            en: 'Denmark' },
+    bavaria:               { de: 'Bayern',               en: 'Bavaria' },
+    'baden-wuerttemberg':  { de: 'Baden-Württemberg',   en: 'Baden-Württemberg' },
+    brandenburg:           { de: 'Brandenburg',          en: 'Brandenburg' },
+    'mecklenburg-vorpommern': { de: 'Mecklenburg-Vorpommern', en: 'Mecklenburg-Vorpommern' },
+    'lower-saxony':        { de: 'Niedersachsen',        en: 'Lower Saxony' },
+    'nordrhein-westfalen': { de: 'Nordrhein-Westfalen', en: 'North Rhine-Westphalia' },
+    'rheinland-pfalz':     { de: 'Rheinland-Pfalz',    en: 'Rhineland-Palatinate' },
+    saxony:                { de: 'Sachsen',              en: 'Saxony' },
+    'saxony-anhalt':       { de: 'Sachsen-Anhalt',      en: 'Saxony-Anhalt' },
+    'schleswig-holstein':  { de: 'Schleswig-Holstein',  en: 'Schleswig-Holstein' },
+    thuringia:             { de: 'Thüringen',            en: 'Thuringia' },
+};
+
+function _regionDisplayName(id) {
+    const entry = _REGION_NAMES[id];
+    if (entry) return entry[getLang()] || entry.de;
+    return id.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+let _mapRegions = { installed: [], active: [] };
+
+export async function loadMapRegions() {
+    const container = document.getElementById('map-regions-list');
+    if (!container) return;
+    container.innerHTML = `<div style="color:var(--text-dim);font-size:13px;padding:8px 0;">${t('mapRegionsLoading')}</div>`;
+    try {
+        const r = await fetch('/api/map/regions');
+        _mapRegions = await r.json();
+        _renderMapRegions(container);
+    } catch {
+        container.innerHTML = `<div style="color:var(--text-dim);font-size:13px;">${t('mapRegionsError')}</div>`;
+    }
+}
+
+function _renderMapRegions(container) {
+    if (!_mapRegions.installed.length) {
+        container.innerHTML = `<div style="color:var(--text-dim);font-size:13px;padding:8px 0;">${t('mapRegionsNone')}</div>`;
+        return;
+    }
+    container.innerHTML = _mapRegions.installed.map(r => `
+        <div class="setting-item" style="margin-bottom:6px;">
+            <div>
+                <span style="font-size:13px;">${_regionDisplayName(r.id)}</span>
+                <span style="font-size:11px;color:var(--text-dim);margin-left:6px;">${r.size_mb} MB</span>
+            </div>
+            <div class="toggle${r.active ? ' active' : ''}"
+                 id="map-region-toggle-${r.id}"
+                 onclick="BoatOS.ui.toggleMapRegion('${r.id}', this)"></div>
+        </div>`).join('');
+}
+
+export function onMbtilesFileSelected(input) {
+    const file = input.files[0];
+    const btn = document.getElementById('map-upload-btn');
+    const label = document.getElementById('map-upload-filename');
+    if (!file) { btn.style.display = 'none'; label.style.display = 'none'; return; }
+    btn.style.display = '';
+    label.style.display = '';
+    const mb = (file.size / 1_048_576).toFixed(0);
+    label.textContent = `${file.name} (${mb} MB)`;
+}
+
+export function uploadMbtiles() {
+    const input = document.getElementById('map-upload-input');
+    const file = input.files[0];
+    if (!file) return;
+
+    const progress = document.getElementById('map-upload-progress');
+    const bar = document.getElementById('map-upload-bar');
+    const pct = document.getElementById('map-upload-pct');
+    const status = document.getElementById('map-upload-status');
+    const btn = document.getElementById('map-upload-btn');
+
+    progress.style.display = '';
+    btn.disabled = true;
+    status.textContent = t('mapUploadUploading');
+    bar.style.width = '0%';
+    pct.textContent = '0%';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/map/regions/upload');
+
+    xhr.upload.addEventListener('progress', e => {
+        if (!e.lengthComputable) return;
+        const p = Math.round(e.loaded / e.total * 100);
+        bar.style.width = p + '%';
+        pct.textContent = p + '%';
+        const mb = (e.loaded / 1_048_576).toFixed(0);
+        const total = (e.total / 1_048_576).toFixed(0);
+        status.textContent = `${t('mapUploadUploading')} ${mb} / ${total} MB`;
+    });
+
+    xhr.addEventListener('load', async () => {
+        btn.disabled = false;
+        if (xhr.status === 200) {
+            bar.style.width = '100%';
+            pct.textContent = '100%';
+            status.textContent = t('mapUploadDone');
+            bar.style.background = 'var(--success, #4caf50)';
+            input.value = '';
+            document.getElementById('map-upload-btn').style.display = 'none';
+            document.getElementById('map-upload-filename').style.display = 'none';
+            setTimeout(() => { progress.style.display = 'none'; bar.style.background = ''; }, 2000);
+            await loadMapRegions();
+        } else if (xhr.status === 409) {
+            status.textContent = t('mapUploadOverwrite');
+            bar.style.background = 'var(--warning, #ff9800)';
+            btn.onclick = () => _uploadMbtilesOverwrite(file);
+        } else {
+            let msg = 'Fehler beim Hochladen';
+            try { msg = JSON.parse(xhr.responseText).detail || msg; } catch {}
+            status.textContent = '✗ ' + msg;
+            bar.style.background = 'var(--error, #f44336)';
+            setTimeout(() => { bar.style.background = ''; progress.style.display = 'none'; }, 3000);
+        }
+    });
+
+    xhr.addEventListener('error', () => {
+        btn.disabled = false;
+        status.textContent = '✗ ' + t('mapUploadConnError');
+        bar.style.background = 'var(--error, #f44336)';
+        setTimeout(() => { bar.style.background = ''; progress.style.display = 'none'; }, 3000);
+    });
+
+    xhr.send(formData);
+}
+
+function _uploadMbtilesOverwrite(file) {
+    document.getElementById('map-upload-btn').onclick = () => uploadMbtiles();
+    const formData = new FormData();
+    formData.append('file', file);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/map/regions/upload?overwrite=true');
+    const bar = document.getElementById('map-upload-bar');
+    const pct = document.getElementById('map-upload-pct');
+    const status = document.getElementById('map-upload-status');
+    bar.style.background = '';
+    xhr.upload.addEventListener('progress', e => {
+        if (!e.lengthComputable) return;
+        const p = Math.round(e.loaded / e.total * 100);
+        bar.style.width = p + '%';
+        pct.textContent = p + '%';
+    });
+    xhr.addEventListener('load', async () => {
+        if (xhr.status === 200) {
+            bar.style.width = '100%';
+            status.textContent = t('mapUploadDone');
+            bar.style.background = 'var(--success, #4caf50)';
+            setTimeout(() => { document.getElementById('map-upload-progress').style.display = 'none'; bar.style.background = ''; }, 2000);
+            await loadMapRegions();
+        }
+    });
+    xhr.send(formData);
+}
+
+export async function toggleMapRegion(regionId, toggleEl) {
+    toggleEl.classList.toggle('active');
+    const isActive = toggleEl.classList.contains('active');
+    if (isActive) {
+        if (!_mapRegions.active.includes(regionId)) _mapRegions.active.push(regionId);
+    } else {
+        _mapRegions.active = _mapRegions.active.filter(r => r !== regionId);
+        if (!_mapRegions.active.length) {
+            // Keep at least one active to avoid blank map
+            _mapRegions.active = [regionId];
+            toggleEl.classList.add('active');
+        }
+    }
+    await fetch('/api/map/regions/active', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ regions: _mapRegions.active })
+    });
+}
+
 export function toggleSettingToggle(toggleElement, settingKey) {
     toggleElement.classList.toggle('active');
     const isActive = toggleElement.classList.contains('active');
@@ -1677,3 +1891,7 @@ window.selectBoatIcon = selectBoatIcon;
 window.toggleLocks = toggleLocks;
 window.togglePegel = togglePegel;
 window.initLayerVisibility = initLayerVisibility;
+window.loadMapRegions = loadMapRegions;
+window.toggleMapRegion = toggleMapRegion;
+window.onMbtilesFileSelected = onMbtilesFileSelected;
+window.uploadMbtiles = uploadMbtiles;

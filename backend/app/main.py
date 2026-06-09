@@ -1,9 +1,9 @@
 """BoatOS Backend - FastAPI Server with Logbook & Charts"""
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, BackgroundTasks, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, BackgroundTasks, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 from fastapi.staticfiles import StaticFiles
-import asyncio, json, websockets, os, shutil, zipfile, subprocess, re
+import asyncio, json, websockets, os, shutil, zipfile, subprocess, re, sqlite3 as _sqlite3
 from datetime import datetime
 from typing import List, Dict, Any
 import paho.mqtt.client as mqtt
@@ -34,7 +34,8 @@ load_dotenv(dotenv_path=dotenv_path)
 app = FastAPI(title="BoatOS API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-# Charts directory
+# Data directories
+MBTILES_DIR = Path("/home/boatos/BoatOS/data")
 CHARTS_DIR = Path("/home/boatos/BoatOS/data/charts")
 CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -4555,6 +4556,147 @@ async def _run_update():
     finally:
         _update_running = False
 
+# ==================== MAP TILE PROXY (multi-region) ====================
+
+def _read_mbtiles_tile(path, z, x, y):
+    # MBTiles y-coordinate is TMS (origin bottom-left) — flip from XYZ
+    tms_y = (1 << z) - 1 - y
+    try:
+        with _sqlite3.connect(str(path)) as conn:
+            row = conn.execute(
+                "SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?",
+                (z, x, tms_y)
+            ).fetchone()
+        return bytes(row[0]) if row else None
+    except Exception:
+        return None
+
+def _get_active_regions():
+    try:
+        with open("data/settings.json") as f:
+            s = json.load(f)
+        regions = s.get("map", {}).get("activeRegions", None)
+        if regions is not None:
+            return regions
+    except Exception:
+        pass
+    installed = sorted(p.stem for p in MBTILES_DIR.glob("*.mbtiles"))
+    return ["germany"] if "germany" in installed else (installed[:1] if installed else [])
+
+@app.get("/api/map/tiles")
+async def map_tiles_health():
+    active = _get_active_regions()
+    available = [r for r in active if (MBTILES_DIR / f"{r}.mbtiles").exists()]
+    return {"ok": len(available) > 0, "active": available}
+
+@app.get("/api/map/tiles/{z}/{x}/{y}.pbf")
+async def get_map_tile(z: int, x: int, y: int):
+    for region in _get_active_regions():
+        p = MBTILES_DIR / f"{region}.mbtiles"
+        if not p.exists():
+            continue
+        data = _read_mbtiles_tile(p, z, x, y)
+        if data:
+            is_gzip = data[:2] == b'\x1f\x8b'
+            headers = {"Cache-Control": "public, max-age=86400"}
+            if is_gzip:
+                headers["Content-Encoding"] = "gzip"
+            return Response(content=data, media_type="application/x-protobuf", headers=headers)
+    return Response(status_code=204)
+
+@app.get("/api/map/regions")
+async def map_regions():
+    active = _get_active_regions()
+    installed = []
+    for p in sorted(MBTILES_DIR.glob("*.mbtiles")):
+        try:
+            size_mb = round(p.stat().st_size / 1_048_576, 1)
+        except Exception:
+            size_mb = 0
+        installed.append({
+            "id": p.stem,
+            "name": p.stem.replace("-", " ").replace("_", " ").title(),
+            "size_mb": size_mb,
+            "active": p.stem in active
+        })
+    return {"installed": installed, "active": active}
+
+@app.post("/api/map/regions/active")
+async def set_active_regions(body: dict):
+    regions = body.get("regions", [])
+    # Validate — only accept regions that actually exist as mbtiles
+    valid = [r for r in regions if (MBTILES_DIR / f"{r}.mbtiles").exists()]
+    try:
+        with open("data/settings.json") as f:
+            s = json.load(f)
+    except Exception:
+        s = {}
+    s.setdefault("map", {})["activeRegions"] = valid
+    with open("data/settings.json", "w") as f:
+        json.dump(s, f, indent=2)
+    return {"ok": True, "active": valid}
+
+def _sanitize_mbtiles_name(raw_name: str) -> tuple:
+    safe = re.sub(r"[^\w\-.]", "_", raw_name)
+    stem = Path(safe).stem
+    return stem, stem + ".mbtiles"
+
+async def _write_mbtiles_stream(dest: Path, read_fn, overwrite: bool):
+    SQLITE_MAGIC = b"SQLite format 3\x00"
+    CHUNK_SIZE = 1_048_576
+    first_chunk = await read_fn(CHUNK_SIZE)
+    if len(first_chunk) < 16 or first_chunk[:16] != SQLITE_MAGIC:
+        raise HTTPException(status_code=400, detail="Not a valid MBTiles file")
+    if dest.exists() and not overwrite:
+        raise HTTPException(status_code=409, detail=f"{dest.name} already exists")
+    try:
+        with open(dest, "wb") as out:
+            out.write(first_chunk)
+            while True:
+                chunk = await read_fn(CHUNK_SIZE)
+                if not chunk:
+                    break
+                out.write(chunk)
+    except Exception as e:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=f"Write error: {e}")
+    return round(dest.stat().st_size / 1_048_576, 2)
+
+@app.post("/api/map/regions/upload")
+async def upload_mbtiles(file: UploadFile = File(...), overwrite: bool = False):
+    stem, display_name = _sanitize_mbtiles_name(file.filename or "upload.mbtiles")
+    dest = MBTILES_DIR / display_name
+    size_mb = await _write_mbtiles_stream(dest, file.read, overwrite)
+    return {"ok": True, "id": stem, "name": display_name, "size_mb": size_mb}
+
+@app.post("/api/map/regions/upload-raw")
+async def upload_mbtiles_raw(request: Request, overwrite: bool = False):
+    raw_name = request.headers.get("X-Filename", "upload.mbtiles")
+    stem, display_name = _sanitize_mbtiles_name(raw_name)
+    dest = MBTILES_DIR / display_name
+    if dest.exists() and not overwrite:
+        raise HTTPException(status_code=409, detail=f"{dest.name} already exists")
+    SQLITE_MAGIC = b"SQLite format 3\x00"
+    validated = False
+    try:
+        with open(dest, "wb") as out:
+            async for chunk in request.stream():
+                if not validated:
+                    if len(chunk) < 16 or chunk[:16] != SQLITE_MAGIC:
+                        raise HTTPException(status_code=400, detail="Not a valid MBTiles file")
+                    validated = True
+                out.write(chunk)
+    except HTTPException:
+        dest.unlink(missing_ok=True)
+        raise
+    except Exception as e:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=f"Write error: {e}")
+    size_mb = round(dest.stat().st_size / 1_048_576, 2)
+    return {"ok": True, "id": stem, "name": display_name, "size_mb": size_mb}
+
+# ==================== HELM DISPLAY MANAGEMENT ====================
+
 _HELM_DISABLED_FLAG = Path("/home/boatos/.boatos_helm_disabled")
 
 @app.get("/api/system/helm")
@@ -4574,6 +4716,11 @@ async def helm_set(body: dict):
     enabled = body.get("enabled", True)
     if enabled:
         _HELM_DISABLED_FLAG.unlink(missing_ok=True)
+        # Re-run detection so /run/boatos/has-display is (re-)created before
+        # lightdm starts — necessary if Helm was disabled and rebooted, which
+        # leaves the flag file absent and blocks the systemd condition.
+        subprocess.run(["sudo", "systemctl", "restart", "boatos-detect-display"],
+                       capture_output=True)
         subprocess.Popen(["sudo", "systemctl", "start", "lightdm"],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
