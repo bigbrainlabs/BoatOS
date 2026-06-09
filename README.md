@@ -16,6 +16,30 @@ A complete marine navigation system for inland waterways and coastal navigation.
 
 ---
 
+## 🗺️ Offline Maps — Windows Tool for Non-Linux Users
+
+> **No Linux, no terminal, no config files needed.**
+
+The **BoatOS MBTiles Creator** is a standalone Windows app that downloads, converts, and uploads offline map tiles directly to your BoatOS Pi — one click per region.
+
+<div align="center">
+
+**[⬇️ Download BoatOS-MBTiles-Creator.exe](https://github.com/bigbrainlabs/BoatOS/releases/latest)**
+
+</div>
+
+**What it does:**
+- Downloads OSM map data for any region (60+ countries and states pre-configured)
+- Converts to `.mbtiles` using tilemaker (downloaded automatically on first run)
+- Uploads the finished file directly to your Pi via WiFi — no USB stick, no SSH
+
+**Supported regions include:** Germany (all 16 states), Netherlands, Belgium, France, Switzerland, Austria, Norway, Sweden, Denmark, Great Britain, Ireland, USA (state-level), Canada, and more.
+
+→ Source & instructions: [`tools/mbtiles-creator/`](tools/mbtiles-creator/)  
+→ Detailed docs: [docs/tileserver.md](docs/tileserver.md)
+
+---
+
 <div align="center">
 
 ## 📚 Logbuch ohne Pose — Book Series & Build Series

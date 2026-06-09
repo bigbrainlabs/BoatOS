@@ -16,6 +16,30 @@ Ein vollständiges Marine-Navigationssystem für Binnenschifffahrt und Küstenna
 
 ---
 
+## 🗺️ Offline-Karten — Windows-Tool für Nicht-Linux-Nutzer
+
+> **Kein Linux, kein Terminal, keine Konfigdateien.**
+
+Der **BoatOS MBTiles Creator** ist eine eigenständige Windows-App, die Offline-Kartenkacheln herunterlädt, konvertiert und direkt auf den BoatOS-Pi hochlädt — ein Klick pro Region.
+
+<div align="center">
+
+**[⬇️ BoatOS-MBTiles-Creator.exe herunterladen](https://github.com/bigbrainlabs/BoatOS/releases/latest)**
+
+</div>
+
+**Was die App macht:**
+- Lädt OSM-Kartendaten für beliebige Regionen herunter (60+ Länder und Bundesländer voreingestellt)
+- Konvertiert zu `.mbtiles` mit tilemaker (wird beim ersten Start automatisch heruntergeladen)
+- Lädt die fertige Datei direkt per WLAN auf den Pi — kein USB-Stick, kein SSH
+
+**Verfügbare Regionen u. a.:** Deutschland (alle 16 Bundesländer), Niederlande, Belgien, Frankreich, Schweiz, Österreich, Norwegen, Schweden, Dänemark, Großbritannien, Irland, USA (bundesstaatlich), Kanada und mehr.
+
+→ Quellcode & Anleitung: [`tools/mbtiles-creator/`](tools/mbtiles-creator/)  
+→ Ausführliche Doku: [docs/tileserver_de.md](docs/tileserver_de.md)
+
+---
+
 <div align="center">
 
 ## 📚 Logbuch ohne Pose — Buchserie & Bauserie

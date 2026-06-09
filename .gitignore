@@ -132,3 +132,13 @@ docs/plugin-system-idea.md
 *screenshot*.png
 *_screenshot.*
 flutter_app/C*
+
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
+tools/mbtiles-creator/dist/
+tools/mbtiles-creator/build/
+tools/mbtiles-creator/tmp/
+tools/mbtiles-creator/data/
+tools/mbtiles-creator/creator_config.json

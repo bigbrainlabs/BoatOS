@@ -111,6 +111,18 @@ sudo iw dev "${IFACE:-wlan0}" set power_save off 2>/dev/null || true
 sudo systemctl reload NetworkManager 2>/dev/null || true
 log "       WiFi Power Management deaktiviert"
 
+# 5a. Ensure nginx upload limit is sufficient for mbtiles files
+log "[5a] Prüfe nginx client_max_body_size..."
+NGINX_CONF=/etc/nginx/sites-available/boatos
+REQUIRED_LIMIT="20G"
+if grep -q "client_max_body_size" "$NGINX_CONF" 2>/dev/null; then
+    sudo sed -i "s/client_max_body_size [^;]*/client_max_body_size $REQUIRED_LIMIT/g" "$NGINX_CONF"
+    log "       client_max_body_size auf $REQUIRED_LIMIT gesetzt"
+else
+    log "       nginx-Konfig nicht gefunden — überspringe"
+fi
+sudo nginx -t 2>/dev/null && sudo systemctl reload nginx || true
+
 # 5. Ensure Mosquitto accepts external connections
 log "[5/6] Konfiguriere Mosquitto (externe Verbindungen)..."
 MOSQ_CONF=/etc/mosquitto/conf.d/boatos.conf
