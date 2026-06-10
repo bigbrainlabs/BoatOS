@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BoatOS Ecosystem – Free Marine OS for Makers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --deep:    #0A1628;
+    --mid:     #1B3A5C;
+    --panel:   #112240;
+    --cyan:    #00D4FF;
+    --amber:   #EF9F27;
+    --text:    #F0F4F8;
+    --muted:   #8BA3BC;
+    --border:  rgba(0,212,255,0.15);
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body:    'Inter', sans-serif;
+    --font-mono:    'JetBrains Mono', monospace;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--deep);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 2.5rem;
+    background: rgba(10,22,40,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-logo {
+    font-family: var(--font-display);
+    font-weight: 700; font-size: 1.2rem;
+    color: var(--cyan); text-decoration: none;
+    display: flex; align-items: center; gap: 0.6rem;
+  }
+  .nav-logo span { color: var(--text); }
+  .nav-links { display: flex; gap: 2rem; list-style: none; }
+  .nav-links a {
+    color: var(--muted); text-decoration: none;
+    font-size: 0.9rem; font-weight: 500;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--cyan); }
+  .nav-cta {
+    background: var(--cyan); color: var(--deep);
+    padding: 0.5rem 1.2rem; border-radius: 6px;
+    font-weight: 600; font-size: 0.85rem;
+    text-decoration: none; transition: opacity 0.2s;
+  }
+  .nav-cta:hover { opacity: 0.85; }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center;
+    padding: 8rem 2rem 4rem;
+    position: relative; overflow: hidden;
+  }
+  .hero-grid {
+    position: absolute; inset: 0; opacity: 0.04;
+    background-image:
+      linear-gradient(var(--cyan) 1px, transparent 1px),
+      linear-gradient(90deg, var(--cyan) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+  .compass {
+    width: 120px; height: 120px; margin-bottom: 2rem;
+    animation: spin 40s linear infinite;
+    opacity: 0.7;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .hero-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.8rem; letter-spacing: 0.15em;
+    color: var(--cyan); text-transform: uppercase;
+    margin-bottom: 1.2rem;
+  }
+  .hero h1 {
+    font-family: var(--font-display);
+    font-size: clamp(2.4rem, 6vw, 4.5rem);
+    font-weight: 700; line-height: 1.1;
+    margin-bottom: 1.5rem;
+    max-width: 900px;
+  }
+  .hero h1 em { color: var(--cyan); font-style: normal; }
+  .hero-sub {
+    font-size: 1.1rem; color: var(--muted);
+    max-width: 620px; margin-bottom: 2.5rem;
+    line-height: 1.8;
+  }
+  .hero-actions { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; }
+  .btn-primary {
+    background: var(--cyan); color: var(--deep);
+    padding: 0.85rem 2rem; border-radius: 8px;
+    font-weight: 700; font-size: 0.95rem;
+    text-decoration: none; transition: opacity 0.2s;
+    display: inline-flex; align-items: center; gap: 0.5rem;
+  }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-secondary {
+    border: 1px solid var(--border); color: var(--text);
+    padding: 0.85rem 2rem; border-radius: 8px;
+    font-weight: 500; font-size: 0.95rem;
+    text-decoration: none; transition: border-color 0.2s;
+    display: inline-flex; align-items: center; gap: 0.5rem;
+  }
+  .btn-secondary:hover { border-color: var(--cyan); color: var(--cyan); }
+
+  .hero-stats {
+    display: flex; gap: 3rem; margin-top: 4rem;
+    flex-wrap: wrap; justify-content: center;
+  }
+  .stat { text-align: center; }
+  .stat-num {
+    font-family: var(--font-display);
+    font-size: 2rem; font-weight: 700; color: var(--cyan);
+    display: block;
+  }
+  .stat-label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+
+  /* ── SECTIONS ── */
+  section { padding: 5rem 2rem; max-width: 1200px; margin: 0 auto; }
+  .section-full { max-width: 100%; padding: 5rem 0; }
+  .section-inner { max-width: 1200px; margin: 0 auto; padding: 0 2rem; }
+
+  .section-eyebrow {
+    font-family: var(--font-mono); font-size: 0.75rem;
+    letter-spacing: 0.18em; color: var(--cyan);
+    text-transform: uppercase; margin-bottom: 0.8rem;
+  }
+  .section-title {
+    font-family: var(--font-display);
+    font-size: clamp(1.8rem, 3vw, 2.6rem);
+    font-weight: 700; margin-bottom: 1rem;
+  }
+  .section-sub {
+    color: var(--muted); font-size: 1rem;
+    max-width: 560px; line-height: 1.8;
+    margin-bottom: 3rem;
+  }
+
+  /* ── PROJECTS GRID ── */
+  .projects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-top: 3rem;
+  }
+  .project-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    transition: border-color 0.2s, transform 0.2s;
+    position: relative; overflow: hidden;
+  }
+  .project-card::before {
+    content: ''; position: absolute;
+    top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--cyan), transparent);
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .project-card:hover { border-color: var(--cyan); transform: translateY(-3px); }
+  .project-card:hover::before { opacity: 1; }
+  .project-icon {
+    font-size: 2.2rem; margin-bottom: 1rem; display: block;
+  }
+  .project-tag {
+    font-family: var(--font-mono); font-size: 0.7rem;
+    color: var(--cyan); text-transform: uppercase;
+    letter-spacing: 0.12em; margin-bottom: 0.5rem;
+    display: block;
+  }
+  .project-card h3 {
+    font-family: var(--font-display);
+    font-size: 1.3rem; font-weight: 600;
+    margin-bottom: 0.7rem;
+  }
+  .project-card p { color: var(--muted); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1.2rem; }
+  .project-link {
+    color: var(--cyan); text-decoration: none;
+    font-size: 0.85rem; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 0.4rem;
+  }
+  .project-link:hover { text-decoration: underline; }
+  .badge {
+    display: inline-block;
+    background: rgba(0,212,255,0.1);
+    color: var(--cyan); border: 1px solid var(--border);
+    font-family: var(--font-mono); font-size: 0.7rem;
+    padding: 0.2rem 0.6rem; border-radius: 4px;
+    margin-top: 0.5rem;
+  }
+  .badge-amber {
+    background: rgba(239,159,39,0.1);
+    color: var(--amber); border-color: rgba(239,159,39,0.3);
+  }
+
+  /* ── FEATURES ── */
+  .features-bg {
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 2rem; margin-top: 3rem;
+  }
+  .feature-item { display: flex; gap: 1rem; align-items: flex-start; }
+  .feature-icon {
+    font-size: 1.4rem; flex-shrink: 0;
+    margin-top: 0.2rem;
+  }
+  .feature-item h4 {
+    font-family: var(--font-display);
+    font-size: 1rem; font-weight: 600;
+    margin-bottom: 0.3rem;
+  }
+  .feature-item p { color: var(--muted); font-size: 0.88rem; line-height: 1.6; }
+
+  /* ── QUICK START ── */
+  .steps { margin-top: 3rem; display: flex; flex-direction: column; gap: 1.5rem; }
+  .step {
+    display: flex; gap: 1.5rem; align-items: flex-start;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1.5rem;
+    transition: border-color 0.2s;
+  }
+  .step:hover { border-color: rgba(0,212,255,0.3); }
+  .step-num {
+    font-family: var(--font-display);
+    font-size: 1.8rem; font-weight: 700;
+    color: var(--cyan); opacity: 0.4;
+    flex-shrink: 0; min-width: 2.5rem; line-height: 1;
+  }
+  .step h4 {
+    font-family: var(--font-display);
+    font-size: 1rem; font-weight: 600;
+    margin-bottom: 0.4rem;
+  }
+  .step p { color: var(--muted); font-size: 0.88rem; line-height: 1.6; }
+  .code-block {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.6rem 1rem;
+    font-family: var(--font-mono); font-size: 0.8rem;
+    color: var(--cyan); margin-top: 0.6rem;
+    display: inline-block;
+  }
+
+  /* ── DOCS TABS ── */
+  .docs-nav {
+    display: flex; gap: 0.5rem; flex-wrap: wrap;
+    margin-bottom: 2rem; border-bottom: 1px solid var(--border);
+    padding-bottom: 1rem;
+  }
+  .docs-tab {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--muted); padding: 0.5rem 1rem;
+    border-radius: 6px; cursor: pointer;
+    font-family: var(--font-body); font-size: 0.88rem;
+    transition: all 0.2s;
+  }
+  .docs-tab.active, .docs-tab:hover {
+    border-color: var(--border);
+    color: var(--text);
+    background: var(--panel);
+  }
+  .docs-tab.active { color: var(--cyan); border-color: var(--cyan); }
+  .docs-panel { display: none; }
+  .docs-panel.active { display: block; }
+  .docs-panel h3 {
+    font-family: var(--font-display);
+    font-size: 1.3rem; font-weight: 600;
+    margin-bottom: 1rem; margin-top: 1.5rem;
+  }
+  .docs-panel h3:first-child { margin-top: 0; }
+  .docs-panel p { color: var(--muted); font-size: 0.9rem; line-height: 1.8; margin-bottom: 1rem; }
+  .docs-panel ul { color: var(--muted); font-size: 0.9rem; padding-left: 1.5rem; margin-bottom: 1rem; }
+  .docs-panel li { margin-bottom: 0.4rem; line-height: 1.7; }
+  .docs-panel .code-block { display: block; white-space: pre; overflow-x: auto; margin-bottom: 1rem; }
+
+  /* ── COMMUNITY ── */
+  .community-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem; margin-top: 2rem;
+  }
+  .community-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1.5rem;
+    text-align: center; text-decoration: none;
+    transition: border-color 0.2s, transform 0.2s;
+    display: block;
+  }
+  .community-card:hover { border-color: var(--cyan); transform: translateY(-2px); }
+  .community-card-icon { font-size: 2rem; margin-bottom: 0.7rem; display: block; }
+  .community-card h4 {
+    font-family: var(--font-display); font-size: 0.95rem;
+    font-weight: 600; margin-bottom: 0.3rem; color: var(--text);
+  }
+  .community-card p { color: var(--muted); font-size: 0.8rem; }
+
+  /* ── BOOKS ── */
+  .books-section {
+    background: linear-gradient(135deg, var(--panel) 0%, rgba(0,212,255,0.05) 100%);
+    border: 1px solid var(--border); border-radius: 16px;
+    padding: 3rem; display: flex; gap: 3rem;
+    align-items: center; flex-wrap: wrap;
+    margin-top: 2rem;
+  }
+  .books-text { flex: 1; min-width: 280px; }
+  .books-text h2 {
+    font-family: var(--font-display);
+    font-size: 1.8rem; font-weight: 700;
+    margin-bottom: 1rem;
+  }
+  .books-text p { color: var(--muted); line-height: 1.8; margin-bottom: 1.5rem; font-size: 0.95rem; }
+  .books-list { flex: 1; min-width: 280px; }
+  .book-item {
+    display: flex; align-items: center; gap: 1rem;
+    padding: 0.7rem 0; border-bottom: 1px solid var(--border);
+  }
+  .book-item:last-child { border-bottom: none; }
+  .book-num {
+    font-family: var(--font-mono); font-size: 0.7rem;
+    color: var(--cyan); min-width: 2rem;
+  }
+  .book-title { font-size: 0.9rem; color: var(--text); }
+  .book-live {
+    margin-left: auto; font-family: var(--font-mono);
+    font-size: 0.65rem; color: var(--amber);
+    background: rgba(239,159,39,0.1);
+    border: 1px solid rgba(239,159,39,0.3);
+    padding: 0.15rem 0.5rem; border-radius: 4px;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 3rem 2rem; text-align: center;
+    color: var(--muted); font-size: 0.85rem;
+  }
+  footer a { color: var(--cyan); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+  .footer-links { display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .footer-motto {
+    font-family: var(--font-display); font-size: 0.9rem;
+    color: var(--muted); font-style: italic;
+    margin-bottom: 1rem;
+  }
+
+  /* ── DIVIDER ── */
+  .divider {
+    height: 1px; background: var(--border);
+    max-width: 1200px; margin: 0 auto;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    nav { padding: 1rem 1.5rem; }
+    .nav-links { display: none; }
+    .hero-stats { gap: 2rem; }
+    .books-section { flex-direction: column; gap: 2rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">
+    ⚓ Boat<span>OS</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#projects">Projects</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#quickstart">Quick Start</a></li>
+    <li><a href="#docs">Docs</a></li>
+    <li><a href="#community">Community</a></li>
+    <li><a href="#books">Books</a></li>
+  </ul>
+  <a href="https://github.com/bigbrainlabs/BoatOS" class="nav-cta" target="_blank">GitHub ↗</a>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-grid"></div>
+
+  <!-- Compass SVG -->
+  <svg class="compass" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="60" cy="60" r="58" stroke="#00D4FF" stroke-width="1" opacity="0.3"/>
+    <circle cx="60" cy="60" r="48" stroke="#00D4FF" stroke-width="0.5" opacity="0.2"/>
+    <polygon points="60,8 65,55 60,58 55,55" fill="#00D4FF" opacity="0.9"/>
+    <polygon points="60,112 65,65 60,62 55,65" fill="#8BA3BC" opacity="0.6"/>
+    <polygon points="8,60 55,55 58,60 55,65" fill="#8BA3BC" opacity="0.6"/>
+    <polygon points="112,60 65,55 62,60 65,65" fill="#EF9F27" opacity="0.8"/>
+    <circle cx="60" cy="60" r="5" fill="#00D4FF" opacity="0.6"/>
+    <text x="60" y="22" text-anchor="middle" fill="#00D4FF" font-size="8" font-family="JetBrains Mono" opacity="0.7">N</text>
+    <text x="60" y="105" text-anchor="middle" fill="#8BA3BC" font-size="8" font-family="JetBrains Mono" opacity="0.7">S</text>
+    <text x="18" y="64" text-anchor="middle" fill="#8BA3BC" font-size="8" font-family="JetBrains Mono" opacity="0.7">W</text>
+    <text x="102" y="64" text-anchor="middle" fill="#EF9F27" font-size="8" font-family="JetBrains Mono" opacity="0.7">E</text>
+  </svg>
+
+  <div class="hero-eyebrow">Open Source Marine Ecosystem</div>
+  <h1>The free <em>Marine OS</em><br>for boat makers</h1>
+  <p class="hero-sub">
+    Offline navigation, engine monitoring, AIS, logbook and weather
+    on a Raspberry Pi. ~€250 in hardware instead of €2,000+ for commercial chartplotters.
+    Flash, boot, sail.
+  </p>
+  <div class="hero-actions">
+    <a href="https://archive.org/download/boatos-distri-image/boatos_v1.6.4.img.gz" class="btn-primary" target="_blank">
+      ⬇ Download Image v1.6.4
+    </a>
+    <a href="#quickstart" class="btn-secondary">
+      Quick Start Guide →
+    </a>
+  </div>
+  <div class="hero-stats">
+    <div class="stat"><span class="stat-num">~€250</span><span class="stat-label">Hardware Total</span></div>
+    <div class="stat"><span class="stat-num">100%</span><span class="stat-label">Open Source</span></div>
+    <div class="stat"><span class="stat-num">16</span><span class="stat-label">Sensor Channels</span></div>
+    <div class="stat"><span class="stat-num">60+</span><span class="stat-label">Map Regions</span></div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- PROJECTS -->
+<section id="projects">
+  <div class="section-eyebrow">The Ecosystem</div>
+  <h2 class="section-title">Four projects. One platform.</h2>
+  <p class="section-sub">Everything you need to digitise an old boat — from the operating system to the sensor hardware to the heating control.</p>
+
+  <div class="projects-grid">
+
+    <div class="project-card">
+      <span class="project-icon">🖥️</span>
+      <span class="project-tag">v1.6.4 — Active</span>
+      <h3>BoatOS</h3>
+      <p>Complete marine operating system on Raspberry Pi. Offline navigation, AIS, engine monitoring, automatic logbook, weather and water level integration.</p>
+      <span class="badge">Raspberry Pi 3/4/5</span>
+      <span class="badge">Flutter + Python</span><br><br>
+      <a href="https://github.com/bigbrainlabs/BoatOS" class="project-link" target="_blank">GitHub ↗</a>
+    </div>
+
+    <div class="project-card">
+      <span class="project-icon">⚡</span>
+      <span class="project-tag">Prototype running</span>
+      <h3>BoatOpenIO</h3>
+      <p>Modular universal marine IO system. 16 channels, stackable mini-boards per channel for voltage dividers, pull-ups, optocouplers and pulse counters.</p>
+      <span class="badge">ESP32 + ADS1115</span>
+      <span class="badge">MQTT</span><br><br>
+      <a href="https://github.com/bigbrainlabs/BoatOpenIO" class="project-link" target="_blank">GitHub ↗</a>
+    </div>
+
+    <div class="project-card">
+      <span class="project-icon">🔥</span>
+      <span class="project-tag">In development</span>
+      <h3>ValveHeater</h3>
+      <p>Modular frost protection for valves and pipes. Hinged heating rings, click-velcro installation, ESP32 controller with BoatOS dashboard integration.</p>
+      <span class="badge">12V DC</span>
+      <span class="badge">3D printed ASA</span><br><br>
+      <a href="https://github.com/bigbrainlabs/ValveHeater" class="project-link" target="_blank">GitHub ↗</a>
+    </div>
+
+    <div class="project-card">
+      <span class="project-icon">📡</span>
+      <span class="project-tag">Planned — Volume 7</span>
+      <h3>AutoSat</h3>
+      <p>Automatic satellite dish alignment using GPS and compass. ~€150 DIY versus €3,000+ commercial. Self-orienting, always connected.</p>
+      <span class="badge-amber badge">Coming soon</span><br><br>
+      <a href="https://github.com/bigbrainlabs" class="project-link" target="_blank">bigbrainlabs ↗</a>
+    </div>
+
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- FEATURES -->
+<div class="features-bg section-full" id="features">
+  <div class="section-inner">
+    <div class="section-eyebrow">What BoatOS does</div>
+    <h2 class="section-title">Everything in one system</h2>
+    <p class="section-sub">No subscriptions. No cloud dependency. Everything runs locally on the Pi — offline first, always.</p>
+
+    <div class="features-grid">
+      <div class="feature-item">
+        <span class="feature-icon">🗺️</span>
+        <div>
+          <h4>Offline Navigation</h4>
+          <p>OpenSeaMap vector tiles stored locally on SSD. Works without mobile signal. Fairways, locks, buoys — all offline.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">⚓</span>
+        <div>
+          <h4>AIS — Live Traffic</h4>
+          <p>Other vessels on the chart in real time. Via AISStream.io over internet or local USB AIS receiver.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">📊</span>
+        <div>
+          <h4>Engine Monitoring</h4>
+          <p>Battery, oil temp, oil pressure, coolant, RPM — all live. Alarms when something is wrong. Works with old analogue VDO sensors.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">📝</span>
+        <div>
+          <h4>Automatic Logbook</h4>
+          <p>Every trip recorded automatically — GPS track, sensor data, weather snapshot. After one season: a complete record.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">🌦️</span>
+        <div>
+          <h4>Weather + Water Levels</h4>
+          <p>OpenWeatherMap warnings on the chart. PEGELONLINE water level data for inland waterways — live.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">📱</span>
+        <div>
+          <h4>Two Frontends</h4>
+          <p>Helm: Flutter native on the touchscreen. Deck: browser frontend — open on any phone, no install needed.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">🆘</span>
+        <div>
+          <h4>SOS / MOB Button</h4>
+          <p>Man-overboard and emergency button in both Helm and Deck. One tap, position logged, alarm triggered.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">💥</span>
+        <div>
+          <h4>Impact Detection</h4>
+          <p>MPU6050 logs every impact with timestamp, GPS position and severity. Born from an unplanned encounter with a rock.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">🗺️</span>
+        <div>
+          <h4>60+ Map Regions</h4>
+          <p>New MBTiles Creator tool for Windows — no Python, no terminal. Select region, create map, upload to Pi. Done.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- QUICK START -->
+<section id="quickstart">
+  <div class="section-eyebrow">Get started</div>
+  <h2 class="section-title">From zero to sailing in 30 minutes</h2>
+  <p class="section-sub">No Linux knowledge required. No terminal. No setup wizard. Flash, boot, done.</p>
+
+  <div class="steps">
+    <div class="step">
+      <span class="step-num">01</span>
+      <div>
+        <h4>Download the image</h4>
+        <p>Get the latest BoatOS image from archive.org. The image contains everything — OS, all services, map data for Germany, OTA updater.</p>
+        <a href="https://archive.org/download/boatos-distri-image/boatos_v1.6.4.img.gz" class="code-block" target="_blank">⬇ boatos_v1.6.4.img.gz</a>
+      </div>
+    </div>
+    <div class="step">
+      <span class="step-num">02</span>
+      <div>
+        <h4>Configure WiFi before flashing</h4>
+        <p>After flashing, open the SSD/SD card on your computer and edit <strong>wlan.txt</strong> in the root directory:</p>
+        <div class="code-block">SSID=YourBoatNetwork
+PASSWORD=YourPassword</div>
+      </div>
+    </div>
+    <div class="step">
+      <span class="step-num">03</span>
+      <div>
+        <h4>Flash with Balena Etcher</h4>
+        <p>Use <a href="https://etcher.balena.io" target="_blank" style="color:var(--cyan)">Balena Etcher</a> (free, Windows/Mac/Linux) — select the .img.gz file, select your SSD or SD card, click Flash. Like flashing any USB stick.</p>
+      </div>
+    </div>
+    <div class="step">
+      <span class="step-num">04</span>
+      <div>
+        <h4>Insert and power on</h4>
+        <p>Insert the SSD/SD into the Pi, connect the touchscreen and GPS mouse, power on. BoatOS boots automatically. GPS position appears once the mouse has a fix.</p>
+      </div>
+    </div>
+    <div class="step">
+      <span class="step-num">05</span>
+      <div>
+        <h4>Access from phone or tablet</h4>
+        <p>Connect your device to the same network as the Pi, open a browser, type the Pi's IP address. Deck opens — full chart and monitoring in the browser.</p>
+        <div class="code-block">http://192.168.x.x:8000</div>
+      </div>
+    </div>
+    <div class="step">
+      <span class="step-num">06</span>
+      <div>
+        <h4>Stay up to date</h4>
+        <p>BoatOS has a built-in OTA updater. New versions are applied on demand from the settings menu — no reflashing needed.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- DOCS -->
+<section id="docs">
+  <div class="section-eyebrow">Documentation</div>
+  <h2 class="section-title">Setup guides</h2>
+  <p class="section-sub">Detailed instructions for each project in the ecosystem.</p>
+
+  <div class="docs-nav">
+    <button class="docs-tab active" onclick="showTab('boatos')">BoatOS</button>
+    <button class="docs-tab" onclick="showTab('boatopenio')">BoatOpenIO</button>
+    <button class="docs-tab" onclick="showTab('valveheater')">ValveHeater</button>
+    <button class="docs-tab" onclick="showTab('maps')">Offline Maps</button>
+  </div>
+
+  <div id="tab-boatos" class="docs-panel active">
+    <h3>Hardware Requirements</h3>
+    <p>Recommended: Raspberry Pi 4 (4GB), 10.1" HDMI touchscreen, BU-353N5 GPS mouse, 128GB SSD, DC-DC 12V→5V converter. Also supported: Pi 3B+, Pi 5, Zero 2W.</p>
+    <h3>Recommended Setup</h3>
+    <ul>
+      <li>Connect Pi via LAN cable to your onboard router for maximum stability</li>
+      <li>Use an SSD instead of SD card — more reliable under voltage fluctuations</li>
+      <li>Dedicated onboard router keeps the boat network separate from marina WiFi</li>
+      <li>GPS mouse needs a clear view of the sky — mount outside or near a hatch</li>
+    </ul>
+    <h3>OTA Update Workaround (images before 2026-06-04)</h3>
+    <p>If OTA update hangs on older images, run this once via terminal or PowerShell:</p>
+    <div class="code-block">ssh boatos@boatos.local "rm ~/BoatOS/scripts/update.sh"</div>
+    <p>Default password: <strong>boatos123</strong> (change this!). Then start the update from Helm or Deck settings.</p>
+    <h3>Change Default Password</h3>
+    <div class="code-block">ssh boatos@boatos.local
+passwd</div>
+  </div>
+
+  <div id="tab-boatopenio" class="docs-panel">
+    <h3>What is BoatOpenIO?</h3>
+    <p>BoatOpenIO is a modular sensor IO system for connecting old analogue marine sensors (VDO temperature, oil pressure, tank senders) to BoatOS via MQTT. 16 channels, stackable mini-boards per channel for signal conditioning.</p>
+    <h3>Hardware</h3>
+    <ul>
+      <li>ESP32 DevKit (main controller)</li>
+      <li>CD74HC4067 MUX (16:1 multiplexer)</li>
+      <li>Up to 4× ADS1115 (16-bit ADC, I2C addresses 0x48–0x4B)</li>
+      <li>MPU6050 (tilt + impact detection)</li>
+      <li>Mini-boards: voltage divider, pull-up/down, optocoupler, pulse counter</li>
+    </ul>
+    <h3>⚠️ Important Warning</h3>
+    <p style="color: var(--amber);">Always verify which mini-board is plugged into which channel before applying power. Connecting 12V directly to a pull-up channel (instead of through a voltage divider) will destroy the MUX, all ADS1115 and the ESP32 through I2C chain reaction. Cost: ~€50. The protection circuit (Zener diodes) is planned for the final PCB version.</p>
+    <h3>First Start</h3>
+    <p>On first boot, BoatOpenIO opens a WiFi access point <strong>BoatOpenIO-Setup</strong>. Connect with your phone, open 192.168.4.1, enter WiFi and MQTT credentials. BoatOS auto-discovers all sensor channels.</p>
+  </div>
+
+  <div id="tab-valveheater" class="docs-panel">
+    <h3>What is ValveHeater?</h3>
+    <p>Modular frost protection heating rings for valves and pipes. Hinged clamshell design, velcro fastening, 12V heating foil (14W per ring), ESP32 controller with MQTT and BoatOS integration.</p>
+    <h3>Installation</h3>
+    <ul>
+      <li>Open ring, place around valve or pipe, close velcro. Under 1 minute per ring.</li>
+      <li>Run cable to controller terminal block</li>
+      <li>Mount controller in accessible location in engine room</li>
+      <li>Connect 12V supply, fuse with 10A</li>
+      <li>First start: WiFiManager AP opens for configuration</li>
+    </ul>
+    <h3>3D Print</h3>
+    <p>Print in ASA (heat resistant to ~95°C, UV stable) or PETG as alternative. Do not use PLA — softens above 60°C. STL files and print parameters in the GitHub repository.</p>
+    <h3>BoatOS Dashboard</h3>
+    <p>ValveHeater sends all data via MQTT. BoatOS auto-discovers the topics and displays temperature, ring status, and remote control buttons in the dashboard.</p>
+  </div>
+
+  <div id="tab-maps" class="docs-panel">
+    <h3>MBTiles Creator (Windows)</h3>
+    <p>New in v1.6.4: standalone Windows tool for creating offline map tiles. No Python, no terminal required.</p>
+    <ul>
+      <li>Download MBTiles Creator from the GitHub releases page</li>
+      <li>Run the .exe — Java (planetiler) downloads automatically on first start</li>
+      <li>Select your region from 60+ options (all German states, Scandinavia, UK, Ireland, USA, Canada, Australia…)</li>
+      <li>Click Create — wait for conversion to complete</li>
+      <li>Upload the .mbtiles file to BoatOS via Deck (Settings → Maps → Upload)</li>
+    </ul>
+    <h3>Multiple Regions</h3>
+    <p>BoatOS v1.6.4 supports multiple map regions simultaneously. Upload several .mbtiles files and switch between them in Deck.</p>
+    <h3>Manual Download (advanced)</h3>
+    <p>Experienced users can download .mbtiles files directly from OpenSeaMap or create them with tilemaker on Linux/Mac.</p>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- COMMUNITY -->
+<section id="community">
+  <div class="section-eyebrow">Join the community</div>
+  <h2 class="section-title">Built by makers, for makers</h2>
+  <p class="section-sub">Active communities across multiple platforms. Ask questions, share builds, contribute code.</p>
+
+  <div class="community-grid">
+    <a href="https://github.com/bigbrainlabs/BoatOS" class="community-card" target="_blank">
+      <span class="community-card-icon">🐙</span>
+      <h4>GitHub</h4>
+      <p>Source code, issues, releases</p>
+    </a>
+    <a href="https://open-boat-projects.org/de/boatos/" class="community-card" target="_blank">
+      <span class="community-card-icon">⛵</span>
+      <h4>Open Boat Projects</h4>
+      <p>Professional marine open source community</p>
+    </a>
+    <a href="https://www.facebook.com/search/top?q=BoatOS" class="community-card" target="_blank">
+      <span class="community-card-icon">📘</span>
+      <h4>Facebook – BoatOS</h4>
+      <p>Updates, builds, discussions</p>
+    </a>
+    <a href="https://hackaday.io/project/205823" class="community-card" target="_blank">
+      <span class="community-card-icon">🔧</span>
+      <h4>Hackaday.io</h4>
+      <p>Project page and build logs</p>
+    </a>
+    <a href="https://www.segeln-forum.de/board/195-open-boat-projects-org/" class="community-card" target="_blank">
+      <span class="community-card-icon">🧭</span>
+      <h4>Segeln-Forum</h4>
+      <p>German sailing community (OBP section)</p>
+    </a>
+    <a href="https://www.mikrocontroller.net" class="community-card" target="_blank">
+      <span class="community-card-icon">⚡</span>
+      <h4>Mikrocontroller.net</h4>
+      <p>German electronics forum</p>
+    </a>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- BOOKS -->
+<section id="books">
+  <div class="section-eyebrow">The story behind the code</div>
+  <h2 class="section-title">Logbook Without Posing</h2>
+
+  <div class="books-section">
+    <div class="books-text">
+      <h2>The whole story.<br>All the mistakes.<br>Nothing polished.</h2>
+      <p>The book series documents every project in this ecosystem — the ideas, the failures, the detours, and the solutions. Honest, self-deprecating, technically correct.</p>
+      <p>If you find this project useful, buying the books is the best way to support it. Everything stays free. The books are the "license fee".</p>
+      <blockquote style="border-left: 2px solid var(--cyan); padding-left: 1rem; color: var(--muted); font-style: italic; margin: 1.5rem 0; font-size: 0.9rem;">
+        "You find this useful? Buy the book series. Then we're even." 😄
+      </blockquote>
+      <a href="https://www.amazon.com/s?k=logbook+without+posing" class="btn-primary" target="_blank" style="display:inline-flex;">
+        📚 Buy on Amazon →
+      </a>
+    </div>
+    <div class="books-list">
+      <div class="book-item">
+        <span class="book-num">Vol.1</span>
+        <span class="book-title">The Engine Runs</span>
+        <span class="book-live">LIVE</span>
+      </div>
+      <div class="book-item">
+        <span class="book-num">Vol.2</span>
+        <span class="book-title">Power Is Never Simple</span>
+        <span class="book-live">LIVE</span>
+      </div>
+      <div class="book-item">
+        <span class="book-num">Vol.3</span>
+        <span class="book-title">Sensors & Monitoring</span>
+        <span class="book-live">LIVE</span>
+      </div>
+      <div class="book-item">
+        <span class="book-num">Vol.4</span>
+        <span class="book-title">BoatOS – The Foundation</span>
+        <span class="book-live">LIVE</span>
+      </div>
+      <div class="book-item">
+        <span class="book-num">Vol.5</span>
+        <span class="book-title">BoatOS – The System</span>
+        <span class="book-live">LIVE</span>
+      </div>
+      <div class="book-item">
+        <span class="book-num">Vol.6</span>
+        <span class="book-title">The Valve Heater</span>
+        <span class="book-live" style="color:var(--muted);background:transparent;border-color:var(--border)">SOON</span>
+      </div>
+      <div class="book-item">
+        <span class="book-num">Vol.7</span>
+        <span class="book-title">The AutoSat</span>
+        <span class="book-live" style="color:var(--muted);background:transparent;border-color:var(--border)">PLANNED</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p class="footer-motto">"Made by hand means knowing what's inside and keeping it affordable."</p>
+  <div class="footer-links">
+    <a href="https://github.com/bigbrainlabs/BoatOS" target="_blank">BoatOS GitHub</a>
+    <a href="https://github.com/bigbrainlabs/BoatOpenIO" target="_blank">BoatOpenIO GitHub</a>
+    <a href="https://open-boat-projects.org/de/boatos/" target="_blank">Open Boat Projects</a>
+    <a href="https://hackaday.io/project/205823" target="_blank">Hackaday.io</a>
+    <a href="https://www.amazon.com/s?k=logbook+without+posing" target="_blank">Books on Amazon</a>
+  </div>
+  <p>Made by <a href="https://github.com/bigbrainlabs" target="_blank">bigbrainlabs</a> · MIT License · 100% Open Source</p>
+</footer>
+
+<script>
+  function showTab(name) {
+    document.querySelectorAll('.docs-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.docs-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    event.target.classList.add('active');
+  }
+</script>
+
+</body>
+</html>
