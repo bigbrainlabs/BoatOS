@@ -1651,21 +1651,34 @@ function _uploadMbtilesOverwrite(file) {
 
 export async function toggleMapRegion(regionId, toggleEl) {
     toggleEl.classList.toggle('active');
-    const isActive = toggleEl.classList.contains('active');
-    if (isActive) {
-        if (!_mapRegions.active.includes(regionId)) _mapRegions.active.push(regionId);
-    } else {
-        _mapRegions.active = _mapRegions.active.filter(r => r !== regionId);
-        if (!_mapRegions.active.length) {
-            // Keep at least one active to avoid blank map
-            _mapRegions.active = [regionId];
-            toggleEl.classList.add('active');
-        }
+
+    // Build new active list from DOM — avoids stale _mapRegions.active state
+    const newActive = Array.from(
+        document.querySelectorAll('[id^="map-region-toggle-"]')
+    )
+        .filter(el => el.classList.contains('active'))
+        .map(el => el.id.replace('map-region-toggle-', ''));
+
+    // Must keep at least one active
+    if (!newActive.length) {
+        toggleEl.classList.add('active');
+        return;
     }
+
+    _mapRegions.active = newActive;
+
+    // Keep localStorage in sync so the general save button doesn't overwrite this
+    try {
+        const stored = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
+        stored.map = stored.map || {};
+        stored.map.activeRegions = newActive;
+        localStorage.setItem('boatos_settings', JSON.stringify(stored));
+    } catch (_) {}
+
     await fetch('/api/map/regions/active', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ regions: _mapRegions.active })
+        body: JSON.stringify({ regions: newActive })
     });
 }
 

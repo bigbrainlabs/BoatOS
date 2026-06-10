@@ -148,6 +148,13 @@ function _vectorStyle() {
                 minzoom: 0,
                 maxzoom: 14
             },
+            'osm-overview': {
+                type: 'raster',
+                tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                tileSize: 256,
+                maxzoom: 10,
+                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            },
             'track-history': { type: 'geojson', data: { type: 'LineString', coordinates: [] } },
             'route': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
             'route-shadow': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
@@ -157,6 +164,7 @@ function _vectorStyle() {
         },
         layers: [
             { id: 'background', type: 'background', paint: { 'background-color': '#e0e0e0' } },
+            { id: 'osm-overview-tiles', type: 'raster', source: 'osm-overview', paint: { 'raster-opacity': ['interpolate', ['linear'], ['zoom'], 7, 1, 10, 0] } },
             { id: 'water', type: 'fill', source: 'basemap', 'source-layer': 'water', paint: { 'fill-color': '#80b0d0' } },
             { id: 'waterway', type: 'line', source: 'basemap', 'source-layer': 'waterway', paint: { 'line-color': '#80b0d0', 'line-width': 2 } },
             { id: 'landcover', type: 'fill', source: 'basemap', 'source-layer': 'landcover', paint: { 'fill-color': '#c0e0c0', 'fill-opacity': 0.5 } },
