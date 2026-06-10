@@ -34,6 +34,24 @@
     overflow-x: hidden;
   }
 
+  /* ── LANGUAGE ── */
+  .lang-de { display: none; }
+  body[data-lang="de"] .lang-en { display: none; }
+  body[data-lang="de"] .lang-de { display: revert; }
+
+  .lang-toggle {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 0.3rem 0.7rem;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .lang-toggle:hover { border-color: var(--cyan); color: var(--cyan); }
+
   /* ── NAV ── */
   nav {
     position: fixed; top: 0; left: 0; right: 0; z-index: 100;
@@ -57,6 +75,7 @@
     transition: color 0.2s;
   }
   .nav-links a:hover { color: var(--cyan); }
+  .nav-right { display: flex; align-items: center; gap: 0.75rem; }
   .nav-cta {
     background: var(--cyan); color: var(--deep);
     padding: 0.5rem 1.2rem; border-radius: 6px;
@@ -182,9 +201,7 @@
   }
   .project-card:hover { border-color: var(--cyan); transform: translateY(-3px); }
   .project-card:hover::before { opacity: 1; }
-  .project-icon {
-    font-size: 2.2rem; margin-bottom: 1rem; display: block;
-  }
+  .project-icon { font-size: 2.2rem; margin-bottom: 1rem; display: block; }
   .project-tag {
     font-family: var(--font-mono); font-size: 0.7rem;
     color: var(--cyan); text-transform: uppercase;
@@ -228,10 +245,7 @@
     gap: 2rem; margin-top: 3rem;
   }
   .feature-item { display: flex; gap: 1rem; align-items: flex-start; }
-  .feature-icon {
-    font-size: 1.4rem; flex-shrink: 0;
-    margin-top: 0.2rem;
-  }
+  .feature-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: 0.2rem; }
   .feature-item h4 {
     font-family: var(--font-display);
     font-size: 1rem; font-weight: 600;
@@ -284,9 +298,7 @@
     transition: all 0.2s;
   }
   .docs-tab.active, .docs-tab:hover {
-    border-color: var(--border);
-    color: var(--text);
-    background: var(--panel);
+    border-color: var(--border); color: var(--text); background: var(--panel);
   }
   .docs-tab.active { color: var(--cyan); border-color: var(--cyan); }
   .docs-panel { display: none; }
@@ -344,10 +356,7 @@
     padding: 0.7rem 0; border-bottom: 1px solid var(--border);
   }
   .book-item:last-child { border-bottom: none; }
-  .book-num {
-    font-family: var(--font-mono); font-size: 0.7rem;
-    color: var(--cyan); min-width: 2rem;
-  }
+  .book-num { font-family: var(--font-mono); font-size: 0.7rem; color: var(--cyan); min-width: 2rem; }
   .book-title { font-size: 0.9rem; color: var(--text); }
   .book-live {
     margin-left: auto; font-family: var(--font-mono);
@@ -373,10 +382,7 @@
   }
 
   /* ── DIVIDER ── */
-  .divider {
-    height: 1px; background: var(--border);
-    max-width: 1200px; margin: 0 auto;
-  }
+  .divider { height: 1px; background: var(--border); max-width: 1200px; margin: 0 auto; }
 
   /* ── RESPONSIVE ── */
   @media (max-width: 768px) {
@@ -387,29 +393,28 @@
   }
 </style>
 </head>
-<body>
+<body data-lang="en">
 
 <!-- NAV -->
 <nav>
-  <a href="#" class="nav-logo">
-    ⚓ Boat<span>OS</span>
-  </a>
+  <a href="#" class="nav-logo">⚓ Boat<span>OS</span></a>
   <ul class="nav-links">
-    <li><a href="#projects">Projects</a></li>
-    <li><a href="#features">Features</a></li>
-    <li><a href="#quickstart">Quick Start</a></li>
-    <li><a href="#docs">Docs</a></li>
+    <li><a href="#projects"><span class="lang-en">Projects</span><span class="lang-de">Projekte</span></a></li>
+    <li><a href="#features"><span class="lang-en">Features</span><span class="lang-de">Funktionen</span></a></li>
+    <li><a href="#quickstart"><span class="lang-en">Quick Start</span><span class="lang-de">Schnellstart</span></a></li>
+    <li><a href="#docs"><span class="lang-en">Docs</span><span class="lang-de">Doku</span></a></li>
     <li><a href="#community">Community</a></li>
-    <li><a href="#books">Books</a></li>
+    <li><a href="#books"><span class="lang-en">Books</span><span class="lang-de">Bücher</span></a></li>
   </ul>
-  <a href="https://github.com/bigbrainlabs/BoatOS" class="nav-cta" target="_blank">GitHub ↗</a>
+  <div class="nav-right">
+    <button class="lang-toggle" onclick="toggleLang()" id="lang-btn">🇩🇪 DE</button>
+    <a href="https://github.com/bigbrainlabs/BoatOS" class="nav-cta" target="_blank">GitHub ↗</a>
+  </div>
 </nav>
 
 <!-- HERO -->
 <div class="hero">
   <div class="hero-grid"></div>
-
-  <!-- Compass SVG -->
   <svg class="compass" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
     <circle cx="60" cy="60" r="58" stroke="#00D4FF" stroke-width="1" opacity="0.3"/>
     <circle cx="60" cy="60" r="48" stroke="#00D4FF" stroke-width="0.5" opacity="0.2"/>
@@ -424,26 +429,34 @@
     <text x="102" y="64" text-anchor="middle" fill="#EF9F27" font-size="8" font-family="JetBrains Mono" opacity="0.7">E</text>
   </svg>
 
-  <div class="hero-eyebrow">Open Source Marine Ecosystem</div>
-  <h1>The free <em>Marine OS</em><br>for boat makers</h1>
-  <p class="hero-sub">
-    Offline navigation, engine monitoring, AIS, logbook and weather
-    on a Raspberry Pi. ~€250 in hardware instead of €2,000+ for commercial chartplotters.
-    Flash, boot, sail.
+  <div class="hero-eyebrow">
+    <span class="lang-en">Open Source Marine Ecosystem</span><span class="lang-de">Open-Source-Marine-Ökosystem</span>
+  </div>
+  <h1>
+    <span class="lang-en">The free <em>Marine OS</em><br>for boat makers</span>
+    <span class="lang-de">Das freie <em>Marine OS</em><br>für Bootsbauer</span>
+  </h1>
+  <p class="hero-sub lang-en">
+    Offline navigation, engine monitoring, AIS, logbook and weather on a Raspberry Pi.
+    ~€250 in hardware instead of €2,000+ for commercial chartplotters. Flash, boot, sail.
+  </p>
+  <p class="hero-sub lang-de">
+    Offline-Navigation, Motorüberwachung, AIS, Logbuch und Wetter auf dem Raspberry Pi.
+    ~250 € Hardware statt 2.000 €+ für kommerzielle Kartenplotter. Flashen, booten, segeln.
   </p>
   <div class="hero-actions">
     <a href="https://archive.org/download/boatos-distri-image/boatos_v1.6.2.img.gz" class="btn-primary" target="_blank">
       ⬇ Download Image v1.6.2
     </a>
     <a href="#quickstart" class="btn-secondary">
-      Quick Start Guide →
+      <span class="lang-en">Quick Start Guide →</span><span class="lang-de">Schnellstart-Guide →</span>
     </a>
   </div>
   <div class="hero-stats">
-    <div class="stat"><span class="stat-num">~€250</span><span class="stat-label">Hardware Total</span></div>
+    <div class="stat"><span class="stat-num">~€250</span><span class="stat-label lang-en">Hardware Total</span><span class="stat-label lang-de">Hardware gesamt</span></div>
     <div class="stat"><span class="stat-num">100%</span><span class="stat-label">Open Source</span></div>
-    <div class="stat"><span class="stat-num">16</span><span class="stat-label">Sensor Channels</span></div>
-    <div class="stat"><span class="stat-num">60+</span><span class="stat-label">Map Regions</span></div>
+    <div class="stat"><span class="stat-num">16</span><span class="stat-label lang-en">Sensor Channels</span><span class="stat-label lang-de">Sensorkanäle</span></div>
+    <div class="stat"><span class="stat-num">60+</span><span class="stat-label lang-en">Map Regions</span><span class="stat-label lang-de">Kartenregionen</span></div>
   </div>
 </div>
 
@@ -451,51 +464,51 @@
 
 <!-- PROJECTS -->
 <section id="projects">
-  <div class="section-eyebrow">The Ecosystem</div>
-  <h2 class="section-title">Four projects. One platform.</h2>
-  <p class="section-sub">Everything you need to digitise an old boat — from the operating system to the sensor hardware to the heating control.</p>
+  <div class="section-eyebrow"><span class="lang-en">The Ecosystem</span><span class="lang-de">Das Ökosystem</span></div>
+  <h2 class="section-title"><span class="lang-en">Four projects. One platform.</span><span class="lang-de">Vier Projekte. Eine Plattform.</span></h2>
+  <p class="section-sub lang-en">Everything you need to digitise an old boat — from the operating system to the sensor hardware to the heating control.</p>
+  <p class="section-sub lang-de">Alles, was du brauchst, um ein altes Boot zu digitalisieren — vom Betriebssystem über die Sensorhardware bis zur Heizungssteuerung.</p>
 
   <div class="projects-grid">
-
     <div class="project-card">
       <span class="project-icon">🖥️</span>
       <span class="project-tag">v1.6.4 — Active</span>
       <h3>BoatOS</h3>
-      <p>Complete marine operating system on Raspberry Pi. Offline navigation, AIS, engine monitoring, automatic logbook, weather and water level integration.</p>
+      <p class="lang-en">Complete marine operating system on Raspberry Pi. Offline navigation, AIS, engine monitoring, automatic logbook, weather and water level integration.</p>
+      <p class="lang-de">Komplettes Marine-Betriebssystem auf dem Raspberry Pi. Offline-Navigation, AIS, Motorüberwachung, automatisches Logbuch, Wetter- und Pegelintegration.</p>
       <span class="badge">Raspberry Pi 3/4/5</span>
       <span class="badge">Flutter + Python</span><br><br>
       <a href="https://github.com/bigbrainlabs/BoatOS" class="project-link" target="_blank">GitHub ↗</a>
     </div>
-
     <div class="project-card">
       <span class="project-icon">⚡</span>
-      <span class="project-tag">Prototype running</span>
+      <span class="project-tag lang-en">Prototype running</span><span class="project-tag lang-de">Prototyp läuft</span>
       <h3>BoatOpenIO</h3>
-      <p>Modular universal marine IO system. 16 channels, stackable mini-boards per channel for voltage dividers, pull-ups, optocouplers and pulse counters.</p>
+      <p class="lang-en">Modular universal marine IO system. 16 channels, stackable mini-boards per channel for voltage dividers, pull-ups, optocouplers and pulse counters.</p>
+      <p class="lang-de">Modulares universelles Marine-IO-System. 16 Kanäle, stapelbare Mini-Boards je Kanal für Spannungsteiler, Pull-ups, Optokoppler und Impulszähler.</p>
       <span class="badge">ESP32 + ADS1115</span>
       <span class="badge">MQTT</span><br><br>
       <a href="https://github.com/bigbrainlabs/BoatOpenIO" class="project-link" target="_blank">GitHub ↗</a>
     </div>
-
     <div class="project-card">
       <span class="project-icon">🔥</span>
-      <span class="project-tag">In development</span>
+      <span class="project-tag lang-en">In development</span><span class="project-tag lang-de">In Entwicklung</span>
       <h3>ValveHeater</h3>
-      <p>Modular frost protection for valves and pipes. Hinged heating rings, click-velcro installation, ESP32 controller with BoatOS dashboard integration.</p>
+      <p class="lang-en">Modular frost protection for valves and pipes. Hinged heating rings, click-velcro installation, ESP32 controller with BoatOS dashboard integration.</p>
+      <p class="lang-de">Modularer Frostschutz für Ventile und Leitungen. Scharnierende Heizringe, Klick-Klett-Montage, ESP32-Controller mit BoatOS-Dashboard-Integration.</p>
       <span class="badge">12V DC</span>
       <span class="badge">3D printed ASA</span><br><br>
       <a href="https://github.com/bigbrainlabs/ValveHeater" class="project-link" target="_blank">GitHub ↗</a>
     </div>
-
     <div class="project-card">
       <span class="project-icon">📡</span>
-      <span class="project-tag">Planned — Volume 7</span>
+      <span class="project-tag lang-en">Planned — Volume 7</span><span class="project-tag lang-de">Geplant — Band 7</span>
       <h3>AutoSat</h3>
-      <p>Automatic satellite dish alignment using GPS and compass. ~€150 DIY versus €3,000+ commercial. Self-orienting, always connected.</p>
-      <span class="badge-amber badge">Coming soon</span><br><br>
+      <p class="lang-en">Automatic satellite dish alignment using GPS and compass. ~€150 DIY versus €3,000+ commercial. Self-orienting, always connected.</p>
+      <p class="lang-de">Automatische Satellitenausrichtung per GPS und Kompass. ~150 € DIY gegenüber 3.000 €+ kommerziell. Selbstausrichtend, immer verbunden.</p>
+      <span class="badge-amber badge lang-en">Coming soon</span><span class="badge-amber badge lang-de">Demnächst</span><br><br>
       <a href="https://github.com/bigbrainlabs" class="project-link" target="_blank">bigbrainlabs ↗</a>
     </div>
-
   </div>
 </section>
 
@@ -504,72 +517,81 @@
 <!-- FEATURES -->
 <div class="features-bg section-full" id="features">
   <div class="section-inner">
-    <div class="section-eyebrow">What BoatOS does</div>
-    <h2 class="section-title">Everything in one system</h2>
-    <p class="section-sub">No subscriptions. No cloud dependency. Everything runs locally on the Pi — offline first, always.</p>
-
+    <div class="section-eyebrow"><span class="lang-en">What BoatOS does</span><span class="lang-de">Was BoatOS kann</span></div>
+    <h2 class="section-title"><span class="lang-en">Everything in one system</span><span class="lang-de">Alles in einem System</span></h2>
+    <p class="section-sub lang-en">No subscriptions. No cloud dependency. Everything runs locally on the Pi — offline first, always.</p>
+    <p class="section-sub lang-de">Keine Abonnements. Keine Cloud-Abhängigkeit. Alles läuft lokal auf dem Pi — offline-first, immer.</p>
     <div class="features-grid">
       <div class="feature-item">
         <span class="feature-icon">🗺️</span>
         <div>
-          <h4>Offline Navigation</h4>
-          <p>OpenSeaMap vector tiles stored locally on SSD. Works without mobile signal. Fairways, locks, buoys — all offline.</p>
+          <h4><span class="lang-en">Offline Navigation</span><span class="lang-de">Offline-Navigation</span></h4>
+          <p class="lang-en">OpenSeaMap vector tiles stored locally on SSD. Works without mobile signal. Fairways, locks, buoys — all offline.</p>
+          <p class="lang-de">OpenSeaMap-Vektorkacheln lokal auf SSD. Funktioniert ohne Mobilfunk. Wasserstraßen, Schleusen, Tonnen — alles offline.</p>
         </div>
       </div>
       <div class="feature-item">
         <span class="feature-icon">⚓</span>
         <div>
-          <h4>AIS — Live Traffic</h4>
-          <p>Other vessels on the chart in real time. Via AISStream.io over internet or local USB AIS receiver.</p>
+          <h4><span class="lang-en">AIS — Live Traffic</span><span class="lang-de">AIS — Live-Verkehr</span></h4>
+          <p class="lang-en">Other vessels on the chart in real time. Via AISStream.io over internet or local USB AIS receiver.</p>
+          <p class="lang-de">Andere Schiffe in Echtzeit auf der Karte. Über AISStream.io per Internet oder lokalen USB-AIS-Empfänger.</p>
         </div>
       </div>
       <div class="feature-item">
         <span class="feature-icon">📊</span>
         <div>
-          <h4>Engine Monitoring</h4>
-          <p>Battery, oil temp, oil pressure, coolant, RPM — all live. Alarms when something is wrong. Works with old analogue VDO sensors.</p>
+          <h4><span class="lang-en">Engine Monitoring</span><span class="lang-de">Motorüberwachung</span></h4>
+          <p class="lang-en">Battery, oil temp, oil pressure, coolant, RPM — all live. Alarms when something is wrong. Works with old analogue VDO sensors.</p>
+          <p class="lang-de">Batterie, Öltemp, Öldruck, Kühlwasser, Drehzahl — alles live. Alarm wenn etwas nicht stimmt. Funktioniert mit alten analogen VDO-Gebern.</p>
         </div>
       </div>
       <div class="feature-item">
         <span class="feature-icon">📝</span>
         <div>
-          <h4>Automatic Logbook</h4>
-          <p>Every trip recorded automatically — GPS track, sensor data, weather snapshot. After one season: a complete record.</p>
+          <h4><span class="lang-en">Automatic Logbook</span><span class="lang-de">Automatisches Logbuch</span></h4>
+          <p class="lang-en">Every trip recorded automatically — GPS track, sensor data, weather snapshot. After one season: a complete record.</p>
+          <p class="lang-de">Jede Fahrt automatisch aufgezeichnet — GPS-Track, Sensordaten, Wetter-Snapshot. Nach einer Saison: ein vollständiges Protokoll.</p>
         </div>
       </div>
       <div class="feature-item">
         <span class="feature-icon">🌦️</span>
         <div>
-          <h4>Weather + Water Levels</h4>
-          <p>OpenWeatherMap warnings on the chart. PEGELONLINE water level data for inland waterways — live.</p>
+          <h4><span class="lang-en">Weather + Water Levels</span><span class="lang-de">Wetter + Pegel</span></h4>
+          <p class="lang-en">OpenWeatherMap warnings on the chart. PEGELONLINE water level data for inland waterways — live.</p>
+          <p class="lang-de">OpenWeatherMap-Warnungen auf der Karte. PEGELONLINE-Pegelstände für Binnenwasserstraßen — live.</p>
         </div>
       </div>
       <div class="feature-item">
         <span class="feature-icon">📱</span>
         <div>
-          <h4>Two Frontends</h4>
-          <p>Helm: Flutter native on the touchscreen. Deck: browser frontend — open on any phone, no install needed.</p>
+          <h4><span class="lang-en">Two Frontends</span><span class="lang-de">Zwei Oberflächen</span></h4>
+          <p class="lang-en">Helm: Flutter native on the touchscreen. Deck: browser frontend — open on any phone, no install needed.</p>
+          <p class="lang-de">Helm: Flutter nativ auf dem Touchscreen. Deck: Browser-Frontend — auf jedem Handy öffnen, keine Installation nötig.</p>
         </div>
       </div>
       <div class="feature-item">
         <span class="feature-icon">🆘</span>
         <div>
           <h4>SOS / MOB Button</h4>
-          <p>Man-overboard and emergency button in both Helm and Deck. One tap, position logged, alarm triggered.</p>
+          <p class="lang-en">Man-overboard and emergency button in both Helm and Deck. One tap, position logged, alarm triggered.</p>
+          <p class="lang-de">Mann-über-Bord- und Notfall-Button in Helm und Deck. Ein Tipp, Position gespeichert, Alarm ausgelöst.</p>
         </div>
       </div>
       <div class="feature-item">
         <span class="feature-icon">💥</span>
         <div>
-          <h4>Impact Detection</h4>
-          <p>MPU6050 logs every impact with timestamp, GPS position and severity. Born from an unplanned encounter with a rock.</p>
+          <h4><span class="lang-en">Impact Detection</span><span class="lang-de">Aufprallerkennung</span></h4>
+          <p class="lang-en">MPU6050 logs every impact with timestamp, GPS position and severity. Born from an unplanned encounter with a rock.</p>
+          <p class="lang-de">MPU6050 protokolliert jeden Aufprall mit Zeitstempel, GPS-Position und Schwere. Entstanden aus einer unbeabsichtigten Begegnung mit einem Felsen.</p>
         </div>
       </div>
       <div class="feature-item">
         <span class="feature-icon">🗺️</span>
         <div>
-          <h4>60+ Map Regions</h4>
-          <p>New MBTiles Creator tool for Windows — no Python, no terminal. Select region, create map, upload to Pi. Done.</p>
+          <h4><span class="lang-en">60+ Map Regions</span><span class="lang-de">60+ Kartenregionen</span></h4>
+          <p class="lang-en">New MBTiles Creator tool for Windows — no Python, no terminal. Select region, create map, upload to Pi. Done.</p>
+          <p class="lang-de">Neues MBTiles-Creator-Tool für Windows — kein Python, kein Terminal. Region auswählen, Karte erstellen, auf den Pi laden. Fertig.</p>
         </div>
       </div>
     </div>
@@ -580,31 +602,34 @@
 
 <!-- QUICK START -->
 <section id="quickstart">
-  <div class="section-eyebrow">Get started</div>
-  <h2 class="section-title">From zero to sailing in 30 minutes</h2>
-  <p class="section-sub">No Linux knowledge required. No terminal. No setup wizard. Flash, boot, done.</p>
-
+  <div class="section-eyebrow"><span class="lang-en">Get started</span><span class="lang-de">Loslegen</span></div>
+  <h2 class="section-title"><span class="lang-en">From zero to sailing in 30 minutes</span><span class="lang-de">Von null zum Segeln in 30 Minuten</span></h2>
+  <p class="section-sub lang-en">No Linux knowledge required. No terminal. No setup wizard. Flash, boot, done.</p>
+  <p class="section-sub lang-de">Keine Linux-Kenntnisse erforderlich. Kein Terminal. Kein Setup-Assistent. Flashen, booten, fertig.</p>
   <div class="steps">
     <div class="step">
       <span class="step-num">01</span>
       <div>
-        <h4>Download the image</h4>
-        <p>Get the latest BoatOS image from archive.org. The image contains everything — OS, all services, map data for Germany, OTA updater.</p>
+        <h4><span class="lang-en">Download the image</span><span class="lang-de">Image herunterladen</span></h4>
+        <p class="lang-en">Get the latest BoatOS image from archive.org. The image contains everything — OS, all services, map data for Germany, OTA updater.</p>
+        <p class="lang-de">Lade das neueste BoatOS-Image von archive.org. Das Image enthält alles — OS, alle Dienste, Kartendaten für Deutschland, OTA-Updater.</p>
         <a href="https://archive.org/download/boatos-distri-image/boatos_v1.6.2.img.gz" class="code-block" target="_blank">⬇ boatos_v1.6.2.img.gz</a>
       </div>
     </div>
     <div class="step">
       <span class="step-num">02</span>
       <div>
-        <h4>Flash with Balena Etcher</h4>
-        <p>Use <a href="https://etcher.balena.io" target="_blank" style="color:var(--cyan)">Balena Etcher</a> (free, Windows/Mac/Linux) — select the .img.gz file, select your SSD or SD card, click Flash. Like flashing any USB stick.</p>
+        <h4><span class="lang-en">Flash with Balena Etcher</span><span class="lang-de">Mit Balena Etcher flashen</span></h4>
+        <p class="lang-en">Use <a href="https://etcher.balena.io" target="_blank" style="color:var(--cyan)">Balena Etcher</a> (free, Windows/Mac/Linux) — select the .img.gz file, select your SSD or SD card, click Flash. Like flashing any USB stick.</p>
+        <p class="lang-de">Nutze <a href="https://etcher.balena.io" target="_blank" style="color:var(--cyan)">Balena Etcher</a> (kostenlos, Windows/Mac/Linux) — .img.gz-Datei auswählen, SSD oder SD-Karte auswählen, Flash klicken. Wie das Flashen eines USB-Sticks.</p>
       </div>
     </div>
     <div class="step">
       <span class="step-num">03</span>
       <div>
-        <h4>Configure WiFi before first boot</h4>
-        <p>After flashing, open the SSD/SD card on your computer and edit <strong>wlan.txt</strong> in the root directory:</p>
+        <h4><span class="lang-en">Configure WiFi before first boot</span><span class="lang-de">WLAN vor dem ersten Start konfigurieren</span></h4>
+        <p class="lang-en">After flashing, open the SSD/SD card on your computer and edit <strong>wlan.txt</strong> in the root directory:</p>
+        <p class="lang-de">Nach dem Flashen die SSD/SD-Karte am Computer öffnen und <strong>wlan.txt</strong> im Hauptverzeichnis bearbeiten:</p>
         <div class="code-block">SSID=YourBoatNetwork
 PASSWORD=YourPassword</div>
       </div>
@@ -612,23 +637,26 @@ PASSWORD=YourPassword</div>
     <div class="step">
       <span class="step-num">04</span>
       <div>
-        <h4>Insert and power on</h4>
-        <p>Insert the SSD/SD into the Pi, connect the touchscreen and GPS mouse, power on. BoatOS boots automatically. GPS position appears once the mouse has a fix.</p>
+        <h4><span class="lang-en">Insert and power on</span><span class="lang-de">Einsetzen und einschalten</span></h4>
+        <p class="lang-en">Insert the SSD/SD into the Pi, connect the touchscreen and GPS mouse, power on. BoatOS boots automatically. GPS position appears once the mouse has a fix.</p>
+        <p class="lang-de">SSD/SD in den Pi einsetzen, Touchscreen und GPS-Maus anschließen, einschalten. BoatOS startet automatisch. GPS-Position erscheint, sobald die Maus einen Fix hat.</p>
       </div>
     </div>
     <div class="step">
       <span class="step-num">05</span>
       <div>
-        <h4>Access from phone or tablet</h4>
-        <p>Connect your device to the same network as the Pi, open a browser, type the Pi's IP address. Deck opens — full chart and monitoring in the browser.</p>
+        <h4><span class="lang-en">Access from phone or tablet</span><span class="lang-de">Vom Handy oder Tablet aufrufen</span></h4>
+        <p class="lang-en">Connect your device to the same network as the Pi, open a browser, type the Pi's IP address. Deck opens — full chart and monitoring in the browser.</p>
+        <p class="lang-de">Gerät mit demselben Netzwerk wie der Pi verbinden, Browser öffnen, IP-Adresse des Pi eingeben. Deck öffnet — vollständige Karte und Monitoring im Browser.</p>
         <div class="code-block">http://192.168.x.x:8000</div>
       </div>
     </div>
     <div class="step">
       <span class="step-num">06</span>
       <div>
-        <h4>Stay up to date</h4>
-        <p>BoatOS has a built-in OTA updater. New versions are applied on demand from the settings menu — no reflashing needed.</p>
+        <h4><span class="lang-en">Stay up to date</span><span class="lang-de">Auf dem neuesten Stand bleiben</span></h4>
+        <p class="lang-en">BoatOS has a built-in OTA updater. New versions are applied on demand from the settings menu — no reflashing needed.</p>
+        <p class="lang-de">BoatOS hat einen eingebauten OTA-Updater. Neue Versionen werden auf Anforderung über das Einstellungsmenü eingespielt — kein Neuflashen erforderlich.</p>
       </div>
     </div>
   </div>
@@ -638,39 +666,50 @@ PASSWORD=YourPassword</div>
 
 <!-- DOCS -->
 <section id="docs">
-  <div class="section-eyebrow">Documentation</div>
-  <h2 class="section-title">Setup guides</h2>
-  <p class="section-sub">Detailed instructions for each project in the ecosystem.</p>
+  <div class="section-eyebrow"><span class="lang-en">Documentation</span><span class="lang-de">Dokumentation</span></div>
+  <h2 class="section-title"><span class="lang-en">Setup guides</span><span class="lang-de">Einrichtungsanleitungen</span></h2>
+  <p class="section-sub lang-en">Detailed instructions for each project in the ecosystem.</p>
+  <p class="section-sub lang-de">Detaillierte Anleitungen für jedes Projekt im Ökosystem.</p>
 
   <div class="docs-nav">
     <button class="docs-tab active" onclick="showTab('boatos')">BoatOS</button>
     <button class="docs-tab" onclick="showTab('boatopenio')">BoatOpenIO</button>
     <button class="docs-tab" onclick="showTab('valveheater')">ValveHeater</button>
-    <button class="docs-tab" onclick="showTab('maps')">Offline Maps</button>
+    <button class="docs-tab" onclick="showTab('maps')"><span class="lang-en">Offline Maps</span><span class="lang-de">Offline-Karten</span></button>
   </div>
 
   <div id="tab-boatos" class="docs-panel active">
-    <h3>Hardware Requirements</h3>
-    <p>Recommended: Raspberry Pi 4 (4GB), 10.1" HDMI touchscreen, BU-353N5 GPS mouse, 128GB SSD, DC-DC 12V→5V converter. Also supported: Pi 3B+, Pi 5, Zero 2W.</p>
-    <h3>Recommended Setup</h3>
-    <ul>
+    <h3><span class="lang-en">Hardware Requirements</span><span class="lang-de">Hardware-Anforderungen</span></h3>
+    <p class="lang-en">Recommended: Raspberry Pi 4 (4GB), 10.1" HDMI touchscreen, BU-353N5 GPS mouse, 128GB SSD, DC-DC 12V→5V converter. Also supported: Pi 3B+, Pi 5, Zero 2W.</p>
+    <p class="lang-de">Empfohlen: Raspberry Pi 4 (4 GB), 10,1" HDMI-Touchscreen, BU-353N5 GPS-Maus, 128 GB SSD, DC-DC 12V→5V-Wandler. Auch unterstützt: Pi 3B+, Pi 5, Zero 2W.</p>
+    <h3><span class="lang-en">Recommended Setup</span><span class="lang-de">Empfohlenes Setup</span></h3>
+    <ul class="lang-en">
       <li>Connect Pi via LAN cable to your onboard router for maximum stability</li>
       <li>Use an SSD instead of SD card — more reliable under voltage fluctuations</li>
       <li>Dedicated onboard router keeps the boat network separate from marina WiFi</li>
       <li>GPS mouse needs a clear view of the sky — mount outside or near a hatch</li>
     </ul>
-    <h3>OTA Update Workaround (images before 2026-06-04)</h3>
-    <p>If OTA update hangs on older images, run this once via terminal or PowerShell:</p>
+    <ul class="lang-de">
+      <li>Pi per LAN-Kabel mit dem Bordrouter verbinden — maximale Stabilität</li>
+      <li>SSD statt SD-Karte verwenden — zuverlässiger bei Spannungsschwankungen</li>
+      <li>Eigener Bordrouter hält das Bootnetz vom Marina-WLAN getrennt</li>
+      <li>GPS-Maus braucht freie Sicht zum Himmel — außen oder nahe einer Luke montieren</li>
+    </ul>
+    <h3><span class="lang-en">OTA Update Workaround (images before 2026-06-04)</span><span class="lang-de">OTA-Update-Workaround (Images vor 2026-06-04)</span></h3>
+    <p class="lang-en">If OTA update hangs on older images, run this once via terminal or PowerShell:</p>
+    <p class="lang-de">Falls der OTA-Update auf älteren Images hängt, einmalig im Terminal oder PowerShell ausführen:</p>
     <div class="code-block">ssh boatos@boatos.local "rm ~/BoatOS/scripts/update.sh"</div>
-    <p>Default password: <strong>boatos123</strong> (change this!). Then start the update from Helm or Deck settings.</p>
-    <h3>Change Default Password</h3>
+    <p class="lang-en">Default password: <strong>boatos123</strong> (change this!). Then start the update from Helm or Deck settings.</p>
+    <p class="lang-de">Standard-Passwort: <strong>boatos123</strong> (bitte ändern!). Danach Update in den Helm- oder Deck-Einstellungen starten.</p>
+    <h3><span class="lang-en">Change Default Password</span><span class="lang-de">Standard-Passwort ändern</span></h3>
     <div class="code-block">ssh boatos@boatos.local
 passwd</div>
   </div>
 
   <div id="tab-boatopenio" class="docs-panel">
-    <h3>What is BoatOpenIO?</h3>
-    <p>BoatOpenIO is a modular sensor IO system for connecting old analogue marine sensors (VDO temperature, oil pressure, tank senders) to BoatOS via MQTT. 16 channels, stackable mini-boards per channel for signal conditioning.</p>
+    <h3><span class="lang-en">What is BoatOpenIO?</span><span class="lang-de">Was ist BoatOpenIO?</span></h3>
+    <p class="lang-en">BoatOpenIO is a modular sensor IO system for connecting old analogue marine sensors (VDO temperature, oil pressure, tank senders) to BoatOS via MQTT. 16 channels, stackable mini-boards per channel for signal conditioning.</p>
+    <p class="lang-de">BoatOpenIO ist ein modulares Sensor-IO-System zum Anschluss alter analoger Bordsensoren (VDO-Temperatur, Öldruck, Tankgeber) an BoatOS via MQTT. 16 Kanäle, stapelbare Mini-Boards je Kanal zur Signalaufbereitung.</p>
     <h3>Hardware</h3>
     <ul>
       <li>ESP32 DevKit (main controller)</li>
@@ -679,43 +718,65 @@ passwd</div>
       <li>MPU6050 (tilt + impact detection)</li>
       <li>Mini-boards: voltage divider, pull-up/down, optocoupler, pulse counter</li>
     </ul>
-    <h3>⚠️ Important Warning</h3>
-    <p style="color: var(--amber);">Always verify which mini-board is plugged into which channel before applying power. Connecting 12V directly to a pull-up channel (instead of through a voltage divider) will destroy the MUX, all ADS1115 and the ESP32 through I2C chain reaction. Cost: ~€50. The protection circuit (Zener diodes) is planned for the final PCB version.</p>
-    <h3>First Start</h3>
-    <p>On first boot, BoatOpenIO opens a WiFi access point <strong>BoatOpenIO-Setup</strong>. Connect with your phone, open 192.168.4.1, enter WiFi and MQTT credentials. BoatOS auto-discovers all sensor channels.</p>
+    <h3><span class="lang-en">⚠️ Important Warning</span><span class="lang-de">⚠️ Wichtiger Hinweis</span></h3>
+    <p class="lang-en" style="color: var(--amber);">Always verify which mini-board is plugged into which channel before applying power. Connecting 12V directly to a pull-up channel (instead of through a voltage divider) will destroy the MUX, all ADS1115 and the ESP32 through I2C chain reaction. Cost: ~€50. The protection circuit (Zener diodes) is planned for the final PCB version.</p>
+    <p class="lang-de" style="color: var(--amber);">Immer prüfen, welches Mini-Board in welchem Kanal steckt, bevor Spannung angelegt wird. 12V direkt an einen Pull-up-Kanal (statt über Spannungsteiler) zerstört durch I2C-Kettenreaktion MUX, alle ADS1115 und den ESP32. Kosten: ~50 €. Die Schutzschaltung (Zener-Dioden) ist für die finale PCB-Version geplant.</p>
+    <h3><span class="lang-en">First Start</span><span class="lang-de">Erster Start</span></h3>
+    <p class="lang-en">On first boot, BoatOpenIO opens a WiFi access point <strong>BoatOpenIO-Setup</strong>. Connect with your phone, open 192.168.4.1, enter WiFi and MQTT credentials. BoatOS auto-discovers all sensor channels.</p>
+    <p class="lang-de">Beim ersten Start öffnet BoatOpenIO den WLAN-Zugangspunkt <strong>BoatOpenIO-Setup</strong>. Mit dem Handy verbinden, 192.168.4.1 aufrufen, WLAN- und MQTT-Zugangsdaten eingeben. BoatOS erkennt alle Sensorkanäle automatisch.</p>
   </div>
 
   <div id="tab-valveheater" class="docs-panel">
-    <h3>What is ValveHeater?</h3>
-    <p>Modular frost protection heating rings for valves and pipes. Hinged clamshell design, velcro fastening, 12V heating foil (14W per ring), ESP32 controller with MQTT and BoatOS integration.</p>
-    <h3>Installation</h3>
-    <ul>
+    <h3><span class="lang-en">What is ValveHeater?</span><span class="lang-de">Was ist ValveHeater?</span></h3>
+    <p class="lang-en">Modular frost protection heating rings for valves and pipes. Hinged clamshell design, velcro fastening, 12V heating foil (14W per ring), ESP32 controller with MQTT and BoatOS integration.</p>
+    <p class="lang-de">Modulare Frostschutz-Heizringe für Ventile und Leitungen. Scharnier-Klappschale, Klett-Befestigung, 12V-Heizfolie (14 W je Ring), ESP32-Controller mit MQTT und BoatOS-Integration.</p>
+    <h3><span class="lang-en">Installation</span><span class="lang-de">Montage</span></h3>
+    <ul class="lang-en">
       <li>Open ring, place around valve or pipe, close velcro. Under 1 minute per ring.</li>
       <li>Run cable to controller terminal block</li>
       <li>Mount controller in accessible location in engine room</li>
       <li>Connect 12V supply, fuse with 10A</li>
       <li>First start: WiFiManager AP opens for configuration</li>
     </ul>
-    <h3>3D Print</h3>
-    <p>Print in ASA (heat resistant to ~95°C, UV stable) or PETG as alternative. Do not use PLA — softens above 60°C. STL files and print parameters in the GitHub repository.</p>
+    <ul class="lang-de">
+      <li>Ring öffnen, um Ventil oder Leitung legen, Klett schließen. Unter 1 Minute pro Ring.</li>
+      <li>Kabel zur Controller-Klemmleiste führen</li>
+      <li>Controller an zugänglicher Stelle im Motorraum montieren</li>
+      <li>12V anschließen, mit 10A absichern</li>
+      <li>Erster Start: WiFiManager-AP öffnet sich zur Konfiguration</li>
+    </ul>
+    <h3><span class="lang-en">3D Print</span><span class="lang-de">3D-Druck</span></h3>
+    <p class="lang-en">Print in ASA (heat resistant to ~95°C, UV stable) or PETG as alternative. Do not use PLA — softens above 60°C. STL files and print parameters in the GitHub repository.</p>
+    <p class="lang-de">Druck in ASA (hitzebeständig bis ~95 °C, UV-stabil) oder PETG als Alternative. Kein PLA — erweicht ab 60 °C. STL-Dateien und Druckparameter im GitHub-Repository.</p>
     <h3>BoatOS Dashboard</h3>
-    <p>ValveHeater sends all data via MQTT. BoatOS auto-discovers the topics and displays temperature, ring status, and remote control buttons in the dashboard.</p>
+    <p class="lang-en">ValveHeater sends all data via MQTT. BoatOS auto-discovers the topics and displays temperature, ring status, and remote control buttons in the dashboard.</p>
+    <p class="lang-de">ValveHeater sendet alle Daten per MQTT. BoatOS erkennt die Topics automatisch und zeigt Temperatur, Ring-Status und Fernsteuerungs-Buttons im Dashboard.</p>
   </div>
 
   <div id="tab-maps" class="docs-panel">
     <h3>MBTiles Creator (Windows)</h3>
-    <p>New in v1.6.4: standalone Windows tool for creating offline map tiles. No Python, no terminal required.</p>
-    <ul>
+    <p class="lang-en">New in v1.6.4: standalone Windows tool for creating offline map tiles. No Python, no terminal required.</p>
+    <p class="lang-de">Neu in v1.6.4: eigenständiges Windows-Tool zum Erstellen von Offline-Kartenkacheln. Kein Python, kein Terminal erforderlich.</p>
+    <ul class="lang-en">
       <li><a href="https://github.com/bigbrainlabs/BoatOS/releases/download/v1.6.4/BoatOS-MBTiles-Creator.exe" target="_blank" style="color:var(--cyan)">⬇ Download BoatOS-MBTiles-Creator.exe</a></li>
       <li>Run the .exe — Java (planetiler) downloads automatically on first start</li>
       <li>Select your region from 60+ options (all German states, Scandinavia, UK, Ireland, USA, Canada, Australia…)</li>
       <li>Enter your BoatOS IP address, click Create &amp; Upload — the tool converts and uploads directly to your Pi</li>
       <li>Note: if you save or download the .mbtiles manually, you need to upload it yourself via Deck (Settings → Maps → Upload)</li>
     </ul>
-    <h3>Multiple Regions</h3>
-    <p>BoatOS v1.6.4 supports multiple map regions simultaneously. Upload several .mbtiles files and switch between them in Deck.</p>
-    <h3>Manual Download (advanced)</h3>
-    <p>Experienced users can download .mbtiles files directly from OpenSeaMap or create them with tilemaker on Linux/Mac.</p>
+    <ul class="lang-de">
+      <li><a href="https://github.com/bigbrainlabs/BoatOS/releases/download/v1.6.4/BoatOS-MBTiles-Creator.exe" target="_blank" style="color:var(--cyan)">⬇ BoatOS-MBTiles-Creator.exe herunterladen</a></li>
+      <li>.exe ausführen — Java (planetiler) wird beim ersten Start automatisch geladen</li>
+      <li>Region aus 60+ Optionen auswählen (alle deutschen Bundesländer, Skandinavien, UK, Irland, USA, Kanada, Australien…)</li>
+      <li>BoatOS-IP eingeben, Erstellen &amp; Hochladen klicken — das Tool konvertiert und lädt direkt auf den Pi</li>
+      <li>Hinweis: Wenn du die .mbtiles-Datei manuell speicherst oder herunterlädst, musst du sie selbst hochladen: Deck → Einstellungen → Karten → Hochladen</li>
+    </ul>
+    <h3><span class="lang-en">Multiple Regions</span><span class="lang-de">Mehrere Regionen</span></h3>
+    <p class="lang-en">BoatOS v1.6.4 supports multiple map regions simultaneously. Upload several .mbtiles files and switch between them in Deck.</p>
+    <p class="lang-de">BoatOS v1.6.4 unterstützt mehrere Kartenregionen gleichzeitig. Mehrere .mbtiles-Dateien hochladen und in Deck zwischen ihnen wechseln.</p>
+    <h3><span class="lang-en">Manual Download (advanced)</span><span class="lang-de">Manueller Download (Fortgeschrittene)</span></h3>
+    <p class="lang-en">Experienced users can download .mbtiles files directly from OpenSeaMap or create them with tilemaker on Linux/Mac.</p>
+    <p class="lang-de">Erfahrene Nutzer können .mbtiles-Dateien direkt von OpenSeaMap herunterladen oder mit tilemaker unter Linux/Mac erstellen.</p>
   </div>
 </section>
 
@@ -723,40 +784,46 @@ passwd</div>
 
 <!-- COMMUNITY -->
 <section id="community">
-  <div class="section-eyebrow">Join the community</div>
-  <h2 class="section-title">Built by makers, for makers</h2>
-  <p class="section-sub">Active communities across multiple platforms. Ask questions, share builds, contribute code.</p>
-
+  <div class="section-eyebrow"><span class="lang-en">Join the community</span><span class="lang-de">Zur Community</span></div>
+  <h2 class="section-title"><span class="lang-en">Built by makers, for makers</span><span class="lang-de">Von Machern, für Macher</span></h2>
+  <p class="section-sub lang-en">Active communities across multiple platforms. Ask questions, share builds, contribute code.</p>
+  <p class="section-sub lang-de">Aktive Communities auf mehreren Plattformen. Fragen stellen, Builds teilen, Code beitragen.</p>
   <div class="community-grid">
     <a href="https://github.com/bigbrainlabs/BoatOS" class="community-card" target="_blank">
       <span class="community-card-icon">🐙</span>
       <h4>GitHub</h4>
-      <p>Source code, issues, releases</p>
+      <p class="lang-en">Source code, issues, releases</p>
+      <p class="lang-de">Quellcode, Issues, Releases</p>
     </a>
     <a href="https://open-boat-projects.org/de/boatos/" class="community-card" target="_blank">
       <span class="community-card-icon">⛵</span>
       <h4>Open Boat Projects</h4>
-      <p>Professional marine open source community</p>
+      <p class="lang-en">Professional marine open source community</p>
+      <p class="lang-de">Professionelle marine Open-Source-Community</p>
     </a>
     <a href="https://www.facebook.com/search/top?q=BoatOS" class="community-card" target="_blank">
       <span class="community-card-icon">📘</span>
       <h4>Facebook – BoatOS</h4>
-      <p>Updates, builds, discussions</p>
+      <p class="lang-en">Updates, builds, discussions</p>
+      <p class="lang-de">Updates, Builds, Diskussionen</p>
     </a>
     <a href="https://hackaday.io/project/205823" class="community-card" target="_blank">
       <span class="community-card-icon">🔧</span>
       <h4>Hackaday.io</h4>
-      <p>Project page and build logs</p>
+      <p class="lang-en">Project page and build logs</p>
+      <p class="lang-de">Projektseite und Build-Logs</p>
     </a>
     <a href="https://www.segeln-forum.de/board/195-open-boat-projects-org/" class="community-card" target="_blank">
       <span class="community-card-icon">🧭</span>
       <h4>Segeln-Forum</h4>
-      <p>German sailing community (OBP section)</p>
+      <p class="lang-en">German sailing community (OBP section)</p>
+      <p class="lang-de">Deutsche Segelgemeinschaft (OBP-Bereich)</p>
     </a>
     <a href="https://www.mikrocontroller.net" class="community-card" target="_blank">
       <span class="community-card-icon">⚡</span>
       <h4>Mikrocontroller.net</h4>
-      <p>German electronics forum</p>
+      <p class="lang-en">German electronics forum</p>
+      <p class="lang-de">Deutsches Elektronikforum</p>
     </a>
   </div>
 </section>
@@ -765,55 +832,60 @@ passwd</div>
 
 <!-- BOOKS -->
 <section id="books">
-  <div class="section-eyebrow">The story behind the code</div>
-  <h2 class="section-title">Logbook Without Posing</h2>
-
+  <div class="section-eyebrow"><span class="lang-en">The story behind the code</span><span class="lang-de">Die Geschichte hinter dem Code</span></div>
+  <h2 class="section-title"><span class="lang-en">Logbook Without Posing</span><span class="lang-de">Logbuch ohne Pose</span></h2>
   <div class="books-section">
     <div class="books-text">
-      <h2>The whole story.<br>All the mistakes.<br>Nothing polished.</h2>
-      <p>The book series documents every project in this ecosystem — the ideas, the failures, the detours, and the solutions. Honest, self-deprecating, technically correct.</p>
-      <p>If you find this project useful, buying the books is the best way to support it. Everything stays free. The books are the "license fee".</p>
+      <h2>
+        <span class="lang-en">The whole story.<br>All the mistakes.<br>Nothing polished.</span>
+        <span class="lang-de">Die ganze Geschichte.<br>Alle Fehler.<br>Nichts poliert.</span>
+      </h2>
+      <p class="lang-en">The book series documents every project in this ecosystem — the ideas, the failures, the detours, and the solutions. Honest, self-deprecating, technically correct.</p>
+      <p class="lang-de">Die Buchserie dokumentiert jedes Projekt in diesem Ökosystem — die Ideen, die Fehler, die Umwege und die Lösungen. Ehrlich, selbstironisch, technisch korrekt.</p>
+      <p class="lang-en">If you find this project useful, buying the books is the best way to support it. Everything stays free. The books are the "license fee".</p>
+      <p class="lang-de">Wenn du dieses Projekt nützlich findest, ist der Kauf der Bücher der beste Weg, es zu unterstützen. Alles bleibt kostenlos. Die Bücher sind die „Lizenzgebühr".</p>
       <blockquote style="border-left: 2px solid var(--cyan); padding-left: 1rem; color: var(--muted); font-style: italic; margin: 1.5rem 0; font-size: 0.9rem;">
-        "You find this useful? Buy the book series. Then we're even." 😄
+        <span class="lang-en">"You find this useful? Buy the book series. Then we're even." 😄</span>
+        <span class="lang-de">„Du findest das nützlich? Kauf die Buchserie. Dann sind wir quitt." 😄</span>
       </blockquote>
       <a href="https://www.amazon.com/s?k=logbook+without+posing" class="btn-primary" target="_blank" style="display:inline-flex;">
-        📚 Buy on Amazon →
+        📚 <span class="lang-en">Buy on Amazon →</span><span class="lang-de">Auf Amazon kaufen →</span>
       </a>
     </div>
     <div class="books-list">
       <div class="book-item">
         <span class="book-num">Vol.1</span>
-        <span class="book-title">The Engine Runs</span>
+        <span class="book-title lang-en">The Engine Runs</span><span class="book-title lang-de">Der Motor läuft</span>
         <span class="book-live">LIVE</span>
       </div>
       <div class="book-item">
         <span class="book-num">Vol.2</span>
-        <span class="book-title">Power Is Never Simple</span>
+        <span class="book-title lang-en">Power Is Never Simple</span><span class="book-title lang-de">Strom ist nie einfach</span>
         <span class="book-live">LIVE</span>
       </div>
       <div class="book-item">
         <span class="book-num">Vol.3</span>
-        <span class="book-title">Sensors & Monitoring</span>
+        <span class="book-title lang-en">Sensors &amp; Monitoring</span><span class="book-title lang-de">Sensoren &amp; Monitoring</span>
         <span class="book-live">LIVE</span>
       </div>
       <div class="book-item">
         <span class="book-num">Vol.4</span>
-        <span class="book-title">BoatOS – The Foundation</span>
+        <span class="book-title lang-en">BoatOS – The Foundation</span><span class="book-title lang-de">BoatOS – Die Grundlage</span>
         <span class="book-live">LIVE</span>
       </div>
       <div class="book-item">
         <span class="book-num">Vol.5</span>
-        <span class="book-title">BoatOS – The System</span>
+        <span class="book-title lang-en">BoatOS – The System</span><span class="book-title lang-de">BoatOS – Das System</span>
         <span class="book-live">LIVE</span>
       </div>
       <div class="book-item">
         <span class="book-num">Vol.6</span>
-        <span class="book-title">The Valve Heater</span>
+        <span class="book-title lang-en">The Valve Heater</span><span class="book-title lang-de">Der Ventilheizer</span>
         <span class="book-live" style="color:var(--muted);background:transparent;border-color:var(--border)">SOON</span>
       </div>
       <div class="book-item">
         <span class="book-num">Vol.7</span>
-        <span class="book-title">The AutoSat</span>
+        <span class="book-title lang-en">The AutoSat</span><span class="book-title lang-de">Der AutoSat</span>
         <span class="book-live" style="color:var(--muted);background:transparent;border-color:var(--border)">PLANNED</span>
       </div>
     </div>
@@ -822,15 +894,16 @@ passwd</div>
 
 <!-- FOOTER -->
 <footer>
-  <p class="footer-motto">"Made by hand means knowing what's inside and keeping it affordable."</p>
+  <p class="footer-motto lang-en">"Made by hand means knowing what's inside and keeping it affordable."</p>
+  <p class="footer-motto lang-de">„Handgemacht bedeutet, zu wissen, was drin ist, und es erschwinglich zu halten."</p>
   <div class="footer-links">
     <a href="https://github.com/bigbrainlabs/BoatOS" target="_blank">BoatOS GitHub</a>
     <a href="https://github.com/bigbrainlabs/BoatOpenIO" target="_blank">BoatOpenIO GitHub</a>
     <a href="https://open-boat-projects.org/de/boatos/" target="_blank">Open Boat Projects</a>
     <a href="https://hackaday.io/project/205823" target="_blank">Hackaday.io</a>
-    <a href="https://www.amazon.com/s?k=logbook+without+posing" target="_blank">Books on Amazon</a>
+    <a href="https://www.amazon.com/s?k=logbook+without+posing" target="_blank"><span class="lang-en">Books on Amazon</span><span class="lang-de">Bücher auf Amazon</span></a>
   </div>
-  <p>Made by <a href="https://github.com/bigbrainlabs" target="_blank">bigbrainlabs</a> · MIT License · 100% Open Source</p>
+  <p><span class="lang-en">Made by</span><span class="lang-de">Gebaut von</span> <a href="https://github.com/bigbrainlabs" target="_blank">bigbrainlabs</a> · MIT License · 100% Open Source</p>
 </footer>
 
 <script>
@@ -840,6 +913,20 @@ passwd</div>
     document.getElementById('tab-' + name).classList.add('active');
     event.target.classList.add('active');
   }
+
+  function toggleLang() {
+    setLang((document.body.dataset.lang || 'en') === 'en' ? 'de' : 'en');
+  }
+
+  function setLang(lang) {
+    document.body.dataset.lang = lang;
+    document.documentElement.lang = lang;
+    document.getElementById('lang-btn').textContent = lang === 'en' ? '🇩🇪 DE' : '🇬🇧 EN';
+    localStorage.setItem('boatos_lang', lang);
+  }
+
+  const savedLang = localStorage.getItem('boatos_lang');
+  if (savedLang) setLang(savedLang);
 </script>
 
 </body>
