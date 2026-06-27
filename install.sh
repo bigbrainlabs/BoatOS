@@ -17,13 +17,13 @@ info()    { echo -e "${YELLOW}Info: $1${NC}"; }
 [ "$EUID" -eq 0 ] && error "Bitte fuehre dieses Skript NICHT als root aus!"
 
 INSTALL_USER=$(whoami)
-INSTALL_DIR="/home/$INSTALL_USER/BoatOS"
+INSTALL_DIR="/srv/BoatOS"
 
 echo "Benutzer:  $INSTALL_USER"
 echo "Verzeichnis: $INSTALL_DIR"
 echo ""
 
-[ -d "$INSTALL_DIR" ] || error "BoatOS-Verzeichnis nicht gefunden: $INSTALL_DIR"
+[ -d "$INSTALL_DIR" ] || error "BoatOS-Verzeichnis nicht gefunden: $INSTALL_DIR (git clone nach /srv/BoatOS)"
 
 # ── 1. System-Pakete ────────────────────────────────────────────────────────
 info "Installiere System-Pakete..."
@@ -57,6 +57,7 @@ fi
 success "SignalK installiert"
 
 info "Erstelle SignalK Service..."
+SIGNALK_BIN=$(command -v signalk-server || echo /usr/local/bin/signalk-server)
 sudo tee /etc/systemd/system/signalk.service > /dev/null << SIGNALK
 [Unit]
 Description=SignalK Server
@@ -66,7 +67,7 @@ After=network.target
 Type=simple
 User=$INSTALL_USER
 WorkingDirectory=/home/$INSTALL_USER
-ExecStart=/usr/bin/signalk-server
+ExecStart=$SIGNALK_BIN
 Restart=always
 RestartSec=10
 
@@ -286,7 +287,7 @@ server {
 
     # Frontend — HTML/JS kein Cache, CSS/Bilder 1h
     location / {
-        root /home/INSTALL_USER_PLACEHOLDER/BoatOS/frontend;
+        root /srv/BoatOS/frontend;
         index index.html;
         try_files $uri $uri/ /index.html;
 
@@ -337,7 +338,7 @@ server {
 }
 NGINX
 
-sudo sed -i "s/INSTALL_USER_PLACEHOLDER/$INSTALL_USER/g" /etc/nginx/sites-available/boatos
+
 sudo ln -sf /etc/nginx/sites-available/boatos /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t || error "Nginx-Konfiguration fehlerhaft"
@@ -393,8 +394,8 @@ echo "  4. MBTiles nach $INSTALL_DIR/maps/ kopieren"
 echo "  5. Tileserver starten:     sudo systemctl start tileserver"
 echo ""
 echo "Helm (Flutter-App) — Build auf Entwicklungs-PC:"
-echo "  flutterpi_tool build --arch=arm64 --cpu=pi4 --release"
-echo "  scp build/flutter-pi/pi4-64/app.so $INSTALL_USER@<pi-ip>:$INSTALL_DIR/flutter_app/app.so"
+echo "  flutterpi_tool build --arch=arm64 --cpu=generic --release"
+echo "  scp build/flutter-pi/aarch64-generic/app.so $INSTALL_USER@<pi-ip>:$INSTALL_DIR/flutter_app/app.so"
 echo "  sudo systemctl restart lightdm"
 echo ""
 echo "Status pruefen:"

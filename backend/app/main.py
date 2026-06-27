@@ -3,7 +3,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, B
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 from fastapi.staticfiles import StaticFiles
-import asyncio, json, websockets, os, shutil, zipfile, subprocess, re, sqlite3 as _sqlite3
+import asyncio, json, websockets, os, shutil, zipfile, subprocess, re, sqlite3 as _sqlite3, gzip as _gzip
 from datetime import datetime
 from typing import List, Dict, Any
 import paho.mqtt.client as mqtt
@@ -4589,20 +4589,63 @@ async def map_tiles_health():
     available = [r for r in active if (MBTILES_DIR / f"{r}.mbtiles").exists()]
     return {"ok": len(available) > 0, "active": available}
 
+def _merge_tiles(tiles: list) -> bytes:
+    """Merge multiple MVT tiles into one by concatenating protobuf bytes.
+    Valid because MVT Tile.layers is a repeated field — MapLibre handles duplicates correctly."""
+    if len(tiles) == 1:
+        t = tiles[0]
+        return t if t[:2] == b'\x1f\x8b' else _gzip.compress(t, compresslevel=1)
+    decompressed = []
+    for t in tiles:
+        try:
+            decompressed.append(_gzip.decompress(t) if t[:2] == b'\x1f\x8b' else t)
+        except Exception:
+            pass
+    return _gzip.compress(b"".join(decompressed), compresslevel=1)
+
 @app.get("/api/map/tiles/{z}/{x}/{y}.pbf")
 async def get_map_tile(z: int, x: int, y: int):
+    tiles = []
     for region in _get_active_regions():
         p = MBTILES_DIR / f"{region}.mbtiles"
         if not p.exists():
             continue
         data = _read_mbtiles_tile(p, z, x, y)
         if data:
-            is_gzip = data[:2] == b'\x1f\x8b'
-            headers = {"Cache-Control": "public, max-age=86400"}
-            if is_gzip:
-                headers["Content-Encoding"] = "gzip"
-            return Response(content=data, media_type="application/x-protobuf", headers=headers)
-    return Response(status_code=204)
+            tiles.append(data)
+    if not tiles:
+        return Response(status_code=204)
+    merged = _merge_tiles(tiles)
+    return Response(
+        content=merged,
+        media_type="application/x-protobuf",
+        headers={"Cache-Control": "public, max-age=86400", "Content-Encoding": "gzip"},
+    )
+
+@app.get("/api/map/seamarks/status")
+async def seamark_status():
+    active = _get_active_regions()
+    available = [r for r in active if (MBTILES_DIR / f"{r}-seamarks.mbtiles").exists()]
+    return {"available": len(available) > 0, "regions": available}
+
+@app.get("/api/map/seamarks/{z}/{x}/{y}.pbf")
+async def get_seamark_tile(z: int, x: int, y: int):
+    tiles = []
+    for region in _get_active_regions():
+        p = MBTILES_DIR / f"{region}-seamarks.mbtiles"
+        if not p.exists():
+            continue
+        data = _read_mbtiles_tile(p, z, x, y)
+        if data:
+            tiles.append(data)
+    if not tiles:
+        return Response(status_code=204)
+    merged = _merge_tiles(tiles)
+    return Response(
+        content=merged,
+        media_type="application/x-protobuf",
+        headers={"Cache-Control": "public, max-age=86400", "Content-Encoding": "gzip"},
+    )
 
 @app.get("/api/map/regions")
 async def map_regions():
@@ -4613,19 +4656,24 @@ async def map_regions():
             size_mb = round(p.stat().st_size / 1_048_576, 1)
         except Exception:
             size_mb = 0
+        is_seamark = p.stem.endswith("-seamarks")
+        base = p.stem[:-len("-seamarks")] if is_seamark else p.stem
         installed.append({
             "id": p.stem,
             "name": p.stem.replace("-", " ").replace("_", " ").title(),
             "size_mb": size_mb,
-            "active": p.stem in active
+            "active": base in active if is_seamark else p.stem in active,
+            "is_seamark": is_seamark,
+            "base_region": base if is_seamark else None,
         })
     return {"installed": installed, "active": active}
 
 @app.post("/api/map/regions/active")
 async def set_active_regions(body: dict):
     regions = body.get("regions", [])
-    # Validate — only accept regions that actually exist as mbtiles
-    valid = [r for r in regions if (MBTILES_DIR / f"{r}.mbtiles").exists()]
+    # Validate — only accept base map regions (no seamark companions)
+    valid = [r for r in regions
+             if not r.endswith("-seamarks") and (MBTILES_DIR / f"{r}.mbtiles").exists()]
     try:
         with open("data/settings.json") as f:
             s = json.load(f)
@@ -4634,6 +4682,11 @@ async def set_active_regions(body: dict):
     s.setdefault("map", {})["activeRegions"] = valid
     with open("data/settings.json", "w") as f:
         json.dump(s, f, indent=2)
+    try:
+        subprocess.Popen(["sudo", "/bin/systemctl", "restart", "tileserver"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
     return {"ok": True, "active": valid}
 
 def _sanitize_mbtiles_name(raw_name: str) -> tuple:

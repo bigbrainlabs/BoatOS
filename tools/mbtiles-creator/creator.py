@@ -1,3 +1,5 @@
+import os
+import sqlite3
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import threading
@@ -7,6 +9,7 @@ import json
 import re
 import shutil
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import requests
@@ -56,77 +59,277 @@ def _available_ram_gb() -> int:
         return 4
 
 
-# (Anzeigename, Geofabrik-URL)
+# ── Translations ──────────────────────────────────────────────────────────────
+
+TRANSLATIONS = {
+    'de': {
+        'title':            'BoatOS MBTiles Creator',
+        'lbl_region':       'Region:',
+        'lbl_pi':           'Pi-Adresse:',
+        'btn_start_upload': 'Start (Upload)',
+        'btn_save':         'In Ordner speichern',
+        'btn_cancel':       'Abbrechen',
+        'lbl_log':          'Log',
+        'btn_lang':         'EN',
+        'folder_dialog':    'Zielordner wählen',
+        # Pipeline steps
+        'step1':            '[1/4] Prüfe Java...',
+        'step2':            '[2/4] Prüfe planetiler.jar...',
+        'step3':            '[3/4] Lade OSM-Kartendaten herunter...',
+        'step4':            '[4/4] Konvertiere mit planetiler...',
+        'step5_upload':     '[5/5] Lade auf Pi hoch...',
+        'step5_save':       '[5/5] Kopiere in Zielordner...',
+        # Java
+        'java_not_found':   '[Fehler] Java nicht gefunden.',
+        'java_hint':        '  Bitte Java 21 installieren: https://www.java.com/de/download/',
+        'java_err_title':   'Java fehlt',
+        'java_err_msg':     (
+            'Java wurde nicht gefunden.\n\n'
+            'Bitte installiere Java 21 von:\nhttps://www.java.com/de/download/\n\n'
+            'Danach BoatOS MBTiles Creator neu starten.'
+        ),
+        'java_warn':        '  Warnung: Java {ver} — Java 21 empfohlen. Versuche trotzdem...',
+        'java_ok':          '  Java {ver} OK.',
+        # Planetiler
+        'pt_found':         '  planetiler.jar vorhanden ({mb:.0f} MB).',
+        'pt_downloading':   '  Nicht gefunden — lade herunter...',
+        'pt_version':       '  Version: {tag} ({mb:.0f} MB)',
+        'pt_no_asset':      '[Fehler] planetiler.jar nicht im Release gefunden.',
+        'pt_ready':         'planetiler.jar bereit.',
+        # OSM download
+        'osm_source':       '  Quelle: {url}',
+        'osm_cached':       '  Bereits vorhanden ({days}d alt) — überspringe Download.',
+        'osm_invalid':      '  Datei unvollständig — lade neu herunter.',
+        'osm_progress':     'OSM-Download: {dl:.1f} / {total:.1f} MB',
+        'osm_progress_unk': 'OSM-Download: {dl:.1f} MB',
+        'osm_done':         '  Download abgeschlossen ({mb:.1f} MB).',
+        # Conversion
+        'conv_cached':      '  Bereits vorhanden ({days}d alt) — überspringe Konvertierung.',
+        'conv_invalid':     '  MBTiles unvollständig oder beschädigt — konvertiere neu.',
+        'conv_running':     'Konvertierung läuft...',
+        'conv_ram':         '  RAM für Java: {xmx} GB',
+        'conv_progress':    'Konvertierung: {pct:.0f}%',
+        'conv_done':        '  Konvertierung abgeschlossen ({mb:.1f} MB).',
+        'conv_err_exit':    '  [Fehler] planetiler Exitcode: {code}',
+        'conv_err_nofile':  '  [Fehler] Ausgabedatei nicht erzeugt.',
+        # Upload / save
+        'upload_post':      '  POST {url}',
+        'upload_progress':  'Upload: {ul:.1f} / {total:.1f} MB',
+        'upload_ok':        '  Upload erfolgreich (HTTP {status}).',
+        'save_copying':     'Kopiere nach {dest}...',
+        'save_done':        '  Gespeichert: {dest}',
+        # Generic
+        'header':           '=== BoatOS MBTiles Creator ===',
+        'lbl_region_log':   'Region: {name}',
+        'lbl_output_log':   'Ausgabe: {name}',
+        'cancelled':        '  [Abgebrochen]',
+        'cancel_req':       '[Abbrechen angefordert...]',
+        'done':             'Fertig.',
+        'error':            '[Fehler] {e}',
+        'error_indent':     '  [Fehler] {e}',
+        # Seamarks
+        'step_sm_convert':  '[+] Extrahiere Seezeichen (offline)...',
+        'sm_running':       'Seezeichen-Konvertierung läuft...',
+        'sm_cached':        '  Seezeichen bereits vorhanden ({days}d alt) — überspringe.',
+        'sm_done':          '  Seezeichen fertig ({mb:.1f} MB).',
+        'sm_fail':          '  Seezeichen-Konvertierung fehlgeschlagen — überspringe.',
+        'step_sm_upload':   '[+] Lade Seezeichen auf Pi hoch...',
+        'step_sm_save':     '[+] Speichere Seezeichen...',
+    },
+    'en': {
+        'title':            'BoatOS MBTiles Creator',
+        'lbl_region':       'Region:',
+        'lbl_pi':           'Pi Address:',
+        'btn_start_upload': 'Start (Upload)',
+        'btn_save':         'Save to Folder',
+        'btn_cancel':       'Cancel',
+        'lbl_log':          'Log',
+        'btn_lang':         'DE',
+        'folder_dialog':    'Choose destination folder',
+        # Pipeline steps
+        'step1':            '[1/4] Checking Java...',
+        'step2':            '[2/4] Checking planetiler.jar...',
+        'step3':            '[3/4] Downloading OSM map data...',
+        'step4':            '[4/4] Converting with planetiler...',
+        'step5_upload':     '[5/5] Uploading to Pi...',
+        'step5_save':       '[5/5] Copying to folder...',
+        # Java
+        'java_not_found':   '[Error] Java not found.',
+        'java_hint':        '  Please install Java 21: https://www.java.com/download/',
+        'java_err_title':   'Java missing',
+        'java_err_msg':     (
+            'Java was not found.\n\n'
+            'Please install Java 21 from:\nhttps://www.java.com/download/\n\n'
+            'Then restart BoatOS MBTiles Creator.'
+        ),
+        'java_warn':        '  Warning: Java {ver} — Java 21 recommended. Trying anyway...',
+        'java_ok':          '  Java {ver} OK.',
+        # Planetiler
+        'pt_found':         '  planetiler.jar found ({mb:.0f} MB).',
+        'pt_downloading':   '  Not found — downloading...',
+        'pt_version':       '  Version: {tag} ({mb:.0f} MB)',
+        'pt_no_asset':      '[Error] planetiler.jar not found in release.',
+        'pt_ready':         'planetiler.jar ready.',
+        # OSM download
+        'osm_source':       '  Source: {url}',
+        'osm_cached':       '  Already downloaded ({days}d old) — skipping.',
+        'osm_invalid':      '  File incomplete — re-downloading.',
+        'osm_progress':     'OSM Download: {dl:.1f} / {total:.1f} MB',
+        'osm_progress_unk': 'OSM Download: {dl:.1f} MB',
+        'osm_done':         '  Download complete ({mb:.1f} MB).',
+        # Conversion
+        'conv_cached':      'Already converted ({days}d old) — skipping conversion.',
+        'conv_invalid':     '  MBTiles incomplete or corrupted — re-converting.',
+        'conv_running':     'Conversion running...',
+        'conv_ram':         '  RAM for Java: {xmx} GB',
+        'conv_progress':    'Converting: {pct:.0f}%',
+        'conv_done':        '  Conversion complete ({mb:.1f} MB).',
+        'conv_err_exit':    '  [Error] planetiler exit code: {code}',
+        'conv_err_nofile':  '  [Error] Output file not created.',
+        # Upload / save
+        'upload_post':      '  POST {url}',
+        'upload_progress':  'Upload: {ul:.1f} / {total:.1f} MB',
+        'upload_ok':        '  Upload successful (HTTP {status}).',
+        'save_copying':     'Copying to {dest}...',
+        'save_done':        '  Saved: {dest}',
+        # Generic
+        'header':           '=== BoatOS MBTiles Creator ===',
+        'lbl_region_log':   'Region: {name}',
+        'lbl_output_log':   'Output: {name}',
+        'cancelled':        '  [Cancelled]',
+        'cancel_req':       '[Cancel requested...]',
+        'done':             'Done.',
+        'error':            '[Error] {e}',
+        'error_indent':     '  [Error] {e}',
+        # Seamarks
+        'step_sm_convert':  '[+] Extracting seamarks (offline)...',
+        'sm_running':       'Seamark conversion running...',
+        'sm_cached':        '  Seamarks already present ({days}d old) — skipping.',
+        'sm_done':          '  Seamarks done ({mb:.1f} MB).',
+        'sm_fail':          '  Seamark conversion failed — skipping.',
+        'step_sm_upload':   '[+] Uploading seamarks to Pi...',
+        'step_sm_save':     '[+] Saving seamarks...',
+    },
+}
+
+
+# ── Planetiler YAML schema for seamark extraction ─────────────────────────────
+
+SEAMARK_SCHEMA_YAML = """\
+schema_name: BoatOS Seamarks
+schema_description: Offline seamark data for marine navigation (buoys, beacons, lights)
+attribution: "© OpenSeaMap contributors, © OpenStreetMap contributors"
+
+sources:
+  osm:
+    type: osm
+
+layers:
+  - id: seamark
+    features:
+      - source: osm
+        geometry: point
+        min_zoom: 8
+        include_when:
+          "seamark:type": __any__
+        attributes:
+          - key: type
+            tag_value: "seamark:type"
+          - key: name
+            tag_value: name
+          - key: category
+            tag_value: "seamark:category"
+          - key: colour
+            tag_value: "seamark:colour"
+          - key: colour_pattern
+            tag_value: "seamark:colour_pattern"
+          - key: shape
+            tag_value: "seamark:shape"
+          - key: topmark_shape
+            tag_value: "seamark:topmark:shape"
+          - key: topmark_colour
+            tag_value: "seamark:topmark:colour"
+          - key: light_char
+            tag_value: "seamark:light:character"
+          - key: light_colour
+            tag_value: "seamark:light:colour"
+          - key: light_period
+            tag_value: "seamark:light:period"
+"""
+
+
+# ── Regions: (de_name, en_name, url) ─────────────────────────────────────────
+
 REGIONS = [
-    # ── Deutschland (Bundesländer) ────────────────────────────────────
-    ("Deutschland",                   "https://download.geofabrik.de/europe/germany-latest.osm.pbf"),
-    ("DE · Baden-Württemberg",        "https://download.geofabrik.de/europe/germany/baden-wuerttemberg-latest.osm.pbf"),
-    ("DE · Bayern",                   "https://download.geofabrik.de/europe/germany/bavaria-latest.osm.pbf"),
-    ("DE · Berlin",                   "https://download.geofabrik.de/europe/germany/berlin-latest.osm.pbf"),
-    ("DE · Brandenburg",              "https://download.geofabrik.de/europe/germany/brandenburg-latest.osm.pbf"),
-    ("DE · Bremen",                   "https://download.geofabrik.de/europe/germany/bremen-latest.osm.pbf"),
-    ("DE · Hamburg",                  "https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf"),
-    ("DE · Hessen",                   "https://download.geofabrik.de/europe/germany/hessen-latest.osm.pbf"),
-    ("DE · Mecklenburg-Vorpommern",   "https://download.geofabrik.de/europe/germany/mecklenburg-vorpommern-latest.osm.pbf"),
-    ("DE · Niedersachsen",            "https://download.geofabrik.de/europe/germany/lower-saxony-latest.osm.pbf"),
-    ("DE · Nordrhein-Westfalen",      "https://download.geofabrik.de/europe/germany/nordrhein-westfalen-latest.osm.pbf"),
-    ("DE · Rheinland-Pfalz",          "https://download.geofabrik.de/europe/germany/rheinland-pfalz-latest.osm.pbf"),
-    ("DE · Saarland",                 "https://download.geofabrik.de/europe/germany/saarland-latest.osm.pbf"),
-    ("DE · Sachsen",                  "https://download.geofabrik.de/europe/germany/saxony-latest.osm.pbf"),
-    ("DE · Sachsen-Anhalt",           "https://download.geofabrik.de/europe/germany/saxony-anhalt-latest.osm.pbf"),
-    ("DE · Schleswig-Holstein",       "https://download.geofabrik.de/europe/germany/schleswig-holstein-latest.osm.pbf"),
-    ("DE · Thüringen",                "https://download.geofabrik.de/europe/germany/thuringia-latest.osm.pbf"),
-    # ── Mitteleuropa ──────────────────────────────────────────────────
-    ("Niederlande",                   "https://download.geofabrik.de/europe/netherlands-latest.osm.pbf"),
-    ("Belgien",                       "https://download.geofabrik.de/europe/belgium-latest.osm.pbf"),
-    ("Luxemburg",                     "https://download.geofabrik.de/europe/luxembourg-latest.osm.pbf"),
-    ("Frankreich",                    "https://download.geofabrik.de/europe/france-latest.osm.pbf"),
-    ("Schweiz",                       "https://download.geofabrik.de/europe/switzerland-latest.osm.pbf"),
-    ("Österreich",                    "https://download.geofabrik.de/europe/austria-latest.osm.pbf"),
-    ("Tschechien",                    "https://download.geofabrik.de/europe/czech-republic-latest.osm.pbf"),
-    ("Polen",                         "https://download.geofabrik.de/europe/poland-latest.osm.pbf"),
-    ("Slowakei",                      "https://download.geofabrik.de/europe/slovakia-latest.osm.pbf"),
-    ("Ungarn",                        "https://download.geofabrik.de/europe/hungary-latest.osm.pbf"),
-    # ── Nordeuropa / Skandinavien ─────────────────────────────────────
-    ("Dänemark",                      "https://download.geofabrik.de/europe/denmark-latest.osm.pbf"),
-    ("Schweden",                      "https://download.geofabrik.de/europe/sweden-latest.osm.pbf"),
-    ("Norwegen",                      "https://download.geofabrik.de/europe/norway-latest.osm.pbf"),
-    ("Finnland",                      "https://download.geofabrik.de/europe/finland-latest.osm.pbf"),
-    ("Island",                        "https://download.geofabrik.de/europe/iceland-latest.osm.pbf"),
-    # ── Britische Inseln ──────────────────────────────────────────────
-    ("Großbritannien",                "https://download.geofabrik.de/europe/great-britain-latest.osm.pbf"),
-    ("GB · England",                  "https://download.geofabrik.de/europe/great-britain/england-latest.osm.pbf"),
-    ("GB · Scotland",                 "https://download.geofabrik.de/europe/great-britain/scotland-latest.osm.pbf"),
-    ("GB · Wales",                    "https://download.geofabrik.de/europe/great-britain/wales-latest.osm.pbf"),
-    ("Irland",                        "https://download.geofabrik.de/europe/ireland-and-northern-ireland-latest.osm.pbf"),
-    # ── Südeuropa / Mittelmeer ────────────────────────────────────────
-    ("Spanien",                       "https://download.geofabrik.de/europe/spain-latest.osm.pbf"),
-    ("Portugal",                      "https://download.geofabrik.de/europe/portugal-latest.osm.pbf"),
-    ("Italien",                       "https://download.geofabrik.de/europe/italy-latest.osm.pbf"),
-    ("Kroatien",                      "https://download.geofabrik.de/europe/croatia-latest.osm.pbf"),
-    ("Slowenien",                     "https://download.geofabrik.de/europe/slovenia-latest.osm.pbf"),
-    ("Griechenland",                  "https://download.geofabrik.de/europe/greece-latest.osm.pbf"),
-    ("Türkei",                        "https://download.geofabrik.de/europe/turkey-latest.osm.pbf"),
-    # ── Osteuropa / Baltikum ──────────────────────────────────────────
-    ("Estland",                       "https://download.geofabrik.de/europe/estonia-latest.osm.pbf"),
-    ("Lettland",                      "https://download.geofabrik.de/europe/latvia-latest.osm.pbf"),
-    ("Litauen",                       "https://download.geofabrik.de/europe/lithuania-latest.osm.pbf"),
-    ("Russland (Europa)",             "https://download.geofabrik.de/europe/russia-latest.osm.pbf"),
-    # ── Nordamerika ───────────────────────────────────────────────────
-    ("USA (gesamt)",                  "https://download.geofabrik.de/north-america/us-latest.osm.pbf"),
-    ("USA · Florida",                 "https://download.geofabrik.de/north-america/us/florida-latest.osm.pbf"),
-    ("USA · New York",                "https://download.geofabrik.de/north-america/us/new-york-latest.osm.pbf"),
-    ("USA · Texas",                   "https://download.geofabrik.de/north-america/us/texas-latest.osm.pbf"),
-    ("USA · California",              "https://download.geofabrik.de/north-america/us/california-latest.osm.pbf"),
-    ("USA · Great Lakes (Michigan)",  "https://download.geofabrik.de/north-america/us/michigan-latest.osm.pbf"),
-    ("Kanada",                        "https://download.geofabrik.de/north-america/canada-latest.osm.pbf"),
-    ("Kanada · British Columbia",     "https://download.geofabrik.de/north-america/canada/british-columbia-latest.osm.pbf"),
-    ("Kanada · Ontario",              "https://download.geofabrik.de/north-america/canada/ontario-latest.osm.pbf"),
-    # ── Karibik / Mittelamerika ───────────────────────────────────────
-    ("Karibik",                       "https://download.geofabrik.de/central-america-latest.osm.pbf"),
-    # ── Australien & Pazifik ──────────────────────────────────────────
-    ("Australien",                    "https://download.geofabrik.de/australia-oceania/australia-latest.osm.pbf"),
-    ("Neuseeland",                    "https://download.geofabrik.de/australia-oceania/new-zealand-latest.osm.pbf"),
+    # ── Deutschland / Germany ─────────────────────────────────────────────────
+    ("Deutschland",                  "Germany",                       "https://download.geofabrik.de/europe/germany-latest.osm.pbf"),
+    ("DE · Baden-Württemberg",       "DE · Baden-Württemberg",        "https://download.geofabrik.de/europe/germany/baden-wuerttemberg-latest.osm.pbf"),
+    ("DE · Bayern",                  "DE · Bavaria",                  "https://download.geofabrik.de/europe/germany/bavaria-latest.osm.pbf"),
+    ("DE · Berlin",                  "DE · Berlin",                   "https://download.geofabrik.de/europe/germany/berlin-latest.osm.pbf"),
+    ("DE · Brandenburg",             "DE · Brandenburg",              "https://download.geofabrik.de/europe/germany/brandenburg-latest.osm.pbf"),
+    ("DE · Bremen",                  "DE · Bremen",                   "https://download.geofabrik.de/europe/germany/bremen-latest.osm.pbf"),
+    ("DE · Hamburg",                 "DE · Hamburg",                  "https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf"),
+    ("DE · Hessen",                  "DE · Hesse",                    "https://download.geofabrik.de/europe/germany/hessen-latest.osm.pbf"),
+    ("DE · Mecklenburg-Vorpommern",  "DE · Mecklenburg-Vorpommern",   "https://download.geofabrik.de/europe/germany/mecklenburg-vorpommern-latest.osm.pbf"),
+    ("DE · Niedersachsen",           "DE · Lower Saxony",             "https://download.geofabrik.de/europe/germany/lower-saxony-latest.osm.pbf"),
+    ("DE · Nordrhein-Westfalen",     "DE · North Rhine-Westphalia",   "https://download.geofabrik.de/europe/germany/nordrhein-westfalen-latest.osm.pbf"),
+    ("DE · Rheinland-Pfalz",         "DE · Rhineland-Palatinate",     "https://download.geofabrik.de/europe/germany/rheinland-pfalz-latest.osm.pbf"),
+    ("DE · Saarland",                "DE · Saarland",                 "https://download.geofabrik.de/europe/germany/saarland-latest.osm.pbf"),
+    ("DE · Sachsen",                 "DE · Saxony",                   "https://download.geofabrik.de/europe/germany/saxony-latest.osm.pbf"),
+    ("DE · Sachsen-Anhalt",          "DE · Saxony-Anhalt",            "https://download.geofabrik.de/europe/germany/saxony-anhalt-latest.osm.pbf"),
+    ("DE · Schleswig-Holstein",      "DE · Schleswig-Holstein",       "https://download.geofabrik.de/europe/germany/schleswig-holstein-latest.osm.pbf"),
+    ("DE · Thüringen",               "DE · Thuringia",                "https://download.geofabrik.de/europe/germany/thuringia-latest.osm.pbf"),
+    # ── Mitteleuropa / Central Europe ────────────────────────────────────────
+    ("Niederlande",                  "Netherlands",                   "https://download.geofabrik.de/europe/netherlands-latest.osm.pbf"),
+    ("Belgien",                      "Belgium",                       "https://download.geofabrik.de/europe/belgium-latest.osm.pbf"),
+    ("Luxemburg",                    "Luxembourg",                    "https://download.geofabrik.de/europe/luxembourg-latest.osm.pbf"),
+    ("Frankreich",                   "France",                        "https://download.geofabrik.de/europe/france-latest.osm.pbf"),
+    ("Schweiz",                      "Switzerland",                   "https://download.geofabrik.de/europe/switzerland-latest.osm.pbf"),
+    ("Österreich",                   "Austria",                       "https://download.geofabrik.de/europe/austria-latest.osm.pbf"),
+    ("Tschechien",                   "Czech Republic",                "https://download.geofabrik.de/europe/czech-republic-latest.osm.pbf"),
+    ("Polen",                        "Poland",                        "https://download.geofabrik.de/europe/poland-latest.osm.pbf"),
+    ("Slowakei",                     "Slovakia",                      "https://download.geofabrik.de/europe/slovakia-latest.osm.pbf"),
+    ("Ungarn",                       "Hungary",                       "https://download.geofabrik.de/europe/hungary-latest.osm.pbf"),
+    # ── Nordeuropa / Northern Europe ─────────────────────────────────────────
+    ("Dänemark",                     "Denmark",                       "https://download.geofabrik.de/europe/denmark-latest.osm.pbf"),
+    ("Schweden",                     "Sweden",                        "https://download.geofabrik.de/europe/sweden-latest.osm.pbf"),
+    ("Norwegen",                     "Norway",                        "https://download.geofabrik.de/europe/norway-latest.osm.pbf"),
+    ("Finnland",                     "Finland",                       "https://download.geofabrik.de/europe/finland-latest.osm.pbf"),
+    ("Island",                       "Iceland",                       "https://download.geofabrik.de/europe/iceland-latest.osm.pbf"),
+    # ── Britische Inseln / British Isles ─────────────────────────────────────
+    ("Großbritannien",               "Great Britain",                  "https://download.geofabrik.de/europe/great-britain-latest.osm.pbf"),
+    ("GB · England",                 "GB · England",                  "https://download.geofabrik.de/europe/great-britain/england-latest.osm.pbf"),
+    ("GB · Scotland",                "GB · Scotland",                 "https://download.geofabrik.de/europe/great-britain/scotland-latest.osm.pbf"),
+    ("GB · Wales",                   "GB · Wales",                    "https://download.geofabrik.de/europe/great-britain/wales-latest.osm.pbf"),
+    ("Irland",                       "Ireland",                       "https://download.geofabrik.de/europe/ireland-and-northern-ireland-latest.osm.pbf"),
+    # ── Südeuropa / Southern Europe ──────────────────────────────────────────
+    ("Spanien",                      "Spain",                         "https://download.geofabrik.de/europe/spain-latest.osm.pbf"),
+    ("Portugal",                     "Portugal",                      "https://download.geofabrik.de/europe/portugal-latest.osm.pbf"),
+    ("Italien",                      "Italy",                         "https://download.geofabrik.de/europe/italy-latest.osm.pbf"),
+    ("Kroatien",                     "Croatia",                       "https://download.geofabrik.de/europe/croatia-latest.osm.pbf"),
+    ("Slowenien",                    "Slovenia",                      "https://download.geofabrik.de/europe/slovenia-latest.osm.pbf"),
+    ("Griechenland",                 "Greece",                        "https://download.geofabrik.de/europe/greece-latest.osm.pbf"),
+    ("Türkei",                       "Turkey",                        "https://download.geofabrik.de/europe/turkey-latest.osm.pbf"),
+    # ── Osteuropa / Eastern Europe ───────────────────────────────────────────
+    ("Estland",                      "Estonia",                       "https://download.geofabrik.de/europe/estonia-latest.osm.pbf"),
+    ("Lettland",                     "Latvia",                        "https://download.geofabrik.de/europe/latvia-latest.osm.pbf"),
+    ("Litauen",                      "Lithuania",                     "https://download.geofabrik.de/europe/lithuania-latest.osm.pbf"),
+    ("Russland (Europa)",            "Russia (Europe)",               "https://download.geofabrik.de/europe/russia-latest.osm.pbf"),
+    # ── Nordamerika / North America ──────────────────────────────────────────
+    ("USA (gesamt)",                 "USA (all)",                     "https://download.geofabrik.de/north-america/us-latest.osm.pbf"),
+    ("USA · Florida",                "USA · Florida",                 "https://download.geofabrik.de/north-america/us/florida-latest.osm.pbf"),
+    ("USA · New York",               "USA · New York",                "https://download.geofabrik.de/north-america/us/new-york-latest.osm.pbf"),
+    ("USA · Texas",                  "USA · Texas",                   "https://download.geofabrik.de/north-america/us/texas-latest.osm.pbf"),
+    ("USA · California",             "USA · California",              "https://download.geofabrik.de/north-america/us/california-latest.osm.pbf"),
+    ("USA · Great Lakes (Michigan)", "USA · Great Lakes (Michigan)",  "https://download.geofabrik.de/north-america/us/michigan-latest.osm.pbf"),
+    ("Kanada",                       "Canada",                        "https://download.geofabrik.de/north-america/canada-latest.osm.pbf"),
+    ("Kanada · British Columbia",    "Canada · British Columbia",     "https://download.geofabrik.de/north-america/canada/british-columbia-latest.osm.pbf"),
+    ("Kanada · Ontario",             "Canada · Ontario",              "https://download.geofabrik.de/north-america/canada/ontario-latest.osm.pbf"),
+    # ── Karibik / Caribbean ──────────────────────────────────────────────────
+    ("Karibik",                      "Caribbean",                     "https://download.geofabrik.de/central-america-latest.osm.pbf"),
+    # ── Australien & Pazifik / Australia & Pacific ───────────────────────────
+    ("Australien",                   "Australia",                     "https://download.geofabrik.de/australia-oceania/australia-latest.osm.pbf"),
+    ("Neuseeland",                   "New Zealand",                   "https://download.geofabrik.de/australia-oceania/new-zealand-latest.osm.pbf"),
 ]
 
 
@@ -139,35 +342,83 @@ def pbf_to_mbtiles_name(url: str) -> str:
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("BoatOS mbtiles Creator")
         self.resizable(True, True)
-        self.minsize(660, 520)
+        self.minsize(660, 480)
 
         self._cancel_event = threading.Event()
         self._running = False
         self._java_exe: str = "java"
+        self._region_idx: int = 0
+
+        cfg = _load_config()
+        self._lang = cfg.get("lang", "de")
 
         self._build_ui()
+        self.title(self.t('title'))
 
-    # ── Status detection ──────────────────────────────────────────────
+    # ── i18n ──────────────────────────────────────────────────────────────────
+
+    def t(self, key: str, **kwargs) -> str:
+        s = TRANSLATIONS.get(self._lang, TRANSLATIONS['de']).get(key, key)
+        return s.format(**kwargs) if kwargs else s
+
+    def _toggle_lang(self):
+        self._lang = 'en' if self._lang == 'de' else 'de'
+        cfg = _load_config()
+        cfg['lang'] = self._lang
+        _save_config(cfg)
+        self._update_ui_texts()
+
+    def _update_ui_texts(self):
+        self.title(self.t('title'))
+        self._lbl_region.configure(text=self.t('lbl_region'))
+        self._lbl_pi.configure(text=self.t('lbl_pi'))
+        self._start_btn.configure(text=self.t('btn_start_upload'))
+        self._save_btn.configure(text=self.t('btn_save'))
+        self._cancel_btn.configure(text=self.t('btn_cancel'))
+        self._log_frame.configure(text=self.t('lbl_log'))
+        self._lang_btn.configure(text=self.t('btn_lang'))
+        col = 0 if self._lang == 'de' else 1
+        names = [r[col] for r in REGIONS]
+        self._region_combo.configure(values=names)
+        self._region_combo.current(self._region_idx)
+
+    # ── Cache validation ──────────────────────────────────────────────────────
+
+    def _is_valid_pbf(self, path: Path) -> bool:
+        try:
+            return path.stat().st_size > 10_000
+        except Exception:
+            return False
+
+    def _is_valid_mbtiles(self, path: Path) -> bool:
+        try:
+            if path.stat().st_size < 4096:
+                return False
+            con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5)
+            try:
+                tables = {r[0] for r in con.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()}
+                return "metadata" in tables and "tiles" in tables
+            finally:
+                con.close()
+        except Exception:
+            return False
+
+    # ── Java detection ────────────────────────────────────────────────────────
 
     def _find_java_exe(self) -> str | None:
-        """Return path to java.exe, checking PATH, registry, and common install dirs."""
-        import shutil as _shutil
-
-        # 1. PATH (works when launched from terminal)
-        found = _shutil.which("java")
+        found = shutil.which("java")
         if found:
             return found
 
-        # 2. JAVA_HOME environment variable
         java_home = os.environ.get("JAVA_HOME", "")
         if java_home:
             candidate = Path(java_home) / "bin" / "java.exe"
             if candidate.exists():
                 return str(candidate)
 
-        # 3. Windows registry — most reliable for Oracle/OpenJDK installs
         try:
             import winreg
             for reg_path in [
@@ -188,12 +439,10 @@ class App(tk.Tk):
         except Exception:
             pass
 
-        # 4. Oracle javapath shortcut directory
         oracle = Path("C:/Program Files/Common Files/Oracle/Java/javapath/java.exe")
         if oracle.exists():
             return str(oracle)
 
-        # 5. Common install directories — newest version first
         for root in [
             Path("C:/Program Files/Java"),
             Path("C:/Program Files/Eclipse Adoptium"),
@@ -214,7 +463,6 @@ class App(tk.Tk):
         return None
 
     def _java_version(self) -> tuple[str | None, str | None]:
-        """Returns (version_string, java_exe_path) or (None, None)."""
         exe = self._find_java_exe()
         if not exe:
             return None, None
@@ -225,7 +473,7 @@ class App(tk.Tk):
             )
             out = r.stderr or r.stdout
             m = re.search(r'version "([^"]+)"', out)
-            version = m.group(1) if m else "gefunden"
+            version = m.group(1) if m else "found"
             return version, exe
         except Exception:
             return None, None
@@ -233,29 +481,11 @@ class App(tk.Tk):
     def _java_major(self, version_str: str) -> int:
         parts = version_str.split(".")
         major = int(parts[0]) if parts[0].isdigit() else 0
-        # old-style: "1.8.0" → Java 8
         if major == 1 and len(parts) > 1 and parts[1].isdigit():
             major = int(parts[1])
         return major
 
-    # ── Planetiler download ───────────────────────────────────────────
-
-    def _download_planetiler_btn(self):
-        self._dl_pt_btn.configure(state="disabled")
-        threading.Thread(
-            target=self._download_planetiler_standalone_thread, daemon=True
-        ).start()
-
-    def _download_planetiler_standalone_thread(self):
-        try:
-            self._log_line("Lade planetiler.jar herunter...")
-            if self._do_download_planetiler():
-                self._log_line("planetiler.jar bereit.")
-        except Exception as e:
-            self._log_line(f"[Fehler] {e}")
-        finally:
-            self.after(0, lambda: self._dl_pt_btn.configure(state="normal"))
-            self.after(2000, lambda: self._set_progress(0, ""))
+    # ── Planetiler download ───────────────────────────────────────────────────
 
     def _do_download_planetiler(self) -> bool:
         rel = requests.get(
@@ -268,12 +498,12 @@ class App(tk.Tk):
             None,
         )
         if not asset:
-            self._log_line("[Fehler] planetiler.jar nicht im Release gefunden.")
+            self._log_line(self.t('pt_no_asset'))
             return False
 
         url = asset["browser_download_url"]
         size_mb = asset["size"] / 1e6
-        self._log_line(f"  Version: {tag} ({size_mb:.0f} MB)")
+        self._log_line(self.t('pt_version', tag=tag, mb=size_mb))
 
         tmp = WORK_DIR / "planetiler.jar.tmp"
         with requests.get(url, stream=True, timeout=600) as resp:
@@ -292,10 +522,10 @@ class App(tk.Tk):
                         )
 
         tmp.replace(PLANETILER_JAR)
-        self._set_progress(100, "planetiler.jar bereit.")
+        self._set_progress(100, self.t('pt_ready'))
         return True
 
-    # ── UI ────────────────────────────────────────────────────────────
+    # ── UI ────────────────────────────────────────────────────────────────────
 
     def _build_ui(self):
         pad = {"padx": 10, "pady": 4}
@@ -304,36 +534,32 @@ class App(tk.Tk):
         top.pack(fill="x", **pad)
         top.columnconfigure(1, weight=1)
 
-        # Planetiler pre-download button
-        ttk.Label(top, text="Planetiler:").grid(row=0, column=0, sticky="w")
-        ttk.Label(top, text="wird automatisch heruntergeladen (einmalig, ~93 MB)").grid(
-            row=0, column=1, columnspan=2, sticky="w", padx=(5, 0)
+        # Language toggle (top right)
+        self._lang_btn = ttk.Button(
+            top, text=self.t('btn_lang'), width=4, command=self._toggle_lang
         )
-        self._dl_pt_btn = ttk.Button(
-            top, text="⬇ Jetzt herunterladen", command=self._download_planetiler_btn
-        )
-        self._dl_pt_btn.grid(row=0, column=3, padx=(4, 0))
+        self._lang_btn.grid(row=0, column=3, rowspan=2, padx=(8, 0), sticky="ne")
 
         # Region
-        ttk.Label(top, text="Region:").grid(row=1, column=0, sticky="w", pady=(10, 0))
+        self._lbl_region = ttk.Label(top, text=self.t('lbl_region'))
+        self._lbl_region.grid(row=0, column=0, sticky="w")
         self._region_var = tk.StringVar()
-        region_names = [r[0] for r in REGIONS]
+        col = 0 if self._lang == 'de' else 1
+        region_names = [r[col] for r in REGIONS]
         self._region_combo = ttk.Combobox(
             top, textvariable=self._region_var, values=region_names,
-            state="readonly", width=34,
+            state="readonly", width=36,
         )
         self._region_combo.current(0)
-        self._region_combo.grid(
-            row=1, column=1, columnspan=2, sticky="w", padx=(5, 0), pady=(10, 0)
-        )
+        self._region_combo.grid(row=0, column=1, columnspan=2, sticky="w", padx=(5, 0))
+        self._region_combo.bind("<<ComboboxSelected>>", self._on_region_select)
 
         # Pi address
-        ttk.Label(top, text="Pi-Adresse:").grid(row=2, column=0, sticky="w", pady=(4, 0))
+        self._lbl_pi = ttk.Label(top, text=self.t('lbl_pi'))
+        self._lbl_pi.grid(row=1, column=0, sticky="w", pady=(6, 0))
         self._pi_var = tk.StringVar(value=_load_config().get("pi_address", "boatos.local"))
-        self._pi_entry = ttk.Entry(top, textvariable=self._pi_var, width=34)
-        self._pi_entry.grid(
-            row=2, column=1, columnspan=2, sticky="w", padx=(5, 0), pady=(4, 0)
-        )
+        self._pi_entry = ttk.Entry(top, textvariable=self._pi_var, width=36)
+        self._pi_entry.grid(row=1, column=1, columnspan=2, sticky="w", padx=(5, 0), pady=(6, 0))
         self._pi_var.trace_add("write", lambda *_: self._save_pi_address())
 
         # Buttons
@@ -341,17 +567,17 @@ class App(tk.Tk):
         btn_frame.pack(fill="x", **pad)
 
         self._start_btn = ttk.Button(
-            btn_frame, text="Start (Upload)", command=self._on_start_upload
+            btn_frame, text=self.t('btn_start_upload'), command=self._on_start_upload
         )
         self._start_btn.pack(side="left", padx=(0, 5))
 
         self._save_btn = ttk.Button(
-            btn_frame, text="In Ordner speichern", command=self._on_start_save
+            btn_frame, text=self.t('btn_save'), command=self._on_start_save
         )
         self._save_btn.pack(side="left", padx=(0, 5))
 
         self._cancel_btn = ttk.Button(
-            btn_frame, text="Abbrechen", command=self._on_cancel, state="disabled"
+            btn_frame, text=self.t('btn_cancel'), command=self._on_cancel, state="disabled"
         )
         self._cancel_btn.pack(side="left")
 
@@ -368,23 +594,26 @@ class App(tk.Tk):
         self._progress.pack(fill="x")
 
         # Log
-        log_frame = ttk.LabelFrame(self, text="Log")
-        log_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        self._log_frame = ttk.LabelFrame(self, text=self.t('lbl_log'))
+        self._log_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
         self._log = tk.Text(
-            log_frame, state="disabled", wrap="word", font=("Consolas", 9)
+            self._log_frame, state="disabled", wrap="word", font=("Consolas", 9)
         )
-        scrollbar = ttk.Scrollbar(log_frame, command=self._log.yview)
+        scrollbar = ttk.Scrollbar(self._log_frame, command=self._log.yview)
         self._log.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
         self._log.pack(fill="both", expand=True)
+
+    def _on_region_select(self, _event=None):
+        self._region_idx = self._region_combo.current()
 
     def _save_pi_address(self):
         cfg = _load_config()
         cfg["pi_address"] = self._pi_var.get()
         _save_config(cfg)
 
-    # ── Helpers ───────────────────────────────────────────────────────
+    # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _log_line(self, text: str):
         def _do():
@@ -412,17 +641,17 @@ class App(tk.Tk):
             self._pi_entry.configure(state="disabled" if running else "normal")
         self.after(0, _do)
 
-    # ── Pipeline ──────────────────────────────────────────────────────
+    # ── Pipeline ──────────────────────────────────────────────────────────────
 
     def _on_cancel(self):
         self._cancel_event.set()
-        self._log_line("[Abbrechen angefordert...]")
+        self._log_line(self.t('cancel_req'))
 
     def _on_start_upload(self):
         self._run_pipeline(save_folder=None)
 
     def _on_start_save(self):
-        folder = filedialog.askdirectory(title="Zielordner wählen")
+        folder = filedialog.askdirectory(title=self.t('folder_dialog'))
         if not folder:
             return
         self._run_pipeline(save_folder=Path(folder))
@@ -433,8 +662,9 @@ class App(tk.Tk):
         self._running = True
         self._cancel_event.clear()
 
-        region_name = self._region_var.get()
-        url = next(u for n, u in REGIONS if n == region_name)
+        idx = self._region_idx
+        de_name, en_name, url = REGIONS[idx]
+        region_name = en_name if self._lang == 'en' else de_name
         pi_address = self._pi_var.get().strip()
         mbtiles_name = pbf_to_mbtiles_name(url)
 
@@ -451,9 +681,9 @@ class App(tk.Tk):
 
     def _pipeline_thread(self, region_name, url, mbtiles_name, pi_address, save_folder):
         try:
-            self._log_line("=== BoatOS mbtiles Creator ===")
-            self._log_line(f"Region: {region_name}")
-            self._log_line(f"Ausgabe: {mbtiles_name}")
+            self._log_line(self.t('header'))
+            self._log_line(self.t('lbl_region_log', name=region_name))
+            self._log_line(self.t('lbl_output_log', name=mbtiles_name))
             self._log_line("")
 
             if not self._step_check_java():
@@ -478,61 +708,76 @@ class App(tk.Tk):
             if self._cancel_event.is_set():
                 return
 
+            # Seamark extraction (non-fatal — base map upload proceeds regardless)
+            seamarks_stem = Path(mbtiles_name).stem + "-seamarks"
+            seamarks_path = TMP_DIR / (seamarks_stem + ".mbtiles")
+            seamarks_ok = self._step_convert_seamarks(pbf_path, seamarks_path)
+            if self._cancel_event.is_set():
+                return
+
             if save_folder:
                 self._step_save(mbtiles_path, save_folder, mbtiles_name)
+                if seamarks_ok:
+                    self._step_save(seamarks_path, save_folder,
+                                    seamarks_stem + ".mbtiles", step_key='step_sm_save')
             else:
                 self._step_upload(mbtiles_path, pi_address, mbtiles_name)
+                if seamarks_ok:
+                    self._step_upload(seamarks_path, pi_address,
+                                      seamarks_stem + ".mbtiles", step_key='step_sm_upload')
 
         except Exception as e:
-            self._log_line(f"\n[Fehler] {e}")
+            self._log_line(self.t('error', e=e))
         finally:
             self._running = False
             self._set_buttons(running=False)
             self._set_progress(0, "")
 
     def _step_check_java(self) -> bool:
-        self._log_line("[1/4] Prüfe Java...")
+        self._log_line(self.t('step1'))
         jv, java_exe = self._java_version()
         if not jv:
-            self._log_line("[Fehler] Java nicht gefunden.")
-            self._log_line("  Bitte Java 21 installieren: https://www.java.com/de/download/")
+            self._log_line(self.t('java_not_found'))
+            self._log_line(self.t('java_hint'))
             self.after(0, lambda: messagebox.showerror(
-                "Java fehlt",
-                "Java wurde nicht gefunden.\n\n"
-                "Bitte installiere Java 21 von:\nhttps://www.java.com/de/download/\n\n"
-                "Danach BoatOS mbtiles Creator neu starten.",
+                self.t('java_err_title'),
+                self.t('java_err_msg'),
             ))
             return False
         self._java_exe = java_exe
         self._log_line(f"  {java_exe}")
         major = self._java_major(jv)
         if major < 21:
-            self._log_line(
-                f"  Warnung: Java {jv} — Java 21 empfohlen. Versuche trotzdem..."
-            )
+            self._log_line(self.t('java_warn', ver=jv))
         else:
-            self._log_line(f"  Java {jv} OK.")
+            self._log_line(self.t('java_ok', ver=jv))
         return True
 
     def _step_check_planetiler(self) -> bool:
-        self._log_line("[2/4] Prüfe planetiler.jar...")
+        self._log_line(self.t('step2'))
         if PLANETILER_JAR.exists():
             size_mb = PLANETILER_JAR.stat().st_size / 1e6
-            self._log_line(f"  planetiler.jar vorhanden ({size_mb:.0f} MB).")
+            self._log_line(self.t('pt_found', mb=size_mb))
             return True
 
-        self._log_line("  Nicht gefunden — lade herunter...")
+        self._log_line(self.t('pt_downloading'))
         try:
-            ok = self._do_download_planetiler()
-            return ok
+            return self._do_download_planetiler()
         except Exception as e:
-            self._log_line(f"  [Fehler] {e}")
+            self._log_line(self.t('error_indent', e=e))
             return False
 
     def _step_download_pbf(self, url: str, pbf_path: Path) -> bool:
-        self._log_line("[3/4] Lade OSM-Kartendaten herunter...")
-        self._log_line(f"  Quelle: {url}")
+        self._log_line(self.t('step3'))
+        self._log_line(self.t('osm_source', url=url))
         TMP_DIR.mkdir(parents=True, exist_ok=True)
+
+        if pbf_path.exists():
+            age = datetime.now() - datetime.fromtimestamp(pbf_path.stat().st_mtime)
+            if age < timedelta(weeks=2) and self._is_valid_pbf(pbf_path):
+                self._log_line(self.t('osm_cached', days=age.days))
+                return True
+            self._log_line(self.t('osm_invalid'))
 
         try:
             with requests.get(url, stream=True, timeout=60) as resp:
@@ -542,35 +787,41 @@ class App(tk.Tk):
                 with open(pbf_path, "wb") as f:
                     for chunk in resp.iter_content(chunk_size=65536):
                         if self._cancel_event.is_set():
-                            self._log_line("  [Abgebrochen]")
+                            self._log_line(self.t('cancelled'))
                             return False
                         f.write(chunk)
                         downloaded += len(chunk)
                         if total:
-                            pct = downloaded / total * 100
-                            label = f"OSM-Download: {downloaded/1e6:.1f} / {total/1e6:.1f} MB"
+                            label = self.t('osm_progress', dl=downloaded/1e6, total=total/1e6)
+                            self._set_progress(downloaded / total * 100, label)
                         else:
-                            pct = 0
-                            label = f"OSM-Download: {downloaded/1e6:.1f} MB"
-                        self._set_progress(pct, label)
+                            label = self.t('osm_progress_unk', dl=downloaded/1e6)
+                            self._set_progress(0, label)
 
             size_mb = pbf_path.stat().st_size / 1e6
-            self._log_line(f"  Download abgeschlossen ({size_mb:.1f} MB).")
+            self._log_line(self.t('osm_done', mb=size_mb))
             return True
 
         except Exception as e:
-            self._log_line(f"  [Fehler] {e}")
+            self._log_line(self.t('error_indent', e=e))
             return False
 
     def _step_convert(self, pbf_path: Path, mbtiles_path: Path) -> bool:
-        self._log_line("[4/4] Konvertiere mit planetiler...")
-        self._set_progress(0, "Konvertierung läuft...")
+        self._log_line(self.t('step4'))
 
         if mbtiles_path.exists():
+            age = datetime.now() - datetime.fromtimestamp(mbtiles_path.stat().st_mtime)
+            if age < timedelta(weeks=2) and self._is_valid_mbtiles(mbtiles_path):
+                self._log_line(self.t('conv_cached', days=age.days))
+                self._set_progress(100, self.t('done'))
+                return True
+            self._log_line(self.t('conv_invalid'))
             mbtiles_path.unlink()
 
+        self._set_progress(0, self.t('conv_running'))
+
         xmx = _available_ram_gb()
-        self._log_line(f"  RAM für Java: {xmx} GB")
+        self._log_line(self.t('conv_ram', xmx=xmx))
 
         cmd = [
             self._java_exe,
@@ -598,93 +849,176 @@ class App(tk.Tk):
             for line in proc.stdout:
                 if self._cancel_event.is_set():
                     proc.kill()
-                    self._log_line("  [Abgebrochen]")
+                    self._log_line(self.t('cancelled'))
                     return False
                 line = line.rstrip()
                 if not line:
                     continue
                 self._log_line("  " + line)
-                # Parse percentage from planetiler progress lines
                 m = re.search(r'\b(\d{1,3})%', line)
                 if m:
                     pct = float(m.group(1))
-                    self._set_progress(pct, f"Konvertierung: {pct:.0f}%")
+                    self._set_progress(pct, self.t('conv_progress', pct=pct))
 
             proc.wait()
             if proc.returncode != 0:
-                self._log_line(f"  [Fehler] planetiler Exitcode: {proc.returncode}")
+                self._log_line(self.t('conv_err_exit', code=proc.returncode))
                 return False
 
             if not mbtiles_path.exists():
-                self._log_line("  [Fehler] Ausgabedatei nicht erzeugt.")
+                self._log_line(self.t('conv_err_nofile'))
                 return False
 
             size_mb = mbtiles_path.stat().st_size / 1e6
-            self._log_line(f"  Konvertierung abgeschlossen ({size_mb:.1f} MB).")
-            self._set_progress(100, "Fertig.")
+            self._log_line(self.t('conv_done', mb=size_mb))
+            self._set_progress(100, self.t('done'))
             return True
 
         except Exception as e:
-            self._log_line(f"  [Fehler] {e}")
+            self._log_line(self.t('error_indent', e=e))
             return False
 
-    def _step_upload(self, mbtiles_path: Path, pi_address: str, mbtiles_name: str) -> bool:
-        self._log_line("[5/5] Lade auf Pi hoch...")
+    def _step_convert_seamarks(self, pbf_path: Path, seamarks_path: Path) -> bool:
+        self._log_line(self.t('step_sm_convert'))
+
+        if seamarks_path.exists():
+            age = datetime.now() - datetime.fromtimestamp(seamarks_path.stat().st_mtime)
+            if age < timedelta(weeks=2) and self._is_valid_mbtiles(seamarks_path):
+                self._log_line(self.t('sm_cached', days=age.days))
+                return True
+            seamarks_path.unlink()
+
+        schema_path = TMP_DIR / "seamark_schema.yaml"
+        schema_path.write_text(SEAMARK_SCHEMA_YAML, encoding="utf-8")
+
+        xmx = max(1, _available_ram_gb() // 2)
+        cmd = [
+            self._java_exe,
+            f"-Xmx{xmx}g",
+            "-jar", str(PLANETILER_JAR),
+            f"--schema={schema_path}",
+            f"--osm-path={pbf_path}",
+            f"--output={seamarks_path}",
+            f"--data-dir={WORK_DIR / 'data'}",
+        ]
+        self._log_line(f"  java -Xmx{xmx}g -jar planetiler.jar --schema=seamark_schema.yaml ...")
+        self._set_progress(0, self.t('sm_running'))
+
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                cwd=str(WORK_DIR),
+            )
+            for line in proc.stdout:
+                if self._cancel_event.is_set():
+                    proc.kill()
+                    return False
+                line = line.rstrip()
+                if not line:
+                    continue
+                self._log_line("  " + line)
+                m = re.search(r'\b(\d{1,3})%', line)
+                if m:
+                    self._set_progress(float(m.group(1)), self.t('sm_running'))
+
+            proc.wait()
+            if proc.returncode != 0 or not seamarks_path.exists():
+                self._log_line(self.t('sm_fail'))
+                return False
+
+            size_mb = seamarks_path.stat().st_size / 1e6
+            self._log_line(self.t('sm_done', mb=size_mb))
+            self._set_progress(100, self.t('done'))
+            return True
+        except Exception as e:
+            self._log_line(f"  {e}")
+            self._log_line(self.t('sm_fail'))
+            return False
+
+    def _step_upload(self, mbtiles_path: Path, pi_address: str, mbtiles_name: str,
+                     step_key: str = 'step5_upload') -> bool:
+        self._log_line(self.t(step_key))
         # Port 8000 = direkt ans Backend, umgeht nginx (kein client_max_body_size-Limit)
-        url = f"http://{pi_address}:8000/api/map/regions/upload-raw"
-        self._log_line(f"  POST {url}")
+        url = f"http://{pi_address}:8000/api/map/regions/upload-raw?overwrite=true"
+        self._log_line(self.t('upload_post', url=url))
 
         try:
             total = mbtiles_path.stat().st_size
+            cancel = self._cancel_event
+            uploaded_ref = [0]
 
-            def _gen():
-                uploaded = 0
-                with open(mbtiles_path, "rb") as f:
-                    while True:
-                        if self._cancel_event.is_set():
-                            break
-                        chunk = f.read(65536)
-                        if not chunk:
-                            break
-                        uploaded += len(chunk)
-                        pct = uploaded / total * 100
-                        label = f"Upload: {uploaded/1e6:.1f} / {total/1e6:.1f} MB"
-                        self._set_progress(pct, label)
-                        yield chunk
+            class _Reader:
+                def __init__(self):
+                    self._f = open(mbtiles_path, "rb")
+                def read(self, n=-1):
+                    if cancel.is_set():
+                        return b""
+                    data = self._f.read(n)
+                    uploaded_ref[0] += len(data)
+                    return data
+                def __len__(self):
+                    return total
+                def close(self):
+                    self._f.close()
 
-            with requests.post(
-                url,
-                data=_gen(),
-                headers={
-                    "Content-Type": "application/octet-stream",
-                    "X-Filename": mbtiles_name,
-                    "Content-Length": str(total),
-                },
-                timeout=600,
-                stream=True,
-            ) as resp:
-                if self._cancel_event.is_set():
-                    self._log_line("  [Abgebrochen]")
-                    return False
-                resp.raise_for_status()
-                self._log_line(f"  Upload erfolgreich (HTTP {resp.status_code}).")
-                return True
+            reader = _Reader()
+
+            # Background thread polls progress independently of the read loop
+            done_evt = threading.Event()
+            def _poll_progress():
+                while not done_evt.wait(0.5):
+                    ul = uploaded_ref[0]
+                    if ul:
+                        self._set_progress(
+                            ul / total * 100,
+                            self.t('upload_progress', ul=ul/1e6, total=total/1e6),
+                        )
+            threading.Thread(target=_poll_progress, daemon=True).start()
+
+            try:
+                resp = requests.post(
+                    url,
+                    data=reader,
+                    headers={
+                        "Content-Type": "application/octet-stream",
+                        "X-Filename": mbtiles_name,
+                        "Content-Length": str(total),
+                    },
+                    timeout=600,
+                )
+            finally:
+                done_evt.set()
+                reader.close()
+
+            if cancel.is_set():
+                self._log_line(self.t('cancelled'))
+                return False
+
+            resp.raise_for_status()
+            self._log_line(self.t('upload_ok', status=resp.status_code))
+            return True
 
         except Exception as e:
-            self._log_line(f"  [Fehler] {e}")
+            self._log_line(self.t('error_indent', e=e))
             return False
 
-    def _step_save(self, mbtiles_path: Path, save_folder: Path, mbtiles_name: str) -> bool:
-        self._log_line("[5/5] Kopiere in Zielordner...")
+    def _step_save(self, mbtiles_path: Path, save_folder: Path, mbtiles_name: str,
+                   step_key: str = 'step5_save') -> bool:
+        self._log_line(self.t(step_key))
         dest = save_folder / mbtiles_name
-        self._set_progress(50, f"Kopiere nach {dest}...")
+        self._set_progress(50, self.t('save_copying', dest=dest))
         try:
             shutil.copy2(mbtiles_path, dest)
-            self._set_progress(100, "Fertig.")
-            self._log_line(f"  Gespeichert: {dest}")
+            self._set_progress(100, self.t('done'))
+            self._log_line(self.t('save_done', dest=dest))
             return True
         except Exception as e:
-            self._log_line(f"  [Fehler] {e}")
+            self._log_line(self.t('error_indent', e=e))
             return False
 
 

@@ -1530,7 +1530,20 @@ function _renderMapRegions(container) {
         container.innerHTML = `<div style="color:var(--text-dim);font-size:13px;padding:8px 0;">${t('mapRegionsNone')}</div>`;
         return;
     }
-    container.innerHTML = _mapRegions.installed.map(r => `
+    container.innerHTML = _mapRegions.installed.map(r => {
+        if (r.is_seamark) {
+            return `
+        <div class="setting-item" style="margin-bottom:6px;opacity:0.7;padding-left:16px;">
+            <div>
+                <span style="font-size:12px;">⚓ ${t('seamarksLabel')} (${_regionDisplayName(r.base_region)})</span>
+                <span style="font-size:11px;color:var(--text-dim);margin-left:6px;">${r.size_mb} MB</span>
+            </div>
+            <span style="font-size:11px;color:${r.active ? 'var(--accent)' : 'var(--text-dim)'};">
+                ${r.active ? t('seamarksActive') : t('seamarksInactive')}
+            </span>
+        </div>`;
+        }
+        return `
         <div class="setting-item" style="margin-bottom:6px;">
             <div>
                 <span style="font-size:13px;">${_regionDisplayName(r.id)}</span>
@@ -1539,7 +1552,8 @@ function _renderMapRegions(container) {
             <div class="toggle${r.active ? ' active' : ''}"
                  id="map-region-toggle-${r.id}"
                  onclick="BoatOS.ui.toggleMapRegion('${r.id}', this)"></div>
-        </div>`).join('');
+        </div>`;
+    }).join('');
 }
 
 export function onMbtilesFileSelected(input) {
@@ -1651,21 +1665,34 @@ function _uploadMbtilesOverwrite(file) {
 
 export async function toggleMapRegion(regionId, toggleEl) {
     toggleEl.classList.toggle('active');
-    const isActive = toggleEl.classList.contains('active');
-    if (isActive) {
-        if (!_mapRegions.active.includes(regionId)) _mapRegions.active.push(regionId);
-    } else {
-        _mapRegions.active = _mapRegions.active.filter(r => r !== regionId);
-        if (!_mapRegions.active.length) {
-            // Keep at least one active to avoid blank map
-            _mapRegions.active = [regionId];
-            toggleEl.classList.add('active');
-        }
+
+    // Build new active list from DOM — avoids stale _mapRegions.active state
+    const newActive = Array.from(
+        document.querySelectorAll('[id^="map-region-toggle-"]')
+    )
+        .filter(el => el.classList.contains('active'))
+        .map(el => el.id.replace('map-region-toggle-', ''));
+
+    // Must keep at least one active
+    if (!newActive.length) {
+        toggleEl.classList.add('active');
+        return;
     }
+
+    _mapRegions.active = newActive;
+
+    // Keep localStorage in sync so the general save button doesn't overwrite this
+    try {
+        const stored = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
+        stored.map = stored.map || {};
+        stored.map.activeRegions = newActive;
+        localStorage.setItem('boatos_settings', JSON.stringify(stored));
+    } catch (_) {}
+
     await fetch('/api/map/regions/active', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ regions: _mapRegions.active })
+        body: JSON.stringify({ regions: newActive })
     });
 }
 
