@@ -279,7 +279,7 @@ export async function initMap(options = {}) {
         } else {
             _showTileserverBanner();
         }
-        addOpenSeaMapOverlays();
+        addOpenSeaMapOverlays(); // async — intentionally not awaited here
 
         // Satelliten-Source und -Layer vorinitialisieren (standardmaessig versteckt)
         map.addSource('satellite', {
@@ -504,25 +504,128 @@ function addLabelsLayer() {
 }
 
 /**
- * Fuegt OpenSeaMap Overlays hinzu (Seezeichen, Betonnung, etc.)
+ * Fuegt OpenSeaMap Overlays hinzu — lokal (Vektor) wenn verfuegbar, sonst online (Raster)
  */
-function addOpenSeaMapOverlays() {
+async function addOpenSeaMapOverlays() {
     try {
-        // Seezeichen-Layer (Betonnung, Leuchtfeuer, etc.)
-        map.addSource('seamark', {
+        // Online-Fallback immer als Source registrieren
+        map.addSource('seamark-online', {
             type: 'raster',
             tiles: ['https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png'],
             tileSize: 256
         });
-        map.addLayer({
-            id: 'seamark-overlay',
-            type: 'raster',
-            source: 'seamark',
-            layout: { visibility: 'visible' },
-            paint: { 'raster-opacity': 1.0 }
-        });
 
-        // Binnenschifffahrt-Layer
+        // Pruefen ob lokale Seamark-MBTiles verfuegbar
+        let localAvailable = false;
+        try {
+            const r = await fetch('/api/map/seamarks/status',
+                { signal: AbortSignal.timeout(2000) });
+            if (r.ok) localAvailable = (await r.json()).available;
+        } catch (_) {}
+
+        if (localAvailable) {
+            // Lokale Vektor-Seezeichen
+            map.addSource('seamark-local', {
+                type: 'vector',
+                tiles: [`${location.protocol}//${location.host}/api/map/seamarks/{z}/{x}/{y}.pbf`],
+                minzoom: 8,
+                maxzoom: 14,
+                attribution: '© OpenSeaMap contributors'
+            });
+
+            // Kreis-Layer: Farbe nach IALA-Konvention aus "colour"-Attribut
+            map.addLayer({
+                id: 'seamark-local-circle',
+                type: 'circle',
+                source: 'seamark-local',
+                'source-layer': 'seamark',
+                minzoom: 8,
+                layout: { visibility: 'visible' },
+                paint: {
+                    'circle-radius': ['interpolate', ['linear'], ['zoom'],
+                        8, 3, 12, 5, 15, 7],
+                    'circle-color': ['match', ['get', 'colour'],
+                        'red',              '#CC2200',
+                        'green',            '#006622',
+                        'yellow',           '#FFD700',
+                        'black',            '#1a1a1a',
+                        'white',            '#E8E8E8',
+                        'red;white',        '#CC3355',
+                        'white;red',        '#CC3355',
+                        'green;white',      '#228844',
+                        'white;green',      '#228844',
+                        'black;red;black',  '#660022',
+                        'black;yellow',     '#886600',
+                        'yellow;black',     '#886600',
+                        'black;yellow;black','#886600',
+                        'yellow;black;yellow','#886600',
+                        '#888888'
+                    ],
+                    'circle-stroke-width': 1.5,
+                    'circle-stroke-color': ['match', ['get', 'colour'],
+                        ['literal', ['white', 'yellow', 'red;white', 'white;red',
+                                     'green;white', 'white;green']], '#333333',
+                        '#000000'
+                    ],
+                    'circle-opacity': 0.9
+                }
+            });
+
+            // Label-Layer: Name und/oder Leuchtfeuerkennung
+            map.addLayer({
+                id: 'seamark-local-label',
+                type: 'symbol',
+                source: 'seamark-local',
+                'source-layer': 'seamark',
+                minzoom: 11,
+                layout: {
+                    visibility: 'visible',
+                    'text-field': ['coalesce',
+                        ['case',
+                            ['all', ['has', 'name'], ['has', 'light_char']],
+                            ['concat', ['get', 'name'], '\n', ['get', 'light_char']],
+                            ['has', 'name'], ['get', 'name'],
+                            ['has', 'light_char'], ['get', 'light_char'],
+                            ''
+                        ],
+                        ''
+                    ],
+                    'text-size': 10,
+                    'text-offset': [0, 1.2],
+                    'text-anchor': 'top',
+                    'text-optional': true,
+                    'text-max-width': 8
+                },
+                paint: {
+                    'text-color': '#000000',
+                    'text-halo-color': '#ffffff',
+                    'text-halo-width': 1.5
+                }
+            });
+
+            // Online-Raster versteckt halten (Fallback bleibt registriert)
+            map.addLayer({
+                id: 'seamark-overlay',
+                type: 'raster',
+                source: 'seamark-online',
+                layout: { visibility: 'none' },
+                paint: { 'raster-opacity': 1.0 }
+            });
+
+            console.log('Lokale Vektor-Seezeichen aktiv');
+        } else {
+            // Kein lokales MBTiles — online Raster-Overlay
+            map.addLayer({
+                id: 'seamark-overlay',
+                type: 'raster',
+                source: 'seamark-online',
+                layout: { visibility: 'visible' },
+                paint: { 'raster-opacity': 1.0 }
+            });
+            console.log('OpenSeaMap Online-Overlay aktiv (kein lokales MBTiles)');
+        }
+
+        // Binnenschifffahrt-Layer (immer online)
         map.addSource('inland', {
             type: 'raster',
             tiles: ['https://tiles.openseamap.org/inland/{z}/{x}/{y}.png'],
@@ -536,7 +639,6 @@ function addOpenSeaMapOverlays() {
             paint: { 'raster-opacity': 1.0 }
         });
 
-        console.log('OpenSeaMap Overlays hinzugefuegt');
     } catch (e) {
         console.warn('OpenSeaMap Overlays konnten nicht hinzugefuegt werden:', e);
     }
@@ -1183,12 +1285,19 @@ function showVectorLayers() {
 }
 
 /**
- * Schaltet OpenSeaMap Seezeichen-Layer um
+ * Schaltet OpenSeaMap Seezeichen-Layer um (lokal und/oder online)
  * @param {boolean} visible - Sichtbarkeit
  */
 export function toggleSeamarkLayer(visible) {
     seaMarkLayerVisible = visible;
-    setLayerVisibility('seamark-overlay', visible);
+    // Lokale Vektor-Layer
+    ['seamark-local-circle', 'seamark-local-label'].forEach(id => {
+        if (map.getLayer(id)) setLayerVisibility(id, visible);
+    });
+    // Online-Raster-Fallback (nur sichtbar wenn kein lokaler Layer aktiv)
+    if (map.getLayer('seamark-overlay') && !map.getLayer('seamark-local-circle')) {
+        setLayerVisibility('seamark-overlay', visible);
+    }
     console.log(`Seezeichen-Layer: ${visible ? 'sichtbar' : 'ausgeblendet'}`);
 }
 

@@ -9,6 +9,7 @@ cat > "$SUDOERS_FILE" << 'EOF'
 boatos ALL=(ALL) NOPASSWD: /bin/systemctl restart boatos.service
 boatos ALL=(ALL) NOPASSWD: /bin/systemctl restart boatos-remote.service
 boatos ALL=(ALL) NOPASSWD: /bin/systemctl restart mosquitto
+boatos ALL=(ALL) NOPASSWD: /bin/systemctl restart tileserver
 boatos ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/mosquitto/conf.d/boatos.conf
 boatos ALL=(ALL) NOPASSWD: /sbin/reboot
 boatos ALL=(ALL) NOPASSWD: /sbin/shutdown

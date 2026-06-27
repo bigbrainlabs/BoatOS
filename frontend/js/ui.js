@@ -1530,7 +1530,20 @@ function _renderMapRegions(container) {
         container.innerHTML = `<div style="color:var(--text-dim);font-size:13px;padding:8px 0;">${t('mapRegionsNone')}</div>`;
         return;
     }
-    container.innerHTML = _mapRegions.installed.map(r => `
+    container.innerHTML = _mapRegions.installed.map(r => {
+        if (r.is_seamark) {
+            return `
+        <div class="setting-item" style="margin-bottom:6px;opacity:0.7;padding-left:16px;">
+            <div>
+                <span style="font-size:12px;">⚓ ${t('seamarksLabel')} (${_regionDisplayName(r.base_region)})</span>
+                <span style="font-size:11px;color:var(--text-dim);margin-left:6px;">${r.size_mb} MB</span>
+            </div>
+            <span style="font-size:11px;color:${r.active ? 'var(--accent)' : 'var(--text-dim)'};">
+                ${r.active ? t('seamarksActive') : t('seamarksInactive')}
+            </span>
+        </div>`;
+        }
+        return `
         <div class="setting-item" style="margin-bottom:6px;">
             <div>
                 <span style="font-size:13px;">${_regionDisplayName(r.id)}</span>
@@ -1539,7 +1552,8 @@ function _renderMapRegions(container) {
             <div class="toggle${r.active ? ' active' : ''}"
                  id="map-region-toggle-${r.id}"
                  onclick="BoatOS.ui.toggleMapRegion('${r.id}', this)"></div>
-        </div>`).join('');
+        </div>`;
+    }).join('');
 }
 
 export function onMbtilesFileSelected(input) {

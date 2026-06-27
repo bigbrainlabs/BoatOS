@@ -127,6 +127,14 @@ TRANSLATIONS = {
         'done':             'Fertig.',
         'error':            '[Fehler] {e}',
         'error_indent':     '  [Fehler] {e}',
+        # Seamarks
+        'step_sm_convert':  '[+] Extrahiere Seezeichen (offline)...',
+        'sm_running':       'Seezeichen-Konvertierung läuft...',
+        'sm_cached':        '  Seezeichen bereits vorhanden ({days}d alt) — überspringe.',
+        'sm_done':          '  Seezeichen fertig ({mb:.1f} MB).',
+        'sm_fail':          '  Seezeichen-Konvertierung fehlgeschlagen — überspringe.',
+        'step_sm_upload':   '[+] Lade Seezeichen auf Pi hoch...',
+        'step_sm_save':     '[+] Speichere Seezeichen...',
     },
     'en': {
         'title':            'BoatOS MBTiles Creator',
@@ -193,8 +201,61 @@ TRANSLATIONS = {
         'done':             'Done.',
         'error':            '[Error] {e}',
         'error_indent':     '  [Error] {e}',
+        # Seamarks
+        'step_sm_convert':  '[+] Extracting seamarks (offline)...',
+        'sm_running':       'Seamark conversion running...',
+        'sm_cached':        '  Seamarks already present ({days}d old) — skipping.',
+        'sm_done':          '  Seamarks done ({mb:.1f} MB).',
+        'sm_fail':          '  Seamark conversion failed — skipping.',
+        'step_sm_upload':   '[+] Uploading seamarks to Pi...',
+        'step_sm_save':     '[+] Saving seamarks...',
     },
 }
+
+
+# ── Planetiler YAML schema for seamark extraction ─────────────────────────────
+
+SEAMARK_SCHEMA_YAML = """\
+schema_name: BoatOS Seamarks
+schema_description: Offline seamark data for marine navigation (buoys, beacons, lights)
+attribution: "© OpenSeaMap contributors, © OpenStreetMap contributors"
+
+sources:
+  osm:
+    type: osm
+
+layers:
+  - id: seamark
+    features:
+      - source: osm
+        geometry: point
+        min_zoom: 8
+        include_when:
+          "seamark:type": __any__
+        attributes:
+          - key: type
+            tag_value: "seamark:type"
+          - key: name
+            tag_value: name
+          - key: category
+            tag_value: "seamark:category"
+          - key: colour
+            tag_value: "seamark:colour"
+          - key: colour_pattern
+            tag_value: "seamark:colour_pattern"
+          - key: shape
+            tag_value: "seamark:shape"
+          - key: topmark_shape
+            tag_value: "seamark:topmark:shape"
+          - key: topmark_colour
+            tag_value: "seamark:topmark:colour"
+          - key: light_char
+            tag_value: "seamark:light:character"
+          - key: light_colour
+            tag_value: "seamark:light:colour"
+          - key: light_period
+            tag_value: "seamark:light:period"
+"""
 
 
 # ── Regions: (de_name, en_name, url) ─────────────────────────────────────────
@@ -647,10 +708,23 @@ class App(tk.Tk):
             if self._cancel_event.is_set():
                 return
 
+            # Seamark extraction (non-fatal — base map upload proceeds regardless)
+            seamarks_stem = Path(mbtiles_name).stem + "-seamarks"
+            seamarks_path = TMP_DIR / (seamarks_stem + ".mbtiles")
+            seamarks_ok = self._step_convert_seamarks(pbf_path, seamarks_path)
+            if self._cancel_event.is_set():
+                return
+
             if save_folder:
                 self._step_save(mbtiles_path, save_folder, mbtiles_name)
+                if seamarks_ok:
+                    self._step_save(seamarks_path, save_folder,
+                                    seamarks_stem + ".mbtiles", step_key='step_sm_save')
             else:
                 self._step_upload(mbtiles_path, pi_address, mbtiles_name)
+                if seamarks_ok:
+                    self._step_upload(seamarks_path, pi_address,
+                                      seamarks_stem + ".mbtiles", step_key='step_sm_upload')
 
         except Exception as e:
             self._log_line(self.t('error', e=e))
@@ -804,8 +878,71 @@ class App(tk.Tk):
             self._log_line(self.t('error_indent', e=e))
             return False
 
-    def _step_upload(self, mbtiles_path: Path, pi_address: str, mbtiles_name: str) -> bool:
-        self._log_line(self.t('step5_upload'))
+    def _step_convert_seamarks(self, pbf_path: Path, seamarks_path: Path) -> bool:
+        self._log_line(self.t('step_sm_convert'))
+
+        if seamarks_path.exists():
+            age = datetime.now() - datetime.fromtimestamp(seamarks_path.stat().st_mtime)
+            if age < timedelta(weeks=2) and self._is_valid_mbtiles(seamarks_path):
+                self._log_line(self.t('sm_cached', days=age.days))
+                return True
+            seamarks_path.unlink()
+
+        schema_path = TMP_DIR / "seamark_schema.yaml"
+        schema_path.write_text(SEAMARK_SCHEMA_YAML, encoding="utf-8")
+
+        xmx = max(1, _available_ram_gb() // 2)
+        cmd = [
+            self._java_exe,
+            f"-Xmx{xmx}g",
+            "-jar", str(PLANETILER_JAR),
+            f"--schema={schema_path}",
+            f"--osm-path={pbf_path}",
+            f"--output={seamarks_path}",
+            f"--data-dir={WORK_DIR / 'data'}",
+        ]
+        self._log_line(f"  java -Xmx{xmx}g -jar planetiler.jar --schema=seamark_schema.yaml ...")
+        self._set_progress(0, self.t('sm_running'))
+
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                cwd=str(WORK_DIR),
+            )
+            for line in proc.stdout:
+                if self._cancel_event.is_set():
+                    proc.kill()
+                    return False
+                line = line.rstrip()
+                if not line:
+                    continue
+                self._log_line("  " + line)
+                m = re.search(r'\b(\d{1,3})%', line)
+                if m:
+                    self._set_progress(float(m.group(1)), self.t('sm_running'))
+
+            proc.wait()
+            if proc.returncode != 0 or not seamarks_path.exists():
+                self._log_line(self.t('sm_fail'))
+                return False
+
+            size_mb = seamarks_path.stat().st_size / 1e6
+            self._log_line(self.t('sm_done', mb=size_mb))
+            self._set_progress(100, self.t('done'))
+            return True
+        except Exception as e:
+            self._log_line(f"  {e}")
+            self._log_line(self.t('sm_fail'))
+            return False
+
+    def _step_upload(self, mbtiles_path: Path, pi_address: str, mbtiles_name: str,
+                     step_key: str = 'step5_upload') -> bool:
+        self._log_line(self.t(step_key))
         # Port 8000 = direkt ans Backend, umgeht nginx (kein client_max_body_size-Limit)
         url = f"http://{pi_address}:8000/api/map/regions/upload-raw?overwrite=true"
         self._log_line(self.t('upload_post', url=url))
@@ -870,8 +1007,9 @@ class App(tk.Tk):
             self._log_line(self.t('error_indent', e=e))
             return False
 
-    def _step_save(self, mbtiles_path: Path, save_folder: Path, mbtiles_name: str) -> bool:
-        self._log_line(self.t('step5_save'))
+    def _step_save(self, mbtiles_path: Path, save_folder: Path, mbtiles_name: str,
+                   step_key: str = 'step5_save') -> bool:
+        self._log_line(self.t(step_key))
         dest = save_folder / mbtiles_name
         self._set_progress(50, self.t('save_copying', dest=dest))
         try:
