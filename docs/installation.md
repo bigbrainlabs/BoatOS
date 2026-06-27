@@ -79,19 +79,11 @@ For users who want to set up a fresh Raspberry Pi OS and install BoatOS manually
 
 ### Requirements
 
-- Raspberry Pi 4 with **Raspberry Pi OS Bookworm 64-bit** (Lite is sufficient)
+- Raspberry Pi 3, 4, 5 or Zero 2W with **Raspberry Pi OS Bookworm 64-bit** (Lite is sufficient)
 - SSH access or keyboard/monitor connected to the Pi
 - Internet connection on the Pi
 
-### Step 1 — Prepare the system
-
-```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y git python3-pip python3-venv nginx nodejs npm \
-  mosquitto mosquitto-clients lightdm
-```
-
-### Step 2 — Clone the repository
+### Step 1 — Clone the repository
 
 ```bash
 cd ~
@@ -99,76 +91,80 @@ git clone https://github.com/bigbrainlabs/BoatOS.git
 cd BoatOS
 ```
 
-### Step 3 — Set up the backend
+### Step 2 — Run the install script
 
 ```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+chmod +x install.sh
+./install.sh
 ```
 
-Set up the systemd service:
+The script installs and configures everything automatically:
+
+- System packages (Python, Node.js 20, nginx, Mosquitto, GDAL, sqlite3, openssl)
+- Python backend with virtualenv + all dependencies
+- SignalK Server (GPS, via npm)
+- Martin vector tile server (offline maps, Port 8081)
+- OSRM routing engine (if pre-compiled ARM64 binaries are present)
+- Self-signed SSL certificate
+- nginx with HTTPS + API proxy
+- All systemd services (`boatos`, `signalk`, `tileserver`, `mosquitto`)
+
+> **Log out and back in** after the script finishes — the `dialout` group membership (for GPS access) only takes effect after a fresh login.
+
+### Step 3 — Set up Helm (Flutter touchscreen app)
+
+Helm runs as a Wayland kiosk via `flutter-pi`. This step is done on your **development PC**, not the Pi.
+
+**Build on your PC:**
 
 ```bash
-sudo cp scripts/boatos.service /etc/systemd/system/
-sudo systemctl enable --now boatos.service
+flutterpi_tool build --arch=arm64 --cpu=generic --release
 ```
 
-### Step 4 — Set up Deck (web frontend)
+Build output: `build/flutter-pi/aarch64-generic/`
+
+**Deploy to the Pi:**
 
 ```bash
-sudo cp scripts/nginx-boatos.conf /etc/nginx/sites-available/boatos
-sudo ln -s /etc/nginx/sites-available/boatos /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
+scp build/flutter-pi/aarch64-generic/app.so boatos@boatos.local:~/BoatOS/flutter_app/app.so
+ssh boatos@boatos.local "sudo systemctl restart lightdm"
 ```
 
-### Step 5 — Set up Helm (Flutter app)
-
-Install flutter-pi:
+For the first deployment (or after a Flutter version bump), also copy the full asset bundle:
 
 ```bash
-sudo apt install -y libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
-  libdrm-dev libgbm-dev fonts-noto-color-emoji
+scp -r build/flutter-pi/aarch64-generic/{assets,fonts,shaders,packages,AssetManifest.*,FontManifest.json,icudtl.dat} \
+  boatos@boatos.local:~/BoatOS/flutter_app/
 ```
 
-Download the pre-compiled binary or build it yourself (see [v2-flutter-pi.md](v2-flutter-pi.md)).
+> See [v2-flutter-pi.md](v2-flutter-pi.md) for how to install `flutter-pi` and `flutterpi_tool` on the Pi and your PC.
 
-Configure lightdm auto-login:
+### Step 4 — Configure GPS
+
+In SignalK, set up your GPS device:
+
+- **BU-353N5**: `/dev/ttyUSB0` @ 4800 baud
+- **GPS mouse**: `/dev/ttyACM0` @ 9600 baud
+
+Edit `~/.signalk/settings.json` or use the SignalK web UI at `http://boatos.local:3000`, then restart:
 
 ```bash
-sudo raspi-config
-# System Options → Boot / Auto Login → Desktop Autologin
+sudo systemctl restart signalk
 ```
 
-Set up the start script:
+### Step 5 — Add offline maps (optional)
+
+Copy your MBTiles files (created with the [MBTiles Creator](https://github.com/bigbrainlabs/BoatOS/releases)) into `~/BoatOS/maps/`, then start the tile server:
 
 ```bash
-cp scripts/boatos-v2.sh ~/boatos-v2.sh
-chmod +x ~/boatos-v2.sh
-# Add to ~/.config/labwc/autostart or configure the lightdm session
-```
-
-### Step 6 — Additional services
-
-**SignalK** (GPS):
-
-```bash
-sudo npm install -g signalk-server
-sudo systemctl enable --now signalk
-```
-
-**Mosquitto** (MQTT):
-
-```bash
-sudo systemctl enable --now mosquitto
+sudo systemctl start tileserver
 ```
 
 **Tileserver** (maps) and **OSRM** (routing) are required for full offline navigation — see [tileserver.md](tileserver.md) and [osrm.md](osrm.md).
 
 > **Online operation without tileserver:** The satellite image (ESRI) and nautical overlays (OpenSeaMap) load from the internet. The base map (rivers, roads, coastlines) and OSRM routing work **only locally** — without tileserver/OSRM you will see only a grey background and no routing.
 
-### Step 7 — First start
+### Step 6 — First start
 
 ```bash
 sudo systemctl restart boatos.service

@@ -42,20 +42,13 @@ Der **BoatOS MBTiles Creator** ist eine eigenständige Windows-App, die Offline-
 
 <div align="center">
 
-## 📚 Logbuch ohne Pose — Buchserie & Bauserie
+## 📚 Buchserie
 
-**BoatOS ist Teil einer vollständigen Open-Source-Bauserie zur Bootstechnik-Optimierung.**  
-Dokumentiert als lebendiges Projekt — zum Nachbauen, Verstehen und Weiterentwickeln.
-
-[![GitHub](https://img.shields.io/badge/Bauserie-logbuch--ohne--pose-181717?style=for-the-badge&logo=github)](https://github.com/bigbrainlabs/logbuch-ohne-pose)
-&nbsp;
 [![Amazon DE](https://img.shields.io/badge/Buch_🇩🇪-Amazon-FF9900?style=for-the-badge&logo=amazon)](https://www.amazon.de/dp/B0GLXGD8LB?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
 &nbsp;
 [![Amazon EN](https://img.shields.io/badge/Buch_🇬🇧-Amazon-FF9900?style=for-the-badge&logo=amazon)](https://www.amazon.de/dp/B0GMD5JH28?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
 &nbsp;
 [![Facebook](https://img.shields.io/badge/Auf_dem_Laufenden_bleiben-Facebook-1877F2?style=for-the-badge&logo=facebook)](https://www.facebook.com/profile.php?id=61590360750363)
-
-*Schritt-für-Schritt Dokumentation · Schaltpläne · Code · Erfahrungsberichte*
 
 > Wenn euch das Projekt gefällt: die Bücher sind der direkteste Weg mich zu unterstützen — und eine ehrliche Rezension auf Amazon hilft enorm, damit andere das Projekt entdecken. Freue mich über jedes Feedback! 🙏
 
@@ -518,9 +511,6 @@ Mehr: [INSTALL.md](INSTALL.md)
 
 ## 📚 Buchserie
 
-BoatOS entsteht als Teil der **„Logbuch ohne Pose"**-Reihe — einer Bauserie rund um Bootstechnik, Sensorik und Selbstbau-Elektronik.
-
-- 🔧 **Bauserie auf GitHub**: [github.com/bigbrainlabs/logbuch-ohne-pose](https://github.com/bigbrainlabs/logbuch-ohne-pose)
 - 📖 **Buch auf Amazon** (🇩🇪): [Logbuch ohne Pose — Deutsch](https://www.amazon.de/dp/B0GLXGD8LB?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
 - 📖 **Buch auf Amazon** (🇬🇧): [Logbuch ohne Pose — English](https://www.amazon.de/dp/B0GMD5JH28?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
 
@@ -530,7 +520,7 @@ BoatOS entsteht als Teil der **„Logbuch ohne Pose"**-Reihe — einer Bauserie 
 
 ## 👏 Credits
 
-- **Entwicklung**: bigbrainlabs — [Logbuch ohne Pose](https://github.com/bigbrainlabs/logbuch-ohne-pose)
+- **Entwicklung**: bigbrainlabs
 - **AI-Pair-Programming**: Claude Code (Anthropic)
 - **Karten**: OpenSeaMap, OpenStreetMap, ESRI
 - **Daten**: DWD, PEGELONLINE, AISStream.io
@@ -541,7 +531,6 @@ BoatOS entsteht als Teil der **„Logbuch ohne Pose"**-Reihe — einer Bauserie 
 ## 🔗 Links
 
 - 🌐 **Open Boat Projects**: [open-boat-projects.org/de/boatos](https://open-boat-projects.org/de/boatos/)
-- 🔧 **Bauserie**: [github.com/bigbrainlabs/logbuch-ohne-pose](https://github.com/bigbrainlabs/logbuch-ohne-pose)
 - 📦 **GitHub**: [github.com/bigbrainlabs/BoatOS](https://github.com/bigbrainlabs/BoatOS)
 - 📖 **Buch (🇩🇪)**: [Logbuch ohne Pose — Deutsch](https://www.amazon.de/dp/B0GLXGD8LB?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
 - 📖 **Buch (🇬🇧)**: [Logbuch ohne Pose — English](https://www.amazon.de/dp/B0GMD5JH28?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
