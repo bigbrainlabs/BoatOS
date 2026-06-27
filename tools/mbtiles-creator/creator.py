@@ -896,7 +896,7 @@ class App(tk.Tk):
             self._java_exe,
             f"-Xmx{xmx}g",
             "-jar", str(PLANETILER_JAR),
-            f"--schema={schema_path}",
+            "--schema", str(schema_path),
             f"--osm-path={pbf_path}",
             f"--output={seamarks_path}",
             f"--data-dir={WORK_DIR / 'data'}",
