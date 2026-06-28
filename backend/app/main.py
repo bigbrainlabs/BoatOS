@@ -34,9 +34,9 @@ load_dotenv(dotenv_path=dotenv_path)
 app = FastAPI(title="BoatOS API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-# Data directories
-MBTILES_DIR = Path("/home/boatos/BoatOS/data")
-CHARTS_DIR = Path("/home/boatos/BoatOS/data/charts")
+# Data directories — relative to this file: backend/app/main.py → BoatOS/data/
+MBTILES_DIR = Path(__file__).resolve().parents[2] / "data"
+CHARTS_DIR = MBTILES_DIR / "charts"
 CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Mount charts directory for static serving
