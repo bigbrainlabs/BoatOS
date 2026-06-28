@@ -2,7 +2,7 @@
 # BoatOS System Update — wird vom Backend (/api/system/update) aufgerufen.
 set -euo pipefail
 
-REPO_DIR=/home/boatos/BoatOS
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 GITHUB_REPO=bigbrainlabs/BoatOS
 GITHUB_URL=https://github.com/$GITHUB_REPO.git
 APP_SO=$REPO_DIR/flutter_app/app.so

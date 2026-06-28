@@ -34,8 +34,10 @@ load_dotenv(dotenv_path=dotenv_path)
 app = FastAPI(title="BoatOS API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-# Data directories — relative to this file: backend/app/main.py → BoatOS/data/
-MBTILES_DIR = Path(__file__).resolve().parents[2] / "data"
+# Base paths — derived from __file__ so they work regardless of username/install location
+_BASE_DIR = Path(__file__).resolve().parents[2]  # .../BoatOS/
+_HOME_DIR = Path.home()
+MBTILES_DIR = _BASE_DIR / "data"
 CHARTS_DIR = MBTILES_DIR / "charts"
 CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -549,7 +551,7 @@ async def get_sensors_list():
 async def set_gps_config(config: Dict[str, Any]):
     """Update GPS device config in SignalK settings and restart SignalK"""
     import subprocess, json as _json
-    signalk_settings = Path("/home/boatos/.signalk/settings.json")
+    signalk_settings = _HOME_DIR / ".signalk" / "settings.json"
     try:
         with open(signalk_settings, 'r') as f:
             sk = _json.load(f)
@@ -572,7 +574,7 @@ async def set_gps_config(config: Dict[str, Any]):
 async def get_gps_config():
     """Get current GPS device config from SignalK settings"""
     import json as _json
-    signalk_settings = Path("/home/boatos/.signalk/settings.json")
+    signalk_settings = _HOME_DIR / ".signalk" / "settings.json"
     try:
         with open(signalk_settings, 'r') as f:
             sk = _json.load(f)
@@ -3272,7 +3274,7 @@ def init_waterway_router():
             # OSRM only binds IPv4 — replace localhost with 127.0.0.1 to avoid IPv6 resolution
             osrm_url = osrm_url.replace('//localhost:', '//127.0.0.1:')
             routing_provider = routing_config.get('provider', 'osrm')
-            osm_file = routing_config.get('osmFile', '/home/boatos/osrm_data/germany-latest.osm.pbf')
+            osm_file = routing_config.get('osmFile', str(_HOME_DIR / 'osrm_data' / 'germany-latest.osm.pbf'))
     except:
         pass
 
@@ -3456,7 +3458,7 @@ async def get_available_regions():
     Returns:
         List of region names that are available for routing
     """
-    osrm_dir = Path("/home/boatos/BoatOS/data/osrm")
+    osrm_dir = _BASE_DIR / "data" / "osrm"
 
     # Find all .osrm.properties files
     properties_files = list(osrm_dir.glob("*-latest.osrm.properties"))
@@ -3541,13 +3543,13 @@ async def switch_region(request: dict):
         return {"success": False, "error": "Region name required"}
 
     # Check if region files exist (use .osrm.properties as indicator)
-    osrm_properties = Path(f"/home/boatos/BoatOS/data/osrm/{region}-latest.osrm.properties")
+    osrm_properties = _BASE_DIR / "data" / "osrm" / f"{region}-latest.osrm.properties"
 
     if not osrm_properties.exists():
         return {"success": False, "error": f"Region '{region}' not found"}
 
     # osrm-routed needs the base path without extension
-    osrm_file = Path(f"/home/boatos/BoatOS/data/osrm/{region}-latest.osrm")
+    osrm_file = _BASE_DIR / "data" / "osrm" / f"{region}-latest.osrm"
 
     try:
         # Kill current osrm-routed process
@@ -3802,7 +3804,7 @@ async def export_all_data():
 
         # Load GPS device config
         try:
-            signalk_path = Path("/home/boatos/.signalk/settings.json")
+            signalk_path = _HOME_DIR / ".signalk" / "settings.json"
             with open(signalk_path, 'r') as f:
                 sk = json.load(f)
             for provider in sk.get("pipedProviders", []):
@@ -3945,7 +3947,7 @@ async def import_all_data(request: Request):
             try:
                 device = import_data["gps_device"].get("device", "/dev/ttyUSB0")
                 baudrate = import_data["gps_device"].get("baudrate", 4800)
-                signalk_path = Path("/home/boatos/.signalk/settings.json")
+                signalk_path = _HOME_DIR / ".signalk" / "settings.json"
                 if signalk_path.exists():
                     with open(signalk_path, 'r') as f:
                         sk = json.load(f)
@@ -3992,8 +3994,8 @@ async def toggle_onscreen_keyboard(action: str = "show"):
                 # Show onboard keyboard with full X11 environment
                 env = os.environ.copy()
                 env['DISPLAY'] = ':0'
-                env['XAUTHORITY'] = '/home/boatos/.Xauthority'
-                env['HOME'] = '/home/boatos'
+                env['XAUTHORITY'] = str(_HOME_DIR / '.Xauthority')
+                env['HOME'] = str(_HOME_DIR)
 
                 subprocess.Popen(
                     ["onboard", "--size", "1024x400"],
@@ -4466,7 +4468,7 @@ async def system_version():
     """Aktuelle und verfügbare Version"""
     # Read version from VERSION file (updated by update.sh / git pull)
     try:
-        current = Path("/home/boatos/BoatOS/VERSION").read_text().strip()
+        current = (_BASE_DIR / "VERSION").read_text().strip()
     except Exception:
         current = "unbekannt"
 
@@ -4525,7 +4527,7 @@ async def start_update(background_tasks: BackgroundTasks):
 
 async def _run_update():
     global _update_running, _update_log
-    script = "/home/boatos/BoatOS/scripts/update.sh"
+    script = str(_BASE_DIR / "scripts" / "update.sh")
 
     # update.sh immer von GitHub laden — stellt sicher dass immer die aktuelle Version läuft
     try:
@@ -4750,7 +4752,7 @@ async def upload_mbtiles_raw(request: Request, overwrite: bool = False):
 
 # ==================== HELM DISPLAY MANAGEMENT ====================
 
-_HELM_DISABLED_FLAG = Path("/home/boatos/.boatos_helm_disabled")
+_HELM_DISABLED_FLAG = _HOME_DIR / ".boatos_helm_disabled"
 
 @app.get("/api/system/helm")
 async def helm_status():

@@ -7,7 +7,9 @@ mkdir -p /run/boatos
 rm -f /run/boatos/has-display
 
 # Manual override: user explicitly disabled Helm via Deck
-[ -f /home/boatos/.boatos_helm_disabled ] && exit 0
+BOATOS_USER=$(systemctl show boatos.service -p User --value 2>/dev/null || echo arielle)
+BOATOS_HOME=$(getent passwd "$BOATOS_USER" | cut -d: -f6)
+[ -f "$BOATOS_HOME/.boatos_helm_disabled" ] && exit 0
 
 # Check DRM connectors for any connected display (HDMI, DSI, DP, ...)
 for status_file in /sys/class/drm/card*-*/status; do
