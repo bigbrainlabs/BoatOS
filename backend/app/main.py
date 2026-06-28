@@ -4668,7 +4668,7 @@ async def map_regions():
             "is_seamark": is_seamark,
             "base_region": base if is_seamark else None,
         })
-    return {"installed": installed, "active": active}
+    return {"installed": installed, "active": active, "mbtiles_dir": str(MBTILES_DIR)}
 
 @app.post("/api/map/regions/active")
 async def set_active_regions(body: dict):

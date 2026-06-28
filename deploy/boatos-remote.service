@@ -4,12 +4,12 @@ After=network.target
 
 [Service]
 Type=simple
-User=arielle
+User=boatos
 Group=input
-WorkingDirectory=/home/arielle/BoatOS/backend
+WorkingDirectory=/home/boatos/BoatOS/backend
 Environment="WAYLAND_DISPLAY=wayland-0"
 Environment="XDG_RUNTIME_DIR=/run/user/1000"
-ExecStart=/usr/bin/python3 /home/arielle/BoatOS/backend/remote_control_server.py
+ExecStart=/usr/bin/python3 /home/boatos/BoatOS/backend/remote_control_server.py
 Restart=always
 RestartSec=5
 

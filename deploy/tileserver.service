@@ -4,9 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-User=arielle
-WorkingDirectory=/home/arielle/BoatOS/data
-ExecStart=/usr/local/bin/martin --listen-addresses 0.0.0.0:8081 /home/arielle/BoatOS/data/germany.mbtiles
+User=boatos
+WorkingDirectory=/home/boatos/BoatOS/data
+ExecStart=/usr/local/bin/martin --listen-addresses 0.0.0.0:8081 /home/boatos/BoatOS/data/germany.mbtiles
 Restart=always
 RestartSec=5
 

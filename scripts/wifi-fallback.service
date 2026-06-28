@@ -5,7 +5,7 @@ Wants=NetworkManager.service
 
 [Service]
 Type=simple
-ExecStart=/bin/bash /home/arielle/BoatOS/scripts/wifi_fallback.sh
+ExecStart=/bin/bash /home/boatos/BoatOS/scripts/wifi_fallback.sh
 Restart=on-failure
 RestartSec=30
 User=root

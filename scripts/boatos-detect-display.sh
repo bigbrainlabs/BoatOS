@@ -7,7 +7,7 @@ mkdir -p /run/boatos
 rm -f /run/boatos/has-display
 
 # Manual override: user explicitly disabled Helm via Deck
-BOATOS_USER=$(systemctl show boatos.service -p User --value 2>/dev/null || echo arielle)
+BOATOS_USER=$(systemctl show boatos.service -p User --value 2>/dev/null || echo boatos)
 BOATOS_HOME=$(getent passwd "$BOATOS_USER" | cut -d: -f6)
 [ -f "$BOATOS_HOME/.boatos_helm_disabled" ] && exit 0
 

@@ -1,11 +1,11 @@
 {
   "options": {
     "paths": {
-      "root": "/home/arielle/BoatOS/data",
+      "root": "/home/boatos/BoatOS/data",
       "fonts": "fonts",
       "sprites": "sprites",
       "styles": "styles",
-      "mbtiles": "/home/arielle/BoatOS/data"
+      "mbtiles": "/home/boatos/BoatOS/data"
     },
     "serveAllFonts": false
   },

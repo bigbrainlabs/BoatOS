@@ -2,7 +2,16 @@
 # BoatOS System Update — wird vom Backend (/api/system/update) aufgerufen.
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# Detect the real repo location from the running systemd service.
+# This works even when the script is executed from a wrong/stale path
+# (e.g. /home/boatos/BoatOS/scripts/) because the old backend used to
+# download update.sh to a hardcoded path before running it.
+_SERVICE_WD=$(systemctl show boatos.service -p WorkingDirectory --value 2>/dev/null | tr -d '[:space:]')
+if [ -n "$_SERVICE_WD" ] && [ -d "${_SERVICE_WD%/backend}" ]; then
+    REPO_DIR="${_SERVICE_WD%/backend}"
+else
+    REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+fi
 GITHUB_REPO=bigbrainlabs/BoatOS
 GITHUB_URL=https://github.com/$GITHUB_REPO.git
 APP_SO=$REPO_DIR/flutter_app/app.so
@@ -111,17 +120,36 @@ sudo iw dev "${IFACE:-wlan0}" set power_save off 2>/dev/null || true
 sudo systemctl reload NetworkManager 2>/dev/null || true
 log "       WiFi Power Management deaktiviert"
 
-# 5a. Ensure nginx upload limit is sufficient for mbtiles files
-log "[5a] Prüfe nginx client_max_body_size..."
+# 5a. Ensure nginx upload limit and timeouts are sufficient for large mbtiles uploads
+log "[5a] Prüfe nginx-Konfiguration für Upload..."
 NGINX_CONF=/etc/nginx/sites-available/boatos
-REQUIRED_LIMIT="20G"
-if grep -q "client_max_body_size" "$NGINX_CONF" 2>/dev/null; then
-    sudo sed -i "s/client_max_body_size [^;]*/client_max_body_size $REQUIRED_LIMIT/g" "$NGINX_CONF"
-    log "       client_max_body_size auf $REQUIRED_LIMIT gesetzt"
+if [ -f "$NGINX_CONF" ]; then
+    # client_max_body_size — update if exists, add to server block if missing
+    if grep -q "client_max_body_size" "$NGINX_CONF"; then
+        sudo sed -i "s/client_max_body_size [^;]*/client_max_body_size 20G/g" "$NGINX_CONF"
+    else
+        sudo sed -i "/listen 443 ssl/a\\    client_max_body_size 20G;" "$NGINX_CONF"
+    fi
+    # proxy_read_timeout — update if exists, add after proxy_pass if missing
+    if grep -q "proxy_read_timeout" "$NGINX_CONF"; then
+        sudo sed -i "s/proxy_read_timeout [^;]*/proxy_read_timeout 600s/g" "$NGINX_CONF"
+    else
+        sudo sed -i "/proxy_pass http:\/\/localhost:8000/a\\        proxy_read_timeout 600s;" "$NGINX_CONF"
+    fi
+    # client_body_timeout — update if exists, add to server block if missing
+    if grep -q "client_body_timeout" "$NGINX_CONF"; then
+        sudo sed -i "s/client_body_timeout [^;]*/client_body_timeout 300s/g" "$NGINX_CONF"
+    else
+        sudo sed -i "/listen 443 ssl/a\\    client_body_timeout 300s;" "$NGINX_CONF"
+    fi
+    # Correct frontend root and charts alias paths to match current REPO_DIR
+    sudo sed -i "s|root [^ ]*/BoatOS/frontend|root $REPO_DIR/frontend|g" "$NGINX_CONF"
+    sudo sed -i "s|alias [^ ]*/BoatOS/data/charts|alias $REPO_DIR/data/charts|g" "$NGINX_CONF"
+    log "       nginx client_max_body_size=20G, proxy_read_timeout=600s, client_body_timeout=300s, root=$REPO_DIR/frontend"
+    sudo nginx -t 2>/dev/null && sudo systemctl reload nginx || log "       nginx reload fehlgeschlagen — Config prüfen"
 else
     log "       nginx-Konfig nicht gefunden — überspringe"
 fi
-sudo nginx -t 2>/dev/null && sudo systemctl reload nginx || true
 
 # 5. Ensure Mosquitto accepts external connections
 log "[5/6] Konfiguriere Mosquitto (externe Verbindungen)..."

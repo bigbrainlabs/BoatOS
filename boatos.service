@@ -5,10 +5,10 @@ Requires=signalk.service
 
 [Service]
 Type=simple
-User=arielle
-WorkingDirectory=/home/arielle/BoatOS/backend
-EnvironmentFile=/home/arielle/BoatOS/.env
-ExecStart=/home/arielle/BoatOS/backend/venv/bin/python app/main.py
+User=boatos
+WorkingDirectory=/home/boatos/BoatOS/backend
+EnvironmentFile=/home/boatos/BoatOS/.env
+ExecStart=/home/boatos/BoatOS/backend/venv/bin/python app/main.py
 Restart=always
 RestartSec=10
 Nice=10
