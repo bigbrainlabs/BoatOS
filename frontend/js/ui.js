@@ -1687,6 +1687,9 @@ export async function toggleMapRegion(regionId, toggleEl) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ regions: newActive })
     });
+
+    // If the map is in online-fallback mode, re-check now that tiles may be available
+    window.BoatOS?.map?.recheckOfflineTiles?.();
 }
 
 export function toggleSettingToggle(toggleElement, settingKey) {

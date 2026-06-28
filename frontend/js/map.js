@@ -110,15 +110,37 @@ let displayedTrackSourceAdded = false;
  * @returns {Object} Map-Instanz
  */
 async function _checkTileserver() {
-    try {
-        const r = await fetch(window.location.origin + '/api/map/tiles', {
-            signal: AbortSignal.timeout(2000)
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            const r = await fetch(window.location.origin + '/api/map/tiles', {
+                cache: 'no-store',
+                signal: AbortSignal.timeout(8000)
+            });
+            if (!r.ok) return false;
+            const data = await r.json();
+            return data.ok === true;
+        } catch {
+            if (attempt < 2) await new Promise(res => setTimeout(res, 1000));
+        }
+    }
+    return false;
+}
+
+export async function recheckOfflineTiles() {
+    const nowOk = await _checkTileserver();
+    if (nowOk === window._tileserverAvailable) return;
+    window._tileserverAvailable = nowOk;
+    if (!map) return;
+    if (nowOk) {
+        map.setStyle(_vectorStyle());
+        map.once('style.load', () => {
+            addLabelsLayer();
+            document.getElementById('tileserver-banner')?.remove();
+            addOpenSeaMapOverlays();
         });
-        if (!r.ok) return false;
-        const data = await r.json();
-        return data.ok === true;
-    } catch {
-        return false;
+    } else {
+        map.setStyle(_rasterFallbackStyle());
+        map.once('style.load', () => _showTileserverBanner());
     }
 }
 
@@ -412,7 +434,7 @@ export async function initMap(options = {}) {
 /**
  * Fuegt Beschriftungs-Layer hinzu
  */
-function addLabelsLayer() {
+export function addLabelsLayer() {
     try {
         // Glyphs-Quelle fuer Text-Labels setzen
         map.setGlyphs('https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf');
@@ -506,7 +528,7 @@ function addLabelsLayer() {
 /**
  * Fuegt OpenSeaMap Overlays hinzu — lokal (Vektor) wenn verfuegbar, sonst online (Raster)
  */
-async function addOpenSeaMapOverlays() {
+export async function addOpenSeaMapOverlays() {
     try {
         // Online-Fallback immer als Source registrieren
         map.addSource('seamark-online', {
