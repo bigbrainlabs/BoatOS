@@ -1,5 +1,5 @@
 """BoatOS Backend - FastAPI Server with Logbook & Charts"""
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, BackgroundTasks, Request, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, BackgroundTasks, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -4723,6 +4723,53 @@ async def upload_mbtiles(file: UploadFile = File(...), overwrite: bool = False):
     dest = MBTILES_DIR / display_name
     size_mb = await _write_mbtiles_stream(dest, file.read, overwrite)
     return {"ok": True, "id": stem, "name": display_name, "size_mb": size_mb}
+
+@app.post("/api/map/regions/upload-chunk")
+async def upload_mbtiles_chunk(
+    file: UploadFile = File(...),
+    filename: str = Form(...),
+    chunk_index: int = Form(...),
+    total_chunks: int = Form(...),
+    overwrite: bool = Form(False),
+):
+    """Chunked upload — each request carries one 5MB slice of the mbtiles file.
+    Chunks are appended to a .uploading temp file; the last chunk renames it to final."""
+    stem, display_name = _sanitize_mbtiles_name(filename)
+    dest = MBTILES_DIR / display_name
+    tmp = MBTILES_DIR / f".{display_name}.uploading"
+
+    data = await file.read()
+
+    if chunk_index == 0:
+        SQLITE_MAGIC = b"SQLite format 3\x00"
+        if len(data) < 16 or data[:16] != SQLITE_MAGIC:
+            raise HTTPException(status_code=400, detail="Not a valid MBTiles file")
+        if dest.exists() and not overwrite:
+            raise HTTPException(status_code=409, detail=f"{display_name} already exists")
+        tmp.unlink(missing_ok=True)
+
+    elif not tmp.exists():
+        raise HTTPException(status_code=400, detail="Upload sequence broken — please restart the upload")
+
+    try:
+        mode = "wb" if chunk_index == 0 else "ab"
+        with open(tmp, mode) as out:
+            out.write(data)
+    except Exception as e:
+        if chunk_index == 0:
+            tmp.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=f"Write error: {e}")
+
+    if chunk_index == total_chunks - 1:
+        try:
+            tmp.replace(dest)
+        except Exception as e:
+            tmp.unlink(missing_ok=True)
+            raise HTTPException(status_code=500, detail=f"Finalize error: {e}")
+        size_mb = round(dest.stat().st_size / 1_048_576, 2)
+        return {"ok": True, "id": stem, "name": display_name, "size_mb": size_mb, "done": True}
+
+    return {"ok": True, "chunk": chunk_index, "total": total_chunks, "done": False}
 
 @app.post("/api/map/regions/upload-raw")
 async def upload_mbtiles_raw(request: Request, overwrite: bool = False):

@@ -1570,6 +1570,11 @@ export function onMbtilesFileSelected(input) {
 }
 
 export function uploadMbtiles() {
+    _doChunkedUpload(false);
+}
+
+async function _doChunkedUpload(overwrite) {
+    const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB per chunk — safe for Pi Zero 2W
     const input = document.getElementById('map-upload-input');
     const file = input.files[0];
     if (!file) return;
@@ -1582,106 +1587,73 @@ export function uploadMbtiles() {
 
     progress.style.display = '';
     btn.disabled = true;
-    status.textContent = t('mapUploadUploading');
+    btn.onclick = null;
+    bar.style.background = '';
     bar.style.width = '0%';
     pct.textContent = '0%';
+    status.textContent = t('mapUploadUploading');
 
-    const formData = new FormData();
-    formData.append('file', file);
+    const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+    const totalMb = (file.size / 1_048_576).toFixed(0);
 
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/map/regions/upload');
+    for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const chunk = file.slice(start, Math.min(start + CHUNK_SIZE, file.size));
 
-    xhr.upload.addEventListener('progress', e => {
-        if (!e.lengthComputable) return;
-        const p = Math.round(e.loaded / e.total * 100);
+        const formData = new FormData();
+        formData.append('file', chunk, file.name);
+        formData.append('filename', file.name);
+        formData.append('chunk_index', i);
+        formData.append('total_chunks', totalChunks);
+        if (i === 0 && overwrite) formData.append('overwrite', 'true');
+
+        let r, result;
+        try {
+            r = await fetch('/api/map/regions/upload-chunk', { method: 'POST', body: formData, cache: 'no-store' });
+            result = await r.json();
+        } catch (err) {
+            btn.disabled = false;
+            console.error('[BoatOS] upload chunk error:', err);
+            status.textContent = '✗ ' + t('mapUploadConnError');
+            bar.style.background = 'var(--error, #f44336)';
+            return;
+        }
+
+        if (!r.ok) {
+            btn.disabled = false;
+            if (r.status === 409) {
+                status.textContent = t('mapUploadOverwrite');
+                bar.style.background = 'var(--warning, #ff9800)';
+                btn.onclick = () => _doChunkedUpload(true);
+            } else {
+                const msg = result.detail || ('HTTP ' + r.status);
+                console.error('[BoatOS] upload error:', r.status, result);
+                status.textContent = '✗ ' + msg;
+                bar.style.background = 'var(--error, #f44336)';
+            }
+            return;
+        }
+
+        const p = Math.round((i + 1) / totalChunks * 100);
         bar.style.width = p + '%';
         pct.textContent = p + '%';
-        const mb = (e.loaded / 1_048_576).toFixed(0);
-        const total = (e.total / 1_048_576).toFixed(0);
-        status.textContent = `${t('mapUploadUploading')} ${mb} / ${total} MB`;
-    });
+        const sentMb = Math.min(Math.round((i + 1) * CHUNK_SIZE / 1_048_576), parseInt(totalMb));
+        status.textContent = `${t('mapUploadUploading')} ${sentMb} / ${totalMb} MB`;
 
-    xhr.upload.addEventListener('loadend', () => {
-        bar.style.width = '100%';
-        pct.textContent = '100%';
-        status.textContent = t('mapUploadSaving');
-    });
-
-    xhr.addEventListener('load', async () => {
-        btn.disabled = false;
-        if (xhr.status === 200) {
-            let sizeTxt = '';
-            try { const res = JSON.parse(xhr.responseText); sizeTxt = ` (${res.size_mb} MB)`; } catch {}
-            status.textContent = t('mapUploadDone') + sizeTxt;
-            bar.style.background = 'var(--success, #4caf50)';
+        if (result.done) {
+            btn.disabled = false;
             input.value = '';
             document.getElementById('map-upload-btn').style.display = 'none';
             document.getElementById('map-upload-filename').style.display = 'none';
+            status.textContent = `${t('mapUploadDone')} (${result.size_mb} MB)`;
+            bar.style.background = 'var(--success, #4caf50)';
+            bar.style.width = '100%';
+            pct.textContent = '100%';
             setTimeout(() => { progress.style.display = 'none'; bar.style.background = ''; }, 4000);
             await loadMapRegions();
-        } else if (xhr.status === 409) {
-            status.textContent = t('mapUploadOverwrite');
-            bar.style.background = 'var(--warning, #ff9800)';
-            btn.onclick = () => _uploadMbtilesOverwrite(file);
-        } else {
-            let msg = 'HTTP ' + xhr.status;
-            try { msg = JSON.parse(xhr.responseText).detail || msg; } catch {}
-            console.error('[BoatOS] upload error', xhr.status, xhr.responseText);
-            status.textContent = '✗ ' + msg;
-            bar.style.background = 'var(--error, #f44336)';
+            return;
         }
-    });
-
-    xhr.addEventListener('error', () => {
-        btn.disabled = false;
-        console.error('[BoatOS] upload XHR error (network)');
-        status.textContent = '✗ ' + t('mapUploadConnError');
-        bar.style.background = 'var(--error, #f44336)';
-    });
-
-    xhr.send(formData);
-}
-
-function _uploadMbtilesOverwrite(file) {
-    document.getElementById('map-upload-btn').onclick = () => uploadMbtiles();
-    const formData = new FormData();
-    formData.append('file', file);
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/map/regions/upload?overwrite=true');
-    const bar = document.getElementById('map-upload-bar');
-    const pct = document.getElementById('map-upload-pct');
-    const status = document.getElementById('map-upload-status');
-    bar.style.background = '';
-    xhr.upload.addEventListener('progress', e => {
-        if (!e.lengthComputable) return;
-        const p = Math.round(e.loaded / e.total * 100);
-        bar.style.width = p + '%';
-        pct.textContent = p + '%';
-    });
-    xhr.upload.addEventListener('loadend', () => {
-        bar.style.width = '100%';
-        pct.textContent = '100%';
-        status.textContent = t('mapUploadSaving');
-    });
-
-    xhr.addEventListener('load', async () => {
-        if (xhr.status === 200) {
-            let sizeTxt = '';
-            try { const res = JSON.parse(xhr.responseText); sizeTxt = ` (${res.size_mb} MB)`; } catch {}
-            status.textContent = t('mapUploadDone') + sizeTxt;
-            bar.style.background = 'var(--success, #4caf50)';
-            setTimeout(() => { document.getElementById('map-upload-progress').style.display = 'none'; bar.style.background = ''; }, 4000);
-            await loadMapRegions();
-        } else {
-            let msg = 'HTTP ' + xhr.status;
-            try { msg = JSON.parse(xhr.responseText).detail || msg; } catch {}
-            console.error('[BoatOS] overwrite upload error', xhr.status, xhr.responseText);
-            status.textContent = '✗ ' + msg;
-            bar.style.background = 'var(--error, #f44336)';
-        }
-    });
-    xhr.send(formData);
+    }
 }
 
 export async function toggleMapRegion(regionId, toggleEl) {
