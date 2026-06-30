@@ -546,6 +546,15 @@ export async function addOpenSeaMapOverlays() {
         } catch (_) {}
 
         if (localAvailable) {
+            // Online-Raster zuerst (unten), lokale Vektordaten darüber
+            map.addLayer({
+                id: 'seamark-overlay',
+                type: 'raster',
+                source: 'seamark-online',
+                layout: { visibility: 'visible' },
+                paint: { 'raster-opacity': 1.0 }
+            });
+
             // Lokale Vektor-Seezeichen
             map.addSource('seamark-local', {
                 type: 'vector',
@@ -585,8 +594,12 @@ export async function addOpenSeaMapOverlays() {
                     ],
                     'circle-stroke-width': 1.5,
                     'circle-stroke-color': ['match', ['get', 'colour'],
-                        ['literal', ['white', 'yellow', 'red;white', 'white;red',
-                                     'green;white', 'white;green']], '#333333',
+                        'white',        '#333333',
+                        'yellow',       '#333333',
+                        'red;white',    '#333333',
+                        'white;red',    '#333333',
+                        'green;white',  '#333333',
+                        'white;green',  '#333333',
                         '#000000'
                     ],
                     'circle-opacity': 0.9
@@ -625,16 +638,7 @@ export async function addOpenSeaMapOverlays() {
                 }
             });
 
-            // Online-Raster versteckt halten (Fallback bleibt registriert)
-            map.addLayer({
-                id: 'seamark-overlay',
-                type: 'raster',
-                source: 'seamark-online',
-                layout: { visibility: 'none' },
-                paint: { 'raster-opacity': 1.0 }
-            });
-
-            console.log('Lokale Vektor-Seezeichen aktiv');
+            console.log('Lokale Vektor-Seezeichen aktiv + Online-Raster als Fallback');
         } else {
             // Kein lokales MBTiles — online Raster-Overlay
             map.addLayer({
@@ -1316,8 +1320,8 @@ export function toggleSeamarkLayer(visible) {
     ['seamark-local-circle', 'seamark-local-label'].forEach(id => {
         if (map.getLayer(id)) setLayerVisibility(id, visible);
     });
-    // Online-Raster-Fallback (nur sichtbar wenn kein lokaler Layer aktiv)
-    if (map.getLayer('seamark-overlay') && !map.getLayer('seamark-local-circle')) {
+    // Online-Raster immer mitschalten (Fallback für Gebiete ohne lokale Daten)
+    if (map.getLayer('seamark-overlay')) {
         setLayerVisibility('seamark-overlay', visible);
     }
     console.log(`Seezeichen-Layer: ${visible ? 'sichtbar' : 'ausgeblendet'}`);

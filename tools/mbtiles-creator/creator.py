@@ -135,6 +135,16 @@ TRANSLATIONS = {
         'sm_fail':          '  Seezeichen-Konvertierung fehlgeschlagen — überspringe.',
         'step_sm_upload':   '[+] Lade Seezeichen auf Pi hoch...',
         'step_sm_save':     '[+] Speichere Seezeichen...',
+        # Routing graph
+        'chk_routing':      'auch Routing-Daten erstellen (für Routen über Ländergrenzen)',
+        'step_routing':     '[+] Erstelle Wasserstraßen-Routing-Graph...',
+        'routing_install':  '  Installiere osmium-Bibliothek...',
+        'routing_nodes':    '  {nodes} Knoten, {edges} Kanten gefunden.',
+        'routing_write':    '  Schreibe {name}...',
+        'routing_done':     '  Routing-Datei: {name} ({mb:.1f} MB)',
+        'routing_skip':     '  osmium nicht verfügbar — Routing übersprungen.',
+        'routing_upload':   '[+] Lade Routing-Datei auf Pi hoch...',
+        'routing_save':     '[+] Speichere Routing-Datei...',
     },
     'en': {
         'title':            'BoatOS MBTiles Creator',
@@ -209,6 +219,16 @@ TRANSLATIONS = {
         'sm_fail':          '  Seamark conversion failed — skipping.',
         'step_sm_upload':   '[+] Uploading seamarks to Pi...',
         'step_sm_save':     '[+] Saving seamarks...',
+        # Routing graph
+        'chk_routing':      'also build routing data (for cross-border routes)',
+        'step_routing':     '[+] Building waterway routing graph...',
+        'routing_install':  '  Installing osmium library...',
+        'routing_nodes':    '  {nodes} nodes, {edges} edges found.',
+        'routing_write':    '  Writing {name}...',
+        'routing_done':     '  Routing file: {name} ({mb:.1f} MB)',
+        'routing_skip':     '  osmium not available — skipping routing.',
+        'routing_upload':   '[+] Uploading routing file to Pi...',
+        'routing_save':     '[+] Saving routing file...',
     },
 }
 
@@ -562,6 +582,13 @@ class App(tk.Tk):
         self._pi_entry.grid(row=1, column=1, columnspan=2, sticky="w", padx=(5, 0), pady=(6, 0))
         self._pi_var.trace_add("write", lambda *_: self._save_pi_address())
 
+        # Routing checkbox
+        self._routing_var = tk.BooleanVar(value=False)
+        self._routing_chk = ttk.Checkbutton(
+            top, text=self.t('chk_routing'), variable=self._routing_var,
+        )
+        self._routing_chk.grid(row=2, column=0, columnspan=3, sticky="w", pady=(6, 0))
+
         # Buttons
         btn_frame = ttk.Frame(self)
         btn_frame.pack(fill="x", **pad)
@@ -580,6 +607,10 @@ class App(tk.Tk):
             btn_frame, text=self.t('btn_cancel'), command=self._on_cancel, state="disabled"
         )
         self._cancel_btn.pack(side="left")
+
+        ttk.Button(
+            btn_frame, text="📋", width=3, command=self._copy_log
+        ).pack(side="right")
 
         # Progress
         progress_frame = ttk.Frame(self)
@@ -622,6 +653,16 @@ class App(tk.Tk):
             self._log.see("end")
             self._log.configure(state="disabled")
         self.after(0, _do)
+        try:
+            with open(WORK_DIR / "last_run.log", "a", encoding="utf-8") as f:
+                f.write(text + "\n")
+        except Exception:
+            pass
+
+    def _copy_log(self):
+        text = self._log.get("1.0", "end")
+        self.clipboard_clear()
+        self.clipboard_append(text)
 
     def _set_progress(self, value: float, label: str = ""):
         def _do():
@@ -639,6 +680,7 @@ class App(tk.Tk):
             self._cancel_btn.configure(state=state_cancel)
             self._region_combo.configure(state="disabled" if running else "readonly")
             self._pi_entry.configure(state="disabled" if running else "normal")
+            self._routing_chk.configure(state="disabled" if running else "normal")
         self.after(0, _do)
 
     # ── Pipeline ──────────────────────────────────────────────────────────────
@@ -672,6 +714,11 @@ class App(tk.Tk):
         self._log.after(0, lambda: self._log.configure(state="normal"))
         self._log.after(0, lambda: self._log.delete("1.0", "end"))
         self._log.after(0, lambda: self._log.configure(state="disabled"))
+
+        try:
+            (WORK_DIR / "last_run.log").write_text("", encoding="utf-8")
+        except Exception:
+            pass
 
         threading.Thread(
             target=self._pipeline_thread,
@@ -715,16 +762,29 @@ class App(tk.Tk):
             if self._cancel_event.is_set():
                 return
 
+            # Routing graph build (optional, non-fatal)
+            build_routing = self._routing_var.get()
+            routing_path = None
+            if build_routing:
+                routing_path = self._step_build_routing(pbf_path)
+                if self._cancel_event.is_set():
+                    return
+
             if save_folder:
                 self._step_save(mbtiles_path, save_folder, mbtiles_name)
                 if seamarks_ok:
                     self._step_save(seamarks_path, save_folder,
                                     seamarks_stem + ".mbtiles", step_key='step_sm_save')
+                if routing_path:
+                    self._step_save(routing_path, save_folder,
+                                    routing_path.name, step_key='routing_save')
             else:
                 self._step_upload(mbtiles_path, pi_address, mbtiles_name)
                 if seamarks_ok:
                     self._step_upload(seamarks_path, pi_address,
                                       seamarks_stem + ".mbtiles", step_key='step_sm_upload')
+                if routing_path:
+                    self._step_upload_routing(routing_path, pi_address)
 
         except Exception as e:
             self._log_line(self.t('error', e=e))
@@ -891,7 +951,7 @@ class App(tk.Tk):
         schema_path = TMP_DIR / "seamark_schema.yaml"
         schema_path.write_text(SEAMARK_SCHEMA_YAML, encoding="utf-8")
 
-        xmx = max(1, _available_ram_gb() // 2)
+        xmx = _available_ram_gb()
         cmd = [
             self._java_exe,
             f"-Xmx{xmx}g",
@@ -1016,6 +1076,183 @@ class App(tk.Tk):
             shutil.copy2(mbtiles_path, dest)
             self._set_progress(100, self.t('done'))
             self._log_line(self.t('save_done', dest=dest))
+            return True
+        except Exception as e:
+            self._log_line(self.t('error_indent', e=e))
+            return False
+
+    def _step_build_routing(self, pbf_path: Path):
+        """Extract waterway network from PBF and write .routing SQLite file."""
+        self._log_line(self.t('step_routing'))
+
+        try:
+            import osmium  # noqa: F401
+        except ImportError:
+            self._log_line(self.t('routing_install'))
+            try:
+                subprocess.run(
+                    [sys.executable, '-m', 'pip', 'install', 'osmium'],
+                    check=True, capture_output=True, timeout=120,
+                )
+            except Exception as e:
+                self._log_line(f'  {e}')
+                self._log_line(self.t('routing_skip'))
+                return None
+
+        import osmium
+        import math as _m
+
+        WATERWAY_TYPES = {'river', 'canal', 'stream', 'fairway', 'dock'}
+
+        class _WE(osmium.SimpleHandler):
+            def __init__(self):
+                super().__init__()
+                self.nodes: dict = {}
+                self.edges: list = []
+
+            def way(self, w):
+                tags = {t.k: t.v for t in w.tags}
+                if tags.get('waterway') not in WATERWAY_TYPES:
+                    return
+                locs = [(n.ref, float(n.location.lat), float(n.location.lon))
+                        for n in w.nodes if n.location.valid()]
+                if len(locs) < 2:
+                    return
+                oneway = tags.get('oneway') == 'yes'
+                for nid, lat, lon in locs:
+                    self.nodes[nid] = (lat, lon)
+                R = 6371000.0
+                for i in range(len(locs) - 1):
+                    n1, lat1, lon1 = locs[i]
+                    n2, lat2, lon2 = locs[i + 1]
+                    dlat = _m.radians(lat2 - lat1)
+                    dlon = _m.radians(lon2 - lon1)
+                    a = (_m.sin(dlat / 2) ** 2 +
+                         _m.cos(_m.radians(lat1)) * _m.cos(_m.radians(lat2)) *
+                         _m.sin(dlon / 2) ** 2)
+                    dist = R * 2 * _m.atan2(_m.sqrt(a), _m.sqrt(1 - a))
+                    self.edges.append((n1, n2, dist))
+                    if not oneway:
+                        self.edges.append((n2, n1, dist))
+
+        handler = _WE()
+        self._set_progress(5, self.t('step_routing'))
+        try:
+            # flex_mem keeps the location index fully in RAM — more reliable on Windows
+            # than the default mmap-based sparse index for large PBF files.
+            handler.apply_file(str(pbf_path), locations=True, idx='flex_mem')
+        except TypeError:
+            handler.apply_file(str(pbf_path), locations=True)
+
+        n, e = len(handler.nodes), len(handler.edges)
+        self._log_line(self.t('routing_nodes', nodes=n, edges=e))
+        if n == 0:
+            self._log_line('  Keine Wasserwege gefunden.')
+            return None
+
+        region = pbf_path.stem
+        for suffix in ('-latest.osm', '.osm', '-latest'):
+            region = region.replace(suffix, '')
+        routing_path = TMP_DIR / f"{region}.routing"
+        self._log_line(self.t('routing_write', name=routing_path.name))
+        self._set_progress(80, self.t('routing_write', name=routing_path.name))
+
+        routing_path.unlink(missing_ok=True)
+        con = sqlite3.connect(str(routing_path))
+        try:
+            con.execute("PRAGMA journal_mode=DELETE")
+            con.execute("PRAGMA synchronous=FULL")
+            con.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT)")
+            con.execute(
+                "CREATE TABLE nodes "
+                "(id INTEGER PRIMARY KEY, lat REAL NOT NULL, lon REAL NOT NULL)"
+            )
+            con.execute(
+                "CREATE TABLE edges "
+                "(from_node INTEGER NOT NULL, to_node INTEGER NOT NULL, distance_m REAL NOT NULL)"
+            )
+            lats = [v[0] for v in handler.nodes.values()]
+            lons = [v[1] for v in handler.nodes.values()]
+            con.executemany("INSERT OR IGNORE INTO metadata VALUES (?,?)", [
+                ("region", region),
+                ("node_count", str(n)),
+                ("edge_count", str(e)),
+                ("bbox_minlat", str(min(lats))),
+                ("bbox_maxlat", str(max(lats))),
+                ("bbox_minlon", str(min(lons))),
+                ("bbox_maxlon", str(max(lons))),
+                ("created_at", datetime.now().isoformat()),
+            ])
+            con.executemany(
+                "INSERT INTO nodes VALUES (?,?,?)",
+                [(nid, lat, lon) for nid, (lat, lon) in handler.nodes.items()],
+            )
+            con.executemany("INSERT INTO edges VALUES (?,?,?)", handler.edges)
+            con.execute("CREATE INDEX idx_edges_from ON edges(from_node)")
+            con.commit()
+        finally:
+            con.close()
+
+        mb = routing_path.stat().st_size / 1e6
+        self._log_line(self.t('routing_done', name=routing_path.name, mb=mb))
+        self._set_progress(100, self.t('done'))
+        return routing_path
+
+    def _step_upload_routing(self, routing_path: Path, pi_address: str) -> bool:
+        self._log_line(self.t('routing_upload'))
+        url = f"http://{pi_address}:8000/api/routing/upload-raw?overwrite=true"
+        self._log_line(self.t('upload_post', url=url))
+        try:
+            total = routing_path.stat().st_size
+            cancel = self._cancel_event
+            uploaded_ref = [0]
+
+            class _Reader:
+                def __init__(self_):
+                    self_._f = open(routing_path, "rb")
+                def read(self_, n=-1):
+                    if cancel.is_set():
+                        return b""
+                    data = self_._f.read(n)
+                    uploaded_ref[0] += len(data)
+                    return data
+                def __len__(self_):
+                    return total
+                def close(self_):
+                    self_._f.close()
+
+            reader = _Reader()
+            done_evt = threading.Event()
+
+            def _poll():
+                while not done_evt.wait(0.5):
+                    ul = uploaded_ref[0]
+                    if ul:
+                        self._set_progress(
+                            ul / total * 100,
+                            self.t('upload_progress', ul=ul / 1e6, total=total / 1e6),
+                        )
+            threading.Thread(target=_poll, daemon=True).start()
+
+            try:
+                resp = requests.post(
+                    url, data=reader,
+                    headers={
+                        "Content-Type": "application/octet-stream",
+                        "X-Filename": routing_path.name,
+                        "Content-Length": str(total),
+                    },
+                    timeout=300,
+                )
+            finally:
+                done_evt.set()
+                reader.close()
+
+            if cancel.is_set():
+                self._log_line(self.t('cancelled'))
+                return False
+            resp.raise_for_status()
+            self._log_line(self.t('upload_ok', status=resp.status_code))
             return True
         except Exception as e:
             self._log_line(self.t('error_indent', e=e))

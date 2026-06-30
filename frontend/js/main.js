@@ -935,7 +935,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // Poll backend every 15 s for language changes written by Helm
-    let _syncedLang = getLang();
+    const _getLang = () => (typeof window.getLanguage === 'function') ? window.getLanguage() : 'de';
+    let _syncedLang = _getLang();
     setInterval(async () => {
         try {
             const res = await fetch(`${_apiUrl}/api/settings`, { cache: 'no-store' });
@@ -944,8 +945,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const remote = s?.ui?.language || s?.language || 'de';
             if (remote !== _syncedLang) {
                 _syncedLang = remote;
-                // Only call if actually different from what's currently active
-                if (remote !== getLang()) setLang(remote);
+                if (remote !== _getLang()) setLang(remote);
             }
         } catch (_) {}
     }, 15000);

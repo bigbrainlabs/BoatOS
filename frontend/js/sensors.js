@@ -757,7 +757,7 @@ export function updateCompass(heading) {
  * @returns {Object|null} MapLibre Map Instanz
  */
 function getMap() {
-    return window.map || null;
+    return window.BoatOS?.map?.getMap?.() || null;
 }
 
 /**

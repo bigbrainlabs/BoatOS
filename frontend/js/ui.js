@@ -1473,6 +1473,9 @@ export function showSettingsTab(tabId, tabElement) {
     if (tabId === 'map') {
         loadMapRegions();
     }
+    if (tabId === 'routing') {
+        loadRoutingGraphs();
+    }
 }
 
 /**
@@ -1517,8 +1520,7 @@ export async function loadMapRegions() {
     if (!container) return;
     container.innerHTML = `<div style="color:var(--text-dim);font-size:13px;padding:8px 0;">${t('mapRegionsLoading')}</div>`;
     try {
-        const r = await fetch('/api/map/regions', { cache: 'no-store' });
-        _mapRegions = await r.json();
+        _mapRegions = await fetch('/api/map/regions', { cache: 'no-store' }).then(r => r.json());
         console.log('[BoatOS] map/regions:', JSON.stringify(_mapRegions));
         _renderMapRegions(container);
     } catch (err) {
@@ -1551,9 +1553,14 @@ function _renderMapRegions(container) {
                 <span style="font-size:13px;">${_regionDisplayName(r.id)}</span>
                 <span style="font-size:11px;color:var(--text-dim);margin-left:6px;">${r.size_mb} MB</span>
             </div>
-            <div class="toggle${r.active ? ' active' : ''}"
-                 id="map-region-toggle-${r.id}"
-                 onclick="BoatOS.ui.toggleMapRegion('${r.id}', this)"></div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <div class="toggle${r.active ? ' active' : ''}"
+                     id="map-region-toggle-${r.id}"
+                     onclick="BoatOS.ui.toggleMapRegion('${r.id}', this)"></div>
+                <span style="cursor:pointer;font-size:14px;color:var(--text-dim);padding:2px 4px;"
+                      title="Löschen"
+                      onclick="BoatOS.ui.deleteMapRegion('${r.id}', this)">🗑</span>
+            </div>
         </div>`;
     }).join('');
 }
@@ -1653,6 +1660,140 @@ async function _doChunkedUpload(overwrite) {
             await loadMapRegions();
             return;
         }
+    }
+}
+
+export function onRoutingFileSelected(input) {
+    const file = input.files[0];
+    const btn = document.getElementById('routing-upload-btn');
+    const label = document.getElementById('routing-upload-filename');
+    if (!file) { btn.style.display = 'none'; label.style.display = 'none'; return; }
+    btn.style.display = '';
+    label.style.display = '';
+    label.textContent = `${file.name} (${(file.size / 1_048_576).toFixed(1)} MB)`;
+}
+
+export async function uploadRoutingFile() {
+    const input = document.getElementById('routing-upload-input');
+    const file = input.files[0];
+    if (!file) return;
+
+    const progress = document.getElementById('routing-upload-progress');
+    const bar = document.getElementById('routing-upload-bar');
+    const pct = document.getElementById('routing-upload-pct');
+    const status = document.getElementById('routing-upload-status');
+    const btn = document.getElementById('routing-upload-btn');
+
+    progress.style.display = '';
+    btn.disabled = true;
+    bar.style.width = '0%';
+    bar.style.background = '';
+    pct.textContent = '0%';
+    status.textContent = 'Hochladen…';
+
+    const CHUNK = 5 * 1024 * 1024;
+    const total = file.size;
+    let uploaded = 0;
+
+    try {
+        const reader = file.stream().getReader();
+        const resp = await fetch(`/api/routing/upload-raw?overwrite=true`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/octet-stream',
+                'X-Filename': file.name,
+                'Content-Length': String(total),
+            },
+            body: file,
+            duplex: 'half',
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            status.textContent = '✗ ' + (err.detail || ('HTTP ' + resp.status));
+            bar.style.background = 'var(--error, #f44336)';
+            btn.disabled = false;
+            return;
+        }
+
+        bar.style.width = '100%';
+        pct.textContent = '100%';
+        bar.style.background = 'var(--success, #4caf50)';
+        status.textContent = '✓ Hochgeladen';
+        input.value = '';
+        btn.style.display = 'none';
+        document.getElementById('routing-upload-filename').style.display = 'none';
+        setTimeout(() => { progress.style.display = 'none'; bar.style.background = ''; }, 4000);
+        await loadRoutingGraphs();
+    } catch (err) {
+        status.textContent = '✗ ' + err.message;
+        bar.style.background = 'var(--error, #f44336)';
+        btn.disabled = false;
+    }
+}
+
+async function loadRoutingGraphs() {
+    const el = document.getElementById('routing-graphs-list');
+    if (!el) return;
+    try {
+        const r = await fetch('/api/routing/installed', { cache: 'no-store' });
+        const data = await r.json();
+        if (!data.graphs.length) {
+            el.textContent = 'Keine Routing-Graphen installiert';
+            return;
+        }
+        el.innerHTML = data.graphs.map(g => {
+            const invalid = g.valid === false || g.node_count === 0;
+            const nodeInfo = invalid
+                ? `<span style="color:var(--warning,#f59e0b)">⚠ Ungültige Datei</span>`
+                : `<span style="color:var(--text-dim)">${g.node_count.toLocaleString()} Knoten · ${g.size_mb} MB</span>`;
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--border,rgba(255,255,255,0.05));">
+                <span>${g.name}</span>
+                <span style="display:flex;align-items:center;gap:8px;">
+                    ${nodeInfo}
+                    <span style="cursor:pointer;opacity:0.6;font-size:14px;" title="Löschen"
+                          onclick="window._deleteRoutingGraph('${g.name}', this)">🗑</span>
+                </span>
+            </div>`;
+        }).join('');
+    } catch {
+        el.textContent = 'Fehler beim Laden';
+    }
+}
+
+window._deleteRoutingGraph = async function(name, el) {
+    if (!confirm(`Routing-Graph "${name}" wirklich löschen?`)) return;
+    el.textContent = '…';
+    try {
+        const r = await fetch(`/api/routing/graphs/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        if (r.ok) {
+            await loadRoutingGraphs();
+        } else {
+            const d = await r.json().catch(() => ({}));
+            alert(d.detail || 'Fehler beim Löschen');
+            el.textContent = '🗑';
+        }
+    } catch (e) {
+        alert('Fehler: ' + e.message);
+        el.textContent = '🗑';
+    }
+};
+
+export async function deleteMapRegion(regionId, iconEl) {
+    if (!confirm(`"${regionId}" wirklich löschen?`)) return;
+    iconEl.textContent = '…';
+    try {
+        const r = await fetch(`/api/map/regions/${regionId}`, { method: 'DELETE' });
+        if (r.ok) {
+            await loadMapRegions();
+        } else {
+            const d = await r.json().catch(() => ({}));
+            alert(d.detail || 'Fehler beim Löschen');
+            iconEl.textContent = '🗑';
+        }
+    } catch (err) {
+        alert(err.message);
+        iconEl.textContent = '🗑';
     }
 }
 
@@ -1915,6 +2056,10 @@ window.toggleLocks = toggleLocks;
 window.togglePegel = togglePegel;
 window.initLayerVisibility = initLayerVisibility;
 window.loadMapRegions = loadMapRegions;
+window.deleteMapRegion = deleteMapRegion;
 window.toggleMapRegion = toggleMapRegion;
 window.onMbtilesFileSelected = onMbtilesFileSelected;
 window.uploadMbtiles = uploadMbtiles;
+window.onRoutingFileSelected = onRoutingFileSelected;
+window.uploadRoutingFile = uploadRoutingFile;
+window.loadRoutingGraphs = loadRoutingGraphs;

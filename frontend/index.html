@@ -908,6 +908,10 @@
                         <div class="toggle active" id="toggle-waterways" onclick="BoatOS.ui.toggleSettingToggle(this, 'preferWaterways')"></div>
                     </div>
                     <div class="setting-item">
+                        <span data-i18n="settings_online_routing_fallback">Online-Routing als Fallback</span>
+                        <div class="toggle active" id="toggle-online-routing" onclick="BoatOS.ui.toggleSettingToggle(this, 'onlineRoutingFallback')"></div>
+                    </div>
+                    <div class="setting-item">
                         <span data-i18n="settings_default_speed">Standard-Geschwindigkeit</span>
                         <input type="number" class="setting-input" id="setting-default-speed" value="6" step="0.5"> <span class="unit-speed">kn</span>
                     </div>
@@ -1215,6 +1219,33 @@
                     <small style="color: var(--text-dim); font-size: 11px;">
                         🔗 API-Key bei graphhopper.com registrieren (500 Anfragen/Tag kostenlos)
                     </small>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Routing-Daten (grenzüberschreitend)</h4>
+                    <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">
+                        .routing-Dateien aus dem MBTiles Creator hochladen — ermöglicht Routen über Ländergrenzen.
+                    </p>
+                    <div id="routing-graphs-list" style="margin-bottom:10px;font-size:12px;color:var(--text-dim);">Wird geladen…</div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <label class="btn-secondary" style="cursor:pointer;flex:1;text-align:center;min-width:120px;">
+                            📂 .routing-Datei wählen
+                            <input type="file" id="routing-upload-input" accept=".routing" style="display:none"
+                                   onchange="BoatOS.ui.onRoutingFileSelected(this)">
+                        </label>
+                        <button id="routing-upload-btn" class="btn-primary" style="flex:1;min-width:120px;display:none;"
+                                onclick="BoatOS.ui.uploadRoutingFile()">⬆ Hochladen</button>
+                    </div>
+                    <div id="routing-upload-filename" style="font-size:11px;color:var(--accent);margin-top:4px;display:none;"></div>
+                    <div id="routing-upload-progress" style="display:none;margin-top:8px;">
+                        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-bottom:3px;">
+                            <span id="routing-upload-status">Hochladen…</span>
+                            <span id="routing-upload-pct">0%</span>
+                        </div>
+                        <div style="background:var(--surface-2,rgba(0,0,0,0.3));border-radius:4px;overflow:hidden;height:6px;">
+                            <div id="routing-upload-bar" style="height:100%;width:0%;background:var(--accent);transition:width 0.2s;"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="setting-group">

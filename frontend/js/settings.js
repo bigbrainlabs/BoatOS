@@ -168,6 +168,8 @@ export function saveAllSettings() {
     if (osrmUrl) settings.routing.osrmUrl = osrmUrl.value;
     if (graphhopperApiKey) settings.routing.graphhopperApiKey = graphhopperApiKey.value;
     if (toggleWaterCurrent) settings.routing.waterCurrentEnabled = toggleWaterCurrent.classList.contains('active');
+    const toggleOnlineRouting = document.getElementById('toggle-online-routing');
+    if (toggleOnlineRouting) settings.routing.onlineRoutingFallback = toggleOnlineRouting.classList.contains('active');
 
     // Fließgeschwindigkeiten - Gewässer-spezifisch
     settings.routing.currents = settings.routing.currents || {};
@@ -411,6 +413,9 @@ export async function loadAllSettings() {
         if (osrmUrl && settings.routing.osrmUrl) osrmUrl.value = settings.routing.osrmUrl;
         if (graphhopperApiKey && settings.routing.graphhopperApiKey) graphhopperApiKey.value = settings.routing.graphhopperApiKey;
         if (toggleWaterCurrent) toggleWaterCurrent.classList.toggle('active', settings.routing.waterCurrentEnabled === true);
+        const toggleOnlineRouting = document.getElementById('toggle-online-routing');
+        // Default true — toggle is active unless explicitly set to false
+        if (toggleOnlineRouting) toggleOnlineRouting.classList.toggle('active', settings.routing.onlineRoutingFallback !== false);
 
         // Fließgeschwindigkeiten laden
         if (settings.routing.currents) {

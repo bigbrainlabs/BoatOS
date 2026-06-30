@@ -2,10 +2,14 @@
 OSRM-based Waterway Routing
 Fast routing using local OSRM server with custom waterway profile
 """
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 import aiohttp
 import asyncio
 import math
+import heapq
+import sqlite3
+from pathlib import Path
+from collections import defaultdict
 
 class OSRMRouter:
     def __init__(self, osrm_url: str = "http://127.0.0.1:5000"):
@@ -18,7 +22,7 @@ class OSRMRouter:
         self.osrm_url = osrm_url.rstrip('/')
         self.enabled = False  # Will be set to True after health check
 
-    async def check_health(self) -> bool:
+    async def check_health(self, timeout: int = 60) -> bool:
         """Check if OSRM server is available"""
         try:
             async with aiohttp.ClientSession() as session:
@@ -27,7 +31,7 @@ class OSRMRouter:
                 test_url = f"{self.osrm_url}/route/v1/driving/11.6167,52.1205;11.6267,52.1305?overview=false"
                 async with session.get(
                     test_url,
-                    timeout=aiohttp.ClientTimeout(total=3)
+                    timeout=aiohttp.ClientTimeout(total=timeout)
                 ) as response:
                     if response.status == 200:
                         data = await response.json()
@@ -170,7 +174,7 @@ class OSRMRouter:
                 async with session.get(
                     url,
                     params=params,
-                    timeout=aiohttp.ClientTimeout(total=10)
+                    timeout=aiohttp.ClientTimeout(total=30)
                 ) as response:
                     if response.status == 200:
                         data = await response.json()
@@ -188,6 +192,25 @@ class OSRMRouter:
                             if distance_m == 0:
                                 print(f"⚠️ OSRM returned distance=0 (coordinates outside map data)")
                                 return self._direct_route(waypoints)
+
+                            # Detect partial route: OSRM snaps the destination to the nearest
+                            # known waterway node when the destination is outside the loaded
+                            # map region (e.g. Netherlands when only Germany is loaded).
+                            # If the route endpoint is far from the intended destination,
+                            # extend with a straight-line segment so the route reaches the goal.
+                            partial_route = False
+                            partial_gap_km = 0.0
+                            route_coords = geometry.get("coordinates", [])
+                            if route_coords and len(waypoints) >= 2:
+                                last_pt = route_coords[-1]  # [lon, lat]
+                                dest = waypoints[-1]        # (lon, lat)
+                                gap_m = self.haversine_distance(last_pt[0], last_pt[1], dest[0], dest[1])
+                                if gap_m > 5000:  # > 5 km gap → OSRM didn't reach destination
+                                    partial_route = True
+                                    partial_gap_km = gap_m / 1000
+                                    print(f"⚠️ OSRM partial route: {partial_gap_km:.1f} km gap to destination — extending with direct line")
+                                    geometry["coordinates"].append([dest[0], dest[1]])
+                                    distance_m += gap_m
 
                             # Extract infrastructure (locks, bridges)
                             infrastructure = self._extract_infrastructure(route)
@@ -222,7 +245,9 @@ class OSRMRouter:
                                     "routing_type": "osrm",
                                     "locks": infrastructure["locks"],
                                     "bridges": infrastructure["bridges"],
-                                    "boat_restrictions": boat_data if boat_data else None
+                                    "boat_restrictions": boat_data if boat_data else None,
+                                    "partial_route": partial_route,
+                                    "partial_gap_km": round(partial_gap_km, 1) if partial_route else None,
                                 }
                             }
                         else:
@@ -299,4 +324,210 @@ class OSRMRouter:
                 "waterway_routed": False,
                 "routing_type": "direct"
             }
+        }
+
+
+class BrouterRouter:
+    """Online waterway routing via brouter.de (rivers profile). No API key required."""
+
+    URL = "https://brouter.de/brouter"
+    PROFILE = "rivers"
+
+    async def route(self, waypoints: List[Tuple[float, float]]) -> dict:
+        """
+        Route via Brouter online API.
+        waypoints: list of (lon, lat) tuples
+        Returns same structure as OSRMRouter.route(), or dict with 'error' key on failure.
+        """
+        lonlats = "|".join(f"{lon},{lat}" for lon, lat in waypoints)
+        params = {
+            "lonlats": lonlats,
+            "profile": self.PROFILE,
+            "alternativeidx": "0",
+            "format": "geojson",
+        }
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    self.URL,
+                    params=params,
+                    timeout=aiohttp.ClientTimeout(total=20)
+                ) as response:
+                    if response.status != 200:
+                        text = await response.text()
+                        print(f"⚠️ Brouter API HTTP {response.status}: {text[:200]}")
+                        return {"error": f"Brouter HTTP {response.status}"}
+
+                    data = await response.json(content_type=None)
+                    features = data.get("features", [])
+                    if not features:
+                        return {"error": "Brouter returned no route features"}
+
+                    feature = features[0]
+                    geometry = feature.get("geometry", {})
+                    props = feature.get("properties", {})
+
+                    distance_m = float(props.get("track-length", 0))
+                    duration_s = float(props.get("total-time", 0))
+
+                    if distance_m == 0:
+                        return {"error": "Brouter returned zero-distance route"}
+
+                    print(f"✅ Brouter route: {distance_m/1852:.2f} NM, {duration_s/60:.1f} min")
+
+                    return {
+                        "type": "Feature",
+                        "geometry": geometry,
+                        "properties": {
+                            "distance_m": distance_m,
+                            "distance_nm": distance_m / 1852,
+                            "duration_s": duration_s,
+                            "duration_h": duration_s / 3600,
+                            "waterway_routed": True,
+                            "routing_type": "brouter",
+                            "locks": [],
+                            "bridges": [],
+                            "partial_route": False,
+                        }
+                    }
+
+        except asyncio.TimeoutError:
+            print("⚠️ Brouter API timeout after 20s")
+            return {"error": "Brouter timeout"}
+        except Exception as e:
+            print(f"❌ Brouter routing error: {e}")
+            return {"error": str(e)}
+
+
+class WaterwayGraphRouter:
+    """A* routing on .routing SQLite graphs built by the MBTiles Creator."""
+
+    CELL = 0.1  # degrees per spatial grid cell
+
+    def __init__(self, routing_dir: Path):
+        self.routing_dir = Path(routing_dir)
+        self._adj: Dict[int, List[Tuple[int, float]]] = {}
+        self._coords: Dict[int, Tuple[float, float]] = {}
+        self._spatial: Dict[Tuple[int, int], List[int]] = defaultdict(list)
+        self._loaded: List[str] = []
+
+    def load_all(self):
+        self._adj.clear()
+        self._coords.clear()
+        self._spatial.clear()
+        self._loaded.clear()
+        if not self.routing_dir.exists():
+            return
+        for rf in sorted(self.routing_dir.glob("*.routing")):
+            self._load_file(rf)
+
+    def _load_file(self, path: Path):
+        try:
+            con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, check_same_thread=False)
+            for nid, lat, lon in con.execute("SELECT id, lat, lon FROM nodes"):
+                self._coords[nid] = (lat, lon)
+                cx, cy = int(lon / self.CELL), int(lat / self.CELL)
+                self._spatial[(cx, cy)].append(nid)
+            for fn, tn, dist in con.execute("SELECT from_node, to_node, distance_m FROM edges"):
+                self._adj.setdefault(fn, []).append((tn, float(dist)))
+            con.close()
+            self._loaded.append(path.stem)
+            print(f"✅ Routing graph '{path.stem}': {len(self._coords)} nodes")
+        except Exception as e:
+            print(f"⚠️ Failed to load {path.name}: {e}")
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self._loaded)
+
+    def _hav(self, lat1, lon1, lat2, lon2) -> float:
+        R = 6371000.0
+        dlat = math.radians(lat2 - lat1)
+        dlon = math.radians(lon2 - lon1)
+        a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+        return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    def _snap(self, lat: float, lon: float, max_m: float = 15000) -> Optional[int]:
+        cx, cy = int(lon / self.CELL), int(lat / self.CELL)
+        best_id, best_d = None, max_m
+        for dx in range(-3, 4):
+            for dy in range(-3, 4):
+                for nid in self._spatial.get((cx + dx, cy + dy), []):
+                    nlat, nlon = self._coords[nid]
+                    d = self._hav(lat, lon, nlat, nlon)
+                    if d < best_d:
+                        best_d = d
+                        best_id = nid
+        return best_id
+
+    def _astar(self, start: int, goal: int) -> Tuple[Optional[List[int]], float]:
+        if start == goal:
+            return [start], 0.0
+        if start not in self._coords or goal not in self._coords:
+            return None, 0.0
+        glat, glon = self._coords[goal]
+        open_set: List[Tuple[float, int]] = [(0.0, start)]
+        came_from: Dict[int, int] = {}
+        g: Dict[int, float] = {start: 0.0}
+        visited: set = set()
+        while open_set:
+            _, cur = heapq.heappop(open_set)
+            if cur in visited:
+                continue
+            visited.add(cur)
+            if cur == goal:
+                path = []
+                while cur in came_from:
+                    path.append(cur)
+                    cur = came_from[cur]
+                path.append(start)
+                path.reverse()
+                return path, g[goal]
+            for nb, dist in self._adj.get(cur, []):
+                ng = g.get(cur, math.inf) + dist
+                if ng < g.get(nb, math.inf):
+                    came_from[nb] = cur
+                    g[nb] = ng
+                    nlat, nlon = self._coords.get(nb, (glat, glon))
+                    heapq.heappush(open_set, (ng + self._hav(nlat, nlon, glat, glon), nb))
+        return None, 0.0
+
+    async def route(self, waypoints: List[Tuple[float, float]]) -> dict:
+        if not self.enabled:
+            return {"error": "no_routing_graphs"}
+        snapped = []
+        for lon, lat in waypoints:
+            nid = self._snap(lat, lon)
+            if nid is None:
+                return {"error": f"no_coverage:{lat:.4f},{lon:.4f}"}
+            snapped.append(nid)
+        coords: List[List[float]] = []
+        total_m = 0.0
+        for i in range(len(snapped) - 1):
+            path, dist = self._astar(snapped[i], snapped[i + 1])
+            if path is None:
+                return {"error": f"no_path_segment_{i}"}
+            seg = [[self._coords[n][1], self._coords[n][0]] for n in path]
+            if coords:
+                seg = seg[1:]
+            coords.extend(seg)
+            total_m += dist
+        if coords:
+            coords[0] = list(waypoints[0])
+            coords[-1] = list(waypoints[-1])
+        speed_ms = 10 * 1000 / 3600
+        return {
+            "type": "Feature",
+            "geometry": {"type": "LineString", "coordinates": coords},
+            "properties": {
+                "distance_m": total_m,
+                "distance_nm": total_m / 1852,
+                "duration_s": total_m / speed_ms,
+                "duration_h": total_m / speed_ms / 3600,
+                "waterway_routed": True,
+                "routing_type": "python_graph",
+                "locks": [],
+                "bridges": [],
+                "partial_route": False,
+            },
         }

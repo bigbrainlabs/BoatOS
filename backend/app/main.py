@@ -40,6 +40,8 @@ _HOME_DIR = Path.home()
 MBTILES_DIR = _BASE_DIR / "data"
 CHARTS_DIR = MBTILES_DIR / "charts"
 CHARTS_DIR.mkdir(parents=True, exist_ok=True)
+ROUTING_DIR = MBTILES_DIR / "routing"
+ROUTING_DIR.mkdir(parents=True, exist_ok=True)
 
 # Mount charts directory for static serving
 app.mount("/charts", StaticFiles(directory=str(CHARTS_DIR)), name="charts")
@@ -3189,6 +3191,8 @@ async def publish_sensor_data():
 # ==================== WATERWAY ROUTING ====================
 osrm_router = None
 pyroutelib_router = None
+brouter_router = None
+waterway_graph_router = None
 
 async def generate_lua_profile(boat: Dict[str, Any]):
     """
@@ -3256,10 +3260,11 @@ def init_waterway_router():
     """
     Initialize waterway routers with fallback strategy:
     1. OSRM (fast, local server, best for waterways)
+    1.5 Brouter (online, cross-border waterway routing)
     2. PyRouteLib (Python-based OSM routing, slower but works)
     3. Direct line (Rhumbline fallback)
     """
-    global osrm_router, pyroutelib_router
+    global osrm_router, pyroutelib_router, brouter_router, waterway_graph_router
 
     # Load settings
     osrm_url = "http://127.0.0.1:5000"
@@ -3302,6 +3307,28 @@ def init_waterway_router():
         print(f"⚠️ PyRouteLib router initialization failed: {e}")
         pyroutelib_router = None
 
+    # Always initialize Brouter (stateless, no health check needed)
+    try:
+        from osrm_routing import BrouterRouter
+        brouter_router = BrouterRouter()
+        print("✅ Brouter router initialized (online fallback)")
+    except Exception as e:
+        print(f"⚠️ Brouter router initialization failed: {e}")
+        brouter_router = None
+
+    # Load uploaded .routing graphs (built by MBTiles Creator)
+    try:
+        from osrm_routing import WaterwayGraphRouter
+        waterway_graph_router = WaterwayGraphRouter(ROUTING_DIR)
+        waterway_graph_router.load_all()
+        if waterway_graph_router.enabled:
+            print(f"✅ Waterway graph router: {waterway_graph_router._loaded}")
+        else:
+            print("ℹ️ Waterway graph router: no .routing files in data/routing/")
+    except Exception as e:
+        print(f"⚠️ Waterway graph router initialization failed: {e}")
+        waterway_graph_router = None
+
 @app.post("/api/route")
 async def calculate_route(request: dict):
     """
@@ -3332,6 +3359,15 @@ async def calculate_route(request: dict):
         # Convert to tuples (lon, lat)
         waypoints = [(float(wp[0]), float(wp[1])) for wp in waypoints_raw]
 
+        # Read online routing fallback setting (default: enabled)
+        online_routing_fallback = True
+        try:
+            with open("data/settings.json", 'r') as f:
+                _s = json.load(f)
+                online_routing_fallback = _s.get('routing', {}).get('onlineRoutingFallback', True)
+        except Exception:
+            pass
+
         # Extract boat data if provided
         boat_data = None
         if any(key in request for key in ["boat_draft", "boat_height", "boat_beam"]):
@@ -3347,6 +3383,59 @@ async def calculate_route(request: dict):
                 print("🚀 Trying OSRM waterway routing...")
                 route = await osrm_router.route(waypoints, boat_data)
                 if route.get("properties", {}).get("routing_type") == "osrm":
+                    # Strategy 1.5: OSRM partial route → try uploaded .routing graph first,
+                    # then Brouter online fallback.
+                    if route["properties"].get("partial_route"):
+                        # 1.5a: Python graph router (uploaded .routing files from Creator)
+                        # Use OSRM's last known waterway point as graph-router start so we
+                        # only need .routing data for the region OSRM couldn't cover (e.g. NL).
+                        if waterway_graph_router and waterway_graph_router.enabled:
+                            print("🗺️ OSRM partial route — trying uploaded waterway graph...")
+                            try:
+                                route_coords = route["geometry"]["coordinates"]
+                                # route_coords[-1] is the destination appended as straight line;
+                                # route_coords[-2] is the last real OSRM waterway point.
+                                if len(route_coords) >= 2:
+                                    osrm_end = tuple(route_coords[-2])   # (lon, lat)
+                                    graph_wp = [osrm_end, waypoints[-1]]
+                                else:
+                                    graph_wp = waypoints
+                                graph_result = await waterway_graph_router.route(graph_wp)
+                                if "error" not in graph_result:
+                                    # Stitch: OSRM coords (without appended straight-line point)
+                                    # + graph coords from border onward
+                                    osrm_prefix = route_coords[:-1]
+                                    graph_coords = graph_result["geometry"]["coordinates"]
+                                    stitched = osrm_prefix + graph_coords
+                                    total_m = route["properties"]["distance_m"] - \
+                                              route["properties"].get("partial_gap_km", 0) * 1000 + \
+                                              graph_result["properties"]["distance_m"]
+                                    route["geometry"]["coordinates"] = stitched
+                                    route["properties"]["distance_m"] = total_m
+                                    route["properties"]["distance_nm"] = total_m / 1852
+                                    route["properties"]["partial_route"] = False
+                                    route["properties"]["partial_gap_km"] = None
+                                    route["properties"]["routing_type"] = "osrm+graph"
+                                    print(f"✅ Stitched OSRM+graph route ({waterway_graph_router._loaded})")
+                                else:
+                                    print(f"⚠️ Graph router: {graph_result['error']}")
+                            except Exception as _ge:
+                                print(f"⚠️ Graph router exception: {_ge}")
+                        # 1.5b: Brouter online (only if still partial after graph attempt)
+                        if (route["properties"].get("partial_route")
+                                and online_routing_fallback
+                                and brouter_router):
+                            print("🌐 Trying Brouter online routing...")
+                            try:
+                                brouter_result = await brouter_router.route(waypoints)
+                                if "error" not in brouter_result:
+                                    print("✅ Brouter cross-border route used")
+                                    route = brouter_result
+                                else:
+                                    print(f"⚠️ Brouter failed ({brouter_result['error']})")
+                            except Exception as _be:
+                                print(f"⚠️ Brouter exception: {_be}")
+
                     # Adjust ETA based on water currents
                     route_geometry = route["geometry"]["coordinates"]
                     distance_km = route["properties"]["distance_m"] / 1000
@@ -3426,6 +3515,23 @@ async def calculate_route(request: dict):
                     return route
             except Exception as e:
                 print(f"⚠️ OSRM routing failed: {e}")
+                # OSRM failed (e.g. cold-start timeout) — still try graph router + Brouter
+                if waterway_graph_router and waterway_graph_router.enabled:
+                    try:
+                        graph_result = await waterway_graph_router.route(waypoints)
+                        if "error" not in graph_result:
+                            print(f"✅ Graph router used after OSRM failure")
+                            return graph_result
+                    except Exception:
+                        pass
+                if online_routing_fallback and brouter_router:
+                    try:
+                        brouter_result = await brouter_router.route(waypoints)
+                        if "error" not in brouter_result:
+                            print("✅ Brouter used after OSRM failure")
+                            return brouter_result
+                    except Exception:
+                        pass
 
         # Strategy 2: Try PyRouteLib (slower but follows waterways)
         if pyroutelib_router and pyroutelib_router.enabled:
@@ -3594,6 +3700,86 @@ async def switch_region(request: dict):
 
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+# ==================== ROUTING GRAPH UPLOAD ====================
+
+def _sanitize_routing_name(filename: str) -> str:
+    stem = Path(filename).stem
+    stem = re.sub(r'[^a-z0-9_\-]', '', stem.lower().replace(' ', '_'))
+    return stem + ".routing"
+
+@app.post("/api/routing/upload-raw")
+async def upload_routing_raw(request: Request, overwrite: bool = False):
+    """Streaming upload of a .routing SQLite file built by the MBTiles Creator."""
+    raw_name = request.headers.get("X-Filename", "upload.routing")
+    display_name = _sanitize_routing_name(raw_name)
+    dest = ROUTING_DIR / display_name
+    if dest.exists() and not overwrite:
+        raise HTTPException(status_code=409, detail=f"{dest.name} already exists")
+    SQLITE_MAGIC = b"SQLite format 3\x00"
+    validated = False
+    tmp = ROUTING_DIR / f".{display_name}.uploading"
+    try:
+        with open(tmp, "wb") as out:
+            async for chunk in request.stream():
+                if not validated:
+                    if len(chunk) < 16 or chunk[:16] != SQLITE_MAGIC:
+                        tmp.unlink(missing_ok=True)
+                        raise HTTPException(status_code=400, detail="Not a valid .routing file")
+                    validated = True
+                out.write(chunk)
+        tmp.replace(dest)
+    except HTTPException:
+        raise
+    except Exception as e:
+        tmp.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    size_mb = round(dest.stat().st_size / 1_048_576, 2)
+    if waterway_graph_router:
+        waterway_graph_router.load_all()
+        print(f"✅ Routing graph reloaded: {waterway_graph_router._loaded}")
+    return {"ok": True, "name": display_name, "size_mb": size_mb}
+
+@app.get("/api/routing/installed")
+async def get_installed_routing_graphs():
+    """List installed .routing files."""
+    graphs = []
+    for rf in sorted(ROUTING_DIR.glob("*.routing")):
+        err = None
+        try:
+            con = _sqlite3.connect(f"file:{rf}?mode=ro", uri=True)
+            meta = dict(con.execute("SELECT key, value FROM metadata").fetchall())
+            con.execute("SELECT id, lat, lon FROM nodes LIMIT 1").fetchone()
+            con.close()
+            valid = True
+        except Exception as _e:
+            meta = {}
+            valid = False
+            err = str(_e)
+        graphs.append({
+            "name": rf.stem,
+            "filename": rf.name,
+            "size_mb": round(rf.stat().st_size / 1_048_576, 2),
+            "node_count": int(meta.get("node_count", 0)),
+            "edge_count": int(meta.get("edge_count", 0)),
+            "created_at": meta.get("created_at", ""),
+            "valid": valid,
+            "error": err,
+        })
+    return {"graphs": graphs}
+
+@app.delete("/api/routing/graphs/{name}")
+async def delete_routing_graph(name: str):
+    """Delete an installed .routing file."""
+    safe = re.sub(r'[^a-z0-9_\-]', '', name.lower())
+    target = ROUTING_DIR / f"{safe}.routing"
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Routing file not found")
+    target.unlink()
+    if waterway_graph_router:
+        waterway_graph_router.load_all()
+    return {"ok": True, "deleted": target.name}
 
 # ==================== CREW MANAGEMENT ====================
 @app.get("/api/crew")
@@ -4342,6 +4528,12 @@ async def disconnect_wifi():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+async def _osrm_health_check_on_startup():
+    """Run OSRM health check once at startup so the first route request doesn't fall back to direct line."""
+    await asyncio.sleep(3)  # let OSRM fully start if it was just launched
+    if osrm_router:
+        await osrm_router.check_health()
+
 # ==================== STARTUP ====================
 @app.on_event("startup")
 async def startup_event():
@@ -4357,6 +4549,7 @@ async def startup_event():
     # asyncio.create_task(publish_sensor_data())  # DISABLED: Home Assistant removed, no longer needed
     load_chart_layers()
     init_waterway_router()
+    asyncio.create_task(_osrm_health_check_on_startup())
 
     # Load settings and configure services
     try:
@@ -4669,6 +4862,30 @@ async def map_regions():
             "base_region": base if is_seamark else None,
         })
     return {"installed": installed, "active": active, "mbtiles_dir": str(MBTILES_DIR)}
+
+@app.delete("/api/map/regions/{region_id}")
+async def delete_map_region(region_id: str):
+    stem = re.sub(r"[^\w\-]", "", region_id)
+    deleted = []
+    for suffix in ["", "-seamarks"]:
+        path = MBTILES_DIR / f"{stem}{suffix}.mbtiles"
+        if path.exists():
+            path.unlink()
+            deleted.append(path.name)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Region not found")
+    active = _get_active_regions()
+    if stem in active:
+        active = [r for r in active if r != stem]
+        try:
+            with open("data/settings.json") as f:
+                s = json.load(f)
+        except Exception:
+            s = {}
+        s.setdefault("map", {})["activeRegions"] = active
+        with open("data/settings.json", "w") as f:
+            json.dump(s, f, indent=2)
+    return {"ok": True, "deleted": deleted}
 
 @app.post("/api/map/regions/active")
 async def set_active_regions(body: dict):

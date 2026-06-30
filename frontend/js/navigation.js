@@ -39,6 +39,9 @@ let navigationStartButton = null;
 // AbortController für Route-Berechnungen
 let routeCalculationController = null;
 
+// Retry-Timer wenn Backend noch nicht bereit (z.B. OSRM cold-start)
+let routeRetryTimeout = null;
+
 // Route-Daten für Live-ETA
 let currentRouteData = {
     totalDistanceNM: 0,
@@ -738,8 +741,14 @@ export function reorderWaypoints(fromIndex, toIndex, context) {
  * Berechnet die Route zwischen allen Wegpunkten
  * @param {Object} context - Kontext mit map, waypoints, API_URL, etc.
  */
-export async function calculateRoute(context) {
+export async function calculateRoute(context, _isRetry = false) {
     const { map, waypoints, API_URL, showRoutingLoader, hideRoutingLoader, showNotification } = context;
+
+    // Ausstehenden Retry abbrechen (neuer Nutzeraufruf hat Vorrang)
+    if (routeRetryTimeout) {
+        clearTimeout(routeRetryTimeout);
+        routeRetryTimeout = null;
+    }
 
     // Laufende Route-Berechnung abbrechen
     if (routeCalculationController) {
@@ -792,10 +801,26 @@ export async function calculateRoute(context) {
                 const routingType = routeData.properties?.routing_type || 'waterway';
 
                 if (routingType === 'direct' || !isWaterwayRouted) {
+                    if (!_isRetry) {
+                        // OSRM könnte noch laden — stiller Retry nach 5s statt sofort Luftlinie
+                        routeRetryTimeout = setTimeout(() => calculateRoute(context, true), 5000);
+                        return;
+                    }
                     if (showNotification) showNotification(t('navWaterwayUnavailable'), 'warning');
                     drawDirectRoute(context);
                     if (hideRoutingLoader) hideRoutingLoader();
                     return;
+                }
+
+                // Routing source notification
+                if (routeData.properties?.routing_type === 'brouter') {
+                    if (showNotification) showNotification(t('navBrouterRoute'), 'info');
+                } else if (routeData.properties?.partial_route) {
+                    const gap = routeData.properties.partial_gap_km ?? '?';
+                    if (showNotification) showNotification(
+                        t('navPartialRoute', { gap }),
+                        'warning'
+                    );
                 }
 
                 // Wasserweg-Route zeichnen
@@ -840,10 +865,13 @@ function drawWaterwayRoute(routeData, context) {
     const coords = routeData.geometry.coordinates;
     const routeCoords = coords;
 
+    // Brouter (online cross-border) gets a distinct amber color
+    const routeColor = routeData.properties?.routing_type === 'brouter' ? '#e67e22' : '#2ecc71';
+
     // Route-Feature erstellen
     const routeFeature = {
         type: 'Feature',
-        properties: { color: '#2ecc71' },
+        properties: { color: routeColor },
         geometry: {
             type: 'LineString',
             coordinates: routeCoords
@@ -867,7 +895,7 @@ function drawWaterwayRoute(routeData, context) {
 
     // Route-Koordinaten für XTE-Berechnung speichern
     currentRouteCoordinates = routeCoords.map(c => ({ lat: c[1], lon: c[0] }));
-    currentRouteColor = '#2ecc71';
+    currentRouteColor = routeColor;
 
     // Richtungspfeile hinzufügen
     addRouteArrows(context);
@@ -2382,7 +2410,9 @@ export function displayLocksTimeline(context) {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
         `;
-        document.getElementById('map-container').appendChild(locksTimelinePanel);
+        const mapContainer = document.getElementById('mapContainer');
+        if (!mapContainer) return;
+        mapContainer.appendChild(locksTimelinePanel);
     }
 
     const currentLat = currentPosition?.lat;
