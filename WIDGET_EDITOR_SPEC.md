@@ -18,7 +18,6 @@
 | Feld | Welcher Wert des Sensors angezeigt wird |
 | Bezeichnung (Alias) | Anzeige-Name überschreiben |
 | Stil | card / minimal / compact / hero |
-| Breite | Spaltenanzahl |
 
 ### GAUGE
 | Property | Beschreibung |
@@ -30,7 +29,6 @@
 | Min / Max | Skalenbereich |
 | Dezimalstellen | 0–3 |
 | Stil | arc180 / arc270 / arc360 / bar |
-| Breite | Spaltenanzahl |
 
 ### HORIZON
 | Property | Beschreibung |
@@ -41,25 +39,21 @@
 | Pitch-Feld | Feld des Pitch-Sensors (z. B. `neigung`) |
 | Impact-Sensor | Sensor für Erschütterungserkennung (optional) |
 | Impact-Feld | Feld des Impact-Sensors (z. B. `aktiv`) |
-| Breite | Spaltenanzahl |
 
 ### COMPASS
 | Property | Beschreibung |
 |---|---|
 | Sensor | Sensor für Kurs/Heading (base_name) |
 | Feld | Feld des Sensors (z. B. `heading`) |
-| Breite | Spaltenanzahl |
 
 ### TEXT
 | Property | Beschreibung |
 |---|---|
 | Text | Statischer Anzeigetext |
-| Breite | Spaltenanzahl |
 
 ### CLOCK / SPACER
-| Property | Beschreibung |
-|---|---|
-| Breite | Spaltenanzahl |
+
+Keine konfigurierbaren Properties.
 
 ---
 
@@ -75,8 +69,7 @@ Alle Sensor-Zuweisungen werden als Felder im Widget-Objekt gespeichert (im DSL/L
   "pitchSensor": "boot/lage",
   "pitchField": "neigung",
   "impactSensor": "boot/sensoren/erschuetterung",
-  "impactField": "aktiv",
-  "size": 2
+  "impactField": "aktiv"
 }
 ```
 
@@ -90,8 +83,7 @@ Alle Sensor-Zuweisungen werden als Felder im Widget-Objekt gespeichert (im DSL/L
   "min": 0,
   "max": 4000,
   "style": "arc180",
-  "decimals": 0,
-  "size": 1
+  "decimals": 0
 }
 ```
 
