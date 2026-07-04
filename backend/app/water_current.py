@@ -518,64 +518,87 @@ class WaterCurrentService:
         sample_indices = [int(i * (len(route_geometry) - 1) / (num_samples - 1)) for i in range(num_samples)]
         sample_indices[-1] = len(route_geometry) - 1
 
-        weighted_speed_sum = 0.0
-        total_sampled_dist = 0.0
-        segment_infos = []
-        km_by_waterway: Dict[str, float] = {}
-        # Signed time impact per waterway: positive = costs time (upstream), negative = saves (downstream)
-        time_impact_by_waterway: Dict[str, float] = {}
+        known_waterways = set(self.static_currents['byName'].keys()) | set(self.river_mouths.keys())
 
+        # ── Pass 1: collect segment geometry + waterway per segment ──────────
+        raw_segments = []
         for i in range(len(sample_indices) - 1):
             idx1 = sample_indices[i]
             idx2 = sample_indices[i + 1]
-
             lon1, lat1 = route_geometry[idx1]
             lon2, lat2 = route_geometry[idx2]
-
-            segment_dist_km = self._haversine_distance(lat1, lon1, lat2, lon2)
-            bearing = self._calculate_bearing(lat1, lon1, lat2, lon2)
-
             mid_lat = (lat1 + lat2) / 2
             mid_lon = (lon1 + lon2) / 2
-
-            # Per-segment waterway detection — each segment uses its own tile.
-            # Prefer waterways that have an explicit byName config (known mouth data);
-            # fall back to the overall dominant if the tile returns an unknown tributary.
             seg_waterway_raw = (
                 self._waterway_at_point(mid_lat, mid_lon, mbtiles_files, tile_cache)
                 if mbtiles_files else None
             )
-            known_waterways = set(self.static_currents['byName'].keys()) | set(self.river_mouths.keys())
             seg_waterway = (
                 seg_waterway_raw if seg_waterway_raw in known_waterways
                 else (detected_waterway or seg_waterway_raw)
             )
+            raw_segments.append({
+                'lat1': lat1, 'lon1': lon1, 'lat2': lat2, 'lon2': lon2,
+                'mid_lat': mid_lat, 'mid_lon': mid_lon,
+                'dist_km': self._haversine_distance(lat1, lon1, lat2, lon2),
+                'bearing': self._calculate_bearing(lat1, lon1, lat2, lon2),
+                'waterway': seg_waterway,
+            })
 
-            current_kmh = self.get_current_at_point(mid_lat, mid_lon, seg_waterway)
+        # ── Determine upstream/downstream per waterway from route endpoints ──
+        # Uses first-entry and last-exit of each waterway on the route.
+        # This handles river meanders correctly: individual segments may go
+        # "away" from the mouth, but the overall path on that river still
+        # brings the boat closer (downstream) or further (upstream).
+        ww_first: Dict[str, Tuple[float, float]] = {}
+        ww_last:  Dict[str, Tuple[float, float]] = {}
+        for sd in raw_segments:
+            ww = sd['waterway']
+            if ww:
+                if ww not in ww_first:
+                    ww_first[ww] = (sd['lat1'], sd['lon1'])
+                ww_last[ww] = (sd['lat2'], sd['lon2'])
+
+        waterway_upstream: Dict[str, bool] = {}
+        for ww, (flat, flon) in ww_first.items():
+            mouth = self.river_mouths.get(ww)
+            if mouth:
+                llat, llon = ww_last[ww]
+                d_first = self._haversine_distance(flat, flon, mouth[0], mouth[1])
+                d_last  = self._haversine_distance(llat, llon, mouth[0], mouth[1])
+                waterway_upstream[ww] = d_last > d_first + 0.1  # further from mouth = upstream
+
+        # ── Pass 2: compute effective speeds + time impacts ──────────────────
+        weighted_speed_sum = 0.0
+        total_sampled_dist = 0.0
+        segment_infos = []
+        time_impact_by_waterway: Dict[str, float] = {}
+
+        for i, sd in enumerate(raw_segments):
+            seg_waterway = sd['waterway']
+            current_kmh = self.get_current_at_point(sd['mid_lat'], sd['mid_lon'], seg_waterway)
+            segment_dist_km = sd['dist_km']
 
             if current_kmh:
-                seg_mouth = self.river_mouths.get(seg_waterway) if seg_waterway else None
-                if seg_mouth:
-                    # Distance-to-mouth: closer to mouth → downstream, further → upstream.
-                    # More robust than bearing comparison (no ±180° boundary issues).
-                    dist_start = self._haversine_distance(lat1, lon1, seg_mouth[0], seg_mouth[1])
-                    dist_end   = self._haversine_distance(lat2, lon2, seg_mouth[0], seg_mouth[1])
-                    going_upstream = dist_end > dist_start + 0.05  # 50m tolerance
+                mouth = self.river_mouths.get(seg_waterway) if seg_waterway else None
+                if mouth and seg_waterway in waterway_upstream:
+                    going_upstream = waterway_upstream[seg_waterway]
                     current_component = current_kmh * (-1 if going_upstream else 1)
                     effective_speed = max(0.5, boat_speed_kmh + current_component)
                     direction = "↑berg" if going_upstream else "↓tal"
                 else:
-                    bearing_to_mouth = route_bearing
+                    # No mouth known → bearing fallback
                     effective_speed = self.calculate_effective_speed(
-                        boat_speed_kmh, current_kmh, bearing, bearing_to_mouth
+                        boat_speed_kmh, current_kmh, sd['bearing'], route_bearing
                     )
-                    angle_diff = abs(bearing - bearing_to_mouth)
+                    angle_diff = abs(sd['bearing'] - route_bearing)
                     if angle_diff > 180:
                         angle_diff = 360 - angle_diff
                     direction = "↓tal" if angle_diff < 90 else "↑berg"
+
                 nominal_time_h = segment_dist_km / boat_speed_kmh
                 actual_time_h  = segment_dist_km / effective_speed
-                time_impact_h  = actual_time_h - nominal_time_h  # positive=slower(berg), negative=faster(tal)
+                time_impact_h  = actual_time_h - nominal_time_h
                 print(f"      Seg {i+1} [{seg_waterway}]: {segment_dist_km:.1f}km, "
                       f"{direction}, current={current_kmh}km/h → eff={effective_speed:.1f}km/h "
                       f"({time_impact_h:+.2f}h)")
@@ -587,9 +610,10 @@ class WaterCurrentService:
                     'effective_speed_kmh': effective_speed,
                     'time_impact_h': time_impact_h,
                 })
-                if seg_waterway and current_kmh:
-                    km_by_waterway[seg_waterway] = km_by_waterway.get(seg_waterway, 0) + segment_dist_km
-                    time_impact_by_waterway[seg_waterway] = time_impact_by_waterway.get(seg_waterway, 0) + time_impact_h
+                if seg_waterway:
+                    time_impact_by_waterway[seg_waterway] = (
+                        time_impact_by_waterway.get(seg_waterway, 0) + time_impact_h
+                    )
             else:
                 effective_speed = boat_speed_kmh
                 segment_infos.append({
