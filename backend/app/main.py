@@ -3464,7 +3464,10 @@ async def calculate_route(request: dict):
 
                     # Find locks along the route
                     try:
-                        locks_on_route = locks_storage.get_locks_on_route(route_geometry, buffer_meters=500)
+                        # 250m: locks actually passed lie 0-220m off the OSRM line (POI at
+                        # lock building, route in chamber). 500m pulled in locks on nearby
+                        # parallel waterways that are never passed.
+                        locks_on_route = locks_storage.get_locks_on_route(route_geometry, buffer_meters=250)
 
                         # Filter out locks already provided by OSRM
                         osrm_locks = route["properties"].get("locks", [])
