@@ -1,10 +1,10 @@
 /**
  * BoatOS Service Worker - PWA Support
- * v17 - Responsive UI, FAB Speed Dial, Glassmorphism Bottom Sheet
+ * v20 - AbortController statt AbortSignal.timeout, Sat-Layers dynamisch
  */
 
 // App shell cache — bump this version on any app update
-const CACHE_NAME = 'boatos-v17';
+const CACHE_NAME = 'boatos-v22';
 
 // Satellite tile cache — intentionally versioned separately so it is NEVER
 // wiped when the app cache version changes (tiles take a long time to download)
@@ -28,12 +28,7 @@ const urlsToCache = [
 // Install — pre-cache app shell resources
 // ---------------------------------------------------------------------------
 self.addEventListener('install', event => {
-    self.skipWaiting(); // Activate immediately, don't wait for old SW to die
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then(cache => cache.addAll(urlsToCache))
-            .catch(err => console.log('SW install error:', err))
-    );
+    self.skipWaiting(); // Activate immediately — no pre-caching to avoid slow TLS per-file
 });
 
 // ---------------------------------------------------------------------------

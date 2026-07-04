@@ -4,7 +4,127 @@ Combines static lookup tables with live Pegelonline data
 """
 from typing import Dict, Optional, List, Tuple
 from pegelonline import pegelonline
+from pathlib import Path
+import sqlite3
+import gzip
 import math
+
+
+# ---------------------------------------------------------------------------
+# Minimal MVT (Mapbox Vector Tile) parser — pure stdlib, no external deps.
+# Used to extract waterway names from local MBTiles files (offline).
+# ---------------------------------------------------------------------------
+
+def _read_varint(data: bytes, pos: int) -> Tuple[int, int]:
+    result = shift = 0
+    while True:
+        b = data[pos]; pos += 1
+        result |= (b & 0x7F) << shift
+        if not (b & 0x80):
+            break
+        shift += 7
+    return result, pos
+
+def _skip_field(data: bytes, pos: int, wt: int) -> int:
+    if wt == 0:
+        _, pos = _read_varint(data, pos)
+    elif wt == 1:
+        pos += 8
+    elif wt == 2:
+        l, pos = _read_varint(data, pos); pos += l
+    elif wt == 5:
+        pos += 4
+    return pos
+
+def _parse_mvt_layer_names(layer_data: bytes) -> Tuple[Optional[str], List[str]]:
+    """Two-pass MVT layer parser — features precede keys/values in Planetiler output."""
+    keys: List[str] = []
+    values: List[Optional[str]] = []
+    feat_blobs: List[bytes] = []
+    lname: Optional[str] = None
+
+    pos = 0
+    while pos < len(layer_data):
+        tag, pos = _read_varint(layer_data, pos)
+        fn, wt = tag >> 3, tag & 7
+        if wt == 2:
+            l, pos = _read_varint(layer_data, pos)
+            lv = layer_data[pos:pos+l]; pos += l
+            if fn == 1:
+                lname = lv.decode('utf-8', errors='ignore')
+            elif fn == 3:
+                keys.append(lv.decode('utf-8', errors='ignore'))
+            elif fn == 4:
+                # Decode MVT Value message
+                vpos = 0; val: Optional[str] = None
+                while vpos < len(lv):
+                    vtag, vpos = _read_varint(lv, vpos)
+                    vfn, vwt = vtag >> 3, vtag & 7
+                    if vwt == 2:
+                        vl, vpos = _read_varint(lv, vpos)
+                        vv = lv[vpos:vpos+vl]; vpos += vl
+                        if vfn == 1:
+                            val = vv.decode('utf-8', errors='ignore')
+                    elif vwt == 0:
+                        _, vpos = _read_varint(lv, vpos)
+                    elif vwt == 1: vpos += 8
+                    elif vwt == 5: vpos += 4
+                values.append(val)
+            elif fn == 2:
+                feat_blobs.append(lv)
+        elif wt == 0: _, pos = _read_varint(layer_data, pos)
+        elif wt == 1: pos += 8
+        elif wt == 5: pos += 4
+
+    names: List[str] = []
+    for fb in feat_blobs:
+        fpos = 0
+        while fpos < len(fb):
+            ftag, fpos = _read_varint(fb, fpos)
+            ffn, fwt = ftag >> 3, ftag & 7
+            if ffn == 2 and fwt == 2:
+                fl, fpos = _read_varint(fb, fpos)
+                fv = fb[fpos:fpos+fl]; fpos += fl
+                # packed uint32 tags: [key_idx, val_idx, ...]
+                tpos = 0; ts: List[int] = []
+                while tpos < len(fv):
+                    t, tpos = _read_varint(fv, tpos); ts.append(t)
+                for i in range(0, len(ts) - 1, 2):
+                    ki, vi = ts[i], ts[i+1]
+                    if ki < len(keys) and vi < len(values) and keys[ki] == 'name' and values[vi]:
+                        names.append(str(values[vi]))
+                break  # found tags, no need to parse rest of feature
+            else:
+                fpos = _skip_field(fb, fpos, fwt)
+    return lname, names
+
+def _waterway_names_from_tile(tile_data: bytes) -> List[str]:
+    """Extract waterway names from a raw (decompressed) MVT tile."""
+    names: List[str] = []
+    pos = 0
+    while pos < len(tile_data):
+        tag, pos = _read_varint(tile_data, pos)
+        fn, wt = tag >> 3, tag & 7
+        if fn == 3 and wt == 2:
+            l, pos = _read_varint(tile_data, pos)
+            layer_data = tile_data[pos:pos+l]; pos += l
+            lname, lnames = _parse_mvt_layer_names(layer_data)
+            if lname == 'waterway':
+                names.extend(lnames)
+        elif wt == 2:
+            l, pos = _read_varint(tile_data, pos); pos += l
+        elif wt == 0: _, pos = _read_varint(tile_data, pos)
+        elif wt == 1: pos += 8
+        elif wt == 5: pos += 4
+    return names
+
+def _lat_lon_to_tile_xyz(lat: float, lon: float, zoom: int) -> Tuple[int, int, int]:
+    """Convert lat/lon to tile (x, y_web, zoom). TMS y = (2^z - 1) - y_web."""
+    lat_r = math.radians(lat)
+    n = 2 ** zoom
+    x = int((lon + 180) / 360 * n)
+    y = int((1 - math.log(math.tan(lat_r) + 1 / math.cos(lat_r)) / math.pi) / 2 * n)
+    return x, y, zoom
 
 class WaterCurrentService:
     def __init__(self):
@@ -14,8 +134,9 @@ class WaterCurrentService:
         self.known_flow_directions = {}
         self.river_areas = {}
         self.river_mouths = {}
+        self.data_dir: Optional[Path] = None
 
-    def configure(self, settings: Dict):
+    def configure(self, settings: Dict, data_dir: Optional[str] = None):
         """
         Configure water current service from settings
 
@@ -29,6 +150,12 @@ class WaterCurrentService:
         """
         if not settings:
             return
+
+        if data_dir:
+            self.data_dir = Path(data_dir)
+        elif self.data_dir is None:
+            # Auto-detect relative to this file: backend/app/ → BoatOS/data/
+            self.data_dir = Path(__file__).resolve().parents[2] / 'data'
 
         self.enabled = settings.get('enabled', False)
         self.static_currents = {
@@ -77,39 +204,115 @@ class WaterCurrentService:
         if self.enabled:
             print(f"   Static data: {len(self.static_currents['byName'])} waterways")
 
+    def _is_canal(self, name: str) -> bool:
+        """Heuristic: is this waterway likely a canal (no significant current)?"""
+        kw = ['kanal', 'canal', 'channel', 'kana', 'meer', 'see', 'lake', 'meer']
+        return any(k in name.lower() for k in kw)
+
     def get_current_at_point(self, lat: float, lon: float, waterway_name: Optional[str] = None) -> Optional[float]:
         """
-        Get water current velocity at a specific point in km/h
-
-        Strategy:
-        1. Try to find nearby Pegelonline station with VA data
-        2. Fall back to static lookup by waterway name
-        3. Fall back to default by waterway type
-
-        Args:
-            lat, lon: Coordinates
-            waterway_name: Optional name of waterway (e.g. "Rhein")
-
-        Returns:
-            Flow velocity in km/h, or None if not available
+        Get water current velocity at a specific point in km/h.
+        Strategy: byName lookup → byType fallback (type inferred from name).
         """
         if not self.enabled:
             return None
 
-        # Strategy 1: DISABLED - Live data from Pegelonline was causing routing timeouts
-        # live_current = self._get_live_current_nearby(lat, lon)
-        # if live_current is not None:
-        #     return live_current
-
-        # Strategy 2: Lookup by waterway name
         if waterway_name:
+            # 1: exact name match
             waterway_data = self.static_currents['byName'].get(waterway_name)
             if waterway_data:
                 return waterway_data.get('current_kmh', 0)
 
-        # Strategy 3: Default by type (e.g. "river" = 2.0 km/h)
-        # We don't have type info here, so return None
+            # 2: type-based fallback — infer river vs canal from name
+            wtype = 'canal' if self._is_canal(waterway_name) else 'river'
+            type_val = self.static_currents['byType'].get(wtype)
+            if type_val is not None:
+                return float(type_val) if isinstance(type_val, (int, float)) else type_val.get('current_kmh', 0)
+
         return None
+
+    def _dominant_waterway_from_steps(self, waterway_steps: List[Tuple[str, float]]) -> Optional[str]:
+        """Return waterway name with most route distance from OSRM steps."""
+        dist_by_name: Dict[str, float] = {}
+        for name, dist_m in waterway_steps:
+            dist_by_name[name] = dist_by_name.get(name, 0) + dist_m
+        if not dist_by_name:
+            return None
+        return max(dist_by_name, key=dist_by_name.get)
+
+    def _get_mbtiles_files(self) -> List[Path]:
+        """Return all non-seamark MBTiles files in the data directory."""
+        if self.data_dir is None:
+            return []
+        return [p for p in self.data_dir.glob('*.mbtiles') if 'seamark' not in p.name]
+
+    def _waterway_at_point(
+        self,
+        lat: float,
+        lon: float,
+        mbtiles_files: List[Path],
+        tile_cache: Dict,
+        zoom: int = 12
+    ) -> Optional[str]:
+        """
+        Query MBTiles at a single lat/lon and return the dominant waterway name
+        from the 'waterway' MVT layer. Uses tile_cache to avoid redundant reads.
+        """
+        x, y_web, z = _lat_lon_to_tile_xyz(lat, lon, zoom)
+        y_tms = (2**z - 1) - y_web
+
+        names: List[str] = []
+        for mbtiles_path in mbtiles_files:
+            cache_key = (mbtiles_path, z, x, y_tms)
+            if cache_key in tile_cache:
+                names.extend(tile_cache[cache_key])
+                continue
+            try:
+                conn = sqlite3.connect(f"file:{mbtiles_path}?mode=ro", uri=True)
+                row = conn.execute(
+                    "SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?",
+                    (z, x, y_tms)
+                ).fetchone()
+                conn.close()
+                if not row:
+                    tile_cache[cache_key] = []
+                    continue
+                try:
+                    tile = gzip.decompress(row[0])
+                except Exception:
+                    tile = bytes(row[0])
+                tile_names = _waterway_names_from_tile(tile)
+                tile_cache[cache_key] = tile_names
+                names.extend(tile_names)
+            except Exception:
+                tile_cache[cache_key] = []
+
+        if not names:
+            return None
+        counts: Dict[str, int] = {}
+        for n in names:
+            counts[n] = counts.get(n, 0) + 1
+        return max(counts, key=counts.get)
+
+    def _dominant_waterway_from_mbtiles(
+        self,
+        route_geometry: List[List[float]],
+        zoom: int = 12
+    ) -> Optional[str]:
+        """Sample 5 points along route, return the most frequent waterway name."""
+        mbtiles_files = self._get_mbtiles_files()
+        if not mbtiles_files:
+            return None
+        n = len(route_geometry)
+        indices = [int(i * (n - 1) / 4) for i in range(5)] if n >= 5 else list(range(n))
+        tile_cache: Dict = {}
+        counts: Dict[str, int] = {}
+        for idx in indices:
+            lon, lat = route_geometry[idx]
+            name = self._waterway_at_point(lat, lon, mbtiles_files, tile_cache, zoom)
+            if name:
+                counts[name] = counts.get(name, 0) + 1
+        return max(counts, key=counts.get) if counts else None
 
     def _get_live_current_nearby(self, lat: float, lon: float, max_distance_km: float = 50) -> Optional[float]:
         """
@@ -242,113 +445,84 @@ class WaterCurrentService:
         self,
         route_geometry: List[List[float]],  # [[lon, lat], [lon, lat], ...]
         distance_km: float,
-        boat_speed_kmh: float
+        boat_speed_kmh: float,
+        waterway_steps: Optional[List[Tuple[str, float]]] = None  # [(name, dist_m), ...]
     ) -> Tuple[float, Dict]:
         """
-        Adjust route duration based on water currents along the route
-
-        Args:
-            route_geometry: List of [lon, lat] coordinates
-            distance_km: Total route distance
-            boat_speed_kmh: Boat's cruising speed
-
-        Returns:
-            Tuple of (adjusted_duration_hours, debug_info)
+        Adjust route duration based on water currents along the route.
+        Waterway detection priority:
+          1. OSRM step names (dominant by distance) — accurate OSM data
+          2. Geographic bounding box + bearing match (fallback for non-OSRM routes)
         """
         if not self.enabled or boat_speed_kmh <= 0:
-            # No adjustment, return original duration
             return distance_km / boat_speed_kmh if boat_speed_kmh > 0 else 0, {}
 
-        # Identify which waterway we're on - try to detect from route geometry
-        detected_waterway = None
-        flow_direction = None
+        detected_waterway: Optional[str] = None
 
-        # First, estimate the route's general direction
-        route_bearing = self._estimate_flow_direction_from_route(route_geometry)
+        # --- 1. Primary: MBTiles query (offline, from local vector tile data, no hardcoding)
+        detected_waterway = self._dominant_waterway_from_mbtiles(route_geometry)
+        if detected_waterway:
+            print(f"   🌊 Waterway detected from MBTiles: {detected_waterway}")
 
-        # Route midpoint for geographic filtering
-        mid_idx = len(route_geometry) // 2
-        mid_lon, mid_lat = route_geometry[mid_idx]
+        # --- 2. Fallback: OSRM step names (if MBTiles unavailable)
+        if not detected_waterway and waterway_steps:
+            detected_waterway = self._dominant_waterway_from_steps(waterway_steps)
+            if detected_waterway:
+                print(f"   🌊 Waterway detected from OSRM steps: {detected_waterway}")
 
-        # Select waterway: must be (1) in geographic area AND (2) bearing within 50°
-        # Use mouth-based bearing for selection (same as per-segment calculation).
-        # Among candidates prefer best bearing match (lowest angle diff) as tiebreaker.
-        best_match_waterway = None
-        best_match_diff = float('inf')
+        # --- 3. Last resort: bounding box + bearing (for direct/non-OSRM routes)
+        if not detected_waterway and self.static_currents['byName']:
+            route_bearing = self._estimate_flow_direction_from_route(route_geometry)
+            mid_idx = len(route_geometry) // 2
+            mid_lon, mid_lat = route_geometry[mid_idx]
 
-        for waterway_name, waterway_data in self.static_currents['byName'].items():
-            current_kmh = waterway_data.get('current_kmh', 0)
-            if current_kmh <= 0:
-                continue
-
-            # Geographic filter: skip rivers that aren't in this area
-            area = self.river_areas.get(waterway_name)
-            if area:
-                lat_min, lat_max, lon_min, lon_max = area
-                if not (lat_min <= mid_lat <= lat_max and lon_min <= mid_lon <= lon_max):
-                    continue
-
-            # Use mouth-based bearing for selection (geometrically correct for any section)
-            mouth_candidate = self.river_mouths.get(waterway_name)
-            if mouth_candidate:
-                candidate_bearing = self._calculate_bearing(mid_lat, mid_lon, mouth_candidate[0], mouth_candidate[1])
-            else:
-                candidate_bearing = self.known_flow_directions.get(waterway_name)
-                if candidate_bearing is None:
-                    continue
-
-            # Bearing filter: route within 50° of downstream or upstream direction
-            angle_diff = abs(route_bearing - candidate_bearing)
-            if angle_diff > 180:
-                angle_diff = 360 - angle_diff
-            reverse_diff = abs(route_bearing - ((candidate_bearing + 180) % 360))
-            if reverse_diff > 180:
-                reverse_diff = 360 - reverse_diff
-            final_diff = min(angle_diff, reverse_diff)
-
-            if final_diff < 50 and final_diff < best_match_diff:
-                best_match_diff = final_diff
-                best_match_waterway = waterway_name
-                flow_direction = candidate_bearing
-
-        if best_match_waterway:
-            detected_waterway = best_match_waterway
-        else:
-            # Fallback: use spatially-nearest configured waterway (highest current in area)
-            for waterway_name, waterway_data in sorted(
-                self.static_currents['byName'].items(),
-                key=lambda x: x[1].get('current_kmh', 0), reverse=True
-            ):
+            best_match_diff = float('inf')
+            for waterway_name, waterway_data in self.static_currents['byName'].items():
                 if waterway_data.get('current_kmh', 0) <= 0:
                     continue
                 area = self.river_areas.get(waterway_name)
                 if area:
                     lat_min, lat_max, lon_min, lon_max = area
-                    if lat_min <= mid_lat <= lat_max and lon_min <= mid_lon <= lon_max:
-                        detected_waterway = waterway_name
-                        flow_direction = self.known_flow_directions.get(waterway_name)
-                        break
+                    if not (lat_min <= mid_lat <= lat_max and lon_min <= mid_lon <= lon_max):
+                        continue
+                mouth_c = self.river_mouths.get(waterway_name)
+                if mouth_c:
+                    cand_bearing = self._calculate_bearing(mid_lat, mid_lon, mouth_c[0], mouth_c[1])
+                else:
+                    cand_bearing = self.known_flow_directions.get(waterway_name)
+                    if cand_bearing is None:
+                        continue
+                angle_diff = abs(route_bearing - cand_bearing)
+                if angle_diff > 180:
+                    angle_diff = 360 - angle_diff
+                reverse_diff = abs(route_bearing - ((cand_bearing + 180) % 360))
+                if reverse_diff > 180:
+                    reverse_diff = 360 - reverse_diff
+                final_diff = min(angle_diff, reverse_diff)
+                if final_diff < 50 and final_diff < best_match_diff:
+                    best_match_diff = final_diff
+                    detected_waterway = waterway_name
 
-        waterway_info = detected_waterway if detected_waterway else "unknown"
-        mouth = self.river_mouths.get(detected_waterway) if detected_waterway else None
+        # Fallback flow direction (used when no mouth known)
+        route_bearing = self._estimate_flow_direction_from_route(route_geometry)
 
-        print(f"   🌊 Current: boat={boat_speed_kmh:.1f}km/h, dist={distance_km:.1f}km, river={waterway_info}" +
-              (f", mouth=({mouth[0]:.3f},{mouth[1]:.3f})" if mouth else " (no mouth data)"))
+        # Prepare per-segment MBTiles lookup (shared tile cache across segments)
+        mbtiles_files = self._get_mbtiles_files()
+        tile_cache: Dict = {}
 
-        # Sample points along route (every ~10km)
+        print(f"   🌊 Current: boat={boat_speed_kmh:.1f}km/h, dist={distance_km:.1f}km, "
+              f"fallback={detected_waterway or 'unknown'}")
+
+        # Sample points along route (every ~10km, min 3 segments)
         num_samples = max(3, int(distance_km / 10))
-        # Create sample indices, ensuring we include the last point
         sample_indices = [int(i * (len(route_geometry) - 1) / (num_samples - 1)) for i in range(num_samples)]
-
-        # Ensure last index is exactly the last point
         sample_indices[-1] = len(route_geometry) - 1
 
-        # Accumulate weighted effective speed; sampled crow-fly distances are shorter
-        # than actual route distance, so we compute avg effective speed then scale
-        # to the actual total route distance.
         weighted_speed_sum = 0.0
         total_sampled_dist = 0.0
         segment_infos = []
+        # Track km per waterway for display (dominant = most km with current)
+        km_by_waterway: Dict[str, float] = {}
 
         for i in range(len(sample_indices) - 1):
             idx1 = sample_indices[i]
@@ -362,34 +536,58 @@ class WaterCurrentService:
 
             mid_lat = (lat1 + lat2) / 2
             mid_lon = (lon1 + lon2) / 2
-            current_kmh = self.get_current_at_point(mid_lat, mid_lon, detected_waterway)
+
+            # Per-segment waterway detection — each segment uses its own tile.
+            # Prefer waterways that have an explicit byName config (known mouth data);
+            # fall back to the overall dominant if the tile returns an unknown tributary.
+            seg_waterway_raw = (
+                self._waterway_at_point(mid_lat, mid_lon, mbtiles_files, tile_cache)
+                if mbtiles_files else None
+            )
+            known_waterways = set(self.static_currents['byName'].keys()) | set(self.river_mouths.keys())
+            seg_waterway = (
+                seg_waterway_raw if seg_waterway_raw in known_waterways
+                else (detected_waterway or seg_waterway_raw)
+            )
+
+            current_kmh = self.get_current_at_point(mid_lat, mid_lon, seg_waterway)
 
             if current_kmh:
-                # Dynamic downstream direction = bearing from this point toward river mouth.
-                # This automatically handles every bend and section of the river.
-                if mouth:
-                    bearing_to_mouth = self._calculate_bearing(mid_lat, mid_lon, mouth[0], mouth[1])
+                seg_mouth = self.river_mouths.get(seg_waterway) if seg_waterway else None
+                if seg_mouth:
+                    # Distance-to-mouth: closer to mouth → downstream, further → upstream.
+                    # More robust than bearing comparison (no ±180° boundary issues).
+                    dist_start = self._haversine_distance(lat1, lon1, seg_mouth[0], seg_mouth[1])
+                    dist_end   = self._haversine_distance(lat2, lon2, seg_mouth[0], seg_mouth[1])
+                    going_upstream = dist_end > dist_start + 0.05  # 50m tolerance
+                    current_component = current_kmh * (-1 if going_upstream else 1)
+                    effective_speed = max(0.5, boat_speed_kmh + current_component)
+                    direction = "↑berg" if going_upstream else "↓tal"
                 else:
-                    bearing_to_mouth = flow_direction if flow_direction is not None else route_bearing
-                effective_speed = self.calculate_effective_speed(
-                    boat_speed_kmh, current_kmh, bearing, bearing_to_mouth
-                )
-                angle_diff = abs(bearing - bearing_to_mouth)
-                if angle_diff > 180:
-                    angle_diff = 360 - angle_diff
-                direction = "↓tal" if angle_diff < 90 else "↑berg"
-                print(f"      Seg {i+1}: {segment_dist_km:.1f}km, bearing={bearing:.0f}°, mouth={bearing_to_mouth:.0f}° ({direction}, Δ{angle_diff:.0f}°), current={current_kmh}km/h → eff={effective_speed:.1f}km/h")
+                    bearing_to_mouth = route_bearing
+                    effective_speed = self.calculate_effective_speed(
+                        boat_speed_kmh, current_kmh, bearing, bearing_to_mouth
+                    )
+                    angle_diff = abs(bearing - bearing_to_mouth)
+                    if angle_diff > 180:
+                        angle_diff = 360 - angle_diff
+                    direction = "↓tal" if angle_diff < 90 else "↑berg"
+                print(f"      Seg {i+1} [{seg_waterway}]: {segment_dist_km:.1f}km, "
+                      f"{direction}, current={current_kmh}km/h → eff={effective_speed:.1f}km/h")
                 segment_infos.append({
                     'distance_km': segment_dist_km,
+                    'waterway': seg_waterway,
                     'current_kmh': current_kmh,
-                    'bearing_to_mouth_deg': bearing_to_mouth,
-                    'segment_bearing_deg': bearing,
+                    'direction': direction,
                     'effective_speed_kmh': effective_speed,
                 })
+                if seg_waterway and current_kmh:
+                    km_by_waterway[seg_waterway] = km_by_waterway.get(seg_waterway, 0) + segment_dist_km
             else:
                 effective_speed = boat_speed_kmh
                 segment_infos.append({
                     'distance_km': segment_dist_km,
+                    'waterway': seg_waterway,
                     'current_kmh': 0,
                     'effective_speed_kmh': boat_speed_kmh,
                 })
@@ -405,15 +603,23 @@ class WaterCurrentService:
         else:
             total_adjusted_time = distance_km / boat_speed_kmh
 
+        # Dominant waterway = the one with most km where current applies
+        display_waterway = (
+            max(km_by_waterway, key=km_by_waterway.get) if km_by_waterway
+            else detected_waterway
+        )
+
+        time_diff = total_adjusted_time - (distance_km / boat_speed_kmh)
         debug_info = {
             'segments': segment_infos,
-            'detected_waterway': detected_waterway,
+            'detected_waterway': display_waterway,
             'original_duration_h': distance_km / boat_speed_kmh,
             'adjusted_duration_h': total_adjusted_time,
-            'time_diff_h': total_adjusted_time - (distance_km / boat_speed_kmh)
+            'time_diff_h': time_diff,
         }
 
-        print(f"   🌊 Total: {total_adjusted_time:.2f}h (was {distance_km/boat_speed_kmh:.2f}h, diff={debug_info['time_diff_h']:.2f}h)")
+        print(f"   🌊 Total: {total_adjusted_time:.2f}h (was {distance_km/boat_speed_kmh:.2f}h, "
+              f"diff={time_diff:.2f}h, display={display_waterway})")
 
         return total_adjusted_time, debug_info
 

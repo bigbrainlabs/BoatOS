@@ -199,7 +199,6 @@ class _MapScreenState extends State<MapScreen> {
   LatLng _lastBoatPos = const LatLng(51.855, 12.046);
 
   static const LatLng _defaultPos = LatLng(51.855, 12.046);
-  static const String _tileUrl = 'http://localhost:8081/germany/{z}/{x}/{y}';
   static const String _apiBase = 'http://localhost:8000';
 
   // ── Routing ──────────────────────────────────────────────────────────────
@@ -447,6 +446,7 @@ class _MapScreenState extends State<MapScreen> {
   // -------------------------------------------------------------------------
 
   Future<void> _buildStyle() async {
+    // Martin-Check: schnell und zuverlässig, unabhängig vom Python-Backend
     bool tileserverOk = false;
     try {
       final resp = await http
@@ -467,14 +467,32 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
+    // Aktive Regionen vom Backend holen — bei Fehler germany als Default
+    List<String> regions = ['germany'];
     try {
-      final theme = ThemeReader().read(_v1Style());
+      final resp = await http
+          .get(Uri.parse('$_apiBase/api/map/tiles'))
+          .timeout(const Duration(seconds: 2));
+      if (resp.statusCode == 200) {
+        final data = json.decode(resp.body) as Map<String, dynamic>;
+        if (data['ok'] == true) {
+          final active = (data['active'] as List<dynamic>?)?.cast<String>();
+          if (active != null && active.isNotEmpty) regions = active;
+        }
+      }
+    } catch (_) {
+      // Default 'germany' beibehalten
+    }
+
+    try {
+      final theme = ThemeReader().read(_buildMapStyleJson(regions));
       final providers = TileProviders({
-        'openmaptiles': NetworkVectorTileProvider(
-          urlTemplate: _tileUrl,
-          maximumZoom: 14,
-          minimumZoom: 0,
-        ),
+        for (final r in regions)
+          'openmaptiles-$r': NetworkVectorTileProvider(
+            urlTemplate: 'http://localhost:8081/$r/{z}/{x}/{y}',
+            maximumZoom: 14,
+            minimumZoom: 0,
+          ),
       });
       if (mounted) {
         setState(() {
@@ -971,6 +989,7 @@ class _MapScreenState extends State<MapScreen> {
         final locks = (props['locks_from_db'] as List<dynamic>? ?? [])
             .map((e) => e as Map<String, dynamic>)
             .toList();
+        final currentAdj = props['current_adjustment'] as Map<String, dynamic>?;
         if (mounted) {
           setState(() {
             _routeResult = RouteResult(
@@ -981,6 +1000,7 @@ class _MapScreenState extends State<MapScreen> {
               routingType:
                   (props['routing_type'] ?? 'direct') as String,
               locks: locks,
+              currentAdjustment: currentAdj,
             );
           });
         }
@@ -2252,155 +2272,45 @@ class _MapScreenState extends State<MapScreen> {
   // V1 map style
   // -------------------------------------------------------------------------
 
-  Map<String, dynamic> _v1Style() => {
-        'version': 8,
-        'sources': {
-          'openmaptiles': {
-            'type': 'vector',
-            'tiles': [_tileUrl],
-            'minzoom': 0,
-            'maxzoom': 14,
-          },
-        },
-        'layers': [
-          {
-            'id': 'background',
-            'type': 'background',
-            'paint': {'background-color': '#e0e0e0'}
-          },
-          {
-            'id': 'water',
-            'type': 'fill',
-            'source': 'openmaptiles',
-            'source-layer': 'water',
-            'paint': {'fill-color': '#80b0d0'}
-          },
-          {
-            'id': 'waterway',
-            'type': 'line',
-            'source': 'openmaptiles',
-            'source-layer': 'waterway',
-            'paint': {'line-color': '#80b0d0', 'line-width': 2.0}
-          },
-          {
-            'id': 'landcover',
-            'type': 'fill',
-            'source': 'openmaptiles',
-            'source-layer': 'landcover',
-            'paint': {'fill-color': '#c0e0c0', 'fill-opacity': 0.5}
-          },
-          {
-            'id': 'park',
-            'type': 'fill',
-            'source': 'openmaptiles',
-            'source-layer': 'park',
-            'paint': {'fill-color': '#a0d0a0', 'fill-opacity': 0.5}
-          },
-          {
-            'id': 'landuse',
-            'type': 'fill',
-            'source': 'openmaptiles',
-            'source-layer': 'landuse',
-            'paint': {'fill-color': '#f0f0e0', 'fill-opacity': 0.3}
-          },
-          {
-            'id': 'building',
-            'type': 'fill',
-            'source': 'openmaptiles',
-            'source-layer': 'building',
-            'paint': {'fill-color': '#d0d0d0'}
-          },
-          {
-            'id': 'roads',
-            'type': 'line',
-            'source': 'openmaptiles',
-            'source-layer': 'transportation',
-            'paint': {'line-color': '#ffffff', 'line-width': 1.0}
-          },
-          {
-            'id': 'roads-motorway',
-            'type': 'line',
-            'source': 'openmaptiles',
-            'source-layer': 'transportation',
-            'filter': ['==', 'class', 'motorway'],
-            'paint': {'line-color': '#ffcc80', 'line-width': 3.0}
-          },
-          {
-            'id': 'roads-trunk',
-            'type': 'line',
-            'source': 'openmaptiles',
-            'source-layer': 'transportation',
-            'filter': ['==', 'class', 'trunk'],
-            'paint': {'line-color': '#ffcc80', 'line-width': 3.0}
-          },
-          {
-            'id': 'roads-primary',
-            'type': 'line',
-            'source': 'openmaptiles',
-            'source-layer': 'transportation',
-            'filter': ['==', 'class', 'primary'],
-            'paint': {'line-color': '#ffcc80', 'line-width': 2.5}
-          },
-          {
-            'id': 'boundary',
-            'type': 'line',
-            'source': 'openmaptiles',
-            'source-layer': 'boundary',
-            'paint': {'line-color': '#808080', 'line-width': 1.0}
-          },
-          {
-            'id': 'place-city',
-            'type': 'symbol',
-            'source': 'openmaptiles',
-            'source-layer': 'place',
-            'filter': ['==', 'class', 'city'],
-            'layout': {
-              'text-field': ['get', 'name:de'],
-              'text-size': 14.0,
-              'text-font': ['Noto Sans Regular'],
-            },
-            'paint': {
-              'text-color': '#333333',
-              'text-halo-color': '#ffffff',
-              'text-halo-width': 2.0,
-            }
-          },
-          {
-            'id': 'place-town',
-            'type': 'symbol',
-            'source': 'openmaptiles',
-            'source-layer': 'place',
-            'filter': ['==', 'class', 'town'],
-            'layout': {
-              'text-field': ['get', 'name:de'],
-              'text-size': 12.0,
-              'text-font': ['Noto Sans Regular'],
-            },
-            'paint': {
-              'text-color': '#444444',
-              'text-halo-color': '#ffffff',
-              'text-halo-width': 1.5,
-            }
-          },
-          {
-            'id': 'place-village',
-            'type': 'symbol',
-            'source': 'openmaptiles',
-            'source-layer': 'place',
-            'filter': ['==', 'class', 'village'],
-            'layout': {
-              'text-field': ['get', 'name:de'],
-              'text-size': 11.0,
-              'text-font': ['Noto Sans Regular'],
-            },
-            'paint': {
-              'text-color': '#555555',
-              'text-halo-color': '#ffffff',
-              'text-halo-width': 1.0,
-            }
-          },
-        ],
+  Map<String, dynamic> _buildMapStyleJson(List<String> regions) {
+    final sources = <String, dynamic>{};
+    for (final r in regions) {
+      sources['openmaptiles-$r'] = {
+        'type': 'vector',
+        'tiles': ['http://localhost:8081/$r/{z}/{x}/{y}'],
+        'minzoom': 0,
+        'maxzoom': 14,
       };
+    }
+
+    final defs = <Map<String, dynamic>>[
+      {'id': 'water',          'type': 'fill',   'source-layer': 'water',          'paint': {'fill-color': '#80b0d0'}},
+      {'id': 'waterway',       'type': 'line',   'source-layer': 'waterway',       'paint': {'line-color': '#80b0d0', 'line-width': 2.0}},
+      {'id': 'landcover',      'type': 'fill',   'source-layer': 'landcover',      'paint': {'fill-color': '#c0e0c0', 'fill-opacity': 0.5}},
+      {'id': 'park',           'type': 'fill',   'source-layer': 'park',           'paint': {'fill-color': '#a0d0a0', 'fill-opacity': 0.5}},
+      {'id': 'landuse',        'type': 'fill',   'source-layer': 'landuse',        'paint': {'fill-color': '#f0f0e0', 'fill-opacity': 0.3}},
+      {'id': 'building',       'type': 'fill',   'source-layer': 'building',       'paint': {'fill-color': '#d0d0d0'}},
+      {'id': 'roads',          'type': 'line',   'source-layer': 'transportation', 'paint': {'line-color': '#ffffff', 'line-width': 1.0}},
+      {'id': 'roads-motorway', 'type': 'line',   'source-layer': 'transportation', 'filter': ['==', 'class', 'motorway'], 'paint': {'line-color': '#ffcc80', 'line-width': 3.0}},
+      {'id': 'roads-trunk',    'type': 'line',   'source-layer': 'transportation', 'filter': ['==', 'class', 'trunk'],    'paint': {'line-color': '#ffcc80', 'line-width': 3.0}},
+      {'id': 'roads-primary',  'type': 'line',   'source-layer': 'transportation', 'filter': ['==', 'class', 'primary'],  'paint': {'line-color': '#ffcc80', 'line-width': 2.5}},
+      {'id': 'boundary',       'type': 'line',   'source-layer': 'boundary',       'paint': {'line-color': '#808080', 'line-width': 1.0}},
+      {'id': 'place-city',     'type': 'symbol', 'source-layer': 'place', 'filter': ['==', 'class', 'city'],    'layout': {'text-field': ['get', 'name:de'], 'text-size': 14.0, 'text-font': ['Noto Sans Regular']}, 'paint': {'text-color': '#333333', 'text-halo-color': '#ffffff', 'text-halo-width': 2.0}},
+      {'id': 'place-town',     'type': 'symbol', 'source-layer': 'place', 'filter': ['==', 'class', 'town'],    'layout': {'text-field': ['get', 'name:de'], 'text-size': 12.0, 'text-font': ['Noto Sans Regular']}, 'paint': {'text-color': '#444444', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5}},
+      {'id': 'place-village',  'type': 'symbol', 'source-layer': 'place', 'filter': ['==', 'class', 'village'], 'layout': {'text-field': ['get', 'name:de'], 'text-size': 11.0, 'text-font': ['Noto Sans Regular']}, 'paint': {'text-color': '#555555', 'text-halo-color': '#ffffff', 'text-halo-width': 1.0}},
+    ];
+
+    final layers = <Map<String, dynamic>>[
+      {'id': 'background', 'type': 'background', 'paint': {'background-color': '#e0e0e0'}},
+    ];
+    for (final def in defs) {
+      for (final r in regions) {
+        layers.add({...def, 'id': '${def['id']}-$r', 'source': 'openmaptiles-$r'});
+      }
+    }
+
+    return {'version': 8, 'sources': sources, 'layers': layers};
+  }
 }
 
 // ---------------------------------------------------------------------------

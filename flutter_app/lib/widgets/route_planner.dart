@@ -41,6 +41,7 @@ class RouteResult {
   final double durationH;
   final String routingType;
   final List<Map<String, dynamic>> locks;
+  final Map<String, dynamic>? currentAdjustment;
 
   const RouteResult({
     required this.coords,
@@ -48,6 +49,7 @@ class RouteResult {
     required this.durationH,
     required this.routingType,
     required this.locks,
+    this.currentAdjustment,
   });
 }
 
@@ -333,8 +335,19 @@ class _RoutePanelState extends State<RoutePanel> {
           _statChip(Icons.lock, '${r.locks.length} Schleuse${r.locks.length > 1 ? 'n' : ''}', const Color(0xFFFFB74D), s),
         if (r.routingType != 'osrm')
           _statChip(Icons.alt_route, l.mapDirect, const Color(0xFFE74C3C), s),
+        if (r.currentAdjustment != null) ..._buildCurrentChip(r.currentAdjustment!, s),
       ],
     );
+  }
+
+  List<Widget> _buildCurrentChip(Map<String, dynamic> adj, double s) {
+    final waterway = adj['detected_waterway'] as String?;
+    final diff = (adj['time_diff_h'] as num?)?.toDouble();
+    if (waterway == null || diff == null || diff.abs() < 0.01) return [];
+    final downstream = diff < 0;
+    final arrow = downstream ? '↓' : '↑';
+    final color = downstream ? _teal : const Color(0xFFC8912E);
+    return [_statChip(Icons.water, '$arrow $waterway', color, s)];
   }
 
   Widget _statChip(IconData icon, String text, Color color, double s) => Row(

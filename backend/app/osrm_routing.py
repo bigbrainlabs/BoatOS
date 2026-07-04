@@ -113,6 +113,17 @@ class OSRMRouter:
             "bridges": bridges
         }
 
+    def _extract_waterway_steps(self, route_data: dict) -> list:
+        """Extract [(name, distance_m)] from OSRM steps — gives actual OSM waterway names."""
+        result = []
+        for leg in route_data.get("legs", []):
+            for step in leg.get("steps", []):
+                name = (step.get("name") or "").strip()
+                dist = step.get("distance", 0)
+                if name and dist > 50:
+                    result.append((name, dist))
+        return result
+
     def haversine_distance(self, lon1: float, lat1: float, lon2: float, lat2: float) -> float:
         """Calculate distance in meters between two points"""
         R = 6371000  # Earth radius in meters
@@ -212,8 +223,9 @@ class OSRMRouter:
                                     geometry["coordinates"].append([dest[0], dest[1]])
                                     distance_m += gap_m
 
-                            # Extract infrastructure (locks, bridges)
+                            # Extract infrastructure (locks, bridges) + waterway names
                             infrastructure = self._extract_infrastructure(route)
+                            waterway_steps = self._extract_waterway_steps(route)
 
                             # Log boat restrictions if provided
                             restrictions = []
@@ -245,6 +257,7 @@ class OSRMRouter:
                                     "routing_type": "osrm",
                                     "locks": infrastructure["locks"],
                                     "bridges": infrastructure["bridges"],
+                                    "waterway_steps": waterway_steps,
                                     "boat_restrictions": boat_data if boat_data else None,
                                     "partial_route": partial_route,
                                     "partial_gap_km": round(partial_gap_km, 1) if partial_route else None,

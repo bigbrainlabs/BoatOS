@@ -51,8 +51,6 @@ let currentRouteData = {
 };
 
 // Route-Pfeil Marker
-let routeArrows = [];
-let routeArrowMarkers = [];
 
 // Route-Label Marker
 let routeLabelMarkers = [];
@@ -897,9 +895,6 @@ function drawWaterwayRoute(routeData, context) {
     currentRouteCoordinates = routeCoords.map(c => ({ lat: c[1], lon: c[0] }));
     currentRouteColor = routeColor;
 
-    // Richtungspfeile hinzufügen
-    addRouteArrows(context);
-
     // Distanz und ETA berechnen
     const distanceNM = routeData.properties?.distance_nm || 0;
     const boatSettings = typeof getBoatSettings === 'function' ? getBoatSettings() : {};
@@ -961,7 +956,7 @@ function drawWaterwayRoute(routeData, context) {
     };
 
     if (showRouteInfo) {
-        showRouteInfo(distanceNM.toFixed(2), etaHoursInt, etaMinutes, routeInfo, false, true, avgSpeed, locksOnRoute.length);
+        showRouteInfo(distanceNM.toFixed(2), etaHoursInt, etaMinutes, routeInfo, false, true, avgSpeed, locksOnRoute.length, routeData.properties.current_adjustment || null);
     }
 
     // Schleusen-Timeline aktualisieren
@@ -1012,9 +1007,6 @@ export function drawDirectRoute(context) {
     // Route-Koordinaten für XTE-Berechnung speichern
     currentRouteCoordinates = points.map(p => ({ lat: p[0], lon: p[1] }));
     currentRoutePolyline = { options: { originalColor: '#3498db' } };
-
-    // Richtungspfeile hinzufügen
-    addRouteArrows(context);
 
     let totalDistance = 0;
     let routeInfo = [];
@@ -1118,12 +1110,10 @@ export function clearRouteDisplay(context) {
     removeRouteLabels(context);
 
     // Route-Pfeile entfernen
-    routeArrows.forEach(marker => marker.remove());
-    routeArrows = [];
-    routeArrowMarkers.forEach(m => m.remove());
-    routeArrowMarkers = [];
-
     currentRouteCoordinates = null;
+
+    const currentBadge = document.getElementById('route-current-badge');
+    if (currentBadge) currentBadge.style.display = 'none';
 }
 
 /**
@@ -1209,83 +1199,6 @@ export function clearRoute(context) {
  * Fügt Richtungspfeile entlang der Route hinzu
  * @param {Object} context - Kontext mit map
  */
-export function addRouteArrows(context) {
-    const { map } = context;
-
-    // Bestehende Pfeile entfernen
-    routeArrows.forEach(arrow => arrow.remove());
-    routeArrows = [];
-    routeArrowMarkers.forEach(m => m.remove());
-    routeArrowMarkers = [];
-
-    if (!currentRouteCoordinates || currentRouteCoordinates.length < 2) return;
-
-    // Gesamte Routen-Distanz berechnen
-    let totalDistance = 0;
-    for (let i = 0; i < currentRouteCoordinates.length - 1; i++) {
-        totalDistance += haversineDistance(
-            currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon,
-            currentRouteCoordinates[i + 1].lat, currentRouteCoordinates[i + 1].lon
-        );
-    }
-
-    // Pfeil-Abstand: ca. 2 km
-    const arrowSpacing = 2000;
-    const numArrows = Math.floor(totalDistance / arrowSpacing);
-
-    if (numArrows < 1) return;
-
-    // Pfeile in Intervallen platzieren
-    let currentDist = arrowSpacing;
-
-    for (let arrowNum = 0; arrowNum < numArrows; arrowNum++) {
-        let accumulatedDistance = 0;
-        let arrowPlaced = false;
-
-        for (let i = 0; i < currentRouteCoordinates.length - 1; i++) {
-            const segmentDistance = haversineDistance(
-                currentRouteCoordinates[i].lat, currentRouteCoordinates[i].lon,
-                currentRouteCoordinates[i + 1].lat, currentRouteCoordinates[i + 1].lon
-            );
-
-            if (accumulatedDistance + segmentDistance >= currentDist) {
-                const distanceIntoSegment = currentDist - accumulatedDistance;
-                const fraction = distanceIntoSegment / segmentDistance;
-
-                const arrowLat = currentRouteCoordinates[i].lat +
-                    (currentRouteCoordinates[i + 1].lat - currentRouteCoordinates[i].lat) * fraction;
-                const arrowLon = currentRouteCoordinates[i].lon +
-                    (currentRouteCoordinates[i + 1].lon - currentRouteCoordinates[i].lon) * fraction;
-
-                const bearing = calculateBearing(
-                    currentRouteCoordinates[i].lat,
-                    currentRouteCoordinates[i].lon,
-                    currentRouteCoordinates[i + 1].lat,
-                    currentRouteCoordinates[i + 1].lon
-                );
-
-                const arrowEl = document.createElement('div');
-                arrowEl.className = 'route-arrow-icon';
-                arrowEl.style.cssText = `transform: rotate(${bearing}deg); font-size: 20px; text-shadow: 0 0 3px rgba(0,0,0,0.8); pointer-events: none;`;
-                arrowEl.innerHTML = '&#x2B06;'; // Unicode Pfeil nach oben
-
-                const arrowMarker = new maplibregl.Marker({ element: arrowEl, anchor: 'center' })
-                    .setLngLat([arrowLon, arrowLat])
-                    .addTo(map);
-
-                routeArrowMarkers.push(arrowMarker);
-                arrowPlaced = true;
-                break;
-            }
-
-            accumulatedDistance += segmentDistance;
-        }
-
-        if (!arrowPlaced) break;
-        currentDist += arrowSpacing;
-    }
-}
-
 // ==================== LIVE-NAVIGATION ====================
 
 /**
@@ -2949,7 +2862,6 @@ export default {
     clearRouteDisplay,
     removeRouteLabels,
     clearRoute,
-    addRouteArrows,
 
     // Navigation
     startNavigation,

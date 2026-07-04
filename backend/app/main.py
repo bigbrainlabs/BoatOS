@@ -3451,8 +3451,10 @@ async def calculate_route(request: dict):
                     except Exception as e:
                         pass
 
+                    waterway_steps = route["properties"].get("waterway_steps")
                     adjusted_duration_h, current_info = water_current_service.adjust_route_duration(
-                        route_geometry, distance_km, boat_speed_kmh
+                        route_geometry, distance_km, boat_speed_kmh,
+                        waterway_steps=waterway_steps
                     )
 
                     if current_info:
@@ -4766,17 +4768,30 @@ def _read_mbtiles_tile(path, z, x, y):
     except Exception:
         return None
 
-def _get_active_regions():
+_active_regions_cache: list | None = None
+_active_regions_cache_ts: float = 0.0
+
+def _get_active_regions() -> list:
+    import time as _time
+    global _active_regions_cache, _active_regions_cache_ts
+    now = _time.monotonic()
+    if _active_regions_cache is not None and now - _active_regions_cache_ts < 30:
+        return _active_regions_cache
     try:
         with open("data/settings.json") as f:
             s = json.load(f)
         regions = s.get("map", {}).get("activeRegions", None)
         if regions is not None:
+            _active_regions_cache = regions
+            _active_regions_cache_ts = now
             return regions
     except Exception:
         pass
     installed = sorted(p.stem for p in MBTILES_DIR.glob("*.mbtiles"))
-    return ["germany"] if "germany" in installed else (installed[:1] if installed else [])
+    result = ["germany"] if "germany" in installed else (installed[:1] if installed else [])
+    _active_regions_cache = result
+    _active_regions_cache_ts = now
+    return result
 
 @app.get("/api/map/tiles")
 async def map_tiles_health():
@@ -4800,14 +4815,13 @@ def _merge_tiles(tiles: list) -> bytes:
 
 @app.get("/api/map/tiles/{z}/{x}/{y}.pbf")
 async def get_map_tile(z: int, x: int, y: int):
-    tiles = []
-    for region in _get_active_regions():
-        p = MBTILES_DIR / f"{region}.mbtiles"
-        if not p.exists():
-            continue
-        data = _read_mbtiles_tile(p, z, x, y)
-        if data:
-            tiles.append(data)
+    loop = asyncio.get_event_loop()
+    paths = [MBTILES_DIR / f"{r}.mbtiles" for r in _get_active_regions()
+             if (MBTILES_DIR / f"{r}.mbtiles").exists()]
+    reads = await asyncio.gather(*[
+        loop.run_in_executor(None, _read_mbtiles_tile, p, z, x, y) for p in paths
+    ])
+    tiles = [t for t in reads if t]
     if not tiles:
         return Response(status_code=204)
     merged = _merge_tiles(tiles)
@@ -4825,14 +4839,13 @@ async def seamark_status():
 
 @app.get("/api/map/seamarks/{z}/{x}/{y}.pbf")
 async def get_seamark_tile(z: int, x: int, y: int):
-    tiles = []
-    for region in _get_active_regions():
-        p = MBTILES_DIR / f"{region}-seamarks.mbtiles"
-        if not p.exists():
-            continue
-        data = _read_mbtiles_tile(p, z, x, y)
-        if data:
-            tiles.append(data)
+    loop = asyncio.get_event_loop()
+    paths = [MBTILES_DIR / f"{r}-seamarks.mbtiles" for r in _get_active_regions()
+             if (MBTILES_DIR / f"{r}-seamarks.mbtiles").exists()]
+    reads = await asyncio.gather(*[
+        loop.run_in_executor(None, _read_mbtiles_tile, p, z, x, y) for p in paths
+    ])
+    tiles = [t for t in reads if t]
     if not tiles:
         return Response(status_code=204)
     merged = _merge_tiles(tiles)

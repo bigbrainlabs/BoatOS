@@ -121,7 +121,7 @@ function updateAllUnitLabels() {
 }
 
 // ==================== ROUTE INFO ====================
-function showRouteInfo(distanceNM, etaHours, etaMinutes, routeInfo, isReverse, isWaterway, avgSpeed, locksCount = 0) {
+function showRouteInfo(distanceNM, etaHours, etaMinutes, routeInfo, isReverse, isWaterway, avgSpeed, locksCount = 0, currentAdjustment = null) {
     console.log('showRouteInfo aufgerufen:', { distanceNM, etaHours, etaMinutes, locksCount });
     updateSimButton();
 
@@ -155,6 +155,21 @@ function showRouteInfo(distanceNM, etaHours, etaMinutes, routeInfo, isReverse, i
     const locksEl = document.getElementById('route-locks');
     if (locksEl) {
         locksEl.textContent = locksCount.toString();
+    }
+
+    // Strömungskorrektur-Indikator
+    const currentBadge = document.getElementById('route-current-badge');
+    if (currentBadge) {
+        const waterway = currentAdjustment?.detected_waterway;
+        const diff = currentAdjustment?.time_diff_h;
+        if (waterway && diff != null && Math.abs(diff) > 0.01) {
+            const downstream = diff < 0;
+            currentBadge.textContent = (downstream ? '↓' : '↑') + ' ' + waterway;
+            currentBadge.style.color = downstream ? 'var(--info, #3EA8A8)' : 'var(--warning, #C8912E)';
+            currentBadge.style.display = 'block';
+        } else {
+            currentBadge.style.display = 'none';
+        }
     }
 
     // TopBar aktualisieren

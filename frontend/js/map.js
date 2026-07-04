@@ -93,8 +93,6 @@ let maxTrackPoints = 500;
 let currentRouteCoordinates = null;
 let currentRouteColor = '#3498db';
 let routeLabelMarkers = [];
-let routeArrowMarkers = [];
-let routeArrows = [];
 
 // Displayed Track (aus Logbook)
 let displayedTrackMarkers = [];
@@ -110,29 +108,34 @@ let displayedTrackSourceAdded = false;
  * @returns {Object} Map-Instanz
  */
 async function _checkTileserver() {
-    for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-            const r = await fetch(window.location.origin + '/api/map/tiles', {
-                cache: 'no-store',
-                signal: AbortSignal.timeout(8000)
-            });
-            if (!r.ok) return false;
-            const data = await r.json();
-            return data.ok === true;
-        } catch {
-            if (attempt < 2) await new Promise(res => setTimeout(res, 1000));
-        }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 2000);
+    try {
+        const r = await fetch(window.location.origin + '/api/map/tiles', {
+            cache: 'no-store',
+            signal: ctrl.signal
+        });
+        clearTimeout(timer);
+        if (!r.ok) return null;
+        const data = await r.json();
+        return (data.ok === true) ? (data.active || ['germany']) : null;
+    } catch {
+        clearTimeout(timer);
+        return null;
     }
-    return false;
 }
 
+let _activeRegions = null;
+
 export async function recheckOfflineTiles() {
-    const nowOk = await _checkTileserver();
+    const regions = await _checkTileserver();
+    const nowOk = regions !== null;
     if (nowOk === window._tileserverAvailable) return;
     window._tileserverAvailable = nowOk;
+    _activeRegions = regions;
     if (!map) return;
     if (nowOk) {
-        map.setStyle(_vectorStyle());
+        map.setStyle(_vectorStyle(regions));
         map.once('style.load', () => {
             addLabelsLayer();
             document.getElementById('tileserver-banner')?.remove();
@@ -160,50 +163,56 @@ function _showTileserverBanner() {
     document.getElementById('map')?.appendChild(banner);
 }
 
-function _vectorStyle() {
-    return {
-        version: 8,
-        sources: {
-            'basemap': {
-                type: 'vector',
-                tiles: [window.location.origin + '/api/map/tiles/{z}/{x}/{y}.pbf'],
-                minzoom: 0,
-                maxzoom: 14
-            },
-            'osm-overview': {
-                type: 'raster',
-                tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-                tileSize: 256,
-                maxzoom: 10,
-                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            },
-            'track-history': { type: 'geojson', data: { type: 'LineString', coordinates: [] } },
-            'route': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
-            'route-shadow': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
-            'completed-segments': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
-            'current-segment': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
-            'remaining-segments': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
-        },
-        layers: [
-            { id: 'background', type: 'background', paint: { 'background-color': '#e0e0e0' } },
-            { id: 'osm-overview-tiles', type: 'raster', source: 'osm-overview', paint: { 'raster-opacity': ['interpolate', ['linear'], ['zoom'], 7, 1, 10, 0] } },
-            { id: 'water', type: 'fill', source: 'basemap', 'source-layer': 'water', paint: { 'fill-color': '#80b0d0' } },
-            { id: 'waterway', type: 'line', source: 'basemap', 'source-layer': 'waterway', paint: { 'line-color': '#80b0d0', 'line-width': 2 } },
-            { id: 'landcover', type: 'fill', source: 'basemap', 'source-layer': 'landcover', paint: { 'fill-color': '#c0e0c0', 'fill-opacity': 0.5 } },
-            { id: 'park', type: 'fill', source: 'basemap', 'source-layer': 'park', paint: { 'fill-color': '#a0d0a0', 'fill-opacity': 0.5 } },
-            { id: 'landuse', type: 'fill', source: 'basemap', 'source-layer': 'landuse', paint: { 'fill-color': '#f0f0e0', 'fill-opacity': 0.3 } },
-            { id: 'building', type: 'fill', source: 'basemap', 'source-layer': 'building', minzoom: 13, paint: { 'fill-color': '#d0d0d0' } },
-            { id: 'roads', type: 'line', source: 'basemap', 'source-layer': 'transportation', paint: { 'line-color': '#ffffff', 'line-width': 1 } },
-            { id: 'roads-major', type: 'line', source: 'basemap', 'source-layer': 'transportation', filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary']]], paint: { 'line-color': '#ffcc80', 'line-width': 3 } },
-            { id: 'boundary', type: 'line', source: 'basemap', 'source-layer': 'boundary', paint: { 'line-color': '#808080', 'line-width': 1, 'line-dasharray': [2, 2] } },
-            { id: 'route-shadow-line', type: 'line', source: 'route-shadow', paint: { 'line-color': 'white', 'line-width': 8, 'line-opacity': 0.4 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
-            { id: 'completed-segments-line', type: 'line', source: 'completed-segments', paint: { 'line-color': '#666', 'line-width': 4, 'line-opacity': 0.3 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
-            { id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#2ecc71', 'line-width': 5, 'line-opacity': 0.9 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
-            { id: 'current-segment-line', type: 'line', source: 'current-segment', paint: { 'line-color': '#ffd700', 'line-width': 6, 'line-opacity': 1.0 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
-            { id: 'remaining-segments-line', type: 'line', source: 'remaining-segments', paint: { 'line-color': '#3498db', 'line-width': 5, 'line-opacity': 0.9 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
-            { id: 'track-line', type: 'line', source: 'track-history', paint: { 'line-color': '#4CAF50', 'line-width': 3 } }
-        ]
-    };
+function _vectorStyle(regions) {
+    const origin = window.location.origin;
+    const sources = {};
+    for (const r of regions) {
+        sources[`basemap-${r}`] = {
+            type: 'vector',
+            tiles: [`${origin}/tiles/${r}/{z}/{x}/{y}`],
+            minzoom: 0,
+            maxzoom: 14
+        };
+    }
+    Object.assign(sources, {
+        'track-history': { type: 'geojson', data: { type: 'LineString', coordinates: [] } },
+        'route': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+        'route-shadow': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+        'completed-segments': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+        'current-segment': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+        'remaining-segments': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
+    });
+
+    const basemapDefs = [
+        { id: 'water',      type: 'fill', 'source-layer': 'water',          paint: { 'fill-color': '#80b0d0' } },
+        { id: 'waterway',   type: 'line', 'source-layer': 'waterway',        paint: { 'line-color': '#80b0d0', 'line-width': 2 } },
+        { id: 'landcover',  type: 'fill', 'source-layer': 'landcover',       paint: { 'fill-color': '#c0e0c0', 'fill-opacity': 0.5 } },
+        { id: 'park',       type: 'fill', 'source-layer': 'park',            paint: { 'fill-color': '#a0d0a0', 'fill-opacity': 0.5 } },
+        { id: 'landuse',    type: 'fill', 'source-layer': 'landuse',         paint: { 'fill-color': '#f0f0e0', 'fill-opacity': 0.3 } },
+        { id: 'building',   type: 'fill', 'source-layer': 'building',        minzoom: 13, paint: { 'fill-color': '#d0d0d0' } },
+        { id: 'roads',      type: 'line', 'source-layer': 'transportation',  paint: { 'line-color': '#ffffff', 'line-width': 1 } },
+        { id: 'roads-major',type: 'line', 'source-layer': 'transportation',  filter: ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary']]], paint: { 'line-color': '#ffcc80', 'line-width': 3 } },
+        { id: 'boundary',   type: 'line', 'source-layer': 'boundary',        paint: { 'line-color': '#808080', 'line-width': 1, 'line-dasharray': [2, 2] } },
+    ];
+
+    const layers = [
+        { id: 'background', type: 'background', paint: { 'background-color': '#e0e0e0' } },
+    ];
+    for (const def of basemapDefs) {
+        for (const r of regions) {
+            layers.push({ ...def, id: `${def.id}-${r}`, source: `basemap-${r}` });
+        }
+    }
+    layers.push(
+        { id: 'route-shadow-line',     type: 'line', source: 'route-shadow',        paint: { 'line-color': 'white',   'line-width': 8, 'line-opacity': 0.4 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+        { id: 'completed-segments-line', type: 'line', source: 'completed-segments', paint: { 'line-color': '#666',   'line-width': 4, 'line-opacity': 0.3 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+        { id: 'route-line',            type: 'line', source: 'route',               paint: { 'line-color': '#2ecc71', 'line-width': 5, 'line-opacity': 0.9 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+        { id: 'current-segment-line',  type: 'line', source: 'current-segment',     paint: { 'line-color': '#ffd700', 'line-width': 6, 'line-opacity': 1.0 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+        { id: 'remaining-segments-line', type: 'line', source: 'remaining-segments', paint: { 'line-color': '#3498db', 'line-width': 5, 'line-opacity': 0.9 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+        { id: 'track-line',            type: 'line', source: 'track-history',       paint: { 'line-color': '#4CAF50', 'line-width': 3 } }
+    );
+
+    return { version: 8, sources, layers };
 }
 
 function _rasterFallbackStyle() {
@@ -265,13 +274,15 @@ export async function initMap(options = {}) {
     const defaultPosition = options.center || { lat: 51.855, lon: 12.046 };
 
     // Tileserver-Verfügbarkeit prüfen, ggf. Online-Fallback nutzen
-    const tileserverOk = await _checkTileserver();
+    const regions = await _checkTileserver();
+    const tileserverOk = regions !== null;
     window._tileserverAvailable = tileserverOk;
-    console.log(tileserverOk ? 'Tileserver verfügbar' : 'Tileserver nicht verfügbar — Online-Fallback aktiv');
+    _activeRegions = regions;
+    console.log(tileserverOk ? `Tileserver verfügbar (${regions.join(',')})` : 'Tileserver nicht verfügbar — Online-Fallback aktiv');
 
     map = new maplibregl.Map({
         container: 'map',
-        style: tileserverOk ? _vectorStyle() : _rasterFallbackStyle(),
+        style: tileserverOk ? _vectorStyle(regions) : _rasterFallbackStyle(),
         center: [defaultPosition.lon, defaultPosition.lat],
         zoom: options.zoom || 13,
         attributionControl: false
@@ -324,6 +335,12 @@ export async function initMap(options = {}) {
         }
 
         initMapMarkers();
+
+        // Periodisch prüfen ob Tileserver wieder verfügbar (z.B. nach Backend-Restart)
+        // Nur wenn aktuell im Fallback-Modus. Stoppt automatisch wenn wieder online.
+        setInterval(() => {
+            if (!window._tileserverAvailable) recheckOfflineTiles();
+        }, 30000);
     });
 
     // Long-Press Erkennung direkt auf Canvas (nicht via MapLibre-Events),
@@ -436,89 +453,21 @@ export async function initMap(options = {}) {
  */
 export function addLabelsLayer() {
     try {
-        // Glyphs-Quelle fuer Text-Labels setzen
         map.setGlyphs('https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf');
 
-        // Stadt-Labels
-        map.addLayer({
-            id: 'place-city',
-            type: 'symbol',
-            source: 'basemap',
-            'source-layer': 'place',
-            filter: ['==', ['get', 'class'], 'city'],
-            minzoom: 5,
-            layout: {
-                'text-field': ['get', 'name'],
-                'text-font': ['Noto Sans Bold'],
-                'text-size': 16
-            },
-            paint: {
-                'text-color': '#333',
-                'text-halo-color': '#fff',
-                'text-halo-width': 2
-            }
-        });
+        const regions = _activeRegions || ['germany'];
+        const labelDefs = [
+            { id: 'place-city',     'source-layer': 'place',    filter: ['==', ['get', 'class'], 'city'],    minzoom: 5,  layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Bold'],    'text-size': 16 }, paint: { 'text-color': '#333', 'text-halo-color': '#fff', 'text-halo-width': 2   } },
+            { id: 'place-town',     'source-layer': 'place',    filter: ['==', ['get', 'class'], 'town'],    minzoom: 8,  layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Regular'], 'text-size': 13 }, paint: { 'text-color': '#444', 'text-halo-color': '#fff', 'text-halo-width': 1.5 } },
+            { id: 'place-village',  'source-layer': 'place',    filter: ['==', ['get', 'class'], 'village'], minzoom: 11, layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Regular'], 'text-size': 11 }, paint: { 'text-color': '#555', 'text-halo-color': '#fff', 'text-halo-width': 1   } },
+            { id: 'waterway-label', 'source-layer': 'waterway', filter: ['has', 'name'],                     layout: { 'symbol-placement': 'line', 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Regular'], 'text-size': 12 }, paint: { 'text-color': '#4a90d9', 'text-halo-color': '#fff', 'text-halo-width': 1.5 } },
+        ];
 
-        // Kleinstadt-Labels
-        map.addLayer({
-            id: 'place-town',
-            type: 'symbol',
-            source: 'basemap',
-            'source-layer': 'place',
-            filter: ['==', ['get', 'class'], 'town'],
-            minzoom: 8,
-            layout: {
-                'text-field': ['get', 'name'],
-                'text-font': ['Noto Sans Regular'],
-                'text-size': 13
-            },
-            paint: {
-                'text-color': '#444',
-                'text-halo-color': '#fff',
-                'text-halo-width': 1.5
+        for (const r of regions) {
+            for (const def of labelDefs) {
+                map.addLayer({ ...def, id: `${def.id}-${r}`, source: `basemap-${r}`, type: 'symbol' });
             }
-        });
-
-        // Dorf-Labels
-        map.addLayer({
-            id: 'place-village',
-            type: 'symbol',
-            source: 'basemap',
-            'source-layer': 'place',
-            filter: ['==', ['get', 'class'], 'village'],
-            minzoom: 11,
-            layout: {
-                'text-field': ['get', 'name'],
-                'text-font': ['Noto Sans Regular'],
-                'text-size': 11
-            },
-            paint: {
-                'text-color': '#555',
-                'text-halo-color': '#fff',
-                'text-halo-width': 1
-            }
-        });
-
-        // Wasserweg-Labels
-        map.addLayer({
-            id: 'waterway-label',
-            type: 'symbol',
-            source: 'basemap',
-            'source-layer': 'waterway',
-            filter: ['has', 'name'],
-            layout: {
-                'symbol-placement': 'line',
-                'text-field': ['get', 'name'],
-                'text-font': ['Noto Sans Regular'],
-                'text-size': 12
-            },
-            paint: {
-                'text-color': '#4a90d9',
-                'text-halo-color': '#fff',
-                'text-halo-width': 1.5
-            }
-        });
-
+        }
         console.log('Labels hinzugefuegt');
     } catch (e) {
         console.warn('Labels konnten nicht hinzugefuegt werden:', e.message);
@@ -943,9 +892,6 @@ export function clearRoute() {
     // Routen-Label-Marker entfernen
     removeRouteLabels();
 
-    // Routen-Pfeile entfernen
-    clearRouteArrows();
-
     currentRouteCoordinates = null;
 
     console.log('Route geloescht');
@@ -962,13 +908,6 @@ export function removeRouteLabels() {
 /**
  * Loescht Routen-Richtungspfeile
  */
-export function clearRouteArrows() {
-    routeArrows.forEach(arrow => arrow.remove());
-    routeArrows = [];
-    routeArrowMarkers.forEach(m => m.remove());
-    routeArrowMarkers = [];
-}
-
 /**
  * Fuegt einen Routen-Label-Marker hinzu
  * @param {number} lat - Breitengrad
@@ -988,25 +927,6 @@ export function addRouteLabelMarker(lat, lon, html) {
     return labelMarker;
 }
 
-/**
- * Fuegt einen Routen-Richtungspfeil hinzu
- * @param {number} lat - Breitengrad
- * @param {number} lon - Laengengrad
- * @param {number} bearing - Kursrichtung in Grad
- */
-export function addRouteArrow(lat, lon, bearing) {
-    const arrowEl = document.createElement('div');
-    arrowEl.className = 'route-arrow-icon';
-    arrowEl.style.cssText = `transform: rotate(${bearing}deg); font-size: 20px; text-shadow: 0 0 3px rgba(0,0,0,0.8); pointer-events: none;`;
-    arrowEl.innerHTML = '⬆️';
-
-    const arrowMarker = new maplibregl.Marker({ element: arrowEl, anchor: 'center' })
-        .setLngLat([lon, lat])
-        .addTo(map);
-
-    routeArrowMarkers.push(arrowMarker);
-    return arrowMarker;
-}
 
 /**
  * Aktualisiert Routen-Segment-Highlighting
@@ -1282,30 +1202,20 @@ export function toggleMapView() {
     return currentBaseLayer;
 }
 
-/**
- * Blendet Vektor-Layer aus
- */
 function hideVectorLayers() {
-    const vectorLayers = ['background', 'water', 'waterway', 'landcover', 'park', 'landuse',
-                          'building', 'roads', 'roads-major', 'boundary',
-                          'place-city', 'place-town', 'place-village', 'waterway-label'];
-    vectorLayers.forEach(layerId => {
-        if (map.getLayer(layerId)) {
-            map.setLayoutProperty(layerId, 'visibility', 'none');
+    if (!map) return;
+    map.getStyle().layers.forEach(layer => {
+        if (layer.id === 'background' || (layer.source && layer.source.startsWith('basemap-'))) {
+            map.setLayoutProperty(layer.id, 'visibility', 'none');
         }
     });
 }
 
-/**
- * Blendet Vektor-Layer ein
- */
 function showVectorLayers() {
-    const vectorLayers = ['background', 'water', 'waterway', 'landcover', 'park', 'landuse',
-                          'building', 'roads', 'roads-major', 'boundary',
-                          'place-city', 'place-town', 'place-village', 'waterway-label'];
-    vectorLayers.forEach(layerId => {
-        if (map.getLayer(layerId)) {
-            map.setLayoutProperty(layerId, 'visibility', 'visible');
+    if (!map) return;
+    map.getStyle().layers.forEach(layer => {
+        if (layer.id === 'background' || (layer.source && layer.source.startsWith('basemap-'))) {
+            map.setLayoutProperty(layer.id, 'visibility', 'visible');
         }
     });
 }
