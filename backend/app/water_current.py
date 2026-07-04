@@ -521,8 +521,9 @@ class WaterCurrentService:
         weighted_speed_sum = 0.0
         total_sampled_dist = 0.0
         segment_infos = []
-        # Track km per waterway for display (dominant = most km with current)
         km_by_waterway: Dict[str, float] = {}
+        # Signed time impact per waterway: positive = costs time (upstream), negative = saves (downstream)
+        time_impact_by_waterway: Dict[str, float] = {}
 
         for i in range(len(sample_indices) - 1):
             idx1 = sample_indices[i]
@@ -572,17 +573,23 @@ class WaterCurrentService:
                     if angle_diff > 180:
                         angle_diff = 360 - angle_diff
                     direction = "↓tal" if angle_diff < 90 else "↑berg"
+                nominal_time_h = segment_dist_km / boat_speed_kmh
+                actual_time_h  = segment_dist_km / effective_speed
+                time_impact_h  = actual_time_h - nominal_time_h  # positive=slower(berg), negative=faster(tal)
                 print(f"      Seg {i+1} [{seg_waterway}]: {segment_dist_km:.1f}km, "
-                      f"{direction}, current={current_kmh}km/h → eff={effective_speed:.1f}km/h")
+                      f"{direction}, current={current_kmh}km/h → eff={effective_speed:.1f}km/h "
+                      f"({time_impact_h:+.2f}h)")
                 segment_infos.append({
                     'distance_km': segment_dist_km,
                     'waterway': seg_waterway,
                     'current_kmh': current_kmh,
                     'direction': direction,
                     'effective_speed_kmh': effective_speed,
+                    'time_impact_h': time_impact_h,
                 })
                 if seg_waterway and current_kmh:
                     km_by_waterway[seg_waterway] = km_by_waterway.get(seg_waterway, 0) + segment_dist_km
+                    time_impact_by_waterway[seg_waterway] = time_impact_by_waterway.get(seg_waterway, 0) + time_impact_h
             else:
                 effective_speed = boat_speed_kmh
                 segment_infos.append({
@@ -603,23 +610,29 @@ class WaterCurrentService:
         else:
             total_adjusted_time = distance_km / boat_speed_kmh
 
-        # Dominant waterway = the one with most km where current applies
-        display_waterway = (
-            max(km_by_waterway, key=km_by_waterway.get) if km_by_waterway
-            else detected_waterway
-        )
+        # Display waterway = the one with the largest absolute time impact.
+        # This shows the waterway that matters most to the journey, regardless of km.
+        # E.g. for Elbe→Saale-upstream: Saale upstream costs more time than Elbe downstream
+        # saves → "↑ Saale" is shown even though the Elbe has more km.
+        if time_impact_by_waterway:
+            display_waterway = max(time_impact_by_waterway, key=lambda w: abs(time_impact_by_waterway[w]))
+            display_time_diff = time_impact_by_waterway[display_waterway]
+        else:
+            display_waterway = detected_waterway
+            display_time_diff = total_adjusted_time - (distance_km / boat_speed_kmh)
 
-        time_diff = total_adjusted_time - (distance_km / boat_speed_kmh)
+        total_time_diff = total_adjusted_time - (distance_km / boat_speed_kmh)
         debug_info = {
             'segments': segment_infos,
             'detected_waterway': display_waterway,
             'original_duration_h': distance_km / boat_speed_kmh,
             'adjusted_duration_h': total_adjusted_time,
-            'time_diff_h': time_diff,
+            'time_diff_h': display_time_diff,   # waterway-specific impact → drives ↑/↓ in badge
+            'total_time_diff_h': total_time_diff,
         }
 
         print(f"   🌊 Total: {total_adjusted_time:.2f}h (was {distance_km/boat_speed_kmh:.2f}h, "
-              f"diff={time_diff:.2f}h, display={display_waterway})")
+              f"net={total_time_diff:+.2f}h, badge={display_waterway} {display_time_diff:+.2f}h)")
 
         return total_adjusted_time, debug_info
 
