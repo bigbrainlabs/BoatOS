@@ -1172,40 +1172,246 @@ async def get_locks_by_waterway(waterway: str):
     locks = locks_storage.get_locks_by_waterway(waterway)
     return {"locks": locks, "count": len(locks), "waterway": waterway}
 
+def _mbtiles_bounds(mbtiles_path: Path):
+    """Bounds (lon_min, lat_min, lon_max, lat_max) aus MBTiles-Metadaten lesen."""
+    import sqlite3
+    try:
+        conn = sqlite3.connect(f"file:{mbtiles_path}?mode=ro", uri=True)
+        row = conn.execute("SELECT value FROM metadata WHERE name='bounds'").fetchone()
+        conn.close()
+        if row:
+            parts = [float(x) for x in row[0].split(",")]
+            if len(parts) == 4:
+                return parts
+    except Exception:
+        pass
+    return None
+
+
+# ==================== LOCKS BACKGROUND JOBS ====================
+# Alle langlaufenden Schleusen-Operationen (Import, Anreichern, Positions-
+# Korrektur) laufen als EIN gemeinsamer Hintergrund-Job mit Fortschritts-
+# Status. Ein einzelner HTTP-Request wäre länger als jedes Proxy-Timeout
+# (nginx: 60s), und synchrone Arbeit würde die Event-Loop blockieren.
+_lock_import_state = {"running": False, "job": None, "progress": "", "result": None}
+
+
+def _start_locks_job(job_name: str, coro) -> dict:
+    """Job starten wenn keiner läuft; gibt Start-Antwort fürs Frontend zurück."""
+    if _lock_import_state["running"]:
+        return {"success": False, "error": f"Es läuft bereits ein Job ({_lock_import_state['job']})", "running": True}
+    _lock_import_state.update({"running": True, "job": job_name, "progress": "Starte…", "result": None})
+    asyncio.create_task(coro)
+    return {"success": True, "started": True, "job": job_name}
+
+
+async def _locks_job_guard(job_name: str, inner):
+    """Wrapper: Fehler landen im Status statt den Job ewig auf running zu lassen."""
+    try:
+        await inner()
+    except Exception as e:
+        print(f"❌ Locks-Job '{job_name}' fehlgeschlagen: {e}")
+        _lock_import_state.update({
+            "running": False, "progress": "Fehler",
+            "result": {"success": False, "error": str(e)}
+        })
+
+
 @app.post("/api/locks/import-osm")
 async def import_locks_from_osm():
-    """Import locks from OpenStreetMap"""
-    try:
-        script_path = Path(__file__).parent.parent / 'import_locks.py'
-        result = subprocess.run(['python', str(script_path)], capture_output=True, text=True, timeout=300)
-        if result.returncode == 0:
-            import re
-            imported = int(re.search(r'(\d+)\s+new', result.stdout, re.I).group(1)) if re.search(r'(\d+)\s+new', result.stdout, re.I) else 0
-            return {"success": True, "imported": imported}
-        return {"success": False, "error": result.stderr or "Import failed"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    """
+    Schleusen-Import von OpenStreetMap (Overpass) als Hintergrund-Job starten —
+    für alle aktiven Karten-Regionen. Status via GET /api/locks/job/status.
+    """
+    return _start_locks_job("import", _locks_job_guard("import", _run_lock_import_inner))
+
+
+@app.get("/api/locks/job/status")
+@app.get("/api/locks/import-osm/status")  # Alt-Pfad für Kompatibilität
+async def lock_import_status():
+    return _lock_import_state
+
+
+async def _run_lock_import_inner():
+    """
+    Schleusen live von Overpass holen — die Bounding-Box je Region kommt
+    dynamisch aus den MBTiles-Metadaten, kein Land ist im Code festgelegt.
+    """
+    import math
+
+    regions = _get_active_regions()
+    bboxes = []
+    for r in regions:
+        p = MBTILES_DIR / f"{r}.mbtiles"
+        if p.exists():
+            b = _mbtiles_bounds(p)
+            if b:
+                bboxes.append((r, b))
+    if not bboxes:
+        _lock_import_state.update({
+            "running": False,
+            "result": {"success": False, "error": "Keine aktiven Karten-Regionen mit MBTiles gefunden"}
+        })
+        return
+
+    existing = await asyncio.to_thread(locks_storage.load_locks)
+
+    def _is_duplicate(lat, lon, name):
+        # Duplikat wenn bestehende Schleuse in <300m — Name ist bei OSM oft
+        # abweichend/leer, Distanz ist das verlässlichere Kriterium
+        for l in existing:
+            if l.get('lat') is None or l.get('lon') is None:
+                continue
+            dlat = (l['lat'] - lat) * 111_000
+            dlon = (l['lon'] - lon) * 111_000 * math.cos(math.radians(lat))
+            if (dlat * dlat + dlon * dlon) ** 0.5 < 300:
+                return True
+        return False
+
+    imported = 0
+    skipped = 0
+    total_found = 0
+    per_region = {}
+
+    async with aiohttp.ClientSession() as session:
+        for region, (lon_min, lat_min, lon_max, lat_max) in bboxes:
+            _lock_import_state["progress"] = f"Frage OSM ab: {region}…"
+            print(f"🔒 Lock-Import: Overpass-Abfrage für {region}")
+            # Nur waterway=lock (+ lock=yes / boat_lock) — KEINE lock_gate:
+            # Einzeltore erzeugen Duplikate und unbrauchbare Namen
+            bbox = f"{lat_min},{lon_min},{lat_max},{lon_max}"
+            query = f"""
+            [out:json][timeout:180];
+            (
+              node["waterway"="lock"]({bbox});
+              way["waterway"="lock"]({bbox});
+              way["lock"="yes"]["waterway"]({bbox});
+              node["amenity"="boat_lock"]({bbox});
+              way["amenity"="boat_lock"]({bbox});
+            );
+            out body center qt;
+            """
+            try:
+                async with session.post(
+                    "https://overpass-api.de/api/interpreter",
+                    data={"data": query},
+                    headers={"User-Agent": "BoatOS/1.0"},
+                    timeout=aiohttp.ClientTimeout(total=200)
+                ) as resp:
+                    if resp.status != 200:
+                        per_region[region] = f"Overpass HTTP {resp.status}"
+                        continue
+                    data = await resp.json(content_type=None)
+            except Exception as e:
+                per_region[region] = f"Fehler: {e}"
+                continue
+
+            _lock_import_state["progress"] = f"Verarbeite {region}: {len(data.get('elements', []))} Elemente…"
+
+            def _process_elements(data):
+                # Läuft in einem Thread: Dedup (O(n·m)) + SQLite-Inserts würden
+                # die Event-Loop sonst minutenlang blockieren (SD-Karten-I/O)
+                nonlocal imported, skipped, total_found
+                region_imported = 0
+                for el in data.get("elements", []):
+                    if el["type"] == "node":
+                        lat, lon = el.get("lat"), el.get("lon")
+                    else:
+                        c = el.get("center") or {}
+                        lat, lon = c.get("lat"), c.get("lon")
+                    if lat is None or lon is None:
+                        continue
+                    total_found += 1
+
+                    tags = el.get("tags", {})
+                    name = tags.get("name") or tags.get("lock_name") or f"Schleuse (OSM {el['id']})"
+
+                    if _is_duplicate(lat, lon, name):
+                        skipped += 1
+                        continue
+
+                    def _f(key):
+                        try:
+                            return float(str(tags.get(key)).replace(",", ".").split()[0])
+                        except Exception:
+                            return None
+
+                    lock_data = {
+                        "name": name,
+                        "waterway": tags.get("waterway:name") or None,
+                        "lat": lat,
+                        "lon": lon,
+                        # Kontakt-Tags direkt aus OSM übernehmen — funktioniert in jedem Land
+                        "vhf_channel": tags.get("vhf") or tags.get("communication:vhf") or None,
+                        "phone": tags.get("phone") or tags.get("contact:phone") or None,
+                        "email": tags.get("email") or tags.get("contact:email") or None,
+                        "website": tags.get("website") or tags.get("contact:website") or None,
+                        "max_length": _f("lock:length") or _f("maxlength"),
+                        "max_width": _f("lock:width") or _f("maxwidth"),
+                        "max_draft": _f("maxdraft") or _f("draft"),
+                        "notes": tags.get("description") or None,
+                    }
+                    try:
+                        locks_storage.add_lock(lock_data)
+                        existing.append({"lat": lat, "lon": lon, "name": name})
+                        imported += 1
+                        region_imported += 1
+                    except Exception:
+                        pass
+                return region_imported
+
+            region_imported = await asyncio.to_thread(_process_elements, data)
+            per_region[region] = f"{region_imported} neu"
+
+    result = {
+        "success": True,
+        "imported": imported,
+        "updated": 0,
+        "skipped": skipped,
+        "total_found": total_found,
+        "regions": per_region,
+    }
+    print(f"🔒 Lock-Import fertig: {imported} neu, {skipped} übersprungen, {total_found} gefunden ({per_region})")
+    _lock_import_state.update({"running": False, "progress": "Fertig", "result": result})
 
 @app.post("/api/locks/enrich")
 async def enrich_locks_data():
-    """Enrich locks with VHF and contact data"""
-    try:
-        script_path = Path(__file__).parent.parent / 'enrich_locks_data.py'
-        result = subprocess.run(['python', str(script_path)], capture_output=True, text=True, timeout=120)
-        if result.returncode == 0:
-            import re
-            vhf = re.search(r'VHF.*?(\d+\.?\d*%)', result.stdout, re.I).group(1) if re.search(r'VHF.*?(\d+\.?\d*%)', result.stdout, re.I) else "0%"
-            return {"success": True, "vhf_coverage": vhf}
-        return {"success": False, "error": result.stderr or "Enrichment failed"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    """Schleusen-Anreicherung (VHF/Kontakte) als Hintergrund-Job starten"""
+    return _start_locks_job("enrich", _locks_job_guard("enrich", _run_lock_enrich))
+
+
+async def _run_lock_enrich():
+    _lock_import_state["progress"] = "Reichere Schleusen-Daten an…"
+    script_path = Path(__file__).parent.parent / 'enrich_locks_data.py'
+    # subprocess.run in Thread — würde sonst die Event-Loop bis zu 120s blockieren
+    result = await asyncio.to_thread(
+        subprocess.run, ['python', str(script_path)],
+        capture_output=True, text=True, timeout=120
+    )
+    if result.returncode == 0:
+        import re
+        m = re.search(r'VHF.*?(\d+\.?\d*%)', result.stdout, re.I)
+        vhf = m.group(1) if m else "0%"
+        _lock_import_state.update({
+            "running": False, "progress": "Fertig",
+            "result": {"success": True, "enriched": vhf, "vhf_coverage": vhf}
+        })
+    else:
+        _lock_import_state.update({
+            "running": False, "progress": "Fehler",
+            "result": {"success": False, "error": result.stderr or "Enrichment failed"}
+        })
 
 @app.get("/api/locks/quality")
 async def check_locks_quality():
     """Get locks database quality statistics"""
     try:
         script_path = Path(__file__).parent.parent / 'check_locks_quality.py'
-        result = subprocess.run(['python', str(script_path)], capture_output=True, text=True, timeout=60)
+        # In Thread — blockiert sonst die Event-Loop bis zu 60s
+        result = await asyncio.to_thread(
+            subprocess.run, ['python', str(script_path)],
+            capture_output=True, text=True, timeout=60
+        )
         if result.returncode == 0:
             import re
             output = result.stdout
@@ -1226,25 +1432,114 @@ async def check_locks_quality():
 
 @app.post("/api/locks/verify-positions")
 async def verify_locks_positions():
-    """Verify and fix lock positions against OpenStreetMap (takes ~2 minutes)"""
-    try:
-        # Import the function directly to use it with silent mode
-        import sys
-        sys.path.append(str(Path(__file__).parent.parent))
-        from check_lock_positions import check_lock_positions
+    """Positions-Korrektur als Hintergrund-Job starten (Nominatim, nur benannte Schleusen)"""
+    return _start_locks_job("verify", _locks_job_guard("verify", _run_lock_verify))
 
-        # Run verification with auto-fix and silent mode
-        result = check_lock_positions(auto_fix=True, distance_threshold=500, silent=True)
 
-        return {
-            "success": True,
-            "checked": result['checked'],
-            "fixed": result['fixed'],
-            "avg_distance_fixed": result['avg_distance_fixed'],
-            "issues": result['issues']
-        }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+async def _run_lock_verify():
+    """
+    Positionen benannter Schleusen gegen Nominatim prüfen und korrigieren.
+    Effizient und länderneutral: nur Einträge mit echtem Schleusen-Namen
+    (~30-50 Abfragen à 1s statt 785 Overpass-Queries), läuft im Thread.
+    Räumt nach einer Korrektur generisch benannte Duplikate im Umkreis ab.
+    """
+    result = await asyncio.to_thread(_verify_positions_sync)
+    _lock_import_state.update({"running": False, "progress": "Fertig", "result": result})
+
+
+def _verify_positions_sync():
+    import math
+    import time as _time
+    import requests
+    import sqlite3
+
+    def _dist_m(lat1, lon1, lat2, lon2):
+        dlat = (lat2 - lat1) * 111_000
+        dlon = (lon2 - lon1) * 111_000 * math.cos(math.radians(lat1))
+        return (dlat * dlat + dlon * dlon) ** 0.5
+
+    locks = locks_storage.load_locks()
+    # Nur benannte Schleusen — generische Einträge (nach Gewässer benannt)
+    # lassen sich per Namenssuche nicht sinnvoll verorten
+    name_prefixes = ('schleuse', 'sluis', 'écluse', 'ecluse', 'lock ', 'sperrwerk')
+    named = [l for l in locks
+             if l.get('name') and l['name'].lower().startswith(name_prefixes)
+             and l.get('lat') is not None and l.get('lon') is not None]
+
+    checked = 0
+    fixed = 0
+    removed_dups = 0
+    issues = []
+
+    for l in named:
+        checked += 1
+        _lock_import_state["progress"] = f"Prüfe {checked}/{len(named)}: {l['name']}"
+        try:
+            r = requests.get(
+                'https://nominatim.openstreetmap.org/search',
+                params={'q': l['name'], 'format': 'json', 'limit': 5},
+                headers={'User-Agent': 'BoatOS/1.0'}, timeout=15
+            )
+            results = r.json() if r.status_code == 200 else []
+        except Exception:
+            results = []
+
+        # Nur Wasserbau-Objekte akzeptieren — Nominatim liefert für
+        # "Schleuse Finkenheerd" sonst den ORT Brieskow-Finkenheerd
+        # (class=place/boundary) und mehrere Schleusen landen auf
+        # derselben falschen Koordinate
+        allowed_classes = ('lock', 'waterway', 'man_made', 'seamark')
+        best = None
+        best_d = None
+        for res in results:
+            if res.get('class') not in allowed_classes:
+                continue
+            try:
+                rlat, rlon = float(res['lat']), float(res['lon'])
+            except Exception:
+                continue
+            # >50 km entfernte Treffer sind Namenskollisionen anderswo
+            d = _dist_m(l['lat'], l['lon'], rlat, rlon)
+            if d < 50_000 and (best_d is None or d < best_d):
+                best, best_d = (rlat, rlon), d
+
+        if best and best_d > 500:
+            locks_storage.update_lock(l['id'], {'lat': best[0], 'lon': best[1]})
+            fixed += 1
+            issues.append({'name': l['name'], 'distance': int(best_d),
+                           'new_position': [best[0], best[1]]})
+            print(f"🔧 Position korrigiert: {l['name']} ({best_d:.0f}m daneben)")
+
+            # Generische Duplikate an der korrigierten Position entfernen
+            # (Tor-Einträge, die nach ihrem Kanal/Fluss benannt sind)
+            try:
+                conn = sqlite3.connect(str(Path(__file__).parent.parent / 'data' / 'locks.db'))
+                for row in conn.execute("SELECT id, name, lat, lon FROM locks WHERE id != ?", (l['id'],)):
+                    rid, rname, rlat, rlon = row
+                    if rlat is None or rlon is None:
+                        continue
+                    if (rname or '').lower().startswith(name_prefixes):
+                        continue  # echte benannte Schleusen nie anfassen
+                    if _dist_m(best[0], best[1], rlat, rlon) < 400:
+                        conn.execute("DELETE FROM locks WHERE id = ?", (rid,))
+                        removed_dups += 1
+                        print(f"   🗑 Duplikat entfernt: '{rname}' (id {rid})")
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                print(f"   ⚠️ Duplikat-Bereinigung fehlgeschlagen: {e}")
+
+        _time.sleep(1.1)  # Nominatim-Richtlinie: max. 1 Anfrage/Sekunde
+
+    print(f"🔧 Positions-Check fertig: {checked} geprüft, {fixed} korrigiert, {removed_dups} Duplikate entfernt")
+    return {
+        "success": True,
+        "checked": checked,
+        "fixed": fixed,
+        "removed_duplicates": removed_dups,
+        "avg_distance_fixed": int(sum(i['distance'] for i in issues) / len(issues)) if issues else 0,
+        "issues": issues,
+    }
 
 @app.get("/api/locks/{lock_id}")
 async def get_lock_details(lock_id: int):

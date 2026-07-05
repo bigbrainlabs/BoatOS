@@ -34,16 +34,16 @@ export const html = `
                     </small>
 
                     <div class="setting-item">
-                        <button id="btn-locks-import" class="btn-primary" data-i18n="settings_import_osm" style="width: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <button id="btn-locks-import" class="btn-secondary" data-i18n="settings_import_osm" style="width: 100%;">
                             🌍 Schleusen von OSM importieren
                         </button>
                         <small style="color: var(--text-dim); display: block; margin-top: 5px;">
-                            Lädt neue Schleusen aus OpenStreetMap in die Datenbank
+                            Lädt Schleusen aus OpenStreetMap für alle aktiven Karten-Regionen
                         </small>
                     </div>
 
                     <div class="setting-item">
-                        <button id="btn-locks-enrich" class="btn-primary" data-i18n="settings_enrich_data" style="width: 100%; background: linear-gradient(135deg, #43cea2 0%, #185a9d 100%);">
+                        <button id="btn-locks-enrich" class="btn-secondary" data-i18n="settings_enrich_data" style="width: 100%;">
                             ✨ Daten anreichern
                         </button>
                         <small style="color: var(--text-dim); display: block; margin-top: 5px;">
@@ -52,7 +52,7 @@ export const html = `
                     </div>
 
                     <div class="setting-item">
-                        <button id="btn-locks-quality" class="btn-primary" data-i18n="settings_quality_report" style="width: 100%; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                        <button id="btn-locks-quality" class="btn-secondary" data-i18n="settings_quality_report" style="width: 100%;">
                             📊 Qualitätsbericht anzeigen
                         </button>
                         <small style="color: var(--text-dim); display: block; margin-top: 5px;">
@@ -61,7 +61,7 @@ export const html = `
                     </div>
 
                     <div class="setting-item">
-                        <button id="btn-locks-verify" class="btn-primary" data-i18n="settings_verify_positions" style="width: 100%; background: linear-gradient(135deg, #f5576c 0%, #fc6c85 100%);">
+                        <button id="btn-locks-verify" class="btn-secondary" data-i18n="settings_verify_positions" style="width: 100%;">
                             📍 Positionen überprüfen & korrigieren
                         </button>
                         <small style="color: var(--text-dim); display: block; margin-top: 5px;">
@@ -191,23 +191,51 @@ export function importSettings() {
 
 // ==================== SCHLEUSEN-DATENBANK ====================
 
+/**
+ * Gemeinsamer Runner für alle Schleusen-Hintergrund-Jobs (Import, Anreichern,
+ * Positions-Korrektur): Job per POST starten, Status pollen, Fortschritt als
+ * Toast anzeigen, am Ende onDone(result) aufrufen.
+ */
+async function runLocksJob(startUrl, onDone) {
+    const response = await fetch(startUrl, { method: 'POST' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const start = await response.json();
+    if (!start.success) throw new Error(start.error || '?');
+
+    let lastProgress = '';
+    const poll = setInterval(async () => {
+        try {
+            const st = await fetch(`${API_URL}/api/locks/job/status`).then(r => r.json());
+            if (st.running) {
+                if (st.progress && st.progress !== lastProgress) {
+                    lastProgress = st.progress;
+                    showMsg(`🔒 ${st.progress}`);
+                }
+                return;
+            }
+            clearInterval(poll);
+            onDone(st.result || {});
+        } catch (e) {
+            clearInterval(poll);
+            onDone({ success: false, error: e.message });
+        }
+    }, 3000);
+}
+
 export async function importLocksFromOSM() {
     if (!confirm(_t('settingsLocksImportConfirm'))) return;
 
     showMsg(_t('settingsLocksImportStart'));
 
     try {
-        const response = await fetch(`${API_URL}/api/locks/import-osm`, { method: 'POST' });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        const result = await response.json();
-
-        if (result.success) {
-            showMsg(_t('settingsLocksImported', { imported: result.imported, updated: result.updated }));
-            if (typeof window.updateLocksOnMap === 'function') window.updateLocksOnMap();
-        } else {
-            showMsg(_t('settingsLocksImportError', { error: result.error }));
-        }
+        await runLocksJob(`${API_URL}/api/locks/import-osm`, (result) => {
+            if (result.success) {
+                showMsg(_t('settingsLocksImported', { imported: result.imported, updated: result.updated ?? 0 }));
+                if (typeof window.updateLocksOnMap === 'function') window.updateLocksOnMap();
+            } else {
+                showMsg(_t('settingsLocksImportError', { error: result.error || '?' }));
+            }
+        });
     } catch (error) {
         console.error('OSM Import error:', error);
         showMsg(_t('settingsLocksImportError', { error: error.message }));
@@ -220,18 +248,15 @@ export async function enrichLocksData() {
     showMsg(_t('settingsLocksEnrichStart'));
 
     try {
-        const response = await fetch(`${API_URL}/api/locks/enrich`, { method: 'POST' });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        const result = await response.json();
-
-        if (result.success) {
-            showMsg(_t('settingsLocksEnriched', { enriched: result.enriched }));
-            if (typeof window.updateLocksOnMap === 'function') window.updateLocksOnMap();
-            setTimeout(() => checkLocksQuality(), 1000);
-        } else {
-            showMsg(_t('settingsLocksEnrichError', { error: result.error }));
-        }
+        await runLocksJob(`${API_URL}/api/locks/enrich`, (result) => {
+            if (result.success) {
+                showMsg(_t('settingsLocksEnriched', { enriched: result.enriched }));
+                if (typeof window.updateLocksOnMap === 'function') window.updateLocksOnMap();
+                setTimeout(() => checkLocksQuality(), 1000);
+            } else {
+                showMsg(_t('settingsLocksEnrichError', { error: result.error }));
+            }
+        });
     } catch (error) {
         console.error('Enrichment error:', error);
         showMsg(_t('settingsLocksEnrichError', { error: error.message }));
@@ -292,19 +317,17 @@ export async function verifyLocksPositions() {
     showMsg(_t('settingsPosStart'));
 
     try {
-        const response = await fetch(`${API_URL}/api/locks/verify-positions`, { method: 'POST' });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        const result = await response.json();
-
-        if (result.success) {
-            showMsg(_t('settingsPosChecked', { checked: result.checked }));
-            if (typeof window.updateLocksOnMap === 'function') {
-                setTimeout(() => window.updateLocksOnMap(), 1000);
+        await runLocksJob(`${API_URL}/api/locks/verify-positions`, (result) => {
+            if (result.success) {
+                showMsg(_t('settingsPosChecked', { checked: result.checked }) +
+                        ` (${result.fixed ?? 0} korrigiert, ${result.removed_duplicates ?? 0} Duplikate entfernt)`);
+                if (typeof window.updateLocksOnMap === 'function') {
+                    setTimeout(() => window.updateLocksOnMap(), 1000);
+                }
+            } else {
+                showMsg(_t('settingsLocksImportError', { error: result.error }));
             }
-        } else {
-            showMsg(_t('settingsLocksImportError', { error: result.error }));
-        }
+        });
     } catch (error) {
         console.error('Position verification error:', error);
         showMsg(_t('settingsLocksImportError', { error: error.message }));
