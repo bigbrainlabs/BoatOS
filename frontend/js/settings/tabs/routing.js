@@ -1,8 +1,10 @@
 /**
- * Settings-Tab: Routing (Provider, OSRM-Region, Routing-Graphen, Strömung)
+ * Settings-Tab: Routing (Provider, OSRM-Server, Routing-Graphen, Strömung)
  *
  * Routing-Graph-Upload läuft weiterhin über ui.js (BoatOS.ui.onRoutingFileSelected /
  * uploadRoutingFile), die Graph-Liste über window.loadRoutingGraphs.
+ * Der frühere OSRM-Regionen-Wechsel wurde entfernt — das Routing läuft global
+ * über das germany-waterways-Profil + .routing-Graphen (grenzüberschreitend).
  */
 
 export const id = 'routing';
@@ -26,22 +28,6 @@ export const html = `
                         <span>Server-URL</span>
                         <input type="text" class="setting-input" id="setting-osrm-url" value="http://127.0.0.1:5000" placeholder="http://127.0.0.1:5000" style="width: 100%;">
                     </div>
-                    <div class="setting-item">
-                        <span data-i18n="settings_current_region">Aktuelle Region</span>
-                        <div id="current-region-display" style="padding: 8px 12px; background: var(--bg-card); border-radius: 6px; color: var(--accent); font-weight: 600;">
-                            <span id="current-region-name">--</span>
-                        </div>
-                    </div>
-                    <div class="setting-item">
-                        <span data-i18n="settings_switch_region_label">Region wechseln</span>
-                        <select class="setting-select" id="region-selector">
-                            <option value="">Region wählen...</option>
-                        </select>
-                    </div>
-                    <button id="btn-switch-region" class="btn-primary" data-i18n="settings_switch_region_btn" style="width: 100%; margin-top: 10px;">
-                        🔄 Region wechseln
-                    </button>
-                    <div id="region-switch-status" style="margin-top: 10px; padding: 10px; border-radius: 6px; font-size: 12px; display: none;"></div>
                 </div>
 
                 <div class="setting-group" id="graphhopper-settings" style="display: none;">
@@ -156,22 +142,12 @@ export const html = `
 `;
 
 let API_URL = '';
-let _ui = null;
-
-function showMsg(message) {
-    if (_ui?.showNotification) _ui.showNotification(message, 'info');
-    else console.log(message);
-}
 
 export function init(ctx) {
     API_URL = ctx.API_URL || '';
-    _ui = ctx.ui || window.BoatOS?.ui;
 
     const provider = document.getElementById('setting-routing-provider');
     if (provider) provider.addEventListener('change', updateRoutingProviderVisibility);
-
-    const switchBtn = document.getElementById('btn-switch-region');
-    if (switchBtn) switchBtn.addEventListener('click', switchOSRMRegion);
 }
 
 export function load(settings) {
@@ -245,32 +221,6 @@ export function collect(settings) {
 
 export function onShow(ctx) {
     if (window.loadRoutingGraphs) window.loadRoutingGraphs();
-    loadRegions();
-}
-
-/** OSRM-Regionen-Dropdown + aktive Region vom Backend laden */
-async function loadRegions() {
-    try {
-        const [regionsRes, currentRes] = await Promise.all([
-            fetch(`${API_URL}/api/routing/regions`),
-            fetch(`${API_URL}/api/routing/current-region`)
-        ]);
-        const regionsData = regionsRes.ok ? await regionsRes.json() : { regions: [] };
-        const currentData = currentRes.ok ? await currentRes.json() : {};
-
-        const selector = document.getElementById('region-selector');
-        if (selector && regionsData.regions?.length) {
-            selector.innerHTML = regionsData.regions.map(r =>
-                `<option value="${r.id}">${r.name || r.id}</option>`
-            ).join('');
-            if (currentData.region) selector.value = currentData.region;
-        }
-
-        const nameEl = document.getElementById('current-region-name');
-        if (nameEl && currentData.region) nameEl.textContent = currentData.name || currentData.region;
-    } catch (e) {
-        console.warn('OSRM-Regionen konnten nicht geladen werden:', e);
-    }
 }
 
 // ==================== AKTIONEN ====================
@@ -284,40 +234,3 @@ export function updateRoutingProviderVisibility() {
     if (graphhopperSettings) graphhopperSettings.style.display = provider === 'graphhopper' ? 'block' : 'none';
 }
 
-export async function switchOSRMRegion() {
-    const regionSelector = document.getElementById('region-selector');
-    const statusEl = document.getElementById('region-switch-status');
-    const selectedRegion = regionSelector?.value;
-
-    if (!selectedRegion) {
-        showMsg('❌ Bitte eine Region auswählen');
-        return;
-    }
-
-    if (statusEl) {
-        statusEl.style.display = 'block';
-        statusEl.textContent = `🔄 Wechsle zu ${selectedRegion}...`;
-    }
-
-    try {
-        const response = await fetch(`${API_URL}/api/routing/switch-region`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ region: selectedRegion })
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            showMsg(`✅ Region gewechselt zu: ${selectedRegion}`);
-            if (statusEl) statusEl.textContent = `✅ Aktiv: ${selectedRegion}`;
-            const currentRegionName = document.getElementById('current-region-name');
-            if (currentRegionName) currentRegionName.textContent = selectedRegion;
-        } else {
-            throw new Error(result.error || 'Fehler');
-        }
-    } catch (error) {
-        showMsg(`❌ Fehler: ${error.message}`);
-        if (statusEl) statusEl.textContent = `❌ ${error.message}`;
-    }
-}
