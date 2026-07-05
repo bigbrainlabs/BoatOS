@@ -283,22 +283,6 @@ layers:
 REGIONS = [
     # ── Deutschland / Germany ─────────────────────────────────────────────────
     ("Deutschland",                  "Germany",                       "https://download.geofabrik.de/europe/germany-latest.osm.pbf"),
-    ("DE · Baden-Württemberg",       "DE · Baden-Württemberg",        "https://download.geofabrik.de/europe/germany/baden-wuerttemberg-latest.osm.pbf"),
-    ("DE · Bayern",                  "DE · Bavaria",                  "https://download.geofabrik.de/europe/germany/bavaria-latest.osm.pbf"),
-    ("DE · Berlin",                  "DE · Berlin",                   "https://download.geofabrik.de/europe/germany/berlin-latest.osm.pbf"),
-    ("DE · Brandenburg",             "DE · Brandenburg",              "https://download.geofabrik.de/europe/germany/brandenburg-latest.osm.pbf"),
-    ("DE · Bremen",                  "DE · Bremen",                   "https://download.geofabrik.de/europe/germany/bremen-latest.osm.pbf"),
-    ("DE · Hamburg",                 "DE · Hamburg",                  "https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf"),
-    ("DE · Hessen",                  "DE · Hesse",                    "https://download.geofabrik.de/europe/germany/hessen-latest.osm.pbf"),
-    ("DE · Mecklenburg-Vorpommern",  "DE · Mecklenburg-Vorpommern",   "https://download.geofabrik.de/europe/germany/mecklenburg-vorpommern-latest.osm.pbf"),
-    ("DE · Niedersachsen",           "DE · Lower Saxony",             "https://download.geofabrik.de/europe/germany/lower-saxony-latest.osm.pbf"),
-    ("DE · Nordrhein-Westfalen",     "DE · North Rhine-Westphalia",   "https://download.geofabrik.de/europe/germany/nordrhein-westfalen-latest.osm.pbf"),
-    ("DE · Rheinland-Pfalz",         "DE · Rhineland-Palatinate",     "https://download.geofabrik.de/europe/germany/rheinland-pfalz-latest.osm.pbf"),
-    ("DE · Saarland",                "DE · Saarland",                 "https://download.geofabrik.de/europe/germany/saarland-latest.osm.pbf"),
-    ("DE · Sachsen",                 "DE · Saxony",                   "https://download.geofabrik.de/europe/germany/saxony-latest.osm.pbf"),
-    ("DE · Sachsen-Anhalt",          "DE · Saxony-Anhalt",            "https://download.geofabrik.de/europe/germany/saxony-anhalt-latest.osm.pbf"),
-    ("DE · Schleswig-Holstein",      "DE · Schleswig-Holstein",       "https://download.geofabrik.de/europe/germany/schleswig-holstein-latest.osm.pbf"),
-    ("DE · Thüringen",               "DE · Thuringia",                "https://download.geofabrik.de/europe/germany/thuringia-latest.osm.pbf"),
     # ── Mitteleuropa / Central Europe ────────────────────────────────────────
     ("Niederlande",                  "Netherlands",                   "https://download.geofabrik.de/europe/netherlands-latest.osm.pbf"),
     ("Belgien",                      "Belgium",                       "https://download.geofabrik.de/europe/belgium-latest.osm.pbf"),
