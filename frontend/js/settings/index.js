@@ -151,6 +151,9 @@ async function loadTabModule(id) {
             document.dispatchEvent(new Event('settingsPanelOpened'));
             try { mod.init?.(getCtx()); } catch (e) { console.warn(`Tab ${id}: init fehlgeschlagen`, e); }
             try { mod.load?.(settingsState); } catch (e) { console.warn(`Tab ${id}: load fehlgeschlagen`, e); }
+            // Unit-Labels (kn/km/h, NM/km) in der frisch injizierten Sektion aktualisieren —
+            // updateAllUnitLabels() lief beim Boot, bevor dieser DOM existierte
+            window.updateAllUnitLabels?.();
         }
     }
     return loadedTabs.get(id);

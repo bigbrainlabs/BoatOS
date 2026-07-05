@@ -391,6 +391,7 @@ const translations = {
         settings_offline_maps_refresh: "↺ Aktualisieren",
         // Nav tab
         settings_prefer_waterways: "Wasserwege bevorzugen",
+        settings_online_routing_fallback: "Online-Routing als Fallback",
         settings_default_speed: "Standard-Geschwindigkeit",
         settings_day_planning: "Tagesplanung",
         settings_daily_hours: "Tägliche Fahrzeit (0 = unbegrenzt)",
@@ -863,6 +864,7 @@ const translations = {
         settings_auto_center: "Auto Center",
         // Nav tab
         settings_prefer_waterways: "Prefer Waterways",
+        settings_online_routing_fallback: "Online routing as fallback",
         settings_default_speed: "Default Speed",
         settings_day_planning: "Day Planning",
         settings_daily_hours: "Daily travel time (0 = unlimited)",

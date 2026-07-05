@@ -30,22 +30,28 @@ let unitSettings = {
 function getDistanceLabel() {
     if (unitSettings.distance === 'nm') return 'NM';
     if (unitSettings.distance === 'km') return 'km';
+    if (unitSettings.distance === 'mi') return 'mi';
     return unitSettings.distance.toUpperCase();
 }
 
 function getSpeedLabel() {
     if (unitSettings.speed === 'kn' || unitSettings.speed === 'knots') return 'kn';
     if (unitSettings.speed === 'kmh') return 'km/h';
+    if (unitSettings.speed === 'mph') return 'mph';
+    if (unitSettings.speed === 'ms') return 'm/s';
     return 'kn';
 }
 
 function convertDistanceFromNM(nm) {
     if (unitSettings.distance === 'km') return nm * 1.852;
+    if (unitSettings.distance === 'mi') return nm * 1.15078;
     return nm;
 }
 
 function convertSpeedFromKn(kn) {
     if (unitSettings.speed === 'kmh') return kn * 1.852;
+    if (unitSettings.speed === 'mph') return kn * 1.15078;
+    if (unitSettings.speed === 'ms') return kn * 0.514444;
     return kn;
 }
 
@@ -769,8 +775,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const loadedSettings = ui.loadSettings();
         if (loadedSettings.units) {
             unitSettings.distance = loadedSettings.units.distance || 'nm';
+            // Wert direkt übernehmen ('knots' = Alt-Alias für 'kn') — mph/ms nicht auf kn kollabieren
             unitSettings.speed = loadedSettings.units.speed === 'knots' ? 'kn' :
-                                 loadedSettings.units.speed === 'kmh' ? 'kmh' : 'kn';
+                                 (loadedSettings.units.speed || 'kn');
         }
         // Sprache initialisieren
         const lang = loadedSettings?.ui?.language || loadedSettings?.language || 'de';
@@ -787,7 +794,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (changedSettings.units) {
             unitSettings.distance = changedSettings.units.distance || 'nm';
             unitSettings.speed = changedSettings.units.speed === 'knots' ? 'kn' :
-                                 changedSettings.units.speed === 'kmh' ? 'kmh' : 'kn';
+                                 (changedSettings.units.speed || 'kn');
             console.log('Einheiten aktualisiert:', unitSettings);
             updateAllUnitLabels();
         }
@@ -966,3 +973,5 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Export für andere Module falls nötig
 export { updateAllUnitLabels, showRouteInfo, updateWaypointList };
+// Global für den Settings-Koordinator (lazy-injizierte Tabs brauchen frische Unit-Labels)
+window.updateAllUnitLabels = updateAllUnitLabels;
