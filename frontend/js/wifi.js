@@ -381,10 +381,11 @@ export async function disconnect() {
 export function initWifi() {
     loadStatus();
     loadSaved();
-    // Refresh status every 10s while wifi tab is visible
+    // Refresh status every 10s while settings page is open AND wifi tab is visible
     _statusInterval = setInterval(() => {
+        const page = document.getElementById('settingsPage');
         const tab = document.getElementById('settings-wifi');
-        if (tab && !tab.classList.contains('section-hidden')) {
+        if (page?.classList.contains('open') && tab && !tab.classList.contains('section-hidden')) {
             loadStatus();
         }
     }, 10000);

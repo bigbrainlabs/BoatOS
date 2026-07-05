@@ -41,7 +41,6 @@
 
     /* Element Sizes */
     --topbar-h: clamp(44px, calc(1.88vw + 20.00px), 56px);
-    --sidebar-w: clamp(280px, calc(10.94vw + 140.00px), 350px);
     --fab-size: clamp(38px, calc(1.25vw + 22.00px), 46px);
     --sheet-peek: clamp(100px, calc(4.69vw + 40.00px), 130px);
     --icon-btn-size: clamp(40px, calc(0.94vw + 22.00px), 40px);

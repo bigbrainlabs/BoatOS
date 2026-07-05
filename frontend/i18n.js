@@ -340,6 +340,11 @@ const translations = {
         settings_tab_charts: "Seekarten",
         settings_tab_data: "Daten",
         settings_tab_wifi: "WLAN",
+        settings_tab_nav: "Navigation",
+        settings_tab_ais: "AIS",
+        settings_tab_gps: "GPS",
+        settings_tab_routing: "Routing",
+        settings_tab_system: "System",
         // Settings panel - section headers
         settings_section_display: "Anzeige",
         settings_section_units: "Einheiten",
@@ -807,6 +812,11 @@ const translations = {
         settings_tab_charts: "Charts",
         settings_tab_data: "Data",
         settings_tab_wifi: "WiFi",
+        settings_tab_nav: "Navigation",
+        settings_tab_ais: "AIS",
+        settings_tab_gps: "GPS",
+        settings_tab_routing: "Routing",
+        settings_tab_system: "System",
         // Settings panel - section headers
         settings_section_display: "Display",
         settings_section_units: "Units",
@@ -956,16 +966,21 @@ function getLanguage() {
     return currentLang;
 }
 
-function updateUI() {
+function applyI18n(root = document) {
     // Update text content
-    document.querySelectorAll("[data-i18n]").forEach(el => {
+    root.querySelectorAll("[data-i18n]").forEach(el => {
         el.textContent = t(el.getAttribute("data-i18n"));
     });
 
     // Update placeholders
-    document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
+    root.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
         el.placeholder = t(el.getAttribute("data-i18n-placeholder"));
     });
+}
+window.applyI18n = applyI18n;
+
+function updateUI() {
+    applyI18n(document);
 }
 
 function toggleLanguage() {

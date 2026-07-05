@@ -15,7 +15,7 @@ import * as sensors from './sensors.js';
 import * as ui from './ui.js';
 import * as ais from './ais.js';
 import * as logbook from './logbook.js';
-import * as settings from './settings.js';
+import * as settings from './settings/index.js';
 import * as wifi from './wifi.js';
 import * as system from './system.js';
 import { initKeyboard } from './keyboard.js';
@@ -665,14 +665,10 @@ window.BoatOS = {
         if (lbl) lbl.textContent = '×' + simMultiplier;
     },
 
-    // === SETTINGS FUNCTIONS (delegated) ===
-    saveAllSettings: () => settings.saveAllSettings(),
-    loadAllSettings: () => settings.loadAllSettings(),
-    settings: {
-        applyGpsConfig: () => settings.applyGpsConfig(),
-        exportSettings: () => settings.exportSettings?.(),
-        importSettings: () => settings.importSettings?.(),
-    }
+    // === SETTINGS ===
+    // Kein eigener Namespace-Block mehr: `settings,` (oben) referenziert das
+    // Modul js/settings/index.js direkt — BoatOS.settings.open/close/save/showTab.
+    // (Der frühere Duplikat-Key hat das Modul überschattet und Buttons gebrochen.)
 };
 
 // ==================== INITIALIZATION ====================
@@ -918,8 +914,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('Theme gewechselt:', e.detail.isDark ? 'Dark' : 'Light');
     });
 
-    // Settings laden
-    settings.loadAllSettings();
+    // Settings laden (Backend-Merge + Sprache/Tagesplanung anwenden)
+    settings.sync();
 
     // Trip-Status prüfen
     checkTripStatus(context);

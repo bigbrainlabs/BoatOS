@@ -601,85 +601,6 @@ window.showNotification = showNotification;
 window.showToast = showToast;
 
 // ===========================================
-// Sidebar Toggle
-// ===========================================
-
-/**
- * Öffnet die Sidebar
- * @param {string} sidebarId - ID der Sidebar (default: 'sidebar')
- */
-export function openSidebar(sidebarId = 'sidebar') {
-    const sidebar = document.getElementById(sidebarId);
-    if (!sidebar) {
-        console.warn(`Sidebar mit ID '${sidebarId}' nicht gefunden`);
-        return false;
-    }
-
-    sidebar.classList.add('open');
-    sidebar.classList.remove('closed');
-
-    // Overlay aktivieren (nutzt HTML-Element mit CSS-Klasse)
-    const overlay = document.getElementById('sidebarOverlay');
-    if (overlay) {
-        overlay.classList.add('active');
-    }
-
-    // Settings laden wenn es die Settings-Sidebar ist
-    if (sidebarId === 'sidebar' && window.BoatOS && window.BoatOS.loadAllSettings) {
-        window.BoatOS.loadAllSettings();
-        window.dispatchEvent(new Event('settingsPanelOpened'));
-    }
-
-    console.log(`Sidebar geöffnet: ${sidebarId}`);
-    return true;
-}
-
-/**
- * Schließt die Sidebar
- * @param {string} sidebarId - ID der Sidebar (default: 'sidebar')
- */
-export function closeSidebar(sidebarId = 'sidebar') {
-    const sidebar = document.getElementById(sidebarId);
-    if (!sidebar) {
-        console.warn(`Sidebar mit ID '${sidebarId}' nicht gefunden`);
-        return false;
-    }
-
-    sidebar.classList.remove('open');
-    sidebar.classList.add('closed');
-
-    // Overlay deaktivieren
-    const overlay = document.getElementById('sidebarOverlay');
-    if (overlay) {
-        overlay.classList.remove('active');
-    }
-
-    console.log(`Sidebar geschlossen: ${sidebarId}`);
-    return true;
-}
-
-/**
- * Schaltet die Sidebar um
- * @param {string} sidebarId - ID der Sidebar (default: 'sidebar')
- * @returns {boolean} - Neuer Status (true = offen)
- */
-export function toggleSidebar(sidebarId = 'sidebar') {
-    const sidebar = document.getElementById(sidebarId);
-    if (!sidebar) {
-        console.warn(`Sidebar mit ID '${sidebarId}' nicht gefunden`);
-        return false;
-    }
-
-    if (sidebar.classList.contains('open')) {
-        closeSidebar(sidebarId);
-        return false;
-    } else {
-        openSidebar(sidebarId);
-        return true;
-    }
-}
-
-// ===========================================
 // Tab-Switching
 // ===========================================
 
@@ -962,8 +883,7 @@ export function toggleFabDial() {
 }
 
 export function toggleLayers() {
-    toggleSidebar();
-    showSettingsTab('map', document.querySelector('[onclick*="showSettingsTab(\'map\'"]'));
+    window.BoatOS?.settings?.open('map');
 }
 
 // ===========================================
@@ -1426,56 +1346,6 @@ export function addLogEntry() {
  */
 export function showLogbookTab(tabId, tabElement) {
     // delegated to logbook.js via BoatOS.showLogbookTab
-}
-
-// ===========================================
-// Settings Panel Funktionen
-// ===========================================
-
-/**
- * Zeigt einen Settings-Tab
- * @param {string} tabId - 'general', 'boat', 'map', 'nav', 'ais'
- * @param {HTMLElement} tabElement - Das angeklickte Tab-Element
- */
-export function showSettingsTab(tabId, tabElement) {
-    // Alle Settings-Sektionen verstecken
-    const sections = ['settings-general', 'settings-boat', 'settings-map', 'settings-nav', 'settings-ais', 'settings-charts', 'settings-gps', 'settings-data', 'settings-routing', 'settings-wifi', 'settings-system'];
-    sections.forEach(id => {
-        const section = document.getElementById(id);
-        if (section) {
-            section.classList.add('section-hidden');
-        }
-    });
-
-    // Gewählte Sektion zeigen
-    const section = document.getElementById(`settings-${tabId}`);
-    if (section) {
-        section.classList.remove('section-hidden');
-    }
-
-    // Tab-Styling aktualisieren
-    document.querySelectorAll('.sidebar-tab').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    if (tabElement) {
-        tabElement.classList.add('active');
-    }
-
-    // Tab-spezifische Initialisierung
-    if (tabId === 'wifi' && window.BoatOS?.wifi) {
-        window.BoatOS.wifi.loadStatus();
-        window.BoatOS.wifi.loadSaved();
-    }
-    if (tabId === 'system' && window.BoatOS?.system) {
-        window.BoatOS.system.checkVersion();
-        window.BoatOS.system.loadHelmStatus();
-    }
-    if (tabId === 'map') {
-        loadMapRegions();
-    }
-    if (tabId === 'routing') {
-        loadRoutingGraphs();
-    }
 }
 
 /**
@@ -2032,9 +1902,6 @@ window.populateLayerList = populateLayerList;
 window.toggleLayerVisibility = toggleLayerVisibility;
 window.loadSettings = loadSettings;
 window.saveSettings = saveSettings;
-window.openSidebar = openSidebar;
-window.closeSidebar = closeSidebar;
-window.toggleSidebar = toggleSidebar;
 window.switchTab = switchTab;
 window.getCategoryIcon = getCategoryIcon;
 window.escapeHTML = escapeHTML;
@@ -2049,7 +1916,6 @@ window.handleSearch = handleSearch;
 window.showFavorites = showFavorites;
 window.addLogEntry = addLogEntry;
 window.showLogbookTab = showLogbookTab;
-window.showSettingsTab = showSettingsTab;
 window.toggleSettingToggle = toggleSettingToggle;
 window.selectBoatIcon = selectBoatIcon;
 window.toggleLocks = toggleLocks;

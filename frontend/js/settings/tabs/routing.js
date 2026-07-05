@@ -1,0 +1,323 @@
+/**
+ * Settings-Tab: Routing (Provider, OSRM-Region, Routing-Graphen, Strömung)
+ *
+ * Routing-Graph-Upload läuft weiterhin über ui.js (BoatOS.ui.onRoutingFileSelected /
+ * uploadRoutingFile), die Graph-Liste über window.loadRoutingGraphs.
+ */
+
+export const id = 'routing';
+
+export const html = `
+                <div class="setting-group">
+                    <h4 data-i18n="settings_routing_method_h4">Routing-Methode</h4>
+                    <div class="setting-item">
+                        <span data-i18n="settings_routing_provider_label">Anbieter</span>
+                        <select class="setting-select" id="setting-routing-provider">
+                            <option value="osrm">OSRM (Lokal, Offline)</option>
+                            <option value="graphhopper">GraphHopper (Cloud API)</option>
+                            <option value="direct">Direkte Linie (Rhumbline)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="setting-group" id="osrm-settings">
+                    <h4>OSRM Server</h4>
+                    <div class="setting-item">
+                        <span>Server-URL</span>
+                        <input type="text" class="setting-input" id="setting-osrm-url" value="http://127.0.0.1:5000" placeholder="http://127.0.0.1:5000" style="width: 100%;">
+                    </div>
+                    <div class="setting-item">
+                        <span data-i18n="settings_current_region">Aktuelle Region</span>
+                        <div id="current-region-display" style="padding: 8px 12px; background: var(--bg-card); border-radius: 6px; color: var(--accent); font-weight: 600;">
+                            <span id="current-region-name">--</span>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <span data-i18n="settings_switch_region_label">Region wechseln</span>
+                        <select class="setting-select" id="region-selector">
+                            <option value="">Region wählen...</option>
+                        </select>
+                    </div>
+                    <button id="btn-switch-region" class="btn-primary" data-i18n="settings_switch_region_btn" style="width: 100%; margin-top: 10px;">
+                        🔄 Region wechseln
+                    </button>
+                    <div id="region-switch-status" style="margin-top: 10px; padding: 10px; border-radius: 6px; font-size: 12px; display: none;"></div>
+                </div>
+
+                <div class="setting-group" id="graphhopper-settings" style="display: none;">
+                    <h4>GraphHopper</h4>
+                    <div class="setting-item">
+                        <span>API-Key</span>
+                        <input type="text" class="setting-input" id="setting-graphhopper-api-key" placeholder="Kostenlos auf graphhopper.com" style="width: 100%;">
+                    </div>
+                    <small style="color: var(--text-dim); font-size: 11px;">
+                        🔗 API-Key bei graphhopper.com registrieren (500 Anfragen/Tag kostenlos)
+                    </small>
+                </div>
+
+                <div class="setting-group">
+                    <h4>Routing-Daten (grenzüberschreitend)</h4>
+                    <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">
+                        .routing-Dateien aus dem MBTiles Creator hochladen — ermöglicht Routen über Ländergrenzen.
+                    </p>
+                    <div id="routing-graphs-list" style="margin-bottom:10px;font-size:12px;color:var(--text-dim);">Wird geladen…</div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <label class="btn-secondary" style="cursor:pointer;flex:1;text-align:center;min-width:120px;">
+                            📂 .routing-Datei wählen
+                            <input type="file" id="routing-upload-input" accept=".routing" style="display:none"
+                                   onchange="BoatOS.ui.onRoutingFileSelected(this)">
+                        </label>
+                        <button id="routing-upload-btn" class="btn-primary" style="flex:1;min-width:120px;display:none;"
+                                onclick="BoatOS.ui.uploadRoutingFile()">⬆ Hochladen</button>
+                    </div>
+                    <div id="routing-upload-filename" style="font-size:11px;color:var(--accent);margin-top:4px;display:none;"></div>
+                    <div id="routing-upload-progress" style="display:none;margin-top:8px;">
+                        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-bottom:3px;">
+                            <span id="routing-upload-status">Hochladen…</span>
+                            <span id="routing-upload-pct">0%</span>
+                        </div>
+                        <div style="background:var(--surface-2,rgba(0,0,0,0.3));border-radius:4px;overflow:hidden;height:6px;">
+                            <div id="routing-upload-bar" style="height:100%;width:0%;background:var(--accent);transition:width 0.2s;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h4 data-i18n="settings_water_current_h4">🌊 Fließgeschwindigkeiten</h4>
+                    <div class="setting-item">
+                        <span data-i18n="settings_consider_current">Strömung berücksichtigen</span>
+                        <div class="toggle" id="toggle-water-current" onclick="BoatOS.ui.toggleSettingToggle(this, 'waterCurrentEnabled')"></div>
+                    </div>
+                    <small style="color: var(--text-dim); font-size: 11px; display: block; margin-bottom: 15px;">
+                        Berücksichtigt Fließgeschwindigkeiten für genauere ETA-Berechnungen
+                    </small>
+
+                    <div id="water-current-settings">
+                        <div style="background: var(--bg-card); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                            <h5 style="margin: 0 0 10px 0; color: var(--accent);">Gewässer-spezifisch (<span class="unit-speed">kn</span>)</h5>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Rhein</span>
+                                    <input type="number" class="setting-input" id="setting-current-rhein" value="3.2" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Mosel</span>
+                                    <input type="number" class="setting-input" id="setting-current-mosel" value="1.6" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Main</span>
+                                    <input type="number" class="setting-input" id="setting-current-main" value="1.3" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Elbe</span>
+                                    <input type="number" class="setting-input" id="setting-current-elbe" value="2.2" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Saale</span>
+                                    <input type="number" class="setting-input" id="setting-current-saale" value="1.1" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Donau</span>
+                                    <input type="number" class="setting-input" id="setting-current-donau" value="2.7" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="background: var(--bg-card); padding: 15px; border-radius: 8px;">
+                            <h5 style="margin: 0 0 10px 0; color: var(--accent);">Standard nach Typ (<span class="unit-speed">kn</span>)</h5>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Fluss</span>
+                                    <input type="number" class="setting-input" id="setting-current-type-river" value="1.1" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Kanal</span>
+                                    <input type="number" class="setting-input" id="setting-current-type-canal" value="0.0" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">Bach</span>
+                                    <input type="number" class="setting-input" id="setting-current-type-stream" value="0.5" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                                <div class="setting-item" style="margin: 0;">
+                                    <span style="font-size: 12px;">See</span>
+                                    <input type="number" class="setting-input" id="setting-current-type-lake" value="0.0" step="0.1" min="0" style="width: 70px;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 15px; padding: 12px; background: rgba(100, 200, 100, 0.1); border-radius: 8px; font-size: 11px; color: var(--text-dim);">
+                        <strong>ℹ️ Berechnung:</strong><br>
+                        • Stromabwärts: Geschwindigkeit + Strömung<br>
+                        • Stromaufwärts: Geschwindigkeit - Strömung<br>
+                        • Live-Daten von PEGELONLINE (falls verfügbar)
+                    </div>
+                </div>
+`;
+
+let API_URL = '';
+let _ui = null;
+
+function showMsg(message) {
+    if (_ui?.showNotification) _ui.showNotification(message, 'info');
+    else console.log(message);
+}
+
+export function init(ctx) {
+    API_URL = ctx.API_URL || '';
+    _ui = ctx.ui || window.BoatOS?.ui;
+
+    const provider = document.getElementById('setting-routing-provider');
+    if (provider) provider.addEventListener('change', updateRoutingProviderVisibility);
+
+    const switchBtn = document.getElementById('btn-switch-region');
+    if (switchBtn) switchBtn.addEventListener('click', switchOSRMRegion);
+}
+
+export function load(settings) {
+    if (settings.routing) {
+        const routingProvider = document.getElementById('setting-routing-provider');
+        const osrmUrl = document.getElementById('setting-osrm-url');
+        const graphhopperApiKey = document.getElementById('setting-graphhopper-api-key');
+        const toggleWaterCurrent = document.getElementById('toggle-water-current');
+
+        if (routingProvider && settings.routing.provider) routingProvider.value = settings.routing.provider;
+        if (osrmUrl && settings.routing.osrmUrl) osrmUrl.value = settings.routing.osrmUrl;
+        if (graphhopperApiKey && settings.routing.graphhopperApiKey) graphhopperApiKey.value = settings.routing.graphhopperApiKey;
+        if (toggleWaterCurrent) toggleWaterCurrent.classList.toggle('active', settings.routing.waterCurrentEnabled === true);
+
+        if (settings.routing.currents) {
+            ['rhein', 'mosel', 'main', 'elbe', 'saale', 'donau'].forEach(name => {
+                const el = document.getElementById(`setting-current-${name}`);
+                if (el && settings.routing.currents[name] !== undefined) el.value = settings.routing.currents[name];
+            });
+        }
+        if (settings.routing.currentTypes) {
+            ['river', 'canal', 'stream', 'lake'].forEach(type => {
+                const el = document.getElementById(`setting-current-type-${type}`);
+                if (el && settings.routing.currentTypes[type] !== undefined) el.value = settings.routing.currentTypes[type];
+            });
+        }
+    }
+
+    updateRoutingProviderVisibility();
+}
+
+export function collect(settings) {
+    settings.routing = settings.routing || {};
+
+    const routingProvider = document.getElementById('setting-routing-provider');
+    const osrmUrl = document.getElementById('setting-osrm-url');
+    const graphhopperApiKey = document.getElementById('setting-graphhopper-api-key');
+    const toggleWaterCurrent = document.getElementById('toggle-water-current');
+
+    if (routingProvider) settings.routing.provider = routingProvider.value;
+    if (osrmUrl) settings.routing.osrmUrl = osrmUrl.value;
+    if (graphhopperApiKey) settings.routing.graphhopperApiKey = graphhopperApiKey.value;
+    if (toggleWaterCurrent) settings.routing.waterCurrentEnabled = toggleWaterCurrent.classList.contains('active');
+
+    // Fließgeschwindigkeiten — Gewässer-spezifisch
+    settings.routing.currents = settings.routing.currents || {};
+    ['rhein', 'mosel', 'main', 'elbe', 'saale', 'donau'].forEach(name => {
+        const el = document.getElementById(`setting-current-${name}`);
+        if (el) settings.routing.currents[name] = parseFloat(el.value) || 0;
+    });
+
+    // Fließgeschwindigkeiten — nach Typ
+    settings.routing.currentTypes = settings.routing.currentTypes || {};
+    ['river', 'canal', 'stream', 'lake'].forEach(type => {
+        const el = document.getElementById(`setting-current-type-${type}`);
+        if (el) settings.routing.currentTypes[type] = parseFloat(el.value) || 0;
+    });
+
+    // waterCurrent-Objekt im Format des Backend water_current_service
+    const nameMap = { rhein: 'Rhein', mosel: 'Mosel', main: 'Main', elbe: 'Elbe', saale: 'Saale', donau: 'Donau' };
+    settings.waterCurrent = {
+        enabled: settings.routing.waterCurrentEnabled === true,
+        byName: {},
+        byType: settings.routing.currentTypes || {}
+    };
+    ['rhein', 'mosel', 'main', 'elbe', 'saale', 'donau'].forEach(name => {
+        const val = settings.routing.currents?.[name];
+        if (val) settings.waterCurrent.byName[nameMap[name]] = { current_kmh: val, type: 'river' };
+    });
+}
+
+export function onShow(ctx) {
+    if (window.loadRoutingGraphs) window.loadRoutingGraphs();
+    loadRegions();
+}
+
+/** OSRM-Regionen-Dropdown + aktive Region vom Backend laden */
+async function loadRegions() {
+    try {
+        const [regionsRes, currentRes] = await Promise.all([
+            fetch(`${API_URL}/api/routing/regions`),
+            fetch(`${API_URL}/api/routing/current-region`)
+        ]);
+        const regionsData = regionsRes.ok ? await regionsRes.json() : { regions: [] };
+        const currentData = currentRes.ok ? await currentRes.json() : {};
+
+        const selector = document.getElementById('region-selector');
+        if (selector && regionsData.regions?.length) {
+            selector.innerHTML = regionsData.regions.map(r =>
+                `<option value="${r.id}">${r.name || r.id}</option>`
+            ).join('');
+            if (currentData.region) selector.value = currentData.region;
+        }
+
+        const nameEl = document.getElementById('current-region-name');
+        if (nameEl && currentData.region) nameEl.textContent = currentData.name || currentData.region;
+    } catch (e) {
+        console.warn('OSRM-Regionen konnten nicht geladen werden:', e);
+    }
+}
+
+// ==================== AKTIONEN ====================
+
+export function updateRoutingProviderVisibility() {
+    const provider = document.getElementById('setting-routing-provider')?.value || 'osrm';
+    const osrmSettings = document.getElementById('osrm-settings');
+    const graphhopperSettings = document.getElementById('graphhopper-settings');
+
+    if (osrmSettings) osrmSettings.style.display = provider === 'osrm' ? 'block' : 'none';
+    if (graphhopperSettings) graphhopperSettings.style.display = provider === 'graphhopper' ? 'block' : 'none';
+}
+
+export async function switchOSRMRegion() {
+    const regionSelector = document.getElementById('region-selector');
+    const statusEl = document.getElementById('region-switch-status');
+    const selectedRegion = regionSelector?.value;
+
+    if (!selectedRegion) {
+        showMsg('❌ Bitte eine Region auswählen');
+        return;
+    }
+
+    if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.textContent = `🔄 Wechsle zu ${selectedRegion}...`;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/api/routing/switch-region`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ region: selectedRegion })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showMsg(`✅ Region gewechselt zu: ${selectedRegion}`);
+            if (statusEl) statusEl.textContent = `✅ Aktiv: ${selectedRegion}`;
+            const currentRegionName = document.getElementById('current-region-name');
+            if (currentRegionName) currentRegionName.textContent = selectedRegion;
+        } else {
+            throw new Error(result.error || 'Fehler');
+        }
+    } catch (error) {
+        showMsg(`❌ Fehler: ${error.message}`);
+        if (statusEl) statusEl.textContent = `❌ ${error.message}`;
+    }
+}

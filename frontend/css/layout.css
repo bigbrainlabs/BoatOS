@@ -409,92 +409,134 @@
 }
 
 /* ============================================
-   SIDEBAR (Settings)
+   SETTINGS PAGE (Fullscreen, Master-Detail)
+   Breit (>=600px): Kategorien-Sidebar links + Content rechts
+   Schmal (<600px): horizontale Chip-Leiste oben + Content darunter
    ============================================ */
-.sidebar-overlay {
+.settings-page {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    z-index: 2000;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.3s;
-}
-
-.sidebar-overlay.active { opacity: 1; visibility: visible; }
-
-.sidebar {
-    position: fixed;
-    top: 0;
-    right: calc(-1 * var(--sidebar-w));
-    width: var(--sidebar-w);
-    height: 100%;
-    background: var(--bg-panel);
-    border-left: 2px solid var(--border);
-    z-index: 2001;
-    transition: right 0.3s ease-out;
-    display: flex;
+    background: var(--bg-main);
+    z-index: 5100; /* über Dashboard-Editor (5000); Toast 10000 / Keyboard 99999 bleiben drüber */
+    display: none;
     flex-direction: column;
 }
 
-.sidebar.open { right: 0; }
+.settings-page.open { display: flex; }
 
-.sidebar-header {
-    padding: var(--space-lg) var(--space-2xl);
-    border-bottom: 2px solid var(--border);
+.settings-page-header {
+    flex: 0 0 auto;
     display: flex;
     justify-content: space-between;
     align-items: center;
-}
-
-.sidebar-header h3 { color: var(--accent); font-size: var(--fs-2xl); }
-
-.sidebar-tabs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-xs);
-    padding: var(--space-md);
+    padding: var(--space-lg) var(--space-2xl);
+    background: var(--bg-panel);
     border-bottom: 2px solid var(--border);
 }
 
-.sidebar-tab {
-    padding: var(--space-xs) var(--space-base);
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
-    font-size: var(--fs-sm);
-    cursor: pointer;
-    transition: all 0.2s;
+.settings-page-header h2 {
+    margin: 0;
+    font-size: var(--fs-2xl);
+    color: var(--accent);
 }
 
-.sidebar-tab:hover { background: var(--border); }
-.sidebar-tab.active { background: var(--accent); color: white; }
-
-.sidebar-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: var(--space-lg);
-}
-
-.sidebar-footer {
-    padding: var(--space-lg);
-    border-top: 2px solid var(--border);
+.settings-page-actions {
     display: flex;
     gap: var(--space-md);
 }
 
-.sidebar-btn {
-    flex: 1;
-    padding: var(--space-base);
+.settings-page-btn {
+    padding: var(--space-sm) var(--space-xl);
     border-radius: var(--radius-md);
     border: none;
     font-size: var(--fs-lg);
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
+    touch-action: manipulation;
 }
 
-.sidebar-btn.primary { background: var(--accent); color: white; }
-.sidebar-btn.secondary { background: var(--bg-card); color: var(--text); border: 2px solid var(--border); }
+.settings-page-btn.primary { background: var(--accent); color: white; }
+.settings-page-btn.secondary { background: var(--bg-card); color: var(--text); border: 2px solid var(--border); }
+
+.settings-page-body {
+    flex: 1;
+    display: flex;
+    min-height: 0; /* erlaubt Kind-Scroll in Flex-Spalte */
+}
+
+.settings-nav {
+    flex: 0 0 220px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    padding: var(--space-md);
+    overflow-y: auto;
+    background: var(--bg-panel);
+    border-right: 2px solid var(--border);
+}
+
+.settings-nav-item {
+    text-align: left;
+    min-height: 44px;
+    padding: var(--space-md) var(--space-base);
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text);
+    font-size: var(--fs-md);
+    cursor: pointer;
+    touch-action: manipulation;
+    white-space: nowrap;
+    transition: background 0.2s;
+}
+
+.settings-nav-item:hover { background: var(--bg-card); }
+.settings-nav-item.active { background: var(--accent); color: white; }
+
+.settings-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-lg) var(--space-2xl);
+    -webkit-overflow-scrolling: touch;
+}
+
+.settings-content-inner {
+    max-width: 660px;
+    margin: 0 auto;
+}
+
+/* Schmale Screens: Chip-Leiste statt Sidebar */
+@media (max-width: 599px) {
+    .settings-page-body { flex-direction: column; }
+
+    .settings-nav {
+        flex: 0 0 auto;
+        flex-direction: row;
+        align-items: center;
+        height: 52px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        border-right: none;
+        border-bottom: 2px solid var(--border);
+        scrollbar-width: none;
+    }
+    .settings-nav::-webkit-scrollbar { display: none; }
+
+    .settings-nav-item {
+        flex: 0 0 auto;
+        min-height: 36px;
+        padding: var(--space-xs) var(--space-base);
+        background: var(--bg-card);
+        border-radius: var(--radius-lg);
+        font-size: var(--fs-sm);
+    }
+
+    .settings-content { padding: var(--space-lg); }
+
+    .settings-page-header { padding: var(--space-md) var(--space-lg); }
+    .settings-page-header h2 { font-size: var(--fs-xl); }
+}
 
 /* ============================================
    SEARCH OVERLAY
@@ -602,7 +644,6 @@
     .nav-values { gap: var(--space-md); }
     .nav-value { min-width: 45px; }
     .nav-value .value { font-size: var(--fs-xl); }
-    .sidebar { width: 100%; right: -100%; }
 }
 
 /* Narrow phones: hide COG + ETA, shrink GPS, reduce top-bar buttons */
