@@ -1470,6 +1470,7 @@ def _verify_positions_sync():
     fixed = 0
     removed_dups = 0
     issues = []
+    claimed_targets = []  # (lat, lon, name) bereits vergebener Korrektur-Ziele
 
     for l in named:
         checked += 1
@@ -1504,6 +1505,21 @@ def _verify_positions_sync():
                 best, best_d = (rlat, rlon), d
 
         if best and best_d > 500:
+            # Kollaps-Schutz: matcht Nominatim mehrere DB-Schleusen auf
+            # dasselbe Objekt (z.B. "Brieskow", "Finkenheerd" -> Schleuse
+            # Brieskow-Finkenheerd), nur die erste verschieben — sonst
+            # stapeln sich Marker auf einem Punkt
+            claimant = next((c for c in claimed_targets
+                             if _dist_m(best[0], best[1], c[0], c[1]) < 100), None)
+            if claimant:
+                issues.append({'name': l['name'], 'distance': int(best_d),
+                               'skipped': True,
+                               'note': f"mögliches Duplikat von '{claimant[2]}' — nicht verschoben"})
+                print(f"⏭️  Übersprungen: {l['name']} — Ziel bereits von '{claimant[2]}' belegt")
+                _time.sleep(1.1)
+                continue
+            claimed_targets.append((best[0], best[1], l['name']))
+
             locks_storage.update_lock(l['id'], {'lat': best[0], 'lon': best[1]})
             fixed += 1
             issues.append({'name': l['name'], 'distance': int(best_d),
