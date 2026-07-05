@@ -344,7 +344,7 @@ class BrouterRouter:
     """Online waterway routing via brouter.de (rivers profile). No API key required."""
 
     URL = "https://brouter.de/brouter"
-    PROFILE = "rivers"
+    PROFILE = "river"  # brouter.de Profilname (nicht "rivers" — das gibt HTTP 500)
 
     async def route(self, waypoints: List[Tuple[float, float]]) -> dict:
         """

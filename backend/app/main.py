@@ -3478,7 +3478,8 @@ async def calculate_route(request: dict):
                             # Calculate total lock time and add to duration
                             total_lock_time_h = 0
                             for lock in locks_on_route:
-                                lock_duration_min = lock.get('avg_duration', 15)  # Default 15 min
+                                # `or 15`: DB liefert teils avg_duration=None — .get()-Default greift dann nicht
+                                lock_duration_min = lock.get('avg_duration') or 15
                                 total_lock_time_h += lock_duration_min / 60
 
                             # Adjust duration for locks
@@ -3547,6 +3548,30 @@ async def calculate_route(request: dict):
                     return route
             except Exception as e:
                 print(f"⚠️ PyRouteLib routing failed: {e}")
+
+        # Strategy 2.5: Route entirely outside local OSRM data (e.g. other country,
+        # OSRM returned distance=0 → "direct"). Try uploaded .routing graph, then
+        # Brouter online — otherwise foreign routes silently became straight lines.
+        if waterway_graph_router and waterway_graph_router.enabled:
+            try:
+                print("🗺️ Trying uploaded waterway graph (outside OSRM data)...")
+                graph_result = await waterway_graph_router.route(waypoints)
+                if "error" not in graph_result:
+                    print("✅ Graph router route used (outside OSRM data)")
+                    return graph_result
+            except Exception as _ge:
+                print(f"⚠️ Graph router exception: {_ge}")
+        if online_routing_fallback and brouter_router:
+            try:
+                print("🌐 Trying Brouter online routing (no local data)...")
+                brouter_result = await brouter_router.route(waypoints)
+                if "error" not in brouter_result:
+                    print("✅ Brouter online route used")
+                    return brouter_result
+                else:
+                    print(f"⚠️ Brouter failed ({brouter_result['error']})")
+            except Exception as _be:
+                print(f"⚠️ Brouter exception: {_be}")
 
         # Strategy 3: Direct line fallback
         print("📏 Using direct line routing (fallback)")
@@ -4917,6 +4942,11 @@ async def set_active_regions(body: dict):
     s.setdefault("map", {})["activeRegions"] = valid
     with open("data/settings.json", "w") as f:
         json.dump(s, f, indent=2)
+    # Cache sofort invalidieren — sonst liefert GET /api/map/regions bis zu 30s alte Werte
+    global _active_regions_cache, _active_regions_cache_ts
+    _active_regions_cache = valid
+    import time as _time
+    _active_regions_cache_ts = _time.monotonic()
     try:
         subprocess.Popen(["sudo", "/bin/systemctl", "restart", "tileserver"],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

@@ -6,7 +6,9 @@ After=network.target
 Type=simple
 User=boatos
 WorkingDirectory=/home/boatos/BoatOS/data
-ExecStart=/usr/local/bin/martin --listen-addresses 0.0.0.0:8081 /home/boatos/BoatOS/data/germany.mbtiles
+# Verzeichnis statt Einzeldatei: martin discovert alle *.mbtiles (germany, netherlands, ...)
+# — nötig für Multi-Region-Karten; neue Uploads brauchen nur einen Tileserver-Restart
+ExecStart=/usr/local/bin/martin --listen-addresses 0.0.0.0:8081 /home/boatos/BoatOS/data
 Restart=always
 RestartSec=5
 
