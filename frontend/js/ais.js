@@ -830,8 +830,8 @@ function updateWaterLevelMarkers(gauges) {
                 .setLngLat([gauge.lon, gauge.lat])
                 .addTo(map);
 
-            // Popup hinzufügen
-            const popup = new maplibregl.Popup({ offset: 15 })
+            // Popup hinzufügen — className für Theme-Styling (dunkler Hintergrund)
+            const popup = new maplibregl.Popup({ offset: 15, className: 'gauge-popup' })
                 .setHTML(createWaterLevelPopup(gauge));
             marker.setPopup(popup);
 
@@ -875,12 +875,12 @@ function createWaterLevelPopup(gauge) {
     const timeStr = date.toLocaleString('de-DE');
 
     return `
-        <div style="min-width: 200px;">
-            <h4 style="margin: 0 0 8px 0; color: #2c3e50;">📊 ${t('gaugesTitle')}</h4>
+        <div style="min-width: 200px; color: var(--text);">
+            <h4 style="margin: 0 0 8px 0; color: var(--accent);">📊 ${t('gaugesTitle')}</h4>
             <p style="margin: 0; font-weight: 600;">${escapeHTML(gauge.name)}</p>
             <p style="margin: 4px 0; font-size: 12px;"><strong>${t('gaugeWater')}</strong> ${escapeHTML(gauge.water)}</p>
-            <p style="margin: 4px 0; font-size: 14px; color: #3498db;"><strong>${t('gaugeLevel')}</strong> ${gauge.water_level_m} m (${gauge.water_level_cm} cm)</p>
-            <p style="margin: 4px 0; font-size: 11px; color: #7f8c8d;">${timeStr}</p>
+            <p style="margin: 4px 0; font-size: 14px; color: var(--info, #3498db);"><strong>${t('gaugeLevel')}</strong> ${gauge.water_level_m} m (${gauge.water_level_cm} cm)</p>
+            <p style="margin: 4px 0; font-size: 11px; color: var(--text-dim);">${timeStr}</p>
         </div>
     `;
 }

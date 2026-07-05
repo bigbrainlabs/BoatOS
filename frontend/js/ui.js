@@ -1848,12 +1848,14 @@ export function initLayerVisibility() {
     // Gespeicherte Einstellungen laden
     const settings = loadSettings();
 
-    // Schleusen standardmäßig aktiv
-    const locksEnabled = settings.infrastructure?.showLocks !== false;
+    // Schleusen standardmäßig aktiv — Settings-Key ist map.showLocks
+    // (infrastructure.showLocks = Alt-Format als Fallback)
+    const locksEnabled = (settings.map?.showLocks ?? settings.infrastructure?.showLocks) !== false;
     locksVisible = locksEnabled;
 
-    // Pegel standardmäßig inaktiv
-    const pegelEnabled = settings.waterLevel?.enabled === true;
+    // Pegel standardmäßig inaktiv — Settings-Key ist map.showPegel
+    // (waterLevel.enabled = Alt-Format als Fallback)
+    const pegelEnabled = (settings.map?.showPegel ?? settings.waterLevel?.enabled) === true;
     pegelVisible = pegelEnabled;
 
     // UI synchronisieren

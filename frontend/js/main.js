@@ -922,7 +922,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Settings laden (Backend-Merge + Sprache/Tagesplanung anwenden)
-    settings.sync();
+    settings.sync().then((merged) => {
+        // Pegelstände initial laden wenn aktiviert — initLayerVisibility() setzt nur
+        // Button-Zustände, der eigentliche Fetch + moveend-Listener startet erst hier.
+        // Läuft nach initAISModule (Map-Referenz im ais-Modul gesetzt) und mit dem
+        // Backend-merged Settings-Stand.
+        if (mapInstance && merged?.map?.showPegel === true && ais.updateWaterLevelSettings) {
+            ais.updateWaterLevelSettings({ enabled: true });
+        }
+    });
 
     // Trip-Status prüfen
     checkTripStatus(context);
