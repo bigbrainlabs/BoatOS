@@ -8,7 +8,7 @@ A complete marine navigation system for inland waterways and coastal navigation.
 
 ### 💾 Ready-to-Flash Image — flash it, start sailing
 
-**[⬇️ Download v1.6.2 (~7.5 GB)](https://archive.org/download/boatos-distri-image/boatos_v1.6.2.img.gz)**
+**[⬇️ Download v1.7.0 (~7.5 GB)](https://archive.org/download/boatos-distri-image/boatos_v1.7.0.img.gz)**
 
 *balenaEtcher or Raspberry Pi Imager → select custom image → Flash → done*
 
@@ -244,7 +244,7 @@ Both UIs share the same backend and REST/WebSocket API.
 
 The fastest setup — just flash and go:
 
-1. **Download image** (v1.6.2): [boatos_v1.6.2.img.gz](https://archive.org/download/boatos-distri-image/boatos_v1.6.2.img.gz) (~7.5 GB)
+1. **Download image** (v1.7.0): [boatos_v1.7.0.img.gz](https://archive.org/download/boatos-distri-image/boatos_v1.7.0.img.gz) (~7.5 GB)
 2. Open **balenaEtcher** or **Raspberry Pi Imager** → select custom image
 3. Flash → boot Pi → Helm starts automatically
 
@@ -446,7 +446,7 @@ mosquitto_pub -h <pi-ip> -t 'boot/sensoren/motor/drehzahl' -m '2500'
 
 ### 🚧 In Progress
 - Helm feature parity with Deck
-- ~~Distributable Pi image~~ ✅ [Ready-to-flash image available](https://archive.org/download/boatos-distri-image/boatos_v1.6.2.img.gz)
+- ~~Distributable Pi image~~ ✅ [Ready-to-flash image available](https://archive.org/download/boatos-distri-image/boatos_v1.7.0.img.gz)
 
 ### 🔮 Planned
 - Anchor alarm with geofencing

@@ -16,7 +16,7 @@ Everything is pre-configured: services, maps, routing, Flutter app. Flash, power
 
 ### Step 1 — Download the image
 
-**[⬇️ Download v1.6.2 (archive.org, ~7.5 GB)](https://archive.org/download/boatos-distri-image/boatos_v1.6.2.img.gz)**
+**[⬇️ Download v1.7.0 (archive.org, ~7.5 GB)](https://archive.org/download/boatos-distri-image/boatos_v1.7.0.img.gz)**
 
 ### Step 2 — Flash the SD card
 
