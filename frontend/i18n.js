@@ -377,6 +377,7 @@ const translations = {
         boat_speed_label: "Reisegeschw. (km/h)",
         // Map tab
         settings_map_layers: "Kartenlayer",
+        settings_show_ienc: "Amtliche Karten (IENC)",
         settings_show_locks: "Schleusen anzeigen",
         settings_show_gauges: "Pegelstände anzeigen",
         settings_show_track: "Track anzeigen",
@@ -850,6 +851,7 @@ const translations = {
         boat_speed_label: "Cruise Speed (km/h)",
         // Map tab
         settings_map_layers: "Map Layers",
+        settings_show_ienc: "Official charts (IENC)",
         settings_show_locks: "Show Locks",
         settings_show_gauges: "Show Water Levels",
         settings_show_track: "Show Track",

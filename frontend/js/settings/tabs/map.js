@@ -15,6 +15,10 @@ export const html = `
                         <div class="toggle active" id="toggle-openseamap" onclick="BoatOS.ui.toggleSettingToggle(this, 'openSeaMap')"></div>
                     </div>
                     <div class="setting-item">
+                        <span data-i18n="settings_show_ienc">Amtliche Karten (IENC)</span>
+                        <div class="toggle active" id="toggle-ienc" onclick="BoatOS.ui.toggleSettingToggle(this, 'showIENC')"></div>
+                    </div>
+                    <div class="setting-item">
                         <span data-i18n="settings_show_locks">Schleusen anzeigen</span>
                         <div class="toggle active" id="toggle-locks" onclick="BoatOS.ui.toggleSettingToggle(this, 'showLocks')"></div>
                     </div>
@@ -91,6 +95,7 @@ export function load(settings) {
 
     const toggles = {
         'toggle-openseamap': settings.map.openSeaMap,
+        'toggle-ienc': settings.map.showIENC,
         'toggle-locks': settings.map.showLocks,
         'toggle-pegel': settings.map.showPegel,
         'toggle-track': settings.map.showTrack,
@@ -110,6 +115,7 @@ export function collect(settings) {
     if (mapStyleSelect) settings.map.style = mapStyleSelect.value;
 
     const toggleOpenSeaMap = document.getElementById('toggle-openseamap');
+    const toggleIENC = document.getElementById('toggle-ienc');
     const toggleLocks = document.getElementById('toggle-locks');
     const togglePegel = document.getElementById('toggle-pegel');
     const toggleTrack = document.getElementById('toggle-track');
@@ -117,6 +123,7 @@ export function collect(settings) {
     const toggleHeadingUp = document.getElementById('toggle-headingup');
 
     if (toggleOpenSeaMap) settings.map.openSeaMap = toggleOpenSeaMap.classList.contains('active');
+    if (toggleIENC) settings.map.showIENC = toggleIENC.classList.contains('active');
     if (toggleLocks) settings.map.showLocks = toggleLocks.classList.contains('active');
     if (togglePegel) settings.map.showPegel = togglePegel.classList.contains('active');
     if (toggleTrack) settings.map.showTrack = toggleTrack.classList.contains('active');

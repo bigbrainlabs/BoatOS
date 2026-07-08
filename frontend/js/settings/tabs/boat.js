@@ -73,7 +73,7 @@ export const html = `
                 <div class="setting-group" style="background: rgba(52, 152, 219, 0.1); padding: 12px; border-radius: 8px;">
                     <p style="font-size: 12px; color: var(--text-dim); margin: 0; line-height: 1.5;">
                         <strong style="color: var(--accent);">Routing-Info:</strong><br>
-                        Tiefgang, Höhe und Breite werden für die Routenplanung verwendet um flache Gewässer, niedrige Brücken und enge Kanäle zu vermeiden.
+                        Tiefgang und Höhe werden nach der Routenberechnung gegen die amtlichen IENC-Karten geprüft — zu niedrige Brücken/Freileitungen, Flachstellen und Wehre auf der Route werden als Warnung angezeigt (sofern IENC-Gewässer installiert sind).
                     </p>
                 </div>
 `;

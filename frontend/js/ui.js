@@ -1722,6 +1722,11 @@ export function toggleSettingToggle(toggleElement, settingKey) {
     if (settingKey === 'showPegel') {
         setPegelVisible(isActive);
     }
+
+    // Amtliche IENC-Karten umschalten
+    if (settingKey === 'showIENC') {
+        window.BoatOS?.map?.toggleIENCLayer?.(isActive);
+    }
 }
 
 /**
@@ -1858,6 +1863,11 @@ export function initLayerVisibility() {
     const pegelEnabled = (settings.map?.showPegel ?? settings.waterLevel?.enabled) === true;
     pegelVisible = pegelEnabled;
 
+    // Amtliche IENC-Karten standardmäßig aktiv (Layer erscheinen ohnehin nur,
+    // wenn Gewässer installiert sind) — Settings-Key ist map.showIENC
+    const iencEnabled = settings.map?.showIENC !== false;
+    window.BoatOS?.map?.toggleIENCLayer?.(iencEnabled);
+
     // UI synchronisieren
     const locksToggle = document.getElementById('toggle-locks');
     if (locksToggle) {
@@ -1867,6 +1877,11 @@ export function initLayerVisibility() {
     const pegelToggle = document.getElementById('toggle-pegel');
     if (pegelToggle) {
         pegelToggle.classList.toggle('active', pegelEnabled);
+    }
+
+    const iencToggle = document.getElementById('toggle-ienc');
+    if (iencToggle) {
+        iencToggle.classList.toggle('active', iencEnabled);
     }
 
     const locksBtn = document.getElementById('btn-locks');

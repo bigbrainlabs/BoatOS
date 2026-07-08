@@ -17,6 +17,10 @@
 // ===========================================
 // Hinweis: core.js muss zuerst geladen werden und stellt globale Variablen bereit
 // wie API_URL, currentPosition, etc.
+import { addIENCLayers, toggleIENCLayer, isIENCVisible } from './ienc.js';
+
+// Re-Export: macht die IENC-Funktionen unter BoatOS.map.* verfügbar (ui.js)
+export { toggleIENCLayer, isIENCVisible };
 
 // ===========================================
 // Map State
@@ -140,10 +144,14 @@ export async function recheckOfflineTiles() {
             addLabelsLayer();
             document.getElementById('tileserver-banner')?.remove();
             addOpenSeaMapOverlays();
+            addIENCLayers(map);
         });
     } else {
         map.setStyle(_rasterFallbackStyle());
-        map.once('style.load', () => _showTileserverBanner());
+        map.once('style.load', () => {
+            _showTileserverBanner();
+            addIENCLayers(map);
+        });
     }
 }
 
@@ -313,6 +321,7 @@ export async function initMap(options = {}) {
             _showTileserverBanner();
         }
         addOpenSeaMapOverlays(); // async — intentionally not awaited here
+        addIENCLayers(map);      // amtliche IENC-Vektor-Tiles (falls installiert)
 
         // Satelliten-Source und -Layer vorinitialisieren (standardmaessig versteckt)
         map.addSource('satellite', {

@@ -158,5 +158,61 @@ class PegelOnline:
             print(f"⚠️ Error parsing station {station.get('shortname', 'unknown')}: {e}")
             return None
 
+    def get_reference_levels(self, lat_min: float, lon_min: float,
+                             lat_max: float, lon_max: float) -> List[Dict[str, Any]]:
+        """
+        Pegel mit Niedrigwasser-Referenz (MNW) für den IENC-Tiefen-Check.
+
+        Liefert pro Station den Aufschlag delta_m = (W − MNW) / 100 auf die
+        Kartentiefe. MNW dient als konservativer Proxy für das Kartennull
+        (GlW liegt unter MNW → der echte Aufschlag wäre größer). Staugeregelte
+        Kanalpegel haben keine characteristicValues und fallen automatisch
+        raus — dort gilt die Kartentiefe direkt. BLOCKING.
+        """
+        cache_key = "reflevels_" + self._get_cache_key(lat_min, lon_min, lat_max, lon_max)
+        if self._is_cache_valid(cache_key):
+            return self.cache[cache_key]['data']
+
+        try:
+            response = requests.get(
+                f"{self.base_url}/stations.json",
+                params={'includeTimeseries': 'true',
+                        'includeCurrentMeasurement': 'true',
+                        'includeCharacteristicValues': 'true'},
+                timeout=15
+            )
+            response.raise_for_status()
+
+            refs = []
+            for station in response.json():
+                lat, lon = station.get('latitude'), station.get('longitude')
+                if not lat or not lon:
+                    continue
+                if not (lat_min <= lat <= lat_max and lon_min <= lon <= lon_max):
+                    continue
+                w_series = next((ts for ts in station.get('timeseries', [])
+                                 if ts.get('shortname') == 'W'), None)
+                if not w_series:
+                    continue
+                current = (w_series.get('currentMeasurement') or {}).get('value')
+                mnw = next((cv.get('value') for cv in w_series.get('characteristicValues', [])
+                            if cv.get('shortname') == 'MNW'), None)
+                if current is None or mnw is None:
+                    continue
+                refs.append({
+                    'name': station.get('longname', station.get('shortname', 'Pegel')).title(),
+                    'lat': lat, 'lon': lon,
+                    'water': station.get('water', {}).get('longname', ''),
+                    'w_cm': current, 'mnw_cm': mnw,
+                    'delta_m': round((current - mnw) / 100, 2),
+                })
+
+            self.cache[cache_key] = {'data': refs, 'timestamp': datetime.now()}
+            print(f"✅ {len(refs)} Referenz-Pegel (MNW) für Tiefen-Check geladen")
+            return refs
+        except Exception as e:
+            print(f"⚠️ Referenz-Pegel konnten nicht geladen werden: {e}")
+            return []
+
 # Global instance
 pegelonline = PegelOnline()
