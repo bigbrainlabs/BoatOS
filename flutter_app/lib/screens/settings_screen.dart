@@ -511,6 +511,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return [
       _header(l.settingsSectionMap),
       _switchRow(l.mapSettingsOpenSeaMap,   b('openSeaMap', true),  (v) { s.set('map', 'openSeaMap', v);  s.save(); }),
+      _switchRow('Amtliche Karten (IENC)',  b('showIENC',   true),  (v) { s.set('map', 'showIENC',   v);  s.save(); }),
       _switchRow(l.mapSettingsShowLocks,    b('showLocks',  true),  (v) { s.set('map', 'showLocks',  v);  s.save(); }),
       _switchRow(l.mapSettingsShowGauges,   b('showPegel',  false), (v) { s.set('map', 'showPegel',  v);  s.save(); }),
       _switchRow(l.mapSettingsShowTrack,    b('showTrack',  true),  (v) { s.set('map', 'showTrack',  v);  s.save(); }),
@@ -1560,7 +1561,17 @@ class _ENCSectionState extends State<_ENCSection> {
   bool _loadingInstalled = true;
   bool _loadingCatalog   = false;
   bool _catalogLoaded    = false;
-  final Set<String> _downloading = {};
+  String? _catalogError;
+
+  // Mehrfachauswahl im Katalog (Gewässer-Namen)
+  final Set<String> _selected = {};
+  // Charts, deren An/Aus gerade umgeschaltet wird (chart-id)
+  final Set<String> _toggling = {};
+
+  // Hintergrund-Job (Download/Konvertierung/Tiles) — Status wird gepollt
+  bool _jobRunning = false;
+  String _jobProgress = '';
+  int _jobPercent = 0;
 
   @override
   void initState() {
@@ -1571,7 +1582,9 @@ class _ENCSectionState extends State<_ENCSection> {
   Future<void> _loadInstalled() async {
     setState(() => _loadingInstalled = true);
     try {
-      final r = await http.get(Uri.parse('$_base/api/charts'));
+      final r = await http
+          .get(Uri.parse('$_base/api/charts'))
+          .timeout(const Duration(seconds: 8));
       if (r.statusCode == 200) {
         _installed = (json.decode(r.body) as List)
             .map((e) => e as Map<String, dynamic>)
@@ -1582,31 +1595,159 @@ class _ENCSectionState extends State<_ENCSection> {
   }
 
   Future<void> _loadCatalog() async {
-    setState(() => _loadingCatalog = true);
+    setState(() {
+      _loadingCatalog = true;
+      _catalogError = null;
+    });
     try {
-      final r = await http.get(Uri.parse('$_base/api/enc/catalog'));
+      // ELWIS-Scrape kann bis ~15s dauern (Backend-Timeout)
+      final r = await http
+          .get(Uri.parse('$_base/api/enc/catalog'))
+          .timeout(const Duration(seconds: 25));
       if (r.statusCode == 200) {
-        _catalog = (json.decode(r.body) as List)
+        final list = (json.decode(r.body) as List)
             .map((e) => e as Map<String, dynamic>)
             .toList();
-        _catalogLoaded = true;
+        if (list.isEmpty) {
+          _catalogError =
+              'ELWIS aktuell nicht erreichbar — später erneut versuchen.';
+        } else {
+          _catalog = list;
+          _catalogLoaded = true;
+        }
+      } else {
+        _catalogError = 'Fehler ${r.statusCode} beim Laden des Katalogs.';
       }
-    } catch (_) {}
+    } catch (_) {
+      _catalogError = 'ELWIS-Katalog konnte nicht geladen werden (Zeitüberschreitung).';
+    }
     if (mounted) setState(() => _loadingCatalog = false);
   }
 
-  Future<void> _download(Map<String, dynamic> item) async {
-    final id = item['id'] as String;
-    setState(() => _downloading.add(id));
+  bool _isDownloaded(Map<String, dynamic> item) =>
+      item['downloaded'] == true ||
+      _installed.any((c) => c['name'] == item['name']);
+
+  void _toggleSelect(String name) => setState(() {
+        if (_selected.contains(name)) {
+          _selected.remove(name);
+        } else {
+          _selected.add(name);
+        }
+      });
+
+  void _selectAll() => setState(() {
+        for (final item in _catalog) {
+          if (!_isDownloaded(item)) _selected.add(item['name'] as String);
+        }
+      });
+
+  void _selectNone() => setState(_selected.clear);
+
+  /// Ausgewählte Gewässer als Batch herunterladen — Backend-Hintergrundjob,
+  /// Status wird gepollt (Muster wie im Deck).
+  Future<void> _downloadSelected() async {
+    if (_selected.isEmpty || _jobRunning) return;
+    final waterways = _catalog
+        .where((item) => _selected.contains(item['name']))
+        .map((item) => {'name': item['name'], 'url': item['url']})
+        .toList();
+    setState(() {
+      _jobRunning = true;
+      _jobProgress = 'Starte…';
+      _jobPercent = 0;
+    });
     try {
-      await http.post(
-        Uri.parse('$_base/api/enc/download'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(item),
-      ).timeout(const Duration(minutes: 10));
+      final resp = await http
+          .post(
+            Uri.parse('$_base/api/enc/download'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode(waterways),
+          )
+          .timeout(const Duration(seconds: 15));
+      final start = resp.statusCode == 200
+          ? json.decode(resp.body) as Map<String, dynamic>
+          : null;
+      if (start == null || start['started'] != true) {
+        setState(() {
+          _jobRunning = false;
+          _catalogError = start?['error'] as String? ??
+              'Download konnte nicht gestartet werden.';
+        });
+        return;
+      }
+      await _pollJob();
+      _selected.clear();
       await _loadInstalled();
-    } catch (_) {}
-    if (mounted) setState(() => _downloading.remove(id));
+      await _loadCatalog();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _jobRunning = false;
+          _catalogError = 'Download fehlgeschlagen: $e';
+        });
+      }
+    }
+  }
+
+  /// Pollt /api/enc/job/status bis der Job fertig ist.
+  Future<void> _pollJob() async {
+    final deadline = DateTime.now().add(const Duration(minutes: 30));
+    while (DateTime.now().isBefore(deadline)) {
+      await Future.delayed(const Duration(seconds: 2));
+      try {
+        final r = await http
+            .get(Uri.parse('$_base/api/enc/job/status'))
+            .timeout(const Duration(seconds: 8));
+        if (r.statusCode != 200) continue;
+        final s = json.decode(r.body) as Map<String, dynamic>;
+        if (mounted) {
+          setState(() {
+            _jobProgress = (s['progress'] as String?) ?? '';
+            _jobPercent = (s['percent'] as num?)?.toInt() ?? _jobPercent;
+          });
+        }
+        if (s['running'] != true) break;
+      } catch (_) {
+        // Netzwerk-Hänger überbrücken, weiter pollen
+      }
+    }
+    if (mounted) setState(() => _jobRunning = false);
+  }
+
+  /// Karte an/aus schalten. ENC-Karten, die noch nicht konvertiert sind,
+  /// werden vor dem Aktivieren konvertiert (Backend-Job). Danach baut das
+  /// Backend die kombinierten Vektor-Tiles neu.
+  Future<void> _toggleChart(String id, bool enabled) async {
+    if (_toggling.contains(id) || _jobRunning) return;
+    setState(() => _toggling.add(id));
+    try {
+      final resp = await http
+          .patch(Uri.parse('$_base/api/charts/$id?enabled=$enabled'))
+          .timeout(const Duration(seconds: 10));
+      if (resp.statusCode == 200) {
+        final data = json.decode(resp.body) as Map<String, dynamic>;
+        if (data['status'] == 'needs_conversion') {
+          // Konvertierung als Job starten und abwarten
+          setState(() {
+            _jobRunning = true;
+            _jobProgress = 'Konvertiere…';
+            _jobPercent = 0;
+          });
+          await http
+              .post(Uri.parse('$_base/api/charts/$id/convert'))
+              .timeout(const Duration(seconds: 15));
+          await _pollJob();
+          await http
+              .patch(Uri.parse('$_base/api/charts/$id?enabled=true'))
+              .timeout(const Duration(seconds: 10));
+        }
+      }
+      await _loadInstalled();
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _toggling.remove(id));
+    }
   }
 
   Future<void> _delete(String chartId, String name) async {
@@ -1635,11 +1776,10 @@ class _ENCSectionState extends State<_ENCSection> {
     await _loadInstalled();
   }
 
-  bool _isInstalled(String id) => _installed.any((c) => c['name'] == id || c['id'] == id);
-
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final selectable = _catalog.where((i) => !_isDownloaded(i)).length;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _h(l.encInstalled),
       if (_loadingInstalled)
@@ -1656,9 +1796,13 @@ class _ENCSectionState extends State<_ENCSection> {
       else
         ..._installed.map((chart) => _chartTile(chart, l)),
 
+      // Laufender Job (Download/Konvertierung) — Fortschritt
+      if (_jobRunning) _jobBar(),
+
       const SizedBox(height: 16),
       _h(l.encAvailable),
-      if (!_catalogLoaded)
+
+      if (!_catalogLoaded) ...[
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
@@ -1675,11 +1819,90 @@ class _ENCSectionState extends State<_ENCSection> {
             label: Text(_loadingCatalog ? l.encLoading : l.encLoadCatalog),
             onPressed: _loadingCatalog ? null : _loadCatalog,
           ),
-        )
-      else
+        ),
+        if (_catalogError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Text(_catalogError!,
+                style: const TextStyle(fontSize: 12, color: Color(0xFFE0894D))),
+          ),
+      ] else ...[
+        // Auswahl-Kopfzeile: Alle / Keine + Anzahl gewählt
+        Row(children: [
+          TextButton(
+            onPressed: selectable == 0 ? null : _selectAll,
+            style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF4FC3F7),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 32)),
+            child: const Text('Alle', style: TextStyle(fontSize: 12)),
+          ),
+          TextButton(
+            onPressed: _selected.isEmpty ? null : _selectNone,
+            style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF8B949E),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 32)),
+            child: const Text('Keine', style: TextStyle(fontSize: 12)),
+          ),
+          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.refresh, size: 18, color: Color(0xFF8B949E)),
+            tooltip: l.encLoadCatalog,
+            onPressed: _loadingCatalog ? null : _loadCatalog,
+            constraints: const BoxConstraints(),
+            padding: const EdgeInsets.all(6),
+          ),
+        ]),
+        const SizedBox(height: 4),
         ..._catalog.map((item) => _catalogTile(item, l)),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1565C0),
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: const Color(0xFF21262D),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            icon: const Icon(Icons.download, size: 18),
+            label: Text(_selected.isEmpty
+                ? 'Ausgewählte herunterladen'
+                : 'Ausgewählte herunterladen (${_selected.length})'),
+            onPressed:
+                (_selected.isEmpty || _jobRunning) ? null : _downloadSelected,
+          ),
+        ),
+      ],
     ]);
   }
+
+  Widget _jobBar() => Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 4),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(
+              child: Text(_jobProgress.isEmpty ? 'Läuft…' : _jobProgress,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF64FFDA)),
+                  overflow: TextOverflow.ellipsis),
+            ),
+            Text('$_jobPercent%',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF8B949E))),
+          ]),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: _jobPercent > 0 ? _jobPercent / 100 : null,
+              minHeight: 5,
+              backgroundColor: const Color(0xFF21262D),
+              valueColor: const AlwaysStoppedAnimation(Color(0xFF4FC3F7)),
+            ),
+          ),
+        ]),
+      );
 
   Widget _h(String t) => Padding(
         padding: const EdgeInsets.only(top: 4, bottom: 10),
@@ -1693,30 +1916,58 @@ class _ENCSectionState extends State<_ENCSection> {
       );
 
   Widget _chartTile(Map<String, dynamic> chart, AppLocalizations l) {
-    final name     = chart['name'] as String? ?? chart['id'] as String? ?? '?';
-    final id       = chart['id']   as String? ?? '';
-    final files    = chart['enc_files'] as int? ?? 0;
+    final name      = chart['name'] as String? ?? chart['id'] as String? ?? '?';
+    final id        = chart['id']   as String? ?? '';
+    final type      = (chart['type'] as String? ?? '').toUpperCase();
+    final files     = chart['enc_files'] as int? ?? 0;
     final converted = chart['converted'] as bool? ?? false;
+    final enabled   = chart['enabled'] as bool? ?? false;
+    final busy      = _toggling.contains(id);
+    final subtitle = <String>[
+      if (type.isNotEmpty) type,
+      if (files > 0) '$files Zellen',
+      converted ? 'aktiv nutzbar' : 'nicht konvertiert',
+    ].join(' · ');
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFF161B22),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF30363D)),
+        border: Border.all(
+          color: enabled ? const Color(0xFF1A5C2E) : const Color(0xFF30363D),
+        ),
       ),
       child: Row(children: [
-        const Icon(Icons.layers, size: 18, color: Color(0xFF4FC3F7)),
+        Icon(converted ? Icons.layers : Icons.layers_clear,
+            size: 18,
+            color: converted ? const Color(0xFF4FC3F7) : const Color(0xFF8B949E)),
         const SizedBox(width: 10),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(name,
                 style: const TextStyle(fontSize: 13, color: Color(0xFFE6EDF3),
                     fontWeight: FontWeight.w500)),
-            Text('$files Dateien${converted ? ' · konvertiert' : ''}',
-                style: const TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
+            Text(subtitle,
+                style: TextStyle(
+                    fontSize: 11,
+                    color: converted
+                        ? const Color(0xFF4CAF50)
+                        : const Color(0xFF8B949E))),
           ]),
         ),
+        // An/Aus-Schalter — zeigt und steuert, ob die Karte aktiv ist
+        if (busy)
+          const SizedBox(width: 40, height: 24,
+              child: Center(child: SizedBox(width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4FC3F7)))))
+        else
+          Switch(
+            value: enabled,
+            onChanged: (v) => _toggleChart(id, v),
+            activeThumbColor: const Color(0xFF4CAF50),
+            inactiveThumbColor: const Color(0xFF8B949E),
+          ),
         IconButton(
           icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFF8B949E)),
           onPressed: () => _delete(id, name),
@@ -1729,50 +1980,47 @@ class _ENCSectionState extends State<_ENCSection> {
   }
 
   Widget _catalogTile(Map<String, dynamic> item, AppLocalizations l) {
-    final id        = item['id']   as String? ?? '';
-    final name      = item['name'] as String? ?? id;
-    final installed = _isInstalled(id);
-    final loading   = _downloading.contains(id);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0D1117),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: installed ? const Color(0xFF1A5C2E) : const Color(0xFF30363D),
-        ),
-      ),
-      child: Row(children: [
-        Icon(installed ? Icons.check_circle : Icons.radio_button_unchecked,
-            size: 16,
-            color: installed ? const Color(0xFF4CAF50) : const Color(0xFF8B949E)),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(name,
-              style: const TextStyle(fontSize: 13, color: Color(0xFFE6EDF3))),
-        ),
-        if (!installed)
-          SizedBox(
-            height: 30,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1565C0),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              ),
-              onPressed: loading ? null : () => _download(item),
-              child: loading
-                  ? const SizedBox(width: 14, height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Laden', style: TextStyle(fontSize: 12)),
-            ),
+    final name       = item['name'] as String? ?? item['id'] as String? ?? '?';
+    final downloaded = _isDownloaded(item);
+    final selected   = _selected.contains(name);
+    return InkWell(
+      onTap: downloaded ? null : () => _toggleSelect(name),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0D1117),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: downloaded
+                ? const Color(0xFF1A5C2E)
+                : (selected ? const Color(0xFF1565C0) : const Color(0xFF30363D)),
           ),
-        if (installed)
-          Text(l.encInstalledLabel,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF4CAF50))),
-      ]),
+        ),
+        child: Row(children: [
+          if (downloaded)
+            const Icon(Icons.check_circle, size: 18, color: Color(0xFF4CAF50))
+          else
+            Icon(
+              selected ? Icons.check_box : Icons.check_box_outline_blank,
+              size: 18,
+              color: selected ? const Color(0xFF4FC3F7) : const Color(0xFF8B949E),
+            ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(name,
+                style: TextStyle(
+                    fontSize: 13,
+                    color: downloaded
+                        ? const Color(0xFF8B949E)
+                        : const Color(0xFFE6EDF3))),
+          ),
+          if (downloaded)
+            Text(l.encInstalledLabel,
+                style: const TextStyle(fontSize: 12, color: Color(0xFF4CAF50))),
+        ]),
+      ),
     );
   }
 }

@@ -19,6 +19,7 @@ import '../services/settings_service.dart';
 import '../services/websocket_service.dart';
 import '../widgets/favorites_sheet.dart';
 import '../widgets/route_planner.dart';
+import 'ienc_style.dart';
 import 'settings_screen.dart';
 import '../widgets/wifi_sheet.dart';
 import '../widgets/gps_panel.dart';
@@ -116,6 +117,105 @@ class _PegelGauge {
 }
 
 // ---------------------------------------------------------------------------
+// IENC route hazard (bridge / cable / depth / weir) from /api/enc/route-check
+// ---------------------------------------------------------------------------
+
+class _RouteHazard {
+  final String type; // bridge | cable | depth | weir
+  final String severity; // danger | warning
+  final String name;
+  final double lat, lon, km;
+  final double? clearance, depth, required_, lengthKm;
+  // Pegel-korrigierte Tiefe (nur type == depth)
+  final double? currentDepth, levelOffsetM;
+  final String? gauge, waterway;
+
+  const _RouteHazard({
+    required this.type,
+    required this.severity,
+    required this.name,
+    required this.lat,
+    required this.lon,
+    required this.km,
+    this.clearance,
+    this.depth,
+    this.required_,
+    this.lengthKm,
+    this.currentDepth,
+    this.levelOffsetM,
+    this.gauge,
+    this.waterway,
+  });
+
+  factory _RouteHazard.fromJson(Map<String, dynamic> j) {
+    double? d(dynamic v) => (v as num?)?.toDouble();
+    return _RouteHazard(
+      type: (j['type'] ?? '') as String,
+      severity: (j['severity'] ?? 'warning') as String,
+      name: (j['name'] ?? '') as String,
+      lat: d(j['lat']) ?? 0.0,
+      lon: d(j['lon']) ?? 0.0,
+      km: d(j['km']) ?? 0.0,
+      clearance: d(j['clearance']),
+      depth: d(j['depth']),
+      required_: d(j['required']),
+      lengthKm: d(j['length_km']),
+      currentDepth: d(j['current_depth']),
+      levelOffsetM: d(j['level_offset_m']),
+      gauge: j['gauge'] as String?,
+      waterway: j['waterway'] as String?,
+    );
+  }
+
+  IconData get icon {
+    switch (type) {
+      case 'bridge':
+        return Icons.horizontal_rule;
+      case 'cable':
+        return Icons.bolt;
+      case 'depth':
+        return Icons.water;
+      case 'weir':
+        return Icons.warning_amber;
+      default:
+        return Icons.error_outline;
+    }
+  }
+
+  String get title {
+    if (name.isNotEmpty) return name;
+    switch (type) {
+      case 'bridge':
+        return 'Brücke';
+      case 'cable':
+        return 'Freileitung';
+      case 'depth':
+        return 'Flachstelle';
+      case 'weir':
+        return 'Wehr / Sperrtor';
+      default:
+        return type;
+    }
+  }
+
+  String get detail {
+    if (type == 'depth') {
+      var s = 'Kartentiefe bis ${depth ?? '?'} m — benötigt ${required_ ?? '?'} m';
+      if (currentDepth != null) {
+        final off = levelOffsetM ?? 0;
+        final sign = off >= 0 ? '+' : '';
+        s += '\naktuell ≈ $currentDepth m ($gauge $sign$off m)';
+      }
+      return s;
+    }
+    if (clearance != null) {
+      return 'Durchfahrtshöhe $clearance m — benötigt ${required_ ?? '?'} m';
+    }
+    return '';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // AIS triangle painter
 // ---------------------------------------------------------------------------
 
@@ -166,8 +266,13 @@ class _MapScreenState extends State<MapScreen> {
   String? _styleError;
   bool _usingOnlineFallback = false;
 
+  // IENC-Vektor-Overlay (amtliche Karten)
+  Style? _iencStyle;
+  bool _iencAvailable = false;
+
   // Layer toggles
   bool _showSeamarks = true;
+  bool _showIENC = true;
   bool _showAIS = true;
   bool _showLocks = true;
   bool _showPegel = false;
@@ -180,6 +285,10 @@ class _MapScreenState extends State<MapScreen> {
   List<_AisVessel> _aisVessels = [];
   List<_InfraPoi> _infraPois = [];
   List<_PegelGauge> _pegelGauges = [];
+
+  // IENC-Hindernisse auf der Route (Brücken/Tiefen/Wehre)
+  List<_RouteHazard> _routeHazards = [];
+  _RouteHazard? _selectedHazard;
 
   // Polling / throttle
   Timer? _aisTimer;
@@ -261,6 +370,7 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _boatAnimTimer = Timer.periodic(const Duration(milliseconds: 60), _boatAnimTick);
     _buildStyle();
+    _buildIencStyle();
     _loadSettings();
     _restoreMOB();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -507,6 +617,47 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  /// IENC-Vektor-Overlay aufbauen — nur wenn das Backend gebaute Tiles hat
+  /// (mindestens ein ENC-Gewässer installiert). Analog zu _buildStyle, aber
+  /// mit eigenem Provider (Python-Backend) und IENC-Theme.
+  Future<void> _buildIencStyle() async {
+    bool available = false;
+    try {
+      final resp = await http
+          .get(Uri.parse('$_apiBase/api/enc/tiles/status'))
+          .timeout(const Duration(seconds: 2));
+      if (resp.statusCode == 200) {
+        final data = json.decode(resp.body) as Map<String, dynamic>;
+        available = data['available'] == true;
+      }
+    } catch (_) {
+      available = false;
+    }
+    if (!available) {
+      if (mounted) setState(() => _iencAvailable = false);
+      return;
+    }
+    try {
+      final theme = ThemeReader().read(buildIencStyleJson());
+      final providers = TileProviders({
+        iencSourceId: NetworkVectorTileProvider(
+          urlTemplate: '$_apiBase/api/enc/tiles/{z}/{x}/{y}.pbf',
+          maximumZoom: 14,
+          minimumZoom: 0,
+        ),
+      });
+      if (mounted) {
+        setState(() {
+          _iencStyle = Style(theme: theme, providers: providers);
+          _iencAvailable = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('IENC style error: $e');
+      if (mounted) setState(() => _iencAvailable = false);
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Settings
   // -------------------------------------------------------------------------
@@ -524,6 +675,7 @@ class _MapScreenState extends State<MapScreen> {
         setState(() {
           _showAIS = ais['enabled'] == true;
           _showSeamarks = map['openSeaMap'] != false;
+          _showIENC = map['showIENC'] != false;
           _showLocks = map['showLocks'] != false;
           _showPegel = map['showPegel'] == true;
           _showTrack = map['showTrack'] != false;
@@ -1003,6 +1155,8 @@ class _MapScreenState extends State<MapScreen> {
               currentAdjustment: currentAdj,
             );
           });
+          // Route gegen die IENC-Daten prüfen (Brücken/Tiefen/Wehre)
+          _checkRouteHazards(coords);
         }
       } else {
         debugPrint('Route failed: HTTP ${resp.statusCode}');
@@ -1011,6 +1165,58 @@ class _MapScreenState extends State<MapScreen> {
       debugPrint('Route error: $e');
     } finally {
       if (mounted) setState(() => _routeLoading = false);
+    }
+  }
+
+  /// Berechnete Route serverseitig gegen die amtlichen IENC-Daten prüfen
+  /// (Brückenhöhen/Freileitungen vs. Bootshöhe, Tiefen vs. Tiefgang inkl.
+  /// Pegel-Korrektur, Wehre). Bootsmaße kommen aus den Settings. Reine
+  /// Warnung — die Route selbst wird nicht verändert.
+  Future<void> _checkRouteHazards(List<LatLng> coords) async {
+    setState(() {
+      _routeHazards = [];
+      _selectedHazard = null;
+    });
+    if (!_iencAvailable || coords.length < 2) return;
+    try {
+      final body = json.encode({
+        'coordinates': coords.map((c) => [c.longitude, c.latitude]).toList(),
+      });
+      final resp = await http
+          .post(
+            Uri.parse('$_apiBase/api/enc/route-check'),
+            headers: {'Content-Type': 'application/json'},
+            body: body,
+          )
+          .timeout(const Duration(seconds: 20));
+      if (resp.statusCode != 200) return;
+      final data = json.decode(resp.body) as Map<String, dynamic>;
+      if (data['checked'] != true) return;
+      final list = (data['warnings'] as List<dynamic>? ?? [])
+          .map((e) => _RouteHazard.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (!mounted) return;
+      setState(() => _routeHazards = list);
+      if (list.isNotEmpty) {
+        final dangers = list.where((h) => h.severity == 'danger').length;
+        final msg = dangers > 0
+            ? '⚠ $dangers kritische Hindernisse auf der Route'
+            : '${list.length} Hinweise auf der Route (Karten-Marker)';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(msg),
+          backgroundColor:
+              dangers > 0 ? const Color(0xFFC0392B) : const Color(0xFF2C3E50),
+          duration: const Duration(seconds: 4),
+        ));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('✓ Route geprüft (IENC) — keine Hindernisse'),
+          backgroundColor: Color(0xFF27AE60),
+          duration: Duration(seconds: 3),
+        ));
+      }
+    } catch (e) {
+      debugPrint('Route hazard check error: $e');
     }
   }
 
@@ -1241,6 +1447,8 @@ class _MapScreenState extends State<MapScreen> {
       _waypoints = [];
       _routeResult = null;
       _routeMode = false;
+      _routeHazards = [];
+      _selectedHazard = null;
     });
   }
 
@@ -1371,6 +1579,15 @@ class _MapScreenState extends State<MapScreen> {
                 tileDimension: 256,
               ),
 
+            // 1c. IENC vector overlay (amtliche Binnenkarten, wenn installiert)
+            if (_showIENC && _iencStyle != null && !_satelliteMode)
+              VectorTileLayer(
+                key: const ValueKey('ienc-overlay'),
+                tileProviders: _iencStyle!.providers,
+                theme: _iencStyle!.theme,
+                layerMode: VectorTileLayerMode.raster,
+              ),
+
             // 2. OpenSeaMap seamark overlay
             if (_showSeamarks)
               TileLayer(
@@ -1416,6 +1633,26 @@ class _MapScreenState extends State<MapScreen> {
                     strokeWidth: 4,
                   ),
                 ],
+              ),
+
+            // 5b. IENC route hazard markers (bridges/depths/weirs)
+            if (_routeHazards.isNotEmpty)
+              MarkerLayer(
+                markers: _routeHazards
+                    .map((h) => Marker(
+                          point: LatLng(h.lat, h.lon),
+                          width: 30,
+                          height: 30,
+                          child: GestureDetector(
+                            onTap: () => setState(() {
+                              _selectedHazard = h;
+                              _selectedPoi = null;
+                              _selectedVessel = null;
+                            }),
+                            child: _buildHazardMarker(h),
+                          ),
+                        ))
+                    .toList(),
               ),
 
             // 5. Pegel markers
@@ -1678,6 +1915,9 @@ class _MapScreenState extends State<MapScreen> {
               }, scale: scale),
               _layerBtn(Icons.waves, 'Seamark', _showSeamarks,
                   (v) => setState(() => _showSeamarks = v), scale: scale),
+              if (_iencAvailable)
+                _layerBtn(Icons.map_outlined, 'IENC', _showIENC,
+                    (v) => setState(() => _showIENC = v), scale: scale),
               _layerBtn(Icons.directions_boat, 'AIS', _showAIS, (v) {
                 setState(() => _showAIS = v);
                 if (v) {
@@ -2018,7 +2258,36 @@ class _MapScreenState extends State<MapScreen> {
             onClose: () => setState(() => _selectedPoi = null),
             scale: scale,
           ),
+
+        if (_selectedHazard != null)
+          _HazardDetailPanel(
+            hazard: _selectedHazard!,
+            onClose: () => setState(() => _selectedHazard = null),
+            scale: scale,
+          ),
       ],
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // IENC hazard marker
+  // -------------------------------------------------------------------------
+
+  Widget _buildHazardMarker(_RouteHazard h) {
+    final color = h.severity == 'danger'
+        ? const Color(0xFFE74C3C)
+        : const Color(0xFFF39C12);
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xE60A0E27),
+        shape: BoxShape.circle,
+        border: Border.all(color: color, width: 2.5),
+        boxShadow: const [
+          BoxShadow(color: Colors.black45, blurRadius: 4),
+        ],
+      ),
+      alignment: Alignment.center,
+      child: Icon(h.icon, color: color, size: 15),
     );
   }
 
@@ -2310,6 +2579,79 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     return {'version': 8, 'sources': sources, 'layers': layers};
+  }
+}
+
+// ---------------------------------------------------------------------------
+// IENC Route Hazard Detail Panel
+// ---------------------------------------------------------------------------
+
+class _HazardDetailPanel extends StatelessWidget {
+  final _RouteHazard hazard;
+  final VoidCallback onClose;
+  final double scale;
+
+  const _HazardDetailPanel({
+    required this.hazard,
+    required this.onClose,
+    this.scale = 1.0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final sc = scale;
+    final color = hazard.severity == 'danger'
+        ? const Color(0xFFE74C3C)
+        : const Color(0xFFF39C12);
+    return Positioned(
+      bottom: 0,
+      left: 0,
+      right: 0,
+      child: Container(
+        color: const Color(0xF2161B22),
+        padding: EdgeInsets.fromLTRB(16 * sc, 12 * sc, 16 * sc, 16 * sc),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(hazard.icon, color: color, size: 20 * sc),
+                SizedBox(width: 8 * sc),
+                Expanded(
+                  child: Text(
+                    hazard.title,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16 * sc,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: onClose,
+                  child: Icon(Icons.close,
+                      color: Colors.white54, size: 20 * sc),
+                ),
+              ],
+            ),
+            SizedBox(height: 8 * sc),
+            Text(
+              hazard.detail,
+              style: TextStyle(
+                  fontSize: 13 * sc, color: const Color(0xFFCCD6F6)),
+            ),
+            SizedBox(height: 6 * sc),
+            Text(
+              'km ${hazard.km}'
+              '${hazard.lengthKm != null ? ' · ${hazard.lengthKm} km' : ''}',
+              style: TextStyle(
+                  fontSize: 11 * sc, color: const Color(0xFF8892B0)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

@@ -77,26 +77,57 @@ def safe_id(name: str) -> str:
 
 # ==================== ELWIS KATALOG & DOWNLOAD ====================
 
-def scrape_catalog() -> list:
-    """Verfügbare IENC-Gewässer von der ELWIS-Seite scrapen. BLOCKING."""
-    response = requests.get(IENC_URL, timeout=15)
-    response.raise_for_status()
-    soup = BeautifulSoup(response.text, "html.parser")
+# Katalog-Cache: ELWIS ist zeitweise nicht erreichbar. Der letzte
+# erfolgreiche Scrape wird gecacht, damit ein Ausfall den Katalog nicht
+# komplett leert (die Download-URLs enthalten ein Datum, sind aber Wochen
+# stabil — für die Anzeige völlig ausreichend).
+_CATALOG_CACHE = Path(__file__).resolve().parents[2] / "data" / "charts" / "elwis_catalog.json"
 
-    waterways = []
-    seen = set()
-    for link in soup.find_all("a", href=True):
-        if "Download?file=" not in link["href"]:
-            continue
-        name = link.text.strip()
-        if not name or name in seen:
-            continue
-        seen.add(name)
-        url = link["href"]
-        if not url.startswith("http"):
-            url = ELWIS_BASE_URL + url
-        waterways.append({"id": safe_id(name), "name": name, "url": url})
-    return waterways
+
+def scrape_catalog() -> list:
+    """Verfügbare IENC-Gewässer von der ELWIS-Seite scrapen. BLOCKING.
+    Fällt bei ELWIS-Ausfall auf den letzten erfolgreichen Scrape zurück."""
+    try:
+        response = requests.get(IENC_URL, timeout=15)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        waterways = []
+        seen = set()
+        for link in soup.find_all("a", href=True):
+            if "Download?file=" not in link["href"]:
+                continue
+            name = link.text.strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            url = link["href"]
+            if not url.startswith("http"):
+                url = ELWIS_BASE_URL + url
+            waterways.append({"id": safe_id(name), "name": name, "url": url})
+
+        if waterways:
+            try:
+                _CATALOG_CACHE.parent.mkdir(parents=True, exist_ok=True)
+                with open(_CATALOG_CACHE, "w", encoding="utf-8") as f:
+                    json.dump(waterways, f, ensure_ascii=False)
+            except Exception:
+                pass
+            return waterways
+        # Leeres Ergebnis (ELWIS-Layout-Änderung/Teilausfall) → Cache
+        raise ValueError("ELWIS lieferte keine Einträge")
+    except Exception as e:
+        if _CATALOG_CACHE.exists():
+            try:
+                with open(_CATALOG_CACHE, "r", encoding="utf-8") as f:
+                    cached = json.load(f)
+                print(f"⚠️ ELWIS-Scrape fehlgeschlagen ({e}) — nutze Cache "
+                      f"({len(cached)} Gewässer)")
+                return cached
+            except Exception:
+                pass
+        print(f"⚠️ ELWIS-Katalog nicht verfügbar und kein Cache: {e}")
+        return []
 
 
 def download_waterway(page_url: str, chart_dir: Path) -> int:
