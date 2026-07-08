@@ -4,6 +4,17 @@
 
 ---
 
+## Umgesetzt — Amtliche Seekarten (IENC)
+
+| Feature | Beschreibung | Kategorie |
+|---------|-------------|-----------|
+| ELWIS-ENC-Pipeline | Amtliche Inland-ENC der WSV per Katalog herunterladen (Hintergrund-Job mit Fortschritt), S-57 → Vektor-Tiles konvertieren; Katalog-Cache übersteht ELWIS-Ausfälle | Karte, Daten |
+| IENC-Vektor-Darstellung | Tiefenbereiche, Fahrrinne, Brücken/Wehre/Freileitungen mit Durchfahrtshöhen, Binnenschifffahrtszeichen (CEVNI), Betonnung, Kilometrierung — mit Klick-Popups. Deck (MapLibre) und Helm (Flutter) | Karte |
+| Route-Hindernis-Warnung | Nach der Routenberechnung Prüfung gegen die IENC-Daten: zu niedrige Brücken/Freileitungen vs. Bootshöhe, Flachstellen vs. Tiefgang (mit Pegel-Korrektur über W−MNW), Wehre — als Marker + Panel | Sicherheit, Routing |
+| Routing: Umflutkanäle ausgeschlossen | Hochwasser-Entlastungsgewässer und Altarme (z.B. Elbe-Umflutkanal Magdeburg) werden nicht mehr als Fahrweg genutzt; explizit freigegebene (Dahme-Umflutkanal) bleiben befahrbar | Routing |
+
+---
+
 ## v1.7.x — Stabilität
 
 | Feature | Beschreibung | Kategorie |

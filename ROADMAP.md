@@ -4,6 +4,17 @@
 
 ---
 
+## Delivered — Official nautical charts (IENC)
+
+| Feature | Description | Category |
+|---------|-------------|----------|
+| ELWIS ENC pipeline | Download official Inland ENCs from the WSV catalog (background job with progress), convert S-57 → vector tiles; catalog cache survives ELWIS outages | Map, Data |
+| IENC vector rendering | Depth areas, fairway, bridges/weirs/overhead cables with clearances, inland traffic signs (CEVNI), buoyage, kilometre marks — with click popups. Deck (MapLibre) and Helm (Flutter) | Map |
+| Route hazard check | After routing, check against IENC data: bridges/cables too low vs. boat height, shallow areas vs. draft (with water-level correction via W−MNW), weirs — shown as markers + panel | Safety, Routing |
+| Routing: flood-relief channels excluded | Flood-relief waterways and old river arms (e.g. Elbe-Umflutkanal at Magdeburg) are no longer routed over; explicitly permitted ones (Dahme-Umflutkanal) stay navigable | Routing |
+
+---
+
 ## v1.7.x — Stability
 
 | Feature | Description | Category |
