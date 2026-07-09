@@ -77,18 +77,50 @@ def safe_id(name: str) -> str:
 
 # ==================== ELWIS KATALOG & DOWNLOAD ====================
 
-# Katalog-Cache: ELWIS ist zeitweise nicht erreichbar. Der letzte
-# erfolgreiche Scrape wird gecacht, damit ein Ausfall den Katalog nicht
-# komplett leert (die Download-URLs enthalten ein Datum, sind aber Wochen
-# stabil — für die Anzeige völlig ausreichend).
+# Katalog-Cache + Anti-Ban-Cooldown:
+# ELWIS sperrt bei zu vielen Requests die IP (Abuse-Schutz). Deshalb wird
+# ELWIS höchstens alle COOLDOWN Stunden kontaktiert (≈2×/Tag); dazwischen
+# kommt IMMER der Cache. So kann auch mehrfaches "Katalog laden" keinen Ban
+# auslösen. Der Marker speichert den letzten VERSUCH (egal ob Erfolg), damit
+# auch Fehlversuche (Ausfall/Ban) nicht zum Hämmern führen.
 _CATALOG_CACHE = Path(__file__).resolve().parents[2] / "data" / "charts" / "elwis_catalog.json"
+_CATALOG_ATTEMPT = _CATALOG_CACHE.with_suffix(".attempt")
+_SCRAPE_COOLDOWN_S = 12 * 3600  # max. 2 ELWIS-Kontakte pro Tag
+
+
+def _read_catalog_cache():
+    if not _CATALOG_CACHE.exists():
+        return None
+    try:
+        with open(_CATALOG_CACHE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
 
 
 def scrape_catalog() -> list:
-    """Verfügbare IENC-Gewässer von der ELWIS-Seite scrapen. BLOCKING.
-    Fällt bei ELWIS-Ausfall auf den letzten erfolgreichen Scrape zurück."""
+    """Verfügbare IENC-Gewässer von ELWIS scrapen. BLOCKING.
+    Cooldown-gesichert: ELWIS wird max. alle _SCRAPE_COOLDOWN_S kontaktiert,
+    sonst kommt der Cache (schützt vor IP-Ban durch Abuse-Erkennung)."""
+    import time
+    cache = _read_catalog_cache()
+    last_attempt = _CATALOG_ATTEMPT.stat().st_mtime if _CATALOG_ATTEMPT.exists() else 0.0
+    in_cooldown = (time.time() - last_attempt) < _SCRAPE_COOLDOWN_S
+
+    # Solange ein Cache da ist und der Cooldown läuft: KEIN ELWIS-Kontakt.
+    if cache is not None and in_cooldown:
+        return cache
+
+    # ELWIS-Versuch — Marker VOR dem Request setzen (auch Fehlversuche zählen).
     try:
-        response = requests.get(IENC_URL, timeout=15)
+        _CATALOG_ATTEMPT.parent.mkdir(parents=True, exist_ok=True)
+        _CATALOG_ATTEMPT.touch()
+    except Exception:
+        pass
+
+    try:
+        # Kurzer Timeout: bei Störung/Ban schnell auf den Cache fallen.
+        response = requests.get(IENC_URL, timeout=6)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
 
@@ -108,24 +140,17 @@ def scrape_catalog() -> list:
 
         if waterways:
             try:
-                _CATALOG_CACHE.parent.mkdir(parents=True, exist_ok=True)
                 with open(_CATALOG_CACHE, "w", encoding="utf-8") as f:
                     json.dump(waterways, f, ensure_ascii=False)
             except Exception:
                 pass
             return waterways
-        # Leeres Ergebnis (ELWIS-Layout-Änderung/Teilausfall) → Cache
         raise ValueError("ELWIS lieferte keine Einträge")
     except Exception as e:
-        if _CATALOG_CACHE.exists():
-            try:
-                with open(_CATALOG_CACHE, "r", encoding="utf-8") as f:
-                    cached = json.load(f)
-                print(f"⚠️ ELWIS-Scrape fehlgeschlagen ({e}) — nutze Cache "
-                      f"({len(cached)} Gewässer)")
-                return cached
-            except Exception:
-                pass
+        if cache is not None:
+            print(f"⚠️ ELWIS-Scrape fehlgeschlagen ({e}) — nutze Cache "
+                  f"({len(cache)} Gewässer)")
+            return cache
         print(f"⚠️ ELWIS-Katalog nicht verfügbar und kein Cache: {e}")
         return []
 

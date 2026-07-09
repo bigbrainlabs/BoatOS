@@ -374,17 +374,8 @@ function _layerDefs(vis) {
             },
             paint: { 'text-color': '#7a5500', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
         },
-        {
-            id: 'ienc-dismar-label', type: 'symbol', source: 'ienc', 'source-layer': 'fairway',
-            filter: ['all', cls('dismar'), ['has', 'wtwdis']], minzoom: 12,
-            layout: {
-                visibility: vis,
-                'text-field': ['concat', 'km ', ['to-string', ['get', 'wtwdis']]],
-                'text-font': ['Noto Sans Regular'],
-                'text-size': 10,
-            },
-            paint: { 'text-color': '#556677', 'text-halo-color': '#ffffff', 'text-halo-width': 1.4 },
-        },
+        // Hinweis: dismar (Kilometer-Marken) werden bewusst NICHT beschriftet —
+        // sie liegen in 100-m-Schritten und überfrachten das Gewässer.
         {
             id: 'ienc-harbour-label', type: 'symbol', source: 'ienc', 'source-layer': 'harbour',
             filter: ['any', ['has', 'NOBJNM'], ['has', 'OBJNAM']], minzoom: 13,

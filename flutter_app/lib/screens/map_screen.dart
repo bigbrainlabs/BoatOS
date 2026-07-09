@@ -19,7 +19,6 @@ import '../services/settings_service.dart';
 import '../services/websocket_service.dart';
 import '../widgets/favorites_sheet.dart';
 import '../widgets/route_planner.dart';
-import 'ienc_style.dart';
 import 'settings_screen.dart';
 import '../widgets/wifi_sheet.dart';
 import '../widgets/gps_panel.dart';
@@ -266,13 +265,12 @@ class _MapScreenState extends State<MapScreen> {
   String? _styleError;
   bool _usingOnlineFallback = false;
 
-  // IENC-Vektor-Overlay (amtliche Karten)
-  Style? _iencStyle;
+  // IENC-Verfügbarkeit — nur für den Route-Hindernis-Check (Brücken/Tiefen/
+  // Wehre). IENC-Kartenanzeige läuft auf dem Deck (GPU), nicht in Helm.
   bool _iencAvailable = false;
 
   // Layer toggles
   bool _showSeamarks = true;
-  bool _showIENC = true;
   bool _showAIS = true;
   bool _showLocks = true;
   bool _showPegel = false;
@@ -370,7 +368,6 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _boatAnimTimer = Timer.periodic(const Duration(milliseconds: 60), _boatAnimTick);
     _buildStyle();
-    _buildIencStyle();
     _loadSettings();
     _restoreMOB();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -594,6 +591,21 @@ class _MapScreenState extends State<MapScreen> {
       // Default 'germany' beibehalten
     }
 
+    // IENC-Verfügbarkeit nur für den Route-Hindernis-Check merken (Brücken/
+    // Tiefen/Wehre). Die IENC-KARTENANZEIGE läuft NUR auf dem Deck (GPU-
+    // MapLibre) — auf Helms CPU-Renderer (vector_map_tiles) staute sich beim
+    // Bewegen der Dart-Heap auf >1 GB (base-only ~448 MB) → Load-Anstieg /
+    // Hang-Gefahr. Nicht in die Karte mergen.
+    try {
+      final resp = await http
+          .get(Uri.parse('$_apiBase/api/enc/tiles/status'))
+          .timeout(const Duration(seconds: 2));
+      _iencAvailable = resp.statusCode == 200 &&
+          (json.decode(resp.body) as Map<String, dynamic>)['available'] == true;
+    } catch (_) {
+      _iencAvailable = false;
+    }
+
     try {
       final theme = ThemeReader().read(_buildMapStyleJson(regions));
       final providers = TileProviders({
@@ -617,47 +629,6 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  /// IENC-Vektor-Overlay aufbauen — nur wenn das Backend gebaute Tiles hat
-  /// (mindestens ein ENC-Gewässer installiert). Analog zu _buildStyle, aber
-  /// mit eigenem Provider (Python-Backend) und IENC-Theme.
-  Future<void> _buildIencStyle() async {
-    bool available = false;
-    try {
-      final resp = await http
-          .get(Uri.parse('$_apiBase/api/enc/tiles/status'))
-          .timeout(const Duration(seconds: 2));
-      if (resp.statusCode == 200) {
-        final data = json.decode(resp.body) as Map<String, dynamic>;
-        available = data['available'] == true;
-      }
-    } catch (_) {
-      available = false;
-    }
-    if (!available) {
-      if (mounted) setState(() => _iencAvailable = false);
-      return;
-    }
-    try {
-      final theme = ThemeReader().read(buildIencStyleJson());
-      final providers = TileProviders({
-        iencSourceId: NetworkVectorTileProvider(
-          urlTemplate: '$_apiBase/api/enc/tiles/{z}/{x}/{y}.pbf',
-          maximumZoom: 14,
-          minimumZoom: 0,
-        ),
-      });
-      if (mounted) {
-        setState(() {
-          _iencStyle = Style(theme: theme, providers: providers);
-          _iencAvailable = true;
-        });
-      }
-    } catch (e) {
-      debugPrint('IENC style error: $e');
-      if (mounted) setState(() => _iencAvailable = false);
-    }
-  }
-
   // -------------------------------------------------------------------------
   // Settings
   // -------------------------------------------------------------------------
@@ -675,7 +646,6 @@ class _MapScreenState extends State<MapScreen> {
         setState(() {
           _showAIS = ais['enabled'] == true;
           _showSeamarks = map['openSeaMap'] != false;
-          _showIENC = map['showIENC'] != false;
           _showLocks = map['showLocks'] != false;
           _showPegel = map['showPegel'] == true;
           _showTrack = map['showTrack'] != false;
@@ -1579,14 +1549,8 @@ class _MapScreenState extends State<MapScreen> {
                 tileDimension: 256,
               ),
 
-            // 1c. IENC vector overlay (amtliche Binnenkarten, wenn installiert)
-            if (_showIENC && _iencStyle != null && !_satelliteMode)
-              VectorTileLayer(
-                key: const ValueKey('ienc-overlay'),
-                tileProviders: _iencStyle!.providers,
-                theme: _iencStyle!.theme,
-                layerMode: VectorTileLayerMode.raster,
-              ),
+            // IENC-Karten sind in die Basiskarten-VectorTileLayer gemergt
+            // (siehe _buildMapStyleJson) — kein separater Layer nötig.
 
             // 2. OpenSeaMap seamark overlay
             if (_showSeamarks)
@@ -1915,9 +1879,6 @@ class _MapScreenState extends State<MapScreen> {
               }, scale: scale),
               _layerBtn(Icons.waves, 'Seamark', _showSeamarks,
                   (v) => setState(() => _showSeamarks = v), scale: scale),
-              if (_iencAvailable)
-                _layerBtn(Icons.map_outlined, 'IENC', _showIENC,
-                    (v) => setState(() => _showIENC = v), scale: scale),
               _layerBtn(Icons.directions_boat, 'AIS', _showAIS, (v) {
                 setState(() => _showAIS = v);
                 if (v) {
