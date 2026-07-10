@@ -5012,6 +5012,14 @@ def _version_key(tag: str):
     return (major, minor, patch, 0, ids)
 
 
+def _is_prerelease(rel: dict) -> bool:
+    """Prerelease erkennen — primär am TAG-NAMEN (-rc/-beta), zusätzlich am
+    GitHub-Flag. Der Tag-Name ist zuverlässig; das GitHub-Flag hinkt in der
+    unauth. Releases-API (CDN-Cache) einem frisch erstellten Prerelease kurz
+    hinterher, weshalb man sich nicht allein darauf verlassen darf."""
+    return _version_key(rel.get("tag_name", ""))[3] == 0 or bool(rel.get("prerelease"))
+
+
 def _get_update_channel(override: str = None) -> str:
     """Update-Kanal: expliziter Override > Settings > 'stable'."""
     if override in ("stable", "beta"):
@@ -5048,11 +5056,12 @@ async def system_version(channel: str = None):
             ) as resp:
                 if resp.status == 200:
                     rels = await resp.json()
-                    # Stable: nur echte Releases; Beta: auch Prereleases
+                    # Stable: nur echte Releases; Beta: auch Prereleases.
+                    # Prerelease-Erkennung am Tag-Namen (CDN-Flag-Lag-fest).
                     cand = [r for r in rels
                             if r.get("tag_name", "").startswith("v")
                             and not r.get("draft")
-                            and (ch == "beta" or not r.get("prerelease"))]
+                            and (ch == "beta" or not _is_prerelease(r))]
                     if cand:
                         best = max(cand, key=lambda r: _version_key(r["tag_name"]))
                         latest = best["tag_name"]

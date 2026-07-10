@@ -40,12 +40,16 @@ def key(tag):
     if not pre: return (a,b,c,1,())
     ids = tuple((0,int(x)) if x.isdigit() else (1,x) for x in pre.split("."))
     return (a,b,c,0,ids)
+def is_pre(r):
+    # Prerelease am Tag-Namen (-rc/-beta) erkennen; GitHub-Flag als Zusatz.
+    # Der Tag-Name ist CDN-Cache-fest, das Flag hinkt kurz hinterher.
+    return key(r.get("tag_name",""))[3] == 0 or bool(r.get("prerelease"))
 try:
     rels = json.load(sys.stdin)
     ch = os.environ.get("BOATOS_CHANNEL","stable")
     cand = [r for r in rels if r.get("tag_name","").startswith("v")
             and not r.get("draft")
-            and (ch=="beta" or not r.get("prerelease"))]
+            and (ch=="beta" or not is_pre(r))]
     if cand:
         best = max(cand, key=lambda r: key(r["tag_name"]))
         appso = next((a["browser_download_url"] for a in best.get("assets",[])
