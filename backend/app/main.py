@@ -4788,48 +4788,79 @@ async def system_reboot():
 _update_running = False
 _update_log: list[str] = []
 
+def _version_key(tag: str):
+    """Semver-Sortierschlüssel inkl. Prerelease-Ordnung nach SemVer-Regel:
+    v1.8.0-rc1 < v1.8.0-rc2 < v1.8.0 (Release schlägt jede Prerelease)."""
+    m = re.match(r'v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.]+))?$', (tag or "").strip())
+    if not m:
+        return (-1, -1, -1, -1, ())
+    major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    pre = m.group(4)
+    if not pre:
+        return (major, minor, patch, 1, ())  # Release-Rang 1 > Prerelease-Rang 0
+    # Prerelease-Identifier: numerisch < alphanumerisch, jeweils vergleichbar
+    ids = tuple((0, int(x)) if x.isdigit() else (1, x) for x in pre.split("."))
+    return (major, minor, patch, 0, ids)
+
+
+def _get_update_channel(override: str = None) -> str:
+    """Update-Kanal: expliziter Override > Settings > 'stable'."""
+    if override in ("stable", "beta"):
+        return override
+    try:
+        with open("data/settings.json") as f:
+            ch = json.load(f).get("system", {}).get("updateChannel")
+        if ch in ("stable", "beta"):
+            return ch
+    except Exception:
+        pass
+    return "stable"
+
+
 @app.get("/api/system/version")
-async def system_version():
-    """Aktuelle und verfügbare Version"""
-    # Read version from VERSION file (updated by update.sh / git pull)
+async def system_version(channel: str = None):
+    """Aktuelle und verfügbare Version für den gewählten Kanal (stable/beta).
+    Beta zieht auch Prereleases (GitHub-Release-Flag) in Betracht."""
     try:
         current = (_BASE_DIR / "VERSION").read_text().strip()
     except Exception:
         current = "unbekannt"
+    ch = _get_update_channel(channel)
 
-    # Use git refs API — reflects the actual git database, not the cached tags list
     latest = "unbekannt"
     published_at = ""
     release_url = ""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                "https://api.github.com/repos/bigbrainlabs/BoatOS/git/refs/tags",
+                "https://api.github.com/repos/bigbrainlabs/BoatOS/releases?per_page=30",
                 headers={"Accept": "application/vnd.github+json"},
                 timeout=aiohttp.ClientTimeout(total=6),
             ) as resp:
                 if resp.status == 200:
-                    refs = await resp.json()
-                    tag_names = [
-                        r["ref"].split("/")[-1] for r in refs
-                        if r.get("ref", "").startswith("refs/tags/v")
-                    ]
-                    def _semver(t):
-                        try:
-                            parts = t.lstrip("v").split(".")
-                            return tuple(int(x) for x in parts)
-                        except Exception:
-                            return (0, 0, 0)
-                    if tag_names:
-                        latest = max(tag_names, key=_semver)
-                        release_url = f"https://github.com/bigbrainlabs/BoatOS/releases/tag/{latest}"
+                    rels = await resp.json()
+                    # Stable: nur echte Releases; Beta: auch Prereleases
+                    cand = [r for r in rels
+                            if r.get("tag_name", "").startswith("v")
+                            and not r.get("draft")
+                            and (ch == "beta" or not r.get("prerelease"))]
+                    if cand:
+                        best = max(cand, key=lambda r: _version_key(r["tag_name"]))
+                        latest = best["tag_name"]
+                        release_url = best.get("html_url", "")
+                        published_at = best.get("published_at", "") or ""
     except Exception:
         pass
 
+    # up_to_date auch wenn current NEUER als latest ist (z.B. Beta→Stable-Wechsel,
+    # während man auf einer Vorabversion sitzt — kein Downgrade anbieten).
+    up_to_date = (latest == "unbekannt"
+                  or _version_key(current) >= _version_key(latest))
     return {
         "current": current,
         "latest": latest,
-        "up_to_date": latest == "unbekannt" or current == latest,
+        "channel": ch,
+        "up_to_date": up_to_date,
         "release_url": release_url,
         "published_at": published_at,
     }
@@ -4840,17 +4871,23 @@ async def update_status():
     return {"running": _update_running, "log": _update_log[-100:]}
 
 @app.post("/api/system/update")
-async def start_update(background_tasks: BackgroundTasks):
-    """Update-Skript starten"""
+async def start_update(request: Request, background_tasks: BackgroundTasks):
+    """Update-Skript starten (im gewählten Kanal)"""
     global _update_running, _update_log
     if _update_running:
         return {"status": "already_running"}
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    channel = _get_update_channel(body.get("channel") if isinstance(body, dict) else None)
     _update_running = True
-    _update_log = ["[System] Update wird gestartet…"]
-    background_tasks.add_task(_run_update)
-    return {"status": "started"}
+    _update_log = [f"[System] Update wird gestartet… (Kanal: {channel})"]
+    background_tasks.add_task(_run_update, channel)
+    return {"status": "started", "channel": channel}
 
-async def _run_update():
+async def _run_update(channel: str = "stable"):
     global _update_running, _update_log
     script = str(_BASE_DIR / "scripts" / "update.sh")
 
@@ -4870,8 +4907,11 @@ async def _run_update():
         _update_log.append(f"[Bootstrap] GitHub nicht erreichbar — nutze lokale Version")
 
     try:
+        # Kanal an update.sh durchreichen (Stable vs. Beta/Prerelease)
+        env = {**os.environ, "BOATOS_CHANNEL": channel}
         proc = await asyncio.create_subprocess_exec(
             "bash", script,
+            env=env,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )

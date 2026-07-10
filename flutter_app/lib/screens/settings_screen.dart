@@ -413,7 +413,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               5  => _einheiten(svc),
               6  => _mqtt(svc),
               11 => _display(svc),
-              12 => _system(),
+              12 => _system(svc),
               _  => <Widget>[],
             };
             inner = Column(
@@ -977,8 +977,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ── Section: System / Update ────────────────────────────────────────────────
 
-  List<Widget> _system() {
+  List<Widget> _system(SettingsService s) {
     final l = context.l10n;
+    final channel =
+        (s.raw['system'] as Map?)?['updateChannel'] == 'beta' ? 'beta' : 'stable';
     return [
       _header(l.systemVersionTitle),
       Container(
@@ -1026,6 +1028,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onTap: _startUpdate,
         ),
       ],
+
+      // Update-Kanal (Stable / Beta)
+      const SizedBox(height: 16),
+      const Text('Update-Kanal',
+          style: TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
+      const SizedBox(height: 8),
+      Row(children: [
+        _channelBtn('Stabil', channel == 'stable',
+            () => _setChannel(s, 'stable')),
+        const SizedBox(width: 8),
+        _channelBtn('Beta', channel == 'beta',
+            () => _setChannel(s, 'beta')),
+      ]),
+      const SizedBox(height: 6),
+      const Text('Beta liefert Vorabversionen (rc) zum Testen — kann instabil sein.',
+          style: TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
 
       if (_updateRunning || _updateLog.isNotEmpty) ...[
         _header(l.updateProgress),
@@ -1112,11 +1130,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       );
 
+  // Update-Kanal aus den Settings (stable/beta)
+  String _channel() =>
+      (context.read<SettingsService>().raw['system'] as Map?)?['updateChannel'] == 'beta'
+          ? 'beta' : 'stable';
+
+  void _setChannel(SettingsService s, String ch) {
+    final cur = (s.raw['system'] as Map?)?['updateChannel'] == 'beta' ? 'beta' : 'stable';
+    if (cur == ch) return;
+    s.set('system', 'updateChannel', ch);
+    s.save();
+    _checkVersion(); // sofort im neuen Kanal prüfen
+  }
+
+  Widget _channelBtn(String label, bool active, VoidCallback onTap) => Expanded(
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: active ? const Color(0xFF1565C0) : const Color(0xFF21262D),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                  color: active ? const Color(0xFF1565C0) : const Color(0xFF30363D)),
+            ),
+            child: Text(label,
+                style: TextStyle(
+                    fontSize: 13,
+                    color: active ? Colors.white : const Color(0xFF8B949E),
+                    fontWeight: active ? FontWeight.w600 : FontWeight.normal)),
+          ),
+        ),
+      );
+
   Future<void> _checkVersion() async {
     setState(() { _verLoading = true; _verCurrent = '…'; _verLatest = '…'; });
     try {
       final res = await http
-          .get(Uri.parse('http://localhost:8000/api/system/version'))
+          .get(Uri.parse('http://localhost:8000/api/system/version?channel=${_channel()}'))
           .timeout(const Duration(seconds: 8));
       final d = json.decode(res.body) as Map<String, dynamic>;
       setState(() {
@@ -1157,7 +1209,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() { _updateRunning = true; _updateLog = ['[System] Update wird gestartet…']; });
     try {
-      await http.post(Uri.parse('http://localhost:8000/api/system/update'));
+      await http.post(
+        Uri.parse('http://localhost:8000/api/system/update'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'channel': _channel()}),
+      );
     } catch (_) {}
     _updatePollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _pollUpdate());
   }
