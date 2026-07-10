@@ -18,37 +18,56 @@ APP_SO=$REPO_DIR/flutter_app/app.so
 
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
-log "=== BoatOS Update gestartet ==="
+CHANNEL="${BOATOS_CHANNEL:-stable}"
+log "=== BoatOS Update gestartet (Kanal: $CHANNEL) ==="
 
-# 1. Code via GitHub-Tarball aktualisieren (kein Git-State nötig)
-log "[1/6] Prüfe neueste Version..."
+# 1. Ziel-Release für den Kanal auflösen (Code-Tarball + app.so aus DEMSELBEN
+#    Release). Stable = nur echte Releases; Beta = auch Prereleases.
+#    Single-Quotes im Python-Block: $ bleibt literal (kein Bash-Expand);
+#    der Kanal kommt über die geerbte Env-Variable BOATOS_CHANNEL.
+log "[1/6] Prüfe neueste Version (Kanal: $CHANNEL)..."
 cd "$REPO_DIR"
 
-LATEST_TAG=$(curl -sf --max-time 15 \
-    "https://api.github.com/repos/$GITHUB_REPO/git/refs/tags" | \
-    python3 -c "
-import sys, json, re
+RESOLVED=$(curl -sf --max-time 15 \
+    "https://api.github.com/repos/$GITHUB_REPO/releases?per_page=30" | \
+    python3 -c '
+import sys, json, re, os
+def key(tag):
+    m = re.match(r"v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.]+))?$", (tag or "").strip())
+    if not m: return (-1,-1,-1,-1,())
+    a,b,c = int(m.group(1)),int(m.group(2)),int(m.group(3))
+    pre = m.group(4)
+    if not pre: return (a,b,c,1,())
+    ids = tuple((0,int(x)) if x.isdigit() else (1,x) for x in pre.split("."))
+    return (a,b,c,0,ids)
 try:
-    refs = json.load(sys.stdin)
-    tags = [r['ref'].split('/')[-1] for r in refs
-            if r['ref'].startswith('refs/tags/v') and not r['ref'].endswith('{}')]
-    def sv(t):
-        m = re.match(r'v(\d+)\.(\d+)\.(\d+)', t)
-        return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else (0,0,0)
-    print(sorted(tags, key=sv)[-1])
-except: pass
-" 2>/dev/null || echo "")
+    rels = json.load(sys.stdin)
+    ch = os.environ.get("BOATOS_CHANNEL","stable")
+    cand = [r for r in rels if r.get("tag_name","").startswith("v")
+            and not r.get("draft")
+            and (ch=="beta" or not r.get("prerelease"))]
+    if cand:
+        best = max(cand, key=lambda r: key(r["tag_name"]))
+        appso = next((a["browser_download_url"] for a in best.get("assets",[])
+                      if a["name"]=="app.so"), "")
+        print(best["tag_name"]); print(appso)
+except Exception:
+    pass
+' 2>/dev/null || echo "")
 
-if [ -z "$LATEST_TAG" ]; then
-    log "       Konnte neueste Version nicht ermitteln — überspringe Code-Update"
+TARGET_TAG=$(printf '%s' "$RESOLVED" | sed -n 1p)
+APP_URL=$(printf '%s' "$RESOLVED" | sed -n 2p)
+
+if [ -z "$TARGET_TAG" ]; then
+    log "       Konnte kein Release für Kanal '$CHANNEL' ermitteln — überspringe Code-Update"
 else
-    log "       Lade $LATEST_TAG von GitHub..."
-    ARCHIVE_URL="https://github.com/$GITHUB_REPO/archive/refs/tags/$LATEST_TAG.tar.gz"
+    log "       Lade $TARGET_TAG von GitHub..."
+    ARCHIVE_URL="https://github.com/$GITHUB_REPO/archive/refs/tags/$TARGET_TAG.tar.gz"
     if curl -sfL --max-time 120 -o /tmp/boatos_update.tar.gz "$ARCHIVE_URL"; then
         tar -xzf /tmp/boatos_update.tar.gz --strip-components=1 -C "$REPO_DIR"
         rm -f /tmp/boatos_update.tar.gz
-        printf '%s\n' "$LATEST_TAG" > "$REPO_DIR/VERSION"
-        log "       Code aktualisiert auf $LATEST_TAG"
+        printf '%s\n' "$TARGET_TAG" > "$REPO_DIR/VERSION"
+        log "       Code aktualisiert auf $TARGET_TAG"
     else
         log "       Download fehlgeschlagen — überspringe Code-Update"
     fi
@@ -66,15 +85,8 @@ else
     log "       Fertig (system pip)"
 fi
 
-# 3. Download latest app.so from GitHub Releases
-log "[3/6] Lade aktuelle Helm-App (app.so)..."
-RELEASE_JSON=$(curl -sf --max-time 15 \
-    "https://api.github.com/repos/$GITHUB_REPO/releases/latest" || echo "{}")
-APP_URL=$(echo "$RELEASE_JSON" | python3 -c \
-    "import sys,json; d=json.load(sys.stdin); \
-     print(next((a['browser_download_url'] for a in d.get('assets',[]) \
-     if a['name']=='app.so'), ''))" 2>/dev/null || echo "")
-
+# 3. app.so aus DEMSELBEN Release wie der Code (in Schritt 1 aufgelöst)
+log "[3/6] Lade Helm-App (app.so) für Kanal $CHANNEL..."
 if [ -n "$APP_URL" ]; then
     log "       Lade von: $APP_URL"
     curl -sfL --max-time 120 -o "${APP_SO}.tmp" "$APP_URL"
