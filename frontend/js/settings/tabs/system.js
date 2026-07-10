@@ -29,6 +29,20 @@ export const html = `
                         style="display:none; width:100%; padding:12px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-size:15px; font-weight:600; cursor:pointer;">
                         ⬆️ Jetzt aktualisieren
                     </button>
+
+                    <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border);">
+                        <div style="display:flex; align-items:center; justify-content:space-between;">
+                            <span data-i18n="settings_sys_channel" style="font-size:14px; color:var(--text);">Update-Kanal</span>
+                            <select id="system-update-channel" onchange="BoatOS.system.setChannel(this.value)"
+                                style="padding:6px 10px; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:13px; cursor:pointer;">
+                                <option value="stable" data-i18n="settings_sys_channel_stable">Stabil</option>
+                                <option value="beta" data-i18n="settings_sys_channel_beta">Beta (Vorabversionen)</option>
+                            </select>
+                        </div>
+                        <div data-i18n="settings_sys_channel_note" style="font-size:11px; color:var(--text-dim); margin-top:6px;">
+                            Beta liefert Vorabversionen (rc) zum Testen — kann instabil sein.
+                        </div>
+                    </div>
                 </div>
 
                 <div class="setting-group" id="system-update-progress" style="display:none;">
@@ -101,6 +115,8 @@ export function collect(settings) {
 
 export function onShow(ctx) {
     if (window.BoatOS?.system) {
+        const sel = document.getElementById('system-update-channel');
+        if (sel && window.BoatOS.system.getChannel) sel.value = window.BoatOS.system.getChannel();
         window.BoatOS.system.checkVersion();
         window.BoatOS.system.loadHelmStatus();
     }

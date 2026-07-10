@@ -6,6 +6,32 @@ const API = '';
 let _pollTimer = null;
 let _autoCheckTimer = null;
 
+// ── Update-Kanal (stable/beta) ────────────────────────────────────────────
+// Einzige Wahrheit ist settings.system.updateChannel (Backend liest es auch).
+// Wir spiegeln es lokal für sofortige Wirkung ohne globalen Settings-Save.
+export function getChannel() {
+    try {
+        const s = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
+        return s.system?.updateChannel === 'beta' ? 'beta' : 'stable';
+    } catch { return 'stable'; }
+}
+
+export async function setChannel(ch) {
+    ch = ch === 'beta' ? 'beta' : 'stable';
+    try {
+        const s = JSON.parse(localStorage.getItem('boatos_settings') || '{}');
+        s.system = { ...(s.system || {}), updateChannel: ch };
+        localStorage.setItem('boatos_settings', JSON.stringify(s));
+        // Ans Backend spiegeln (auch Helm + Auto-Check nutzen den Kanal)
+        fetch(`${API}/api/settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(s),
+        }).catch(() => {});
+    } catch {}
+    await checkVersion();
+}
+
 function _setBadge(visible) {
     const badge = document.getElementById('update-badge');
     if (badge) badge.style.display = visible ? 'flex' : 'none';
@@ -35,7 +61,7 @@ async function _fetchVersion(updateUI) {
     }
 
     try {
-        const res  = await fetch(`${API}/api/system/version`);
+        const res  = await fetch(`${API}/api/system/version?channel=${getChannel()}`);
         const data = await res.json();
 
         if (updateUI && elCurrent) {
@@ -85,7 +111,11 @@ export async function startUpdate() {
     if (logEl)     logEl.textContent = '';
 
     try {
-        await fetch('/api/system/update', { method: 'POST' });
+        await fetch('/api/system/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channel: getChannel() }),
+        });
     } catch (_) {}
 
     _startPoll();
