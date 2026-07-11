@@ -652,18 +652,8 @@ class DashboardRenderer {
      * Render a widget for use inside a screen slot (no grid-column span needed)
      */
     _renderWidgetFull(widget) {
-        const size = 1; // slot determines size, not the widget
-        switch (widget.type) {
-            case 'sensor':  return this.renderSensorWidget(widget, size);
-            case 'gauge':   return this.renderGaugeWidget(widget, size);
-            case 'chart':   return this.renderChartWidget(widget, size);
-            case 'text':    return this.renderTextWidget(widget, size);
-            case 'spacer':  return this.renderSpacerWidget(widget, size);
-            case 'clock':   return this.renderClockWidget(widget, size);
-            case 'compass': return `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:var(--fs-4xl);">🧭</div>`;
-            case 'horizon': return this.renderHorizonWidget(widget, size);
-            default:        return '';
-        }
+        // slot determines size, not the widget → size 1, slot:true
+        return window.dashWidgets.render(widget, { r: this, size: 1, slot: true });
     }
 
     /**
@@ -802,18 +792,7 @@ class DashboardRenderer {
         const size = widget.size || 1;
         const rh = rowHeight || 1;
 
-        let html;
-        switch (widget.type) {
-            case 'sensor':  html = this.renderSensorWidget(widget, size); break;
-            case 'gauge':   html = this.renderGaugeWidget(widget, size); break;
-            case 'chart':   html = this.renderChartWidget(widget, size); break;
-            case 'text':    html = this.renderTextWidget(widget, size); break;
-            case 'spacer':  html = this.renderSpacerWidget(widget, size); break;
-            case 'clock':   html = this.renderClockWidget(widget, size); break;
-            case 'compass': html = `<div style="grid-column: span ${size}; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:var(--fs-4xl); padding:var(--space-3xl);">🧭</div>`; break;
-            case 'horizon': html = this.renderHorizonWidget(widget, size); break;
-            default: return '';
-        }
+        let html = window.dashWidgets.render(widget, { r: this, size });
         if (rh > 1 && html) {
             html = html.replace(/grid-column: span \d+/, `$&; grid-row: span ${rh}`);
         }

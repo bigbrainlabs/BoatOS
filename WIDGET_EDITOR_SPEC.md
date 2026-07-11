@@ -41,6 +41,8 @@
 | Impact-Feld | Feld des Impact-Sensors (z. B. `aktiv`) |
 
 ### COMPASS
+> **Stand:** aktuell nur Platzhalter-Icon (kein Property-Panel). Zieldefinition:
+
 | Property | Beschreibung |
 |---|---|
 | Sensor | Sensor für Kurs/Heading (base_name) |
@@ -50,6 +52,15 @@
 | Property | Beschreibung |
 |---|---|
 | Text | Statischer Anzeigetext |
+
+### CHART
+| Property | Beschreibung |
+|---|---|
+| Sensor | Sensor-Pfad |
+| Typ (`chart_type`) | line / bar / area |
+| Periode | Zeitraum in Minuten (Standard 60) |
+
+Kein Property-Panel im visuellen Editor (nur per DSL bzw. Sensor-Picker konfigurierbar).
 
 ### CLOCK / SPACER
 
@@ -101,10 +112,43 @@ Alle Sensor-Zuweisungen werden als Felder im Widget-Objekt gespeichert (im DSL/L
 
 ---
 
-## Umsetzung (TODOs)
+## Widget-Registry — der gemeinsame Modul-Contract (Deck ↔ Helm)
 
-- [ ] **DSL-Parser** (Backend): neue Widget-Felder parsen und durchreichen (`rollSensor`, `rollField`, `pitchSensor`, `pitchField`, `impactSensor`, `impactField`, `field` bei Gauge/Sensor)
-- [ ] **Deck — dashboard-editor.js**: Properties-Panel für jeden Widget-Typ vollständig implementieren (alle Felder aus dieser Spec)
-- [ ] **Deck — dashboard_renderer.js**: Widget-Properties aus Layout-JSON lesen statt aus globalen Settings
-- [ ] **Helm — settings_screen.dart**: `_WidgetEditDialog` für alle Widget-Typen vollständig implementieren
-- [ ] **Helm — dashboard_screen.dart**: Widget-Properties aus Layout lesen statt aus SettingsService
+Deck und Helm nutzen **dieselbe Architektur**: ein Widget-Typ = **ein selbst-registrierendes Modul**. Der Render-Code bleibt sprachbedingt getrennt (JS/DOM vs. Flutter/CustomPainter), aber **Struktur, Vertrag und DSL sind identisch**. Ein neues Widget = eine Datei pro Plattform, beide nach demselben Muster, plus (falls neue Felder) der gemeinsame DSL-Parser im Backend.
+
+### Vertrag
+
+| Baustein | Deck (`window.dashWidgets`) | Helm (`DashWidgetRegistry`) |
+|---|---|---|
+| Registrierung | `register({ type, label, render, editor, icon, name, dsl })` | `register(type, label, builder, editor, dsl)` |
+| Anzeige | `render(widget, {r, size})` → HTML | `builder(w, sensors)` → Widget |
+| Property-Panel | `editor(widget, {ed, idx})` → HTML | `editor(w, setState, sensors)` → Widget |
+| DSL-Zeile | `dsl(widget, {withSize})` → String | `dsl(w)` → String |
+| Editor-Liste | `icon(widget, ed)` / `name(widget, ed)` | (aus Sensor/Label abgeleitet) |
+
+### Dateien
+
+- **Deck:** `frontend/js/dashboard/registry.js` (Kern) + `frontend/js/dashboard/widgets/<type>.js` (Module). Einbinden in `frontend/index.html` **vor** `dashboard_renderer.js`. Non-module → Registry liegt auf `window.dashWidgets` (bewusst **nicht** `window.BoatOS`, das `main.js` neu zuweist).
+- **Helm:** `flutter_app/lib/widgets/dashboard/registry.dart` (Kern) + `<type>_widget.dart` (Module), registriert in `registry_init.dart`.
+- **Gemeinsam:** `backend/app/dashboard_dsl.py` ist der kanonische DSL-Parser (Single Source of Truth der Grammatik).
+
+### Casing-Konvention
+
+- **DSL-Keywords werden UPPERCASE emittiert** (`SENSOR`, `GAUGE`, …) und **case-insensitiv geparst** — das ist die kanonische, plattformübergreifende Form.
+- Der Laufzeit-Feldwert `widget.type` ist intern auf dem Deck **klein** (`'sensor'`, wie vom Backend-Parser geliefert), auf Helm **groß**. Die Registry normalisiert Lookups (`normType` → UPPERCASE), sodass beides transparent zusammenpasst. Ein Angleichen der internen Kleinschreibung ist **nicht nötig** und wird bewusst vermieden.
+
+### Ein neues Widget hinzufügen (Rezept)
+
+1. `frontend/js/dashboard/widgets/<type>.js` anlegen → `window.dashWidgets.register({...})` mit `render`, ggf. `editor`/`icon`/`name`/`dsl`.
+2. Script-Tag in `frontend/index.html` (vor `dashboard_renderer.js`) ergänzen.
+3. Helm-Pendant `<type>_widget.dart` + Eintrag in `registry_init.dart`.
+4. Nur falls neue DSL-Felder: `backend/app/dashboard_dsl.py` (Parser) erweitern.
+
+## Status
+
+- [x] **DSL-Parser** (Backend): Widget-Felder werden geparst und durchgereicht (`rollSensor`/`rollField`/`pitchSensor`/`pitchField`/`impactSensor`/`impactField`, `field`, Chart `chart_type`/`period`).
+- [x] **Deck — Registry-Architektur**: `render`/`editor`/`icon`/`name`/`dsl` je Widget im Modul; `dashboard_renderer.js` + `dashboard-editor.js` dispatchen über `window.dashWidgets`. Beide alten `switch`-Blöcke und beide DSL-Serialisierer entfernt.
+- [x] **Deck — Properties-Panel**: `renderProperties()` = gemeinsamer Rahmen + `dashWidgets.buildEditor()`; Typ-Felder leben im Modul.
+- [x] **Helm — Registry** (`DashWidgetRegistry`) als Referenz-Architektur.
+- [ ] **Deck — Screen-Slot-Editor** (`dashboard-editor.js`, Slot-Zuweisung im Screen-Modus): eigener Editor-Kontext mit `setSlotProp`/`setSlotSensor`-Handlern und reduziertem Feldsatz — noch **nicht** auf die Registry migriert. Follow-up: `editor()` handler-parametrisieren, dann auch hier `buildEditor` nutzen.
+- [ ] **COMPASS**: aktuell Platzhalter-Icon auf beiden Plattformen → echtes Kreis-Instrument (Basis fürs Motorboot-Nav-Instrument).

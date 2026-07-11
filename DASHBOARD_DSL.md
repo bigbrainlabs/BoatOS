@@ -2,6 +2,8 @@
 
 Einfache, lesbare Sprache zum Definieren von Dashboard-Layouts in BoatOS.
 
+> **Widget-Architektur:** Jeder Widget-Typ ist ein selbst-registrierendes Modul (Deck: `window.dashWidgets`, Helm: `DashWidgetRegistry`). Die DSL-Serialisierung eines Typs lebt in seinem Modul (`dsl()`), der kanonische Parser ist `backend/app/dashboard_dsl.py`. Details + „neues Widget hinzufügen"-Rezept: siehe [WIDGET_EDITOR_SPEC.md](WIDGET_EDITOR_SPEC.md). DSL-Keywords werden UPPERCASE emittiert und case-insensitiv geparst.
+
 ## Grundkonzept
 
 Das Dashboard ist **grid-basiert** und in **Reihen (ROWS)** organisiert. Jede Reihe enthält **Widgets** (Sensoren, Gauges, Charts).
