@@ -1,35 +1,32 @@
 # Dashboard-Widget-Registry — Deck (JS/Web)
 
-Dieses Dokument beschreibt die Widget-Registry-Architektur des BoatOS Deck-Dashboards (Browser/Web-Frontend). Sie ermöglicht es, neue Dashboard-Widgets als eigenständige JS-Dateien hinzuzufügen, ohne bestehenden Code anzufassen.
+Wie man dem BoatOS-**Deck**-Dashboard (Browser/Web-Frontend) eigene Widgets als eigenständige JS-Dateien hinzufügt — ohne den Renderer oder Editor anzufassen.
+
+> Das Helm-Pendant (Flutter/Dart) ist gleich aufgebaut: [dashboard-widgets.md](dashboard-widgets.md). Ein Widget wird je Plattform einmal geschrieben, beide sprechen dasselbe DSL.
 
 ---
 
 ## Konzept
 
-Jedes Widget registriert sich selbst in `window.DashWidgets` (einem globalen Objekt). Der `DashboardRenderer` und der `DashboardEditor` fragen dort ab, wie ein Widget gerendert, bearbeitet und in DSL serialisiert wird.
+Jeder Widget-Typ ist ein **selbst-registrierendes Modul**. Beim Laden ruft es `window.dashWidgets.register({...})`. Renderer und Editor fragen die Registry ab, wie ein Widget gezeichnet, editiert und in DSL serialisiert wird.
 
 ```
-┌───────────────────────────────────────────────────────────┐
-│                      index.html                           │
-│  <script src="widgets/gauge.js"> etc.  ← vor renderer    │
-└───────────────────┬───────────────────────────────────────┘
-                    │ setzt window.DashWidgets['type'] = ...
-                    ▼
-┌───────────────────────────────────────────────────────────┐
-│            window.DashWidgets  (globales Objekt)          │
-│  'gauge' → { toDSL, renderSlotControls, renderHTML, ... } │
-│  'sensor' → { ... }                                       │
-│  ...                                                      │
-└──────────┬────────────────────────┬───────────────────────┘
-           │                        │
-           ▼                        ▼
-┌─────────────────────┐  ┌──────────────────────────────────┐
-│ dashboard_renderer  │  │  dashboard-editor.js             │
-│ .renderWidget()     │  │  ._widgetToDSLLine()             │
-│ → def.renderHTML()  │  │  → def.toDSL()                   │
-└─────────────────────┘  │  [+ def.renderSlotControls()]    │
-                         └──────────────────────────────────┘
+index.html
+  <script src="js/dashboard/registry.js">          ← Registry-Kern (zuerst)
+  <script src="js/dashboard/widgets/<typ>.js"> …   ← Module (registrieren sich)
+  <script src="dashboard_renderer.js">             ← nutzt window.dashWidgets
+  <script src="js/dashboard-editor.js">
+        │
+        ▼
+window.dashWidgets           (globales Registry-Objekt)
+  register(def) · render(w,ctx) · buildEditor(w,ctx)
+  iconFor / nameFor · toDsl(w,opts) · labelFor / isRegistered
+        │
+        ├─ dashboard_renderer.js  → dashWidgets.render(w, {r, size})
+        └─ dashboard-editor.js    → iconFor/nameFor/buildEditor/toDsl
 ```
+
+> **Wichtig:** Die Registry liegt auf **`window.dashWidgets`** (bewusst *nicht* unter `window.BoatOS` — das wird von `main.js` neu zugewiesen und würde die Registry löschen).
 
 ---
 
@@ -37,268 +34,189 @@ Jedes Widget registriert sich selbst in `window.DashWidgets` (einem globalen Obj
 
 ```
 frontend/
-├── widgets/
-│   ├── gauge.js       ← GAUGE
-│   ├── sensor.js      ← SENSOR
-│   ├── clock.js       ← CLOCK
-│   ├── compass.js     ← COMPASS
-│   ├── text.js        ← TEXT
-│   ├── spacer.js      ← SPACER
-│   └── horizon.js     ← HORIZON
-├── dashboard_renderer.js   ← ruft renderHTML()
-└── js/dashboard-editor.js  ← ruft toDSL() + renderSlotControls()
+├── js/dashboard/
+│   ├── registry.js            ← Registry-Kern (nicht anfassen)
+│   └── widgets/
+│       ├── sensor.js  gauge.js  chart.js  clock.js
+│       ├── text.js    spacer.js horizon.js compass.js
+│       └── <dein-widget>.js    ← neu
+├── dashboard_renderer.js       ← ruft render()
+└── js/dashboard-editor.js      ← ruft iconFor/nameFor/buildEditor/toDsl
 ```
 
 ---
 
-## Widget-Struktur
+## Der Widget-Contract
 
-Jeder Eintrag in `window.DashWidgets` hat diese Form:
+`register()` nimmt ein Objekt. Nur `type`, `label` und `render` sind Pflicht:
 
 ```js
-window.DashWidgets = window.DashWidgets || {};
-window.DashWidgets['mein'] = {
-  type:     'mein',          // Kleinbuchstaben, passend zum DSL-Schlüssel
-  label:    'Mein Widget',   // Anzeigename im Editor
+window.dashWidgets.register({
+  type:  'MEIN',              // kanonisch GROSS (wie das DSL-Keyword)
+  label: 'Mein Widget',       // Anzeigename im Editor
 
-  defaults: {
-    type: 'mein',
-    size: 1,
-    // weitere Felder mit Standardwerten
-  },
-
-  toDSL(w) { ... },                             // w → DSL-String
-  renderSlotControls(slot, w, sensors) { ... }, // Editor-Controls (HTML-String)
-  renderHTML(widget, size) { ... },             // Rendering (HTML-String)
-};
+  render(widget, ctx)  { … }, // → HTML-String  (Pflicht)
+  editor(widget, ctx)  { … }, // → HTML der Property-Felder (optional)
+  icon(widget, ed)     { … }, // → Emoji für die Editor-Liste (optional)
+  name(widget, ed)     { … }, // → Anzeigename in der Editor-Liste (optional)
+  dsl(widget, opts)    { … }, // → DSL-Zeile (optional, sonst nicht speicherbar)
+});
 ```
 
-### `toDSL(w)` — DSL-Serialisierung
+### `render(widget, ctx)` — Darstellung → HTML-String
 
-Gibt die DSL-Zeile für das Widget zurück (ohne führenden Zeilenumbruch):
-
-```js
-toDSL(w) {
-  let dsl = `  MEIN ${w.sensor || ''}`;
-  if (w.size && w.size > 1) dsl += ` SIZE ${w.size}`;
-  return dsl;
-},
-```
-
-Wird aufgerufen von `DashboardEditor._widgetToDSLLine()`.
-
-### `renderSlotControls(slot, w, sensors)` — Editor-Formular
-
-Gibt einen HTML-String zurück, der die widget-spezifischen Konfigurationsfelder enthält. Live-Änderungen werden per `window.dashboardEditor.updateWidget()` weitergegeben:
+`ctx = { r, size, slot }`:
+- `ctx.r` — die `DashboardRenderer`-Instanz (Sensordaten `ctx.r.sensors`, Helfer wie `ctx.r.getSensorValue(path)`, `ctx.r.generateId(prefix)`, `ctx.r.formatValue(...)`).
+- `ctx.size` — Breite in Grid-Spalten. **`grid-column: span ${ctx.size}` ist Pflicht** im äußersten Element (außer im Screen-Slot, s.u.).
+- `ctx.slot` — `true`, wenn in einem Screen-Slot gerendert (dann meist ohne `grid-column`-span).
 
 ```js
-renderSlotControls(slot, w, sensors) {
-  const cur = w.sensor || '';
+render(widget, ctx) {
+  const val = ctx.r.getSensorValue(widget.sensor) ?? '–';
   return `
-    <div style="margin-top:8px">
-      <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">
-        Sensor
-      </label>
-      <select onchange="window.dashboardEditor.updateWidget(${slot},'sensor',this.value)"
-              style="width:100%;padding:6px;background:var(--bg-card);
-                     border:1px solid var(--border);border-radius:6px;
-                     color:var(--text);font-size:12px">
-        <option value="">-- keiner --</option>
-        ${sensors.map(s => `
-          <option value="${s.base_name}" ${cur === s.base_name ? 'selected' : ''}>
-            ${s.name || s.base_name}
-          </option>
-        `).join('')}
+    <div class="gauge-widget" style="grid-column: span ${ctx.size};">
+      <span data-sensor-path="${widget.sensor}">${val}</span>
+    </div>`;
+}
+```
+
+**Live-Updates:** `render()` läuft nur beim (Neu-)Aufbau. Für Sekunden-Updates eigene `data-*`-Attribute setzen — `DashboardRenderer.updateValues()` (1 s-Takt) schreibt neue Werte hinein, ohne `render()` erneut aufzurufen:
+
+```
+data-sensor-path="boot/batterie/spannung"  → Wert wird ersetzt
+data-gauge-path="…" data-min="0" data-max="100" data-style="arc270" → Gauge-Nadel/Arc
+```
+
+Für Canvas-Instrumente gibt es ein eigenes Muster (s. „Fortgeschritten").
+
+### `editor(widget, ctx)` — Property-Panel → HTML-String
+
+`ctx = { ed, idx }`. `ed` ist der `DashboardEditor` (`ed.sensors`, `ed.sensorGroups`, Helfer wie `ed._renderSensorFieldCheckboxes(idx, w)`), `idx` der Widget-Index. Änderungen laufen über `window.dashboardEditor.updateWidget(idx, prop, value)` (schreibt ins Widget + re-rendert sofort):
+
+```js
+editor(w, ctx) {
+  return `
+    <div>
+      <label>Sensor</label>
+      <select onchange="window.dashboardEditor.updateWidget(${ctx.idx},'sensor',this.value)">
+        <option value="">— keiner —</option>
+        ${(ctx.ed.sensorGroups||[]).map(s =>
+          `<option value="${s.base_name}" ${w.sensor===s.base_name?'selected':''}>${s.name}</option>`
+        ).join('')}
       </select>
-    </div>
-  `;
-},
+    </div>`;
+}
 ```
 
-- `slot`: Index des Widgets im Editor-Array (für `updateWidget`)
-- `w`: aktuelles Widget-Objekt (aus `editor.widgets[slot]`)
-- `sensors`: Array aus `/api/sensors/list` → `[{ base_name, name, values, ... }, ...]`
-- `window.dashboardEditor.updateWidget(slot, prop, value)` aktualisiert das Widget und re-rendert den Editor sofort
+Der gemeinsame Rahmen (Typ-Badge, Reihe, Farbe, Verschieben) kommt automatisch — `editor()` liefert nur die **typ-spezifischen** Felder. Ohne `editor()` hat das Widget nur die gemeinsamen Felder.
 
-### `renderHTML(widget, size)` — Darstellung
+### `dsl(widget, opts)` — Serialisierung → DSL-Zeile
 
-Gibt einen vollständigen HTML-String für die Darstellung im Dashboard zurück. `grid-column: span ${size}` ist Pflicht:
+`opts.withSize` = `true` im Grid-Modus (dann `SIZE` anhängen), `false` im Screen-Slot. **Keyword GROSS.** Ohne `dsl()` lässt sich das Widget nicht speichern.
 
 ```js
-renderHTML(widget, size) {
-  const val = (widget._liveValues && widget._liveValues[widget.sensor]) || '--';
-  return `
-    <div style="
-      grid-column: span ${size};
-      background: radial-gradient(ellipse at 30% 20%,
-        rgba(40,80,140,0.7), rgba(15,25,50,0.85));
-      border: 2px solid rgba(100,180,255,0.2);
-      border-radius: var(--radius-xl);
-      padding: var(--space-3xl);
-      display: flex; align-items: center; justify-content: center;
-      color: var(--accent); font-size: var(--fs-4xl); font-weight: 700;
-    ">
-      <span data-sensor="${widget.sensor}">${val}</span>
-    </div>
-  `;
-},
+dsl(w, o) {
+  let line = `MEIN ${w.sensor || ''}`.trim();
+  if (o.withSize && w.size > 1) line += ` SIZE ${w.size}`;
+  if (w.color && w.color !== 'cyan') line += ` COLOR ${w.color}`;
+  return line;
+}
 ```
 
-Für Live-Updates füge `data-sensor="..."` oder `data-gauge-path="..."` Attribute ein —  
-`DashboardRenderer.updateValues()` schreibt neue Werte in Elemente mit diesen Attributen.
+### `icon(widget, ed)` / `name(widget, ed)`
 
----
-
-## Vollständiges Beispiel
-
-Datei: `frontend/widgets/mein.js`
-
-```js
-window.DashWidgets = window.DashWidgets || {};
-window.DashWidgets['mein'] = {
-    type: 'mein',
-    label: 'Mein Widget',
-    defaults: { type: 'mein', sensor: '', size: 1, color: 'cyan' },
-
-    toDSL(w) {
-        let dsl = `  MEIN ${w.sensor || ''}`;
-        if (w.size && w.size > 1) dsl += ` SIZE ${w.size}`;
-        if (w.color && w.color !== 'cyan') dsl += ` COLOR ${w.color}`;
-        return dsl;
-    },
-
-    renderSlotControls(slot, w, sensors) {
-        const cur = w.sensor || '';
-        const color = w.color || 'cyan';
-        return `
-            <div style="margin-top:8px">
-                <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Sensor</label>
-                <select onchange="window.dashboardEditor.updateWidget(${slot},'sensor',this.value)"
-                        style="width:100%;padding:6px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
-                    <option value="">-- keiner --</option>
-                    ${sensors.map(s => `
-                        <option value="${s.base_name}" ${cur === s.base_name ? 'selected' : ''}>
-                            ${s.name || s.base_name}
-                        </option>
-                    `).join('')}
-                </select>
-            </div>
-            <div style="margin-top:8px">
-                <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Farbe</label>
-                <div style="display:flex;gap:6px;flex-wrap:wrap">
-                    ${['cyan','blue','green','orange','purple','red','yellow'].map(c => `
-                        <div onclick="window.dashboardEditor.updateWidget(${slot},'color','${c}')"
-                             style="width:24px;height:24px;border-radius:5px;cursor:pointer;
-                                    background:var(--${c==='cyan'?'accent':c});
-                                    border:2px solid ${color===c?'white':'transparent'}"></div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
-    },
-
-    renderHTML(widget, size) {
-        const colorMap = {
-            cyan: '#64ffda', blue: '#3498db', orange: '#e67e22',
-            green: '#2ecc71', purple: '#9b59b6', red: '#e74c3c', yellow: '#f1c40f'
-        };
-        const color = colorMap[widget.color || 'cyan'] || colorMap.cyan;
-        return `
-            <div style="
-                grid-column: span ${size};
-                background: radial-gradient(ellipse at 30% 20%, rgba(40,80,140,0.7), rgba(15,25,50,0.85));
-                border: 2px solid rgba(100,180,255,0.2);
-                border-radius: var(--radius-xl);
-                padding: var(--space-3xl);
-                display: flex; align-items: center; justify-content: center;
-                font-size: var(--fs-4xl); font-weight: 700; color: ${color};
-            ">
-                <span data-sensor="${widget.sensor || ''}">--</span>
-            </div>
-        `;
-    },
-};
-```
+Emoji + Name in der Editor-Widget-Liste. Fehlen sie, gilt `📦` bzw. der Typ.
 
 ---
 
 ## Neues Widget einbinden — Schritt für Schritt
 
-### 1. Widget-Datei anlegen
+**1. Modul anlegen** `frontend/js/dashboard/widgets/mein.js`:
 
-`frontend/widgets/mein.js` mit der obigen Struktur anlegen.
-
-### 2. In index.html eintragen
-
-Die `<script>`-Tags der Widget-Dateien müssen **vor** `dashboard_renderer.js` und `dashboard-editor.js` stehen:
-
-```html
-<!-- Dashboard Widgets Registry -->
-<script src="widgets/gauge.js"></script>
-<script src="widgets/sensor.js"></script>
-<script src="widgets/clock.js"></script>
-<script src="widgets/compass.js"></script>
-<script src="widgets/text.js"></script>
-<script src="widgets/spacer.js"></script>
-<script src="widgets/horizon.js"></script>
-<script src="widgets/mein.js"></script>   <!-- ← hinzufügen -->
+```js
+(function () {
+  'use strict';
+  window.dashWidgets.register({
+    type: 'MEIN',
+    label: 'Mein Widget',
+    render: (w, ctx) => `<div class="gauge-widget" style="grid-column: span ${ctx.size};">…</div>`,
+    icon:  () => '🧩',
+    name:  (w) => 'Mein Widget',
+    dsl:   (w, o) => 'MEIN' + (o.withSize && w.size > 1 ? ` SIZE ${w.size}` : ''),
+    // editor: (w, ctx) => `…`,   // optional
+  });
+})();
 ```
 
-### 3. DSL-Parser erweitern (falls nötig)
+**2. In `frontend/index.html` einbinden** — **vor** `dashboard_renderer.js`, nach `registry.js`:
 
-Der Renderer und Editor delegieren Rendering/Serialisierung vollständig an die Registry. Der DSL-Parser (`dashboard_renderer.js` → `parseDSL()`) muss nur erweitert werden, wenn das neue Widget eigene DSL-Schlüsselwörter einführt, die der Parser noch nicht kennt.
+```html
+<script src="js/dashboard/registry.js"></script>
+<script src="js/dashboard/widgets/sensor.js"></script>
+…
+<script src="js/dashboard/widgets/mein.js"></script>   <!-- ← neu -->
+<script src="dashboard_renderer.js"></script>
+```
+
+**3. Im Editor sichtbar machen** (optional): Eintrag in der „Spezial"-Liste des Add-Panels in `js/dashboard-editor.js`.
+
+**4. DSL-Parser** (`backend/app/dashboard_dsl.py`) nur erweitern, wenn das Widget **neue** DSL-Keywords/-Felder einführt. Der Parser ist die kanonische Grammatik-Quelle (case-insensitiv). Für ein simples `MEIN <sensor> SIZE n` genügt ein `_parse_*`-Zweig analog `_parse_compass`.
+
+`dashboard_renderer.js` und `dashboard-editor.js` müssen für neue Typen **nicht** geändert werden.
 
 ---
 
-## Sensor-Daten im renderHTML-Kontext
+## Fortgeschritten: Canvas-Instrument mit Backend-/Live-Daten
 
-`renderHTML` wird beim initialen Rendern aufgerufen — Sensor-Werte sind zu diesem Zeitpunkt noch nicht vorhanden. Für Live-Updates nutze `data-*`-Attribute:
+Das **Navi-Instrument** (`js/dashboard/widgets/compass.js` → `dashboard_renderer.js`-Methoden) zeigt das Muster für ein Widget, das nicht aus dem `sensors`-Map lebt, sondern aus GPS + einem Backend-Endpoint, und auf Canvas zeichnet:
 
-```
-data-sensor="boot/batterie"          → DashboardRenderer schreibt ersten numerischen Wert
-data-gauge-path="gauge-arc-123"      → SVG-Pfad für Gauge-Arc
-data-gauge-needle="gauge-needle-123" → SVG-Element für Nadel
-```
+- **Hülle:** `render()` gibt einen Container mit `<canvas data-nav-instrument>` zurück (kein `data-sensor-path`).
+- **Zeichnen:** eine `drawX(canvas)`-Methode am Renderer, alles relativ zur Kantenlänge `s` (Proportionen bleiben beim Skalieren). Canvas-Größe aus dem Eltern-Container (`min(clientWidth, clientHeight)`), **nicht** `canvas.offsetWidth` (bleibt auf 300 hängen).
+- **Anstoßen:** in `render()`s `requestAnimationFrame` + in `updateValues()` (1 s) ein `_drawX()` aufrufen, das alle `[data-nav-instrument] canvas` neu dimensioniert und zeichnet.
+- **Backend-Daten:** throttled fetchen (z. B. max 1×/5 s, sonst hämmert es das Backend — siehe die pegelonline-Vollload-Falle) und das Ergebnis auf `window.BoatOS.context` ablegen, das der Painter liest.
 
-`DashboardRenderer.updateValues(sensors)` aktualisiert alle Elemente mit diesen Attributen im DOM — ohne `renderHTML` erneut aufzurufen.
+Live-Werte, die andere Module setzen (GPS SOG/COG, Restweg/Peilung), liegen auf `window.BoatOS.context` (von `main.js`/`navigation.js` gepflegt).
 
-Die `sensors`-Map in `renderSlotControls` hat die Struktur (aus `/api/sensors/list`):
+---
+
+## Sensor-Daten-Format
+
+`ctx.r.sensors` bzw. `ctx.ed.sensorGroups` (aus `/api/sensors/list`):
 
 ```js
-[
-  {
-    base_name: "boot/batterie",
-    name:      "Batterie",
-    unit:      "V",
-    values:    { "spannung": "12.6", "strom": "3.2" }
-  },
-  ...
-]
+{
+  "boot/batterie": {
+    base_name: "boot/batterie", name: "Batterie", unit: "V",
+    values: { spannung: "12.6", strom: "3.2" }
+  }, …
+}
 ```
+
+`ctx.r.getSensorValue(path)` löst `base_name` **oder** `base_name/feld` auf (erster numerischer Wert bei fehlendem Feld).
 
 ---
 
 ## Vorhandene Widget-Typen
 
-| Datei         | Typ      | DSL-Schlüssel | Besonderheiten                         |
-|---------------|----------|---------------|----------------------------------------|
-| `gauge.js`    | `gauge`  | `GAUGE`       | arc270/arc180/arc360/bar, SVG, Nadel   |
-| `sensor.js`   | `sensor` | `SENSOR`      | card/compact/minimal, Einheit, Alias   |
-| `clock.js`    | `clock`  | `CLOCK`       | Systemzeit, kein Sensor                |
-| `compass.js`  | `compass`| `COMPASS`     | Platzhalter, kein Sensor               |
-| `text.js`     | `text`   | `TEXT`        | Freitext, Stil (title/subtitle/normal) |
-| `spacer.js`   | `spacer` | `SPACER`      | Unsichtbar, nur SIZE                   |
-| `horizon.js`  | `horizon`| `HORIZON`     | Platzhalter (Horizont)                 |
+| Modul        | Typ        | DSL        | Besonderheit                                   |
+|--------------|------------|------------|------------------------------------------------|
+| `sensor.js`  | `SENSOR`   | `SENSOR`   | card/compact/minimal/hero, Feld-Auswahl, Alias |
+| `gauge.js`   | `GAUGE`    | `GAUGE`    | arc180/270/360/bar, SVG, Min/Max/Einheit/Dez.  |
+| `chart.js`   | `CHART`    | `CHART`    | Zeitreihe (line/bar/area), Periode             |
+| `clock.js`   | `CLOCK`    | `CLOCK`    | Uhrzeit/Datum, kein Sensor                     |
+| `text.js`    | `TEXT`     | `TEXT`     | Freitext, Stil title/subtitle/normal           |
+| `spacer.js`  | `SPACER`   | `SPACER`   | unsichtbar, nur SIZE                           |
+| `horizon.js` | `HORIZON`  | `HORIZON`  | künstlicher Horizont (Canvas), roll/pitch/impact |
+| `compass.js` | `COMPASS`  | `COMPASS`  | Navi-Master-Instrument (Canvas + Backend-Daten) |
 
 ---
 
 ## Dateiübersicht
 
-| Datei                        | Ändern wenn…                                            |
-|------------------------------|---------------------------------------------------------|
-| `frontend/widgets/*.js`      | Ein Widget geändert oder neu hinzugefügt wird           |
-| `frontend/index.html`        | Ein neues Widget-Script eingebunden werden muss         |
-| `frontend/dashboard_renderer.js` | Das Rendering-Framework erweitert werden muss       |
-| `frontend/js/dashboard-editor.js` | Der Editor neue Widget-Typen im Typ-Picker zeigen soll |
-
-`dashboard_renderer.js` und `dashboard-editor.js` müssen für neue Widget-Typen **nicht** geändert werden — nur `index.html` und die neue Widget-Datei.
+| Datei                              | Ändern wenn…                                  |
+|------------------------------------|-----------------------------------------------|
+| `js/dashboard/widgets/*.js`        | ein Widget geändert/neu hinzugefügt wird      |
+| `frontend/index.html`              | ein neues Widget-Script eingebunden wird      |
+| `js/dashboard/registry.js`         | die Registry-Schnittstelle selbst ändern      |
+| `js/dashboard-editor.js`           | ein neuer Typ im Add-Picker erscheinen soll   |
+| `backend/app/dashboard_dsl.py`     | neue DSL-Keywords/-Felder geparst werden      |

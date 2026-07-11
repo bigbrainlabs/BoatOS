@@ -2,6 +2,8 @@
 
 Dieses Dokument beschreibt die Widget-Registry-Architektur des BoatOS Helm-Dashboards (Flutter). Sie ermöglicht es, neue Dashboard-Widgets als eigenständige Dart-Dateien hinzuzufügen, ohne bestehenden Code anzufassen.
 
+> Das Deck-Pendant (JS/Web) ist gleich aufgebaut: [dashboard-widgets-deck.md](dashboard-widgets-deck.md). Ein Widget wird je Plattform einmal geschrieben, beide sprechen dasselbe DSL (`backend/app/dashboard_dsl.py`).
+
 ---
 
 ## Konzept
@@ -255,6 +257,45 @@ Die Hilfsfunktion `dashGetValue(sensors, path)` aus `gauge_widget.dart` deckt de
 
 ---
 
+## Fortgeschritten: Live-Daten (GPS/Backend/Route) + CustomPainter
+
+Manche Widgets leben nicht aus dem MQTT-`sensors`-Map, sondern aus GPS, der aktiven Route oder einem Backend-Endpoint und zeichnen selbst. Dann gibt `build()` einen **StatefulWidget** zurück, der Provider konsumiert und ggf. das Backend pollt. Vorbild: `compass_widget.dart` (Navi-Master-Instrument).
+
+Verfügbare Provider (in `main.dart` registriert, App-weit):
+
+```dart
+// GPS live (lat/lon, speed in Knoten, heading in Grad)
+final gps = context.watch<WebSocketService>().gps;   // GpsData?  → gps?.lat, gps?.speed, …
+
+// Einheiten aus den Settings
+final s = context.watch<SettingsService>();
+final kmh = s.isKmh;   // Geschwindigkeit km/h vs. kn
+final km  = s.isKm;    // Distanz km vs. NM
+
+// Aktive Route-Polyline (Backend-broadcast, Deck ↔ Helm-synchron) → Restweg/Peilung
+final coords = context.watch<WebSocketService>().route;  // List<[lat, lon]>, leer = keine Route
+```
+
+Backend-Daten throttled holen (sonst hämmert ein fahrendes Boot das Backend — s. pegelonline-Vollload-Falle):
+
+```dart
+Timer.periodic(const Duration(seconds: 2), (_) {
+  final gps = context.read<WebSocketService>().gps;
+  if (gps == null || _busy || now - _last < const Duration(seconds: 5)) return;
+  _busy = true; _last = now;
+  http.get(Uri.parse('http://localhost:8000/api/nav/point?lat=${gps.lat}&lon=${gps.lon}'))
+      .timeout(const Duration(seconds: 12))
+      .then((r) { if (mounted) setState(() => _data = jsonDecode(r.body)); })
+      .catchError((_) {}).whenComplete(() => _busy = false);
+});
+```
+
+Gezeichnet wird per `CustomPainter` (alles relativ zur Kantenlänge `s`, damit die Proportionen beim Skalieren bleiben) in einem `LayoutBuilder` → `CustomPaint`. Den Rahmen (Card) bringt jedes Widget selbst mit — `Container(decoration: BoxDecoration(color: 0xFF161B22, borderRadius: 12, border: 0xFF30363D))`.
+
+> Die aktive Route ist Backend-State: Deck **und** Helm posten sie bei jeder Änderung an `POST /api/nav/route`, das Backend broadcastet `route_update` an alle WS-Clients. Der `WebSocketService` hält sie (`route`-Getter) — so ist die Route plattformübergreifend synchron (Instrument + Karten-Linie).
+
+---
+
 ## Vorhandene Editor-Sub-Widgets
 
 Alle in `gauge_widget.dart` (Dashboard-Ordner) definiert:
@@ -277,5 +318,6 @@ Alle in `gauge_widget.dart` (Dashboard-Ordner) definiert:
 | `dash_widget.dart`     | Das Datenmodell neue Felder braucht                 |
 | `dashboard_screen.dart`| DSL-Parser für neue Schlüsselwörter erweitern       |
 | `*_widget.dart`        | Das jeweilige Widget geändert/erweitert wird        |
+| `services/websocket_service.dart` / `main.dart` | Ein neues Widget App-weite Live-Daten (GPS/Route/Provider) braucht |
 
 Weder `dashboard_screen.dart` noch `settings_screen.dart` müssen für neue Widget-Typen geändert werden — nur `registry_init.dart` und die neue Widget-Datei.
