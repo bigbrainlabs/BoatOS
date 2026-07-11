@@ -136,6 +136,18 @@ sudo iw dev "${IFACE:-wlan0}" set power_save off 2>/dev/null || true
 sudo systemctl reload NetworkManager 2>/dev/null || true
 log "       WiFi Power Management deaktiviert"
 
+# DNS-Falle beheben: NetworkManager darf /etc/resolv.conf NICHT verwalten
+# (dns=none). Sonst überschreibt NM bei getrenntem wlan0 die eth0-Nameserver
+# von dhcpcd mit einer leeren resolv.conf → DNS tot nach jedem Boot/Update.
+log "[4b] DNS-Verwaltung fixieren (dhcpcd exklusiv, NM dns=none)..."
+sudo cp "$REPO_DIR/scripts/boatos-dns-none.conf" /etc/NetworkManager/conf.d/10-boatos-dns.conf
+# Öffentlicher DNS-Fallback: dhcpcd hängt resolv.conf.tail an jede resolv.conf
+# an — greift, falls der Router-DNS mal nicht erreichbar ist.
+printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' | sudo tee /etc/resolv.conf.tail > /dev/null
+sudo systemctl reload NetworkManager 2>/dev/null || true
+sudo systemctl restart dhcpcd 2>/dev/null || true
+log "       DNS fixiert (NM dns=none, dhcpcd + Fallback 1.1.1.1/8.8.8.8)"
+
 # 5a. Ensure nginx upload limit and timeouts are sufficient for large mbtiles uploads
 log "[5a] Prüfe nginx-Konfiguration für Upload..."
 NGINX_CONF=/etc/nginx/sites-available/boatos
