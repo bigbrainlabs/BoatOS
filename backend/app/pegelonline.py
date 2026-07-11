@@ -169,7 +169,17 @@ class PegelOnline:
         Kanalpegel haben keine characteristicValues und fallen automatisch
         raus — dort gilt die Kartentiefe direkt. BLOCKING.
         """
-        cache_key = "reflevels_" + self._get_cache_key(lat_min, lon_min, lat_max, lon_max)
+        # Der API-Call lädt IMMER alle Stationen (Bbox wird nur clientseitig
+        # gefiltert). Deshalb die teure Vollliste EINMAL cachen (bbox-unabhängig)
+        # und hier nur filtern — sonst lädt ein fahrendes Boot die komplette
+        # DE-Pegel-DB bei jeder Position neu (Backend-Hang).
+        all_refs = self._all_reference_levels()
+        return [r for r in all_refs
+                if lat_min <= r['lat'] <= lat_max and lon_min <= r['lon'] <= lon_max]
+
+    def _all_reference_levels(self) -> List[Dict[str, Any]]:
+        """Alle deutschen Referenz-Pegel (MNW) — einmal geladen + gecacht. BLOCKING."""
+        cache_key = "reflevels_all"
         if self._is_cache_valid(cache_key):
             return self.cache[cache_key]['data']
 
@@ -187,8 +197,6 @@ class PegelOnline:
             for station in response.json():
                 lat, lon = station.get('latitude'), station.get('longitude')
                 if not lat or not lon:
-                    continue
-                if not (lat_min <= lat <= lat_max and lon_min <= lon <= lon_max):
                     continue
                 w_series = next((ts for ts in station.get('timeseries', [])
                                  if ts.get('shortname') == 'W'), None)
@@ -208,7 +216,7 @@ class PegelOnline:
                 })
 
             self.cache[cache_key] = {'data': refs, 'timestamp': datetime.now()}
-            print(f"✅ {len(refs)} Referenz-Pegel (MNW) für Tiefen-Check geladen")
+            print(f"✅ {len(refs)} Referenz-Pegel (MNW) geladen (gecacht)")
             return refs
         except Exception as e:
             print(f"⚠️ Referenz-Pegel konnten nicht geladen werden: {e}")

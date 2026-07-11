@@ -24,6 +24,17 @@ import { t } from './i18n.js';
 // Route-Koordinaten für XTE-Berechnung
 let currentRouteCoordinates = null;
 
+// Aktive Route ans Backend melden → Broadcast an alle Clients (Deck ↔ Helm-Sync).
+function _publishActiveRoute() {
+    const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
+    const coords = (currentRouteCoordinates || []).map(c => [c.lat, c.lon]);
+    fetch(`${apiUrl}/api/nav/route`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coords }),
+    }).catch(() => {});
+}
+
 // Routen-Farbe für Segment-Hervorhebung
 let currentRouteColor = '#3498db';
 
@@ -900,6 +911,7 @@ function drawWaterwayRoute(routeData, context) {
 
     // Route-Koordinaten für XTE-Berechnung speichern
     currentRouteCoordinates = routeCoords.map(c => ({ lat: c[1], lon: c[0] }));
+    _publishActiveRoute();
     currentRouteColor = routeColor;
 
     // Distanz und ETA berechnen
@@ -1013,6 +1025,7 @@ export function drawDirectRoute(context) {
 
     // Route-Koordinaten für XTE-Berechnung speichern
     currentRouteCoordinates = points.map(p => ({ lat: p[0], lon: p[1] }));
+    _publishActiveRoute();
     currentRoutePolyline = { options: { originalColor: '#3498db' } };
 
     let totalDistance = 0;
@@ -1121,6 +1134,7 @@ export function clearRouteDisplay(context) {
 
     // Route-Pfeile entfernen
     currentRouteCoordinates = null;
+    _publishActiveRoute();
 
     const currentBadge = document.getElementById('route-current-badge');
     if (currentBadge) currentBadge.style.display = 'none';
@@ -1357,6 +1371,7 @@ export function clearRoute(context) {
 
     // Route-Daten zurücksetzen
     currentRouteCoordinates = null;
+    _publishActiveRoute();
     currentRoutePolyline = null;
     currentRouteData = {
         totalDistanceNM: 0,
@@ -1674,6 +1689,7 @@ export function updateLiveETA(context) {
     if (!hasRoute || !currentPosition || !currentPosition.lat || !currentPosition.lon) {
         const liveEtaDisplay = document.getElementById('live-eta-display');
         if (liveEtaDisplay) liveEtaDisplay.style.display = 'none';
+        if (window.BoatOS && window.BoatOS.context) window.BoatOS.context.nav = null;
         return;
     }
 
@@ -1706,6 +1722,20 @@ export function updateLiveETA(context) {
     // Live: Basis immer "jetzt" — bereits gefahrene Zeit ist schon aus dem Tageslimit verbraucht
     const eta = calculateETA(remainingDistanceNM, currentSpeed, new Date());
     const arrivalTimeStr = formatArrivalTime(eta.arrivalTime);
+
+    // Restweg + Peilung (zum Ziel) + ETA für Widgets (Navi-Instrument) bereitstellen
+    if (window.BoatOS && window.BoatOS.context) {
+        const dest = waypoints[waypoints.length - 1];
+        // Wegpunkte tragen .lon (nicht .lng) — sonst NaN
+        const destLon = dest ? (dest.lon != null ? dest.lon : dest.lng) : null;
+        const brg = (dest && destLon != null)
+            ? Math.round(calculateBearing(currentLat, currentLon, dest.lat, destLon)) : null;
+        window.BoatOS.context.nav = {
+            remainingM,
+            etaText: arrivalTimeStr,
+            bearing: (typeof brg === 'number' && !isNaN(brg)) ? brg : null,
+        };
+    }
 
     // --- Header: ETA als Ankunftszeit ---
     const etaEl = document.getElementById('eta-value');

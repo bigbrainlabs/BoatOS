@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 class GpsData {
@@ -43,9 +44,11 @@ class WebSocketService extends ChangeNotifier {
   WebSocketChannel? _channel;
   GpsData? _gps;
   bool _connected = false;
+  List<List<double>> _route = const []; // aktive Route [[lat, lon], ...]
 
   GpsData? get gps => _gps;
   bool get connected => _connected;
+  List<List<double>> get route => _route; // vom Backend broadcastet (Deck ↔ Helm)
 
   void connect() {
     try {
@@ -56,9 +59,26 @@ class WebSocketService extends ChangeNotifier {
         onError: (_) => _scheduleReconnect(),
         onDone: _scheduleReconnect,
       );
+      _fetchInitialRoute(); // aktuelle Route beim (Re-)Connect nachladen
     } catch (_) {
       _scheduleReconnect();
     }
+  }
+
+  static List<List<double>> _parseCoords(dynamic raw) {
+    final list = (raw as List?) ?? const [];
+    return list
+        .map<List<double>>((p) => [(p[0] as num).toDouble(), (p[1] as num).toDouble()])
+        .toList();
+  }
+
+  void _fetchInitialRoute() {
+    http.get(Uri.parse('http://localhost:8000/api/nav/route'))
+        .timeout(const Duration(seconds: 5))
+        .then((r) {
+      _route = _parseCoords((json.decode(r.body))['coords']);
+      notifyListeners();
+    }).catchError((_) {});
   }
 
   void _onMessage(dynamic raw) {
@@ -68,6 +88,9 @@ class WebSocketService extends ChangeNotifier {
       if ((data['type'] == 'gps_update' || data['type'] == 'gps') &&
           data['data'] != null) {
         _gps = GpsData.fromJson(data['data'] as Map<String, dynamic>);
+        notifyListeners();
+      } else if (data['type'] == 'route_update' && data['data'] != null) {
+        _route = _parseCoords(data['data']['coords']);
         notifyListeners();
       }
     } catch (_) {}

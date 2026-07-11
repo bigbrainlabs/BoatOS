@@ -175,6 +175,28 @@ async def broadcast_gps_data():
     # Remove disconnected clients
     websocket_clients.difference_update(disconnected)
 
+
+# ── Aktive Route (geteilt über alle Clients) — [[lat, lon], ...] ──────────────
+current_route = []
+
+def set_route(coords):
+    global current_route
+    current_route = coords or []
+
+async def broadcast_route():
+    """Aktive Route an alle WebSocket-Clients broadcasten (Deck ↔ Helm-Sync)."""
+    if not websocket_clients:
+        return
+    message = json.dumps({'type': 'route_update', 'data': {'coords': current_route}})
+    disconnected = set()
+    for ws in websocket_clients:
+        try:
+            await ws.send_text(message)
+        except Exception:
+            disconnected.add(ws)
+    websocket_clients.difference_update(disconnected)
+
+
 def get_gps_status():
     """Get current GPS status"""
     return {

@@ -403,6 +403,10 @@ class DashboardRenderer {
             if (dateEl) dateEl.textContent = now.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
         });
 
+        // Update navigation instruments (COMPASS) — SOG/COG live neu zeichnen
+        this._maybeFetchNavPoint();
+        this._drawNavInstruments();
+
         // Update horizon widgets — only set targets; RAF loop does the drawing
         document.querySelectorAll('[data-horizon-roll-path]').forEach(container => {
             const rollPath   = container.dataset.horizonRollPath;
@@ -600,7 +604,7 @@ class DashboardRenderer {
             }
         }
         // Canvas widgets need a full layout frame before their parent sizes resolve.
-        requestAnimationFrame(() => this._initHorizonCanvases());
+        requestAnimationFrame(() => { this._initHorizonCanvases(); this._drawNavInstruments(); });
     }
 
     /**
@@ -1730,6 +1734,233 @@ class DashboardRenderer {
             const dim = Math.max(10, Math.min(pw, ph) || cv.offsetWidth || cv.offsetHeight || 200);
             cv.width = dim; cv.height = dim;
             this.drawHorizonCanvas(cv, roll, pitch);
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // COMPASS → Navigations-Master-Instrument (Motorboot)
+    // Runde Rose (North-up) + COG-Zeiger + großer SOG-Mittelwert + 4 Eck-Boxen.
+    // Segel/Wind/Polar erst v2/v3. Alles per Canvas (kohärente Optik).
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** HTML-Hülle für das Navi-Instrument (Canvas quadratisch, wie Horizont). */
+    renderCompassInstrument(widget, size) {
+        const navId = this.generateId('nav');
+        return `
+            <div class="gauge-widget" data-nav-instrument
+                 style="grid-column: span ${size}; height:100%; min-height:220px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:8px;">
+                <div style="flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+                    <canvas id="${navId}" style="display:block; max-width:100%; max-height:100%; aspect-ratio:1/1;"></canvas>
+                </div>
+            </div>
+        `;
+    }
+
+    /** Live-Navigationsdaten für das Instrument einsammeln (fehlend → null). */
+    _gatherNavData() {
+        const c = (window.BoatOS && window.BoatOS.context) || {};
+        const sogKn = (typeof c.sog === 'number') ? c.sog : null;
+        const cog   = (typeof c.cog === 'number') ? ((c.cog % 360) + 360) % 360 : null;
+
+        // Navi-Punktdaten (aus /api/nav/point, throttled): Fahrrinnentiefe
+        // (pegel-korrigiert), nächster Pegel, Strömung.
+        const np = c.navPoint || {};
+        const dp = np.depth;
+        const fairwayDepth = (dp && typeof dp.current_depth === 'number') ? dp.current_depth
+            : (dp && typeof dp.depth === 'number' ? dp.depth : null);
+        const pegelCm  = (np.gauge && typeof np.gauge.w_cm === 'number') ? np.gauge.w_cm : null;
+        const pegelName = (np.gauge && np.gauge.name) ? np.gauge.name : null;
+        const currentKmh = (typeof np.current_kmh === 'number') ? np.current_kmh : null;
+
+        // Vorausschau (flachste Tiefe voraus) — Früh-Warnung
+        const ah = np.ahead;
+        const aheadDepth   = (ah && typeof ah.current_depth === 'number') ? ah.current_depth : null;
+        const aheadDist    = (ah && typeof ah.distance_m === 'number') ? ah.distance_m : null;
+        const aheadShallow = !!(ah && ah.shallow);
+
+        // Route: Restweg (m) + Peilung (°) zum Ziel (von navigation.updateLiveETA)
+        const nav = c.nav || {};
+        const remainingM = (typeof nav.remainingM === 'number') ? nav.remainingM : null;
+        const wpBearing  = (typeof nav.bearing === 'number' && !isNaN(nav.bearing)) ? nav.bearing : null;
+
+        // Tiefenmesser (Echolot) — Hardware-Sensor, übliche Pfade durchprobieren.
+        let sounder = null;
+        for (const p of ['depth', 'tiefe', 'environment/depth/belowKeel',
+                         'navigation/depth/belowKeel', 'boot/tiefe']) {
+            const v = this.getSensorValue(p);
+            const n = parseFloat(v);
+            if (v != null && v !== '' && !isNaN(n)) { sounder = n; break; }
+        }
+
+        return { sogKn, cog, fairwayDepth, pegelCm, pegelName, currentKmh, sounder,
+                 aheadDepth, aheadDist, aheadShallow, remainingM, wpBearing };
+    }
+
+    /** Navi-Punktdaten (Tiefe/Pegel/Strömung) holen (throttled, 8s / >~40m). */
+    _maybeFetchNavPoint() {
+        if (!document.querySelector('[data-nav-instrument]')) return;
+        const c = (window.BoatOS && window.BoatOS.context) || {};
+        const pos = c.currentPosition;
+        if (!pos || typeof pos.lat !== 'number') return;
+        const st = this._navPointState ||
+            (this._navPointState = { t: 0, lat: null, lon: null, busy: false });
+        if (st.busy) return;
+        const now = Date.now();
+        // Nie öfter als alle 5 s (schützt das Backend vor Dauer-Abfragen bei
+        // schneller Simulation); ohne nennenswerte Bewegung nur alle 15 s.
+        if (now - st.t < 5000) return;
+        const moved = st.lat == null ||
+            Math.abs(pos.lat - st.lat) > 0.0004 || Math.abs(pos.lon - st.lon) > 0.0004; // ~40 m
+        if (!moved && now - st.t < 15000) return;
+        st.t = now; st.lat = pos.lat; st.lon = pos.lon; st.busy = true;
+        const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
+        const cog = (typeof c.cog === 'number') ? `&cog=${c.cog}` : '';
+        fetch(`${apiUrl}/api/nav/point?lat=${pos.lat}&lon=${pos.lon}${cog}`)
+            .then(r => r.json())
+            .then(d => { if (window.BoatOS && window.BoatOS.context) window.BoatOS.context.navPoint = d; })
+            .catch(() => {})
+            .finally(() => { st.busy = false; });
+    }
+
+    /** Zeichnet das Navi-Instrument in ein quadratisches Canvas. */
+    drawCompassInstrument(cv) {
+        const g = cv.getContext('2d');
+        const s = cv.width;
+        if (!s) return;
+        const cx = s / 2, cy = s * 0.40;    // hochgeschoben (Platz fürs 2×2-Grid unten)
+        const R = s * 0.30;                 // Rosen-Radius (Rand frei für Boxen)
+        const { sogKn, cog, fairwayDepth, pegelCm, pegelName, currentKmh, sounder,
+                aheadDepth, aheadDist, aheadShallow, remainingM, wpBearing } = this._gatherNavData();
+        const A = deg => (deg - 90) * Math.PI / 180;   // 0° = oben (Norden)
+
+        g.clearRect(0, 0, s, s);
+
+        // Hintergrund-Scheibe
+        g.beginPath(); g.arc(cx, cy, R * 1.04, 0, Math.PI * 2);
+        const bg = g.createRadialGradient(cx - R * 0.3, cy - R * 0.35, R * 0.1, cx, cy, R * 1.1);
+        bg.addColorStop(0, '#1a3350');
+        bg.addColorStop(1, '#0a1526');
+        g.fillStyle = bg; g.fill();
+        g.lineWidth = Math.max(1, s * 0.006); g.strokeStyle = 'rgba(100,180,255,0.28)'; g.stroke();
+
+        const rr = R;                        // Ring-Radius
+        // Ticks
+        for (let d = 0; d < 360; d += 5) {
+            const major = d % 30 === 0;
+            const len = major ? R * 0.12 : R * 0.06;
+            const a = A(d);
+            g.beginPath();
+            g.moveTo(cx + (rr - len) * Math.cos(a), cy + (rr - len) * Math.sin(a));
+            g.lineTo(cx + rr * Math.cos(a), cy + rr * Math.sin(a));
+            g.lineWidth = major ? Math.max(1.5, s * 0.008) : Math.max(0.75, s * 0.004);
+            g.strokeStyle = major ? 'rgba(200,220,255,0.75)' : 'rgba(150,180,220,0.35)';
+            g.stroke();
+        }
+
+        // Grad-/Kardinal-Beschriftung
+        g.textAlign = 'center'; g.textBaseline = 'middle';
+        const labelR = rr - R * 0.24;
+        for (let d = 0; d < 360; d += 30) {
+            const a = A(d);
+            const x = cx + labelR * Math.cos(a), y = cy + labelR * Math.sin(a);
+            const card = d % 90 === 0;
+            let txt, col;
+            if (d === 0) { txt = 'N'; col = '#ff5b52'; }
+            else if (d === 90) { txt = 'E'; col = '#d4e6ff'; }
+            else if (d === 180) { txt = 'S'; col = '#d4e6ff'; }
+            else if (d === 270) { txt = 'W'; col = '#d4e6ff'; }
+            else { txt = String(d).padStart(3, '0'); col = 'rgba(185,205,235,0.6)'; }
+            g.font = `${card ? 700 : 400} ${Math.round(s * (card ? 0.058 : 0.038))}px system-ui, sans-serif`;
+            g.fillStyle = col;
+            g.fillText(txt, x, y);
+        }
+
+        // COG-Zeiger (Dreieck)
+        if (cog != null) {
+            const a = A(cog);
+            g.save(); g.translate(cx, cy); g.rotate(a + Math.PI / 2);
+            const tip = -(rr - R * 0.04), base = -(rr - R * 0.20), hw = R * 0.06;
+            g.beginPath();
+            g.moveTo(0, tip); g.lineTo(-hw, base); g.lineTo(hw, base); g.closePath();
+            g.fillStyle = '#4FC3F7'; g.fill();
+            g.restore();
+        }
+
+        // WP-Peilungs-Marker (Steuer-Hinweis zum Ziel) — Raute auf dem Ring
+        if (wpBearing != null) {
+            const a = A(wpBearing);
+            const mr = rr - R * 0.02, d = R * 0.06;
+            g.save(); g.translate(cx + mr * Math.cos(a), cy + mr * Math.sin(a)); g.rotate(a + Math.PI / 2);
+            g.beginPath();
+            g.moveTo(0, -d); g.lineTo(d * 0.7, 0); g.lineTo(0, d); g.lineTo(-d * 0.7, 0); g.closePath();
+            g.fillStyle = '#c9a0ff'; g.fill();
+            g.restore();
+        }
+
+        // Mittelwert SOG
+        let numStr = '–', unitStr = 'SOG';
+        if (sogKn != null && typeof window.convertSpeedFromKn === 'function') {
+            numStr = window.convertSpeedFromKn(sogKn).toFixed(1);
+            unitStr = (window.getSpeedLabel ? window.getSpeedLabel() : 'kn');
+        } else if (sogKn != null) {
+            numStr = sogKn.toFixed(1); unitStr = 'kn';
+        }
+        g.fillStyle = 'rgba(150,170,200,0.7)';
+        g.font = `600 ${Math.round(s * 0.04)}px system-ui, sans-serif`;
+        g.fillText('SOG', cx, cy - R * 0.36);
+        g.fillStyle = '#eef4ff';
+        g.font = `700 ${Math.round(s * 0.15)}px system-ui, sans-serif`;
+        g.fillText(numStr, cx, cy);
+        g.fillStyle = '#9fb2cc';
+        g.font = `500 ${Math.round(s * 0.045)}px system-ui, sans-serif`;
+        g.fillText(unitStr, cx, cy + R * 0.30);
+
+        const fmtM = v => v.toFixed(1) + ' m';
+        const fmtRest = m => (window.formatDistance ? window.formatDistance(m / 1852)
+            : (m >= 1000 ? (m / 1000).toFixed(1) + ' km' : Math.round(m) + ' m'));
+
+        // Tiefe-Rinne-Wert wird zur Früh-Warnung, wenn voraus zu flach:
+        const rinne = aheadShallow
+            ? { label: `⚠ flach in ${aheadDist} m`, val: (aheadDepth != null ? fmtM(aheadDepth) : '–'), col: '#ff6b6b' }
+            : { label: 'Tiefe Rinne', val: (fairwayDepth != null ? fmtM(fairwayDepth) : '–'), col: '#5fd6e6' };
+
+        // Stat-Helfer: kleines Label über größerem Wert
+        const drawStat = (x, yLabel, yVal, align, label, val, col) => {
+            g.textAlign = align;
+            g.fillStyle = 'rgba(160,180,210,0.62)';
+            g.font = `600 ${Math.round(s * 0.030)}px system-ui, sans-serif`;
+            g.fillText(label, x, yLabel);
+            g.fillStyle = col;
+            g.font = `700 ${Math.round(s * 0.052)}px system-ui, sans-serif`;
+            g.fillText(val, x, yVal);
+        };
+
+        // 2 obere Ecken (kurze Werte): COG · Pegel
+        drawStat(s * 0.035, s * 0.05, s * 0.105, 'left',  'COG',   (cog != null ? Math.round(cog) + '°' : '–'), '#7fe0a0');
+        drawStat(s * 0.965, s * 0.05, s * 0.105, 'right', (pegelName ? `Pegel (${pegelName})` : 'Pegel'), (pegelCm != null ? Math.round(pegelCm) + ' cm' : '–'), '#7fbfff');
+
+        // Unten 2×2-Grid (unter der Rose): Tiefe/Echolot · Strömung/WP
+        const colL = s * 0.27, colR = s * 0.73;
+        drawStat(colL, s * 0.755, s * 0.815, 'center', rinne.label, rinne.val, rinne.col);
+        drawStat(colR, s * 0.755, s * 0.815, 'center', 'Echolot',  (sounder != null ? fmtM(sounder) : '–'), '#9fd0ff');
+        drawStat(colL, s * 0.885, s * 0.945, 'center', 'Strömung', (currentKmh != null ? currentKmh.toFixed(1) + ' km/h' : '–'), '#ffd479');
+        drawStat(colR, s * 0.885, s * 0.945, 'center', (wpBearing != null ? `→ ${wpBearing}°` : '→ WP'), (remainingM != null ? fmtRest(remainingM) : '–'), '#c9a0ff');
+        g.textAlign = 'center';
+    }
+
+    /** Alle Navi-Instrument-Canvases (neu) dimensionieren + zeichnen. */
+    _drawNavInstruments() {
+        document.querySelectorAll('[data-nav-instrument] canvas').forEach(cv => {
+            const par = cv.parentElement;
+            // Aus dem Eltern-Container skalieren (min aus Breite/Höhe = größtes
+            // Quadrat, das reinpasst) — NICHT aus cv.offsetWidth, das bliebe auf
+            // der Canvas-Default-Breite (300) hängen. Proportionen bleiben, weil
+            // in drawCompassInstrument alles relativ zu s gerechnet wird.
+            const pw = par ? par.clientWidth  : 0;
+            const ph = par ? par.clientHeight : 0;
+            const dim = Math.max(10, Math.min(pw, ph) || cv.offsetWidth || 220);
+            if (cv.width !== dim || cv.height !== dim) { cv.width = dim; cv.height = dim; }
+            this.drawCompassInstrument(cv);
         });
     }
 

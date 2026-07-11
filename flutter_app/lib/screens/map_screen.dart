@@ -1080,7 +1080,24 @@ class _MapScreenState extends State<MapScreen> {
           .toList();
       if (_waypoints.length < 2) _routeResult = null;
     });
-    if (_waypoints.length >= 2) _calculateRoute();
+    if (_waypoints.length >= 2) _calculateRoute(); else _syncNavRoute();
+  }
+
+  /// Aktive Route ans Backend melden → Broadcast an alle Clients (Deck ↔ Helm-
+  /// Sync: Navi-Instrument Restweg/Peilung + Karten-Linie auf der anderen Seite).
+  void _syncNavRoute() {
+    final coords = (_routeResult?.coords ?? const <LatLng>[])
+        .map((p) => [p.latitude, p.longitude])
+        .toList();
+    http
+        .post(
+          Uri.parse('$_apiBase/api/nav/route'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({'coords': coords}),
+        )
+        .timeout(const Duration(seconds: 8))
+        .then((_) {})
+        .catchError((_) {});
   }
 
   Future<void> _calculateRoute() async {
@@ -1127,6 +1144,7 @@ class _MapScreenState extends State<MapScreen> {
           });
           // Route gegen die IENC-Daten prüfen (Brücken/Tiefen/Wehre)
           _checkRouteHazards(coords);
+          _syncNavRoute();
         }
       } else {
         debugPrint('Route failed: HTTP ${resp.statusCode}');
@@ -1375,7 +1393,7 @@ class _MapScreenState extends State<MapScreen> {
       _waypoints = sr.waypoints;
       _routeResult = null;
     });
-    if (_waypoints.length >= 2) _calculateRoute();
+    if (_waypoints.length >= 2) _calculateRoute(); else _syncNavRoute();
   }
 
   void _saveRoute(String name) async {
@@ -1420,6 +1438,7 @@ class _MapScreenState extends State<MapScreen> {
       _routeHazards = [];
       _selectedHazard = null;
     });
+    _syncNavRoute();
   }
 
   // =========================================================================
@@ -1585,7 +1604,8 @@ class _MapScreenState extends State<MapScreen> {
                 ],
               ),
 
-            // 5. Route polyline
+            // 5. Route polyline (lokal) — sonst die vom Backend broadcastete
+            //    Route (auf einer anderen Plattform geplant, Deck ↔ Helm-Sync).
             if (_routeResult != null && _routeResult!.coords.length >= 2)
               PolylineLayer(
                 polylines: [
@@ -1594,6 +1614,16 @@ class _MapScreenState extends State<MapScreen> {
                     color: _routeResult!.routingType == 'osrm'
                         ? const Color(0xFF2ECC71)
                         : const Color(0xFF3498DB),
+                    strokeWidth: 4,
+                  ),
+                ],
+              )
+            else if (ws.route.length >= 2)
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: ws.route.map((p) => LatLng(p[0], p[1])).toList(),
+                    color: const Color(0xFF3498DB),
                     strokeWidth: 4,
                   ),
                 ],

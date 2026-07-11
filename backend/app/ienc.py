@@ -19,6 +19,7 @@ die späteren Source-Layer.
 
 import gzip
 import json
+import math
 import os
 import shutil
 import sqlite3
@@ -926,6 +927,153 @@ def apply_level_offsets(warnings: list, gauges: list, draft_m: float,
         result.append(w)
 
     return result
+
+
+def depth_at_point(lat, lon, chart_dirs) -> dict:
+    """
+    Fahrrinnentiefe an einem einzelnen Punkt — dieselbe Datenbasis wie die
+    Routen-Tiefenwarnung (DEPARE/DRGARE-Flächen, DRVAL2 = Fahrrinnentiefe,
+    Fallback DRVAL1). BLOCKING (via to_thread aufrufen).
+
+    Nimmt die MINIMALE Tiefe der enthaltenden Flächen (konservativ, wie
+    check_route). Rückgabe {depth, waterway, lat, lon} oder None (Punkt in
+    keiner erfassten Tiefenfläche).
+    """
+    pt = (lon, lat)
+    best = None  # (depth, waterway)
+    for name, chart_dir in chart_dirs:
+        for cls in ("depare", "drgare"):
+            for feat in _load_class_features(chart_dir, cls):
+                geom = feat.get("geometry")
+                props = feat.get("properties") or {}
+                if not geom or geom.get("type") not in ("Polygon", "MultiPolygon"):
+                    continue
+                d = _num_or_none(props.get("DRVAL2"))
+                if d is None:
+                    d = _num_or_none(props.get("DRVAL1"))
+                if d is None:
+                    continue
+                pts = _geom_points(geom)
+                if not pts:
+                    continue
+                if not (min(p[0] for p in pts) <= lon <= max(p[0] for p in pts)
+                        and min(p[1] for p in pts) <= lat <= max(p[1] for p in pts)):
+                    continue
+                if not _point_in_polygon(pt, geom):
+                    continue
+                if best is None or d < best[0]:
+                    best = (d, name)
+    if best is None:
+        return None
+    return {"depth": best[0], "waterway": best[1], "lat": lat, "lon": lon}
+
+
+def offset_point(lat, lon, bearing_deg, dist_m):
+    """Punkt dist_m Meter in Richtung bearing_deg von (lat,lon)."""
+    brad = math.radians(bearing_deg)
+    mx, my = _m_per_deg(lat)   # Meter pro Grad (lon, lat)
+    return (lat + (dist_m * math.cos(brad)) / my,
+            lon + (dist_m * math.sin(brad)) / mx)
+
+
+_depth_index_cache = {}
+
+
+def _depth_index(chart_dir):
+    """Gecachter Tiefen-Flächen-Index eines Charts: Liste (minx,miny,maxx,maxy,
+    depth, geom) für DEPARE/DRGARE. Bbox EINMAL berechnet (nicht pro Abfrage)."""
+    key = str(chart_dir)
+    idx = _depth_index_cache.get(key)
+    if idx is not None:
+        return idx
+    idx = []
+    for cls in ("depare", "drgare"):
+        for feat in _load_class_features(chart_dir, cls):
+            geom = feat.get("geometry")
+            props = feat.get("properties") or {}
+            if not geom or geom.get("type") not in ("Polygon", "MultiPolygon"):
+                continue
+            d = _num_or_none(props.get("DRVAL2"))
+            if d is None:
+                d = _num_or_none(props.get("DRVAL1"))
+            if d is None:
+                continue
+            pts = _geom_points(geom)
+            if not pts:
+                continue
+            idx.append((min(p[0] for p in pts), min(p[1] for p in pts),
+                        max(p[0] for p in pts), max(p[1] for p in pts), d, geom))
+    _depth_index_cache[key] = idx
+    return idx
+
+
+def depth_scan(points, chart_dirs) -> list:
+    """
+    Fahrrinnentiefe für MEHRERE Punkte in EINER Iteration über den gecachten
+    Bbox-Index — aktuelle Position + Vorausschau teilen sich den Durchlauf.
+    BLOCKING (via to_thread aufrufen).
+
+    points: [(lat, lon), ...]. Rückgabe: gleiche Länge, je {depth, waterway}
+    (minimale/​konservativste enthaltende Fläche) oder None.
+    """
+    res = [None] * len(points)   # je Punkt: (depth, waterway)
+    for name, chart_dir in chart_dirs:
+        for (minx, miny, maxx, maxy, d, geom) in _depth_index(chart_dir):
+            for i, (plat, plon) in enumerate(points):
+                if not (minx <= plon <= maxx and miny <= plat <= maxy):
+                    continue
+                if res[i] is not None and res[i][0] <= d:
+                    continue
+                if _point_in_polygon((plon, plat), geom):
+                    if res[i] is None or d < res[i][0]:
+                        res[i] = (d, name)
+    return [{"depth": r[0], "waterway": r[1]} if r else None for r in res]
+
+
+def nearest_gauge_delta(lat, lon, waterway, gauges, max_gauge_km: float = 30.0) -> dict:
+    """
+    Pegel-Delta (delta_m = W − MNW) des nächsten Pegels am SELBEN Gewässer,
+    für die Wasserstands-Korrektur der Punkt-Tiefe. Gleiche Match-Regel wie
+    apply_level_offsets (exakter Gewässer-Name, max_gauge_km). None sonst.
+    """
+    if not gauges:
+        return None
+    wnorm = _norm_water_name(waterway or "")
+    best = None  # (dist_km, gauge)
+    mx, my = _m_per_deg(lat)
+    for g in gauges:
+        if _norm_water_name(g.get("water", "")) != wnorm:
+            continue
+        dist_km = ((((g["lon"] - lon) * mx) ** 2 +
+                    ((g["lat"] - lat) * my) ** 2) ** 0.5) / 1000
+        if dist_km <= max_gauge_km and (best is None or dist_km < best[0]):
+            best = (dist_km, g)
+    if best is None:
+        return None
+    dist_km, g = best
+    return {"delta_m": g["delta_m"], "gauge": g["name"], "distance_km": round(dist_km, 1)}
+
+
+def lookahead_shallowest(lat, lon, bearing_deg, chart_dirs,
+                         distances_m=(300, 600, 1000)) -> dict:
+    """
+    Flachste Fahrrinnentiefe VORAUS: prüft Punkte entlang bearing_deg (COG) in
+    den angegebenen Entfernungen (Meter) und liefert den flachsten Treffer
+    {depth, waterway, distance_m, lat, lon} — für die Früh-Warnung vor zu
+    geringer Tiefe. None, wenn kein Punkt in einer Fahrrinne liegt.
+    BLOCKING (via to_thread aufrufen).
+    """
+    brad = math.radians(bearing_deg)
+    mx, my = _m_per_deg(lat)   # Meter pro Grad (lon, lat)
+    best = None
+    for dm in distances_m:
+        plat = lat + (dm * math.cos(brad)) / my
+        plon = lon + (dm * math.sin(brad)) / mx
+        info = depth_at_point(plat, plon, chart_dirs)
+        if info and (best is None or info["depth"] < best["depth"]):
+            best = {"depth": info["depth"], "waterway": info["waterway"],
+                    "distance_m": dm, "lat": plat, "lon": plon}
+    return best
 
 
 def read_tiles_meta(mbtiles_path) -> dict:

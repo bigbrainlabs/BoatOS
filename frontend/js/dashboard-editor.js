@@ -776,7 +776,7 @@ SCREEN Wetter LAYOUT grid-4
                             ['window.dashboardEditor.addWidget(\'spacer\')', '⬜', 'Spacer'],
                             ['window.dashboardEditor.addWidget(\'clock\')',  '🕐', 'Uhr'],
                             ['window.dashboardEditor.addWidget(\'text\')',   '📝', 'Text'],
-                            ['window.dashboardEditor.addWidget(\'compass\')', '🧭', 'Kompass'],
+                            ['window.dashboardEditor.addWidget(\'compass\')', '🧭', 'Navi-Instrument'],
                             ['window.dashboardEditor.addWidget(\'horizon\')', '🌅', 'Horizont'],
                         ].map(([fn, icon, label]) => `
                             <div onclick="${fn}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;margin-bottom:5px;cursor:pointer;font-size:12px;transition:border-color .15s"
@@ -1579,7 +1579,7 @@ SCREEN Wetter LAYOUT grid-4
                                         <option value="gauge" ${wtype==='gauge'?'selected':''}>Gauge</option>
                                         <option value="horizon" ${wtype==='horizon'?'selected':''}>Horizont</option>
                                         <option value="clock" ${wtype==='clock'?'selected':''}>Uhr</option>
-                                        <option value="compass" ${wtype==='compass'?'selected':''}>Kompass</option>
+                                        <option value="compass" ${wtype==='compass'?'selected':''}>Navi-Instrument</option>
                                         <option value="spacer" ${wtype==='spacer'?'selected':''}>Spacer</option>
                                         <option value="text" ${wtype==='text'?'selected':''}>Text</option>
                                     </select>

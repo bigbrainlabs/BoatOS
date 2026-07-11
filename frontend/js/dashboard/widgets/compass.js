@@ -1,19 +1,17 @@
 /**
- * Dashboard-Widget: COMPASS (aktuell Platzhalter-Icon)
- * Die Markup unterscheidet sich zwischen Screen-Slot (ctx.slot, ohne Grid-Span)
- * und Grid-Reihe (mit grid-column span) — 1:1 wie zuvor in den beiden Switches.
- * Wird später zum echten Kreis-Instrument ausgebaut.
+ * Dashboard-Widget: COMPASS → Navigations-Master-Instrument (Motorboot)
+ * Runde Kompassrose (North-up) + COG-Zeiger + großer SOG-Mittelwert + Eck-Boxen.
+ * render() brückt auf die Renderer-Implementierung (ctx.r.renderCompassInstrument).
+ * Segel/Wind/Polar erst v2/v3.
  */
 (function () {
     'use strict';
     window.dashWidgets.register({
         type: 'COMPASS',
-        label: 'Kompass',
-        render: (w, ctx) => ctx.slot
-            ? `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:var(--fs-4xl);">🧭</div>`
-            : `<div style="grid-column: span ${ctx.size}; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:var(--fs-4xl); padding:var(--space-3xl);">🧭</div>`,
+        label: 'Navi-Instrument',
+        render: (w, ctx) => ctx.r.renderCompassInstrument(w, ctx.size),
         icon: () => '🧭',
-        name: () => 'Kompass',
+        name: () => 'Navi-Instrument',
         dsl: (w, o) => 'COMPASS' + (o.withSize && w.size > 1 ? ` SIZE ${w.size}` : ''),
     });
 })();

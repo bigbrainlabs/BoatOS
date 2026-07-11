@@ -634,6 +634,22 @@ async def disable_external_gps():
     return {"status": "ok"}
 
 
+@app.post("/api/nav/route")
+async def set_nav_route(data: dict):
+    """Aktive Route setzen + an alle Clients broadcasten (Deck ↔ Helm-Sync).
+    Body: {"coords": [[lat, lon], ...]} — leer = Route gelöscht."""
+    coords = data.get("coords") or []
+    gps_service.set_route(coords)
+    await gps_service.broadcast_route()
+    return {"status": "ok", "count": len(coords)}
+
+
+@app.get("/api/nav/route")
+async def get_nav_route():
+    """Aktuelle aktive Route (für Initial-Load neuer Clients)."""
+    return {"coords": gps_service.current_route}
+
+
 @app.get("/api/settings")
 async def get_settings():
     """Get user settings"""
@@ -2044,6 +2060,129 @@ async def enc_route_check(request: Request):
         "boat": {"height": height, "draft": draft},
         "waterways": [name for name, _ in charts],
     }
+
+
+@app.get("/api/enc/depth-at")
+async def enc_depth_at(lat: float, lon: float):
+    """
+    Berechnete Fahrrinnentiefe an einem Punkt (aktuelle Position) — dieselbe
+    IENC-Datenbasis wie die Routen-Tiefenwarnung, inkl. Pegel-Korrektur
+    (current_depth = Kartentiefe + W−MNW am selben Gewässer).
+    Für das Navi-Instrument. Query: ?lat=&lon=
+    """
+    charts = [(c["name"], Path(c["path"])) for c in chart_layers
+              if c.get("type") == "enc" and c.get("enabled") and c.get("converted")]
+    if not charts:
+        return {"available": False, "reason": "Keine IENC-Gewässer installiert"}
+
+    info = await asyncio.to_thread(ienc.depth_at_point, lat, lon, charts)
+    if not info:
+        return {"available": False, "reason": "Außerhalb erfasster Fahrrinnen"}
+
+    result = {
+        "available": True,
+        "depth": info["depth"],            # Kartentiefe (DRVAL2)
+        "current_depth": info["depth"],    # ggf. pegel-korrigiert (s.u.)
+        "waterway": info["waterway"],
+    }
+    # Pegel-Korrektur (nur Differenz W−MNW, wie bei der Routen-Warnung)
+    try:
+        gauges = await asyncio.to_thread(
+            pegelonline.get_reference_levels,
+            lat - 0.3, lon - 0.3, lat + 0.3, lon + 0.3)
+        off = ienc.nearest_gauge_delta(lat, lon, info["waterway"], gauges)
+        if off:
+            result["current_depth"] = round(info["depth"] + off["delta_m"], 2)
+            result["level_offset_m"] = off["delta_m"]
+            result["gauge"] = off["gauge"]
+    except Exception as e:
+        print(f"⚠️ Pegel-Korrektur depth-at fehlgeschlagen: {e}")
+
+    return result
+
+
+@app.get("/api/nav/point")
+async def nav_point(lat: float, lon: float, cog: float = None):
+    """
+    Kombinierte Navi-Instrument-Daten für einen Punkt (aktuelle Position) in
+    EINEM Aufruf: Fahrrinnentiefe (pegel-korrigiert), nächster Pegelstand,
+    Strömung — und (mit cog) die flachste Fahrrinnentiefe 300–1000 m VORAUS
+    als Früh-Warnung. Vom Navi-Instrument throttled gefetcht.
+    Query: ?lat=&lon=&cog=
+    """
+    out = {"lat": lat, "lon": lon}
+
+    # 1) Fahrrinnentiefe: aktuelle Position + (mit cog) Vorausschau 300/600/1000 m
+    # in EINER Flächen-Iteration (depth_scan) — sonst 4× so teuer.
+    charts = [(c["name"], Path(c["path"])) for c in chart_layers
+              if c.get("type") == "enc" and c.get("enabled") and c.get("converted")]
+    ahead_dists = [300, 600, 1000]
+    points = [(lat, lon)]
+    if cog is not None:
+        points += [ienc.offset_point(lat, lon, cog, dm) for dm in ahead_dists]
+    scan = await asyncio.to_thread(ienc.depth_scan, points, charts) if charts else []
+    info = scan[0] if scan else None
+    waterway = info["waterway"] if info else None
+
+    # 2) Pegel-Referenzwerte (gecachte DE-Vollliste, nur clientseitig gefiltert)
+    gauges = []
+    try:
+        gauges = await asyncio.to_thread(
+            pegelonline.get_reference_levels,
+            lat - 0.3, lon - 0.3, lat + 0.3, lon + 0.3)
+    except Exception as e:
+        print(f"⚠️ Pegel-Abruf nav/point fehlgeschlagen: {e}")
+
+    if info:
+        depth = {"depth": info["depth"], "current_depth": info["depth"], "waterway": waterway}
+        off = ienc.nearest_gauge_delta(lat, lon, waterway, gauges)
+        if off:
+            depth["current_depth"] = round(info["depth"] + off["delta_m"], 2)
+            depth["gauge"] = off["gauge"]
+        out["depth"] = depth
+
+    # Nächster Pegel (für Anzeige) — kleinster Abstand im Umkreis
+    if gauges:
+        ng = min(gauges, key=lambda g: (g["lat"] - lat) ** 2 + (g["lon"] - lon) ** 2)
+        out["gauge"] = {"name": ng.get("name"), "water": ng.get("water", ""),
+                        "w_cm": ng.get("w_cm")}
+
+    # Vorausschau: flachster Treffer 300–1000 m voraus (aus demselben Scan),
+    # damit zu geringe Tiefe FRÜH (vor Erreichen) gewarnt werden kann.
+    if cog is not None and len(scan) > 1:
+        best = None  # (dist_m, (plat, plon), scan-entry)
+        for idx, dm in enumerate(ahead_dists, start=1):
+            s = scan[idx]
+            if s and (best is None or s["depth"] < best[2]["depth"]):
+                best = (dm, points[idx], s)
+        if best:
+            dm, (plat, plon), s = best
+            a_cur = s["depth"]
+            off_a = ienc.nearest_gauge_delta(plat, plon, s["waterway"], gauges)
+            if off_a:
+                a_cur = round(s["depth"] + off_a["delta_m"], 2)
+            entry = {"depth": s["depth"], "current_depth": a_cur,
+                     "distance_m": dm, "waterway": s["waterway"]}
+            try:
+                with open("data/settings.json", "r") as f:
+                    draft = json.load(f).get("boat", {}).get("draft")
+                if draft:
+                    entry["draft"] = float(draft)
+                    entry["shallow"] = a_cur < float(draft) + 0.3
+            except Exception:
+                pass
+            out["ahead"] = entry
+
+    # 3) Strömung (km/h) am Punkt — gleiche Quelle wie die Routen-Zeitkorrektur
+    try:
+        cur = await asyncio.to_thread(
+            water_current_service.get_current_at_point, lat, lon, waterway)
+        if cur is not None:
+            out["current_kmh"] = round(cur, 1)
+    except Exception as e:
+        print(f"⚠️ Strömung nav/point fehlgeschlagen: {e}")
+
+    return out
 
 
 @app.get("/api/enc/tiles/status")
