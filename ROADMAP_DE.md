@@ -49,6 +49,8 @@
 | Wetter-Overlay auf Karte | Wind-Pfeile entlang der Route mit Farbcodierung nach Stärke | Karte |
 | Logbuch-Export (PDF / HTML) | Törnbericht mit Track-Karte — für Versicherung, Archiv | UX |
 | Fotos im Logbuch | Bilder zu Etappen hinzufügen — lokal auf dem Pi, kein Cloud-Upload | UX |
+| 3D-/Look-ahead-Kartenansicht (Deck) | Gekippte head-up-Perspektive der Fahrrinne voraus (wie Berufsschifffahrt-ECDIS, z. B. Tresco Navigis) — Kamera-Pitch + COG-Follow auf den bestehenden IENC-Vektordaten (MapLibre); Tonnen, km-Marken, Tiefenzonen, Sky-Layer | Karte |
+| Helm-Map-Engine für 3D-Perspektive | `flutter_map` ist 2D (nur Drehung, kein Pitch) — für die 3D-Ansicht auf dem Helm Wechsel auf eine MapLibre-native Flutter-Engine (GPU); flutter-pi-Ressourcen prüfen. Ohne Wechsel bleibt der Helm bei head-up 2D | Karte, Plattform |
 
 ---
 

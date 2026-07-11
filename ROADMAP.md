@@ -49,6 +49,8 @@
 | Weather overlay on map | Wind arrows along the route, colour-coded by intensity | Map |
 | Logbook export (PDF / HTML) | Trip report with track map — for insurance, records, archive | UX |
 | Photos in logbook | Attach images to trip legs — stored locally on the Pi, no cloud upload | UX |
+| 3D / look-ahead chart view (Deck) | Tilted head-up perspective of the fairway ahead (like professional inland ECDIS, e.g. Tresco Navigis) — camera pitch + COG-follow on the existing IENC vector data (MapLibre); buoys, km-marks, depth zones, sky layer | Map |
+| Helm map engine for 3D perspective | `flutter_map` is 2D (rotation only, no pitch) — a 3D view on the Helm needs switching to a MapLibre-native Flutter engine (GPU); check flutter-pi resources. Without the switch the Helm stays head-up 2D | Map, Platform |
 
 ---
 
