@@ -1,0 +1,168 @@
+/* ============================================================================
+   Rondell (Quick-Action-Karussell, Coverflow-Arc) + schwebende Info-Panels
+   Eigene Datei — NACH layout.css einbinden (überschreibt das alte Bottom-Sheet).
+   Verhalten/Logik: js/quick-actions.js + ui.showSection/closePanel.
+   ============================================================================ */
+
+/* Deckende Vordergrund-Flächen (Panel/Buttons/Pfeile) — --bg-card ist mit
+   0.6/0.4 Alpha zu durchsichtig. Seitliche Arc-Elemente faden separat per JS-opacity. */
+:root            { --rondell-fg: rgb(240, 244, 248); }
+[data-theme="dark"] { --rondell-fg: rgb(18, 30, 48); }
+
+/* ── Bottom-Container: transparent & schwebend (kein grauer Kasten mehr) ───── */
+.bottom-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: max(var(--space-md), env(safe-area-inset-bottom));
+    top: auto;
+    background: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    max-height: none;
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-md);
+    pointer-events: none;               /* Karte bleibt klickbar; Kinder reaktivieren */
+    transform: none !important;         /* alte peek/full/hidden-States neutralisieren */
+}
+/* Dark-Mode-Hintergrund aus layout.css (höhere Spezifität) ebenfalls neutralisieren */
+[data-theme="dark"] .bottom-sheet { background: none; }
+.bottom-sheet .sheet-handle { display: none; }
+
+/* ── Schwebendes Info-Panel (nur sichtbar bei .panel-open) ─────────────────── */
+.sheet-content {
+    order: 1;                           /* über dem Rondell */
+    position: relative;
+    width: min(560px, 94vw);
+    max-height: 52vh;
+    overflow-y: auto;
+    padding: var(--space-lg);
+    padding-top: 34px;                  /* Platz für das X */
+    background: var(--rondell-fg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2xl);
+    box-shadow: 0 8px 30px var(--shadow-strong);
+    pointer-events: auto;
+}
+.bottom-sheet:not(.panel-open) .sheet-content { display: none; }
+
+.sheet-close {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    z-index: 5;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--rondell-fg);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    font-size: 1rem;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.sheet-close:hover { color: var(--text); }
+
+/* ── Rondell (Coverflow-Arc) ─────────────────────────────────────────────── */
+.quick-actions-wrap {
+    order: 2;                           /* ganz unten */
+    position: relative;
+    overflow: visible;
+    background: none;
+    pointer-events: auto;
+}
+.qa-carousel::after { content: none; }  /* alter rechter Fade entfällt */
+
+.qa-carousel .quick-actions {
+    display: block;
+    position: relative;
+    width: min(420px, 92vw);
+    height: 70px;
+    margin: 0 auto;
+    padding: 0;
+    overflow: visible;
+    perspective: 640px;
+    perspective-origin: center 45%;
+}
+
+.qa-carousel .quick-action {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    margin: 0;
+    transform-origin: center center;
+    transition: transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.3s ease;
+    will-change: transform, opacity;
+    gap: 1px;
+    padding: 6px 6px;
+    min-width: 58px;
+    width: 58px;
+    background: var(--rondell-fg);      /* deckend — kein Durchscheinen der Karte */
+    box-shadow: 0 3px 10px var(--shadow-strong);
+}
+.qa-carousel .quick-action .icon  { font-size: var(--fs-xl); }
+.qa-carousel .quick-action .label {
+    font-size: 0.6rem;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.qa-carousel .quick-action:hover { transform: inherit; }  /* Hover-Lift würde die Arc-Transform brechen */
+.qa-carousel .quick-action.qa-center {
+    box-shadow: 0 8px 20px var(--shadow-strong);
+    border-color: var(--accent);
+}
+
+/* Pfeile — direkt neben dem Rondell (linke/rechte Position setzt js/quick-actions.js) */
+.qa-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 200;
+    width: 30px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--rondell-fg);
+    color: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 2px 8px var(--shadow);
+    touch-action: manipulation;
+}
+.qa-arrow:active { transform: translateY(-50%) scale(0.92); }
+
+/* ── Layer-Schalter in AIS/Schleusen-Panels (Karten-Layer an/aus) ─────────── */
+.layer-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: var(--space-md);
+    padding: 8px 14px;
+    background: var(--bg-card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    font-size: var(--fs-base);
+    font-weight: 600;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.layer-toggle-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
