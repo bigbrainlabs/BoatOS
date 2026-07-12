@@ -9,6 +9,7 @@
 import * as core from './core.js';
 import * as theme from './theme.js';
 import * as mapModule from './map.js';
+import { initQuickActionsCarousel } from './quick-actions.js';
 import * as navigation from './navigation.js';
 import * as weather from './weather.js';
 import * as sensors from './sensors.js';
@@ -734,6 +735,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Theme initialisieren
     theme.initTheme();
+
+    // Quick-Action-Karussell (Coverflow-Arc) initialisieren
+    initQuickActionsCarousel();
 
     // Version im Hintergrund prüfen (Badge + alle 6h)
     system.autoCheck();

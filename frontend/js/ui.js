@@ -782,18 +782,33 @@ export function showSection(sectionId, tabElement) {
         section.classList.remove('section-hidden');
     }
 
-    // Tab-Styling aktualisieren
-    document.querySelectorAll('.sheet-tab').forEach(tab => {
+    // Aktiv-Styling: Rondell-Panel-Einträge (.qa-section) — plus Legacy-Reiter
+    document.querySelectorAll('.qa-section, .sheet-tab').forEach(tab => {
         tab.classList.remove('active');
     });
     if (tabElement) {
         tabElement.classList.add('active');
     }
 
-    // Sheet auf "full" erweitern wenn nicht schon
-    if (sheetState === 'peek') {
-        cycleSheet();
+    // Schwebendes Info-Panel über dem Rondell einblenden
+    const sheet = document.getElementById('bottomSheet');
+    if (sheet) {
+        sheet.classList.add('panel-open');
     }
+}
+
+/**
+ * Schließt das schwebende Info-Panel (X-Icon) — das Rondell schwebt danach
+ * wieder frei über der Karte.
+ */
+export function closePanel() {
+    const sheet = document.getElementById('bottomSheet');
+    if (sheet) {
+        sheet.classList.remove('panel-open');
+    }
+    document.querySelectorAll('.qa-section, .sheet-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
 }
 
 // ===========================================
@@ -844,7 +859,7 @@ export function toggleMode() {
             setTimeout(() => map.resize(), 50);
         }
         if (bottomSheet) {
-            bottomSheet.style.display = 'block';
+            bottomSheet.style.display = 'flex';   // Rondell = Flex-Column (Panel über Arc)
             // Sheet auf peek-Status zurücksetzen
             bottomSheet.classList.remove('full', 'hidden');
             bottomSheet.classList.add('peek');
