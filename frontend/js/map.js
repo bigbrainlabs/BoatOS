@@ -47,7 +47,7 @@ let courseUpMode = false;
 let perspective3D = false;          // 3D-/Look-ahead-Kartenmodus (gekippt + head-up)
 let _courseUpBefore3D = false;
 let _zoomBefore3D = null;
-const PITCH_3D = 55;                // Kamera-Neigung im 3D-Modus (Grad)
+const PITCH_3D = 65;                // Kamera-Neigung im 3D-Modus (Grad)
 const ZOOM_3D_DELTA = 1.3;         // im 3D-Modus etwas reinzoomen (räumlicher)
 let _smoothHeading = null;
 const HEADING_EMA_ALPHA = 0.15; // low = very smooth bearing rotation

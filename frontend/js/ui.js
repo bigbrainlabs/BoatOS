@@ -1836,10 +1836,14 @@ export function toggleLocks() {
     locksVisible = !locksVisible;
     setLocksVisible(locksVisible);
 
-    // Settings-Toggle synchronisieren
+    // Settings-Toggle + Panel-Layer-Button synchronisieren
     const settingsToggle = document.getElementById('toggle-locks');
     if (settingsToggle) {
         settingsToggle.classList.toggle('active', locksVisible);
+    }
+    const layerBtn = document.getElementById('btn-locks');
+    if (layerBtn) {
+        layerBtn.classList.toggle('active', locksVisible);
     }
 
     showToast(locksVisible ? t('layerLocksOn') : t('layerLocksOff'), 'info');
@@ -1852,10 +1856,14 @@ export function togglePegel() {
     pegelVisible = !pegelVisible;
     setPegelVisible(pegelVisible);
 
-    // Settings-Toggle synchronisieren
+    // Settings-Toggle + Rondell-Button synchronisieren
     const settingsToggle = document.getElementById('toggle-pegel');
     if (settingsToggle) {
         settingsToggle.classList.toggle('active', pegelVisible);
+    }
+    const rondellBtn = document.getElementById('btn-pegel');
+    if (rondellBtn) {
+        rondellBtn.classList.toggle('active', pegelVisible);
     }
 
     showToast(pegelVisible ? t('layerGaugesOn') : t('layerGaugesOff'), 'info');

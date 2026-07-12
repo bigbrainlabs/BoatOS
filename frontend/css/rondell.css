@@ -92,6 +92,7 @@
     overflow: visible;
     perspective: 640px;
     perspective-origin: center 45%;
+    touch-action: pan-y;   /* horizontales Swipen gehört dem Rondell, vertikal darf scrollen */
 }
 
 .qa-carousel .quick-action {
@@ -108,6 +109,7 @@
     width: 58px;
     background: var(--rondell-fg);      /* deckend — kein Durchscheinen der Karte */
     box-shadow: 0 3px 10px var(--shadow-strong);
+    touch-action: pan-y;                /* Swipe nicht vom Button verschlucken */
 }
 .qa-carousel .quick-action .icon  { font-size: var(--fs-xl); }
 .qa-carousel .quick-action .label {
@@ -165,4 +167,23 @@
     background: var(--accent);
     color: #fff;
     border-color: var(--accent);
+}
+
+/* ── Größere Auflösungen: Icon + Text nebeneinander, Text größer ──────────────
+   Handy-Ansicht (schmal) bleibt unverändert kompakt/vertikal. quick-actions.js
+   berechnet Abstand/Pfeile aus offsetWidth → passt sich automatisch an. */
+@media (min-width: 768px) {
+    .qa-carousel .quick-action {
+        flex-direction: row;
+        width: 132px;
+        min-width: 132px;
+        gap: 8px;
+        padding: 11px 14px;
+    }
+    .qa-carousel .quick-action .icon  { font-size: var(--fs-2xl); }
+    .qa-carousel .quick-action .label {
+        font-size: 0.9rem;
+        white-space: nowrap;
+    }
+    .qa-carousel .quick-actions { height: 78px; }
 }

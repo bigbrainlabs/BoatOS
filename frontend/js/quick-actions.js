@@ -106,20 +106,35 @@ export function initQuickActionsCarousel() {
     wrap.appendChild(_arrowL);
     wrap.appendChild(_arrowR);
 
-    // Swipe (Pointer-Drag)
+    // Swipe (Pointer-Drag). Pointer-Capture ist auf Touch entscheidend: ohne
+    // sie stiehlt der mobile Browser die horizontale Geste (pointercancel) und
+    // pointermove/-up kommen nicht mehr an → Sliden ginge nicht.
     let startX = null;
-    strip.addEventListener('pointerdown', (e) => { startX = e.clientX; _swipeMoved = false; });
+    let captured = false;
+    strip.addEventListener('pointerdown', (e) => {
+        startX = e.clientX;
+        _swipeMoved = false;
+        captured = false;
+        // WICHTIG: hier NICHT capturen — sonst landet das click-Event auf der
+        // Swipe-Fläche statt auf dem Button und der onclick feuert nie.
+    });
     strip.addEventListener('pointermove', (e) => {
-        if (startX != null && Math.abs(e.clientX - startX) > 8) _swipeMoved = true;
+        if (startX == null) return;
+        if (Math.abs(e.clientX - startX) > 8) {
+            _swipeMoved = true;
+            // Erst jetzt (echter Swipe) capturen, damit die Geste nicht abbricht.
+            if (!captured) { try { strip.setPointerCapture(e.pointerId); captured = true; } catch (_) {} }
+        }
     });
     const endSwipe = (e) => {
         if (startX == null) return;
         const dx = (e.clientX ?? startX) - startX;
         startX = null;
+        if (captured) { try { strip.releasePointerCapture(e.pointerId); } catch (_) {} captured = false; }
         if (Math.abs(dx) > 40) rotateQuickActions(dx < 0 ? 1 : -1);
     };
     strip.addEventListener('pointerup', endSwipe);
-    strip.addEventListener('pointercancel', () => { startX = null; });
+    strip.addEventListener('pointercancel', endSwipe);
     // Klick nach echtem Swipe unterdrücken (sonst löst der Button-onclick aus)
     strip.addEventListener('click', (e) => {
         if (_swipeMoved) { e.stopPropagation(); e.preventDefault(); _swipeMoved = false; }
