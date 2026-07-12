@@ -27,6 +27,7 @@ import weather_alerts
 import locks_storage
 import dashboard_dsl
 import ienc
+import display_power
 
 # Load environment variables from .env file (one level up from backend/)
 dotenv_path = Path(__file__).resolve().parent.parent.parent / ".env"
@@ -4821,6 +4822,7 @@ async def startup_event():
     load_chart_layers()
     init_waterway_router()
     asyncio.create_task(_osrm_health_check_on_startup())
+    display_power.start_wake_watcher()  # optionaler Wake-Taster (config-gated, No-op sonst)
 
     # Load settings and configure services
     try:
@@ -4919,6 +4921,21 @@ async def system_reboot():
     """Pi neu starten"""
     asyncio.get_event_loop().call_later(1, lambda: subprocess.Popen(['sudo', '/sbin/reboot']))
     return {"status": "rebooting"}
+
+
+@app.get("/api/system/display")
+async def get_display_power():
+    """Display-Relais-Status: {configured, on}. on=null wenn nicht konfiguriert."""
+    return {"configured": display_power.is_configured(), "on": display_power.get_state()}
+
+
+@app.post("/api/system/display")
+async def set_display_power(data: dict):
+    """Bildschirm per Relais an/aus (Pi läuft weiter). Body: {"on": true|false}."""
+    on = bool(data.get("on", True))
+    ok = display_power.set_state(on)
+    return {"status": "ok" if ok else "not_configured",
+            "on": display_power.get_state() if ok else None}
 
 # ---------------------------------------------------------------------------
 # System update
