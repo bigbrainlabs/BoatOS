@@ -337,9 +337,107 @@ function stopWeatherUpdates() {
 }
 
 // ==================== EXPORTS ====================
+// ==================== ROUTE-WETTER (Forecast entlang der Route, offline-fähig) ====================
+
+async function showRouteWeather() {
+    const coords = (window.BoatOS?.navigation?.getCurrentRouteCoordinates?.() || []);
+    if (!coords || coords.length < 2) {
+        if (window.BoatOS?.ui?.showNotification) window.BoatOS.ui.showNotification('Keine Route geplant', 'warning');
+        else alert('Keine Route geplant');
+        return;
+    }
+    const overlay = _routeWxOverlay();
+    overlay.querySelector('.rw-body').innerHTML =
+        '<div style="padding:24px;text-align:center;color:var(--text-dim)">Wetter wird geladen…</div>';
+    overlay.style.display = 'flex';
+
+    const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
+    const depEl = document.getElementById('departure-datetime');
+    let departure = null;
+    if (depEl && depEl.value) { try { departure = new Date(depEl.value).toISOString(); } catch (_) {} }
+    // Geplante Geschwindigkeit der Route für die ETA (kn); Fallback 6 kn.
+    const rd = window.BoatOS?.navigation?.getCurrentRouteData?.();
+    const speedKn = (rd && rd.plannedSpeed) ? rd.plannedSpeed : 6;
+    try {
+        const res = await fetch(`${apiUrl}/api/weather/route`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ coords: coords.map(c => [c.lat, c.lon]), departure, speedKn }),
+        });
+        overlay.querySelector('.rw-body').innerHTML = _renderRouteWx(await res.json());
+    } catch (e) {
+        overlay.querySelector('.rw-body').innerHTML =
+            '<div style="padding:24px;text-align:center;color:var(--danger)">Fehler beim Laden.</div>';
+    }
+}
+
+function _routeWxOverlay() {
+    let ov = document.getElementById('route-weather-overlay');
+    if (ov) return ov;
+    ov = document.createElement('div');
+    ov.id = 'route-weather-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:none;align-items:center;justify-content:center;';
+    ov.innerHTML = `
+        <div style="background:var(--bg-panel,#0d1117);border:1px solid var(--border);border-radius:14px;width:min(560px,94vw);max-height:86vh;display:flex;flex-direction:column;overflow:hidden;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);">
+                <span style="font-size:1rem;font-weight:600;color:var(--text);">🌦 Route-Wetter</span>
+                <button onclick="document.getElementById('route-weather-overlay').style.display='none'" style="background:none;border:none;color:var(--text-dim);font-size:1.3rem;cursor:pointer;">✕</button>
+            </div>
+            <div class="rw-body" style="overflow-y:auto;padding:2px 4px;"></div>
+        </div>`;
+    ov.addEventListener('click', (e) => { if (e.target === ov) ov.style.display = 'none'; });
+    document.body.appendChild(ov);
+    return ov;
+}
+
+function _windColor(kn) {
+    if (kn == null) return 'var(--text-dim)';
+    if (kn < 11) return '#3fb950';
+    if (kn < 22) return '#e3b341';
+    return '#f85149';
+}
+
+function _renderRouteWx(data) {
+    if (!data || !data.available) {
+        return `<div style="padding:24px;text-align:center;color:var(--text-dim)">${data?.reason || 'Kein Wetter verfügbar.'}</div>`;
+    }
+    const src = data.offline
+        ? `<span style="color:#e3b341">⚠ Offline · Cache (${data.cache_age_min ?? '?'} min alt)</span>`
+        : `<span style="color:var(--text-dim)">Live · ${new Date(data.generated_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>`;
+    const rows = (data.points || []).map(p => {
+        const t = p.eta ? new Date(p.eta).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+        const emoji = (p.icon ? getWeatherEmoji(p.icon) : '') || '';
+        // Einheiten aus den Settings (Backend liefert kn/°C/km kanonisch)
+        const fmtSpd = (window.formatSpeed || ((k) => `${k} kn`));
+        const wind = p.wind_speed != null ? fmtSpd(p.wind_speed, 0) : '–';
+        const gust = p.gust ? ` <span style="color:var(--text-dim)">(${fmtSpd(p.gust, 0)})</span>` : '';
+        const arrow = (p.wind_deg != null)
+            ? `<span style="display:inline-block;transform:rotate(${(p.wind_deg + 180) % 360}deg);color:${_windColor(p.wind_speed)}">↑</span>`
+            : '';
+        const precip = p.precip ? ` · 💧${p.precip} mm` : '';
+        const temp = (p.temp != null)
+            ? (typeof formatTemperature === 'function' ? formatTemperature(p.temp) : `${p.temp}°`)
+            : '';
+        const dist = (window.formatDistance ? window.formatDistance(p.km / 1.852) : `${p.km} km`);
+        return `
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 8px;border-bottom:1px solid var(--border);">
+                <div style="min-width:56px;text-align:right;">
+                    <div style="font-weight:600;color:var(--text);">${t}</div>
+                    <div style="font-size:0.7rem;color:var(--text-dim);">${dist}</div>
+                </div>
+                <div style="font-size:1.3rem;">${emoji}</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="color:var(--text);font-size:0.85rem;">${p.description || ''} ${temp}</div>
+                    <div style="font-size:0.8rem;color:${_windColor(p.wind_speed)};">${arrow} ${wind}${gust}${precip}</div>
+                </div>
+            </div>`;
+    }).join('');
+    return `<div style="padding:6px 8px;font-size:0.75rem;">${src}</div>${rows || '<div style="padding:24px;text-align:center;color:var(--text-dim)">Keine Punkte.</div>'}`;
+}
+
 // Bei Verwendung als ES6 Modul diese Exports aktivieren:
 
 export {
+    showRouteWeather,
     // Hauptfunktionen
     fetchWeather,
     loadWeatherData,

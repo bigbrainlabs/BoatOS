@@ -2406,6 +2406,126 @@ async def fetch_weather():
         await fetch_weather_once("de")
         await asyncio.sleep(1800)
 
+
+# ── Route-Wetter-Forecast (offline-fähig) ────────────────────────────────────
+# Tastet die Route ab, rechnet pro Punkt die ETA und nimmt den passenden
+# OWM-3h-Forecast. Grid-Cache spart API-Calls; Datei-Cache dient offline.
+_route_weather = {"data": None, "ts": 0.0}   # letzter Route-Forecast (Offline-Fallback)
+_owm_fc_cache = {}                            # (lat0.1, lon0.1) → (ts, forecast_list)
+_ROUTE_WX_CACHE_FILE = "data/weather_route_cache.json"
+
+
+def _hav_km(lat1, lon1, lat2, lon2):
+    dlat = radians(lat2 - lat1); dlon = radians(lon2 - lon1)
+    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+    return 6371.0 * 2 * atan2(sqrt(a), sqrt(1 - a))
+
+
+def _sample_route_km(coords, n):
+    """coords [[lat,lon],...] → n Punkte gleichmäßig nach Distanz, je (lat,lon,km)."""
+    if len(coords) < 2:
+        return [(coords[0][0], coords[0][1], 0.0)] if coords else []
+    cum = [0.0]
+    for i in range(1, len(coords)):
+        cum.append(cum[-1] + _hav_km(coords[i - 1][0], coords[i - 1][1], coords[i][0], coords[i][1]))
+    total = cum[-1]
+    out = []
+    for k in range(n):
+        d = total * k / (n - 1) if n > 1 else 0.0
+        j = 1
+        while j < len(cum) and cum[j] < d:
+            j += 1
+        j = min(j, len(coords) - 1)
+        seg = cum[j] - cum[j - 1]
+        t = (d - cum[j - 1]) / seg if seg > 0 else 0.0
+        lat = coords[j - 1][0] + t * (coords[j][0] - coords[j - 1][0])
+        lon = coords[j - 1][1] + t * (coords[j][1] - coords[j - 1][1])
+        out.append((lat, lon, round(d, 1)))
+    return out
+
+
+async def _owm_forecast_list(session, lat, lon):
+    """OWM 3h-Forecast-Liste für eine grid-gesnappte Position (~0.1°), 30min-Cache."""
+    key = (round(lat, 1), round(lon, 1))
+    now = datetime.now().timestamp()
+    c = _owm_fc_cache.get(key)
+    if c and now - c[0] < 1800:
+        return c[1]
+    url = (f"{OPENWEATHER_BASE_URL}/forecast?lat={key[0]}&lon={key[1]}"
+           f"&appid={OPENWEATHER_API_KEY}&units=metric&lang=de")
+    async with session.get(url) as r:
+        if r.status != 200:
+            return None
+        lst = (await r.json()).get("list", [])
+        _owm_fc_cache[key] = (now, lst)
+        return lst
+
+
+@app.post("/api/weather/route")
+async def weather_route(request: Request):
+    """
+    Wetter-Forecast entlang der Route (an der jeweiligen ETA), herunterladbar +
+    offline nutzbar. Body: {coords:[[lat,lon],...], speedKn?, departure?, points?}.
+    Ohne Internet: letzter gecachter Forecast (source='cache').
+    """
+    body = await request.json()
+    coords = body.get("coords") or []
+    if len(coords) < 2:
+        return {"available": False, "reason": "Keine Route"}
+    speed_kn = float(body.get("speedKn") or 10)
+    try:
+        dep_ts = datetime.fromisoformat(body["departure"]).timestamp() if body.get("departure") \
+            else datetime.now().timestamp()
+    except Exception:
+        dep_ts = datetime.now().timestamp()
+    n = max(2, min(int(body.get("points") or 8), 12))
+    pts = _sample_route_km(coords, n)
+
+    try:
+        result = []
+        async with aiohttp.ClientSession() as session:
+            for (lat, lon, km) in pts:
+                eta_ts = dep_ts + (km / (speed_kn * 1.852)) * 3600  # km / (km/h) → s
+                lst = await _owm_forecast_list(session, lat, lon)
+                entry = {"km": km, "lat": round(lat, 5), "lon": round(lon, 5),
+                         "eta": datetime.fromtimestamp(eta_ts).isoformat()}
+                f = min(lst, key=lambda x: abs(x["dt"] - eta_ts)) if lst else None
+                if f:
+                    g = f["wind"].get("gust")
+                    entry.update({
+                        "temp": round(f["main"]["temp"], 1),
+                        "description": f["weather"][0]["description"],
+                        "icon": f["weather"][0]["icon"],
+                        "wind_speed": round(f["wind"]["speed"] * 1.94384, 1),   # kn
+                        "wind_deg": f["wind"].get("deg", 0),
+                        "gust": round(g * 1.94384, 1) if g else None,           # kn
+                        "precip": round((f.get("rain", {}) or {}).get("3h", 0) or 0, 1),
+                        "forecast_time": f["dt_txt"],
+                    })
+                result.append(entry)
+        payload = {"available": True, "source": "live", "speedKn": speed_kn,
+                   "generated_at": datetime.now().isoformat(), "points": result}
+        _route_weather["data"] = payload
+        _route_weather["ts"] = datetime.now().timestamp()
+        try:
+            with open(_ROUTE_WX_CACHE_FILE, "w") as fh:
+                json.dump(payload, fh)
+        except Exception:
+            pass
+        return payload
+    except Exception as e:
+        print(f"⚠️ Route-Wetter (live) fehlgeschlagen, Offline-Cache: {e}")
+        cached = _route_weather["data"]
+        if cached is None:
+            try:
+                cached = json.load(open(_ROUTE_WX_CACHE_FILE))
+            except Exception:
+                cached = None
+        if cached:
+            age = int((datetime.now().timestamp() - _route_weather.get("ts", 0)) / 60)
+            return {**cached, "source": "cache", "offline": True, "cache_age_min": age}
+        return {"available": False, "reason": "Offline und kein Cache"}
+
 # ==================== WEATHER ALERTS (DWD) ====================
 @app.get("/api/weather/alerts")
 async def get_weather_alerts():

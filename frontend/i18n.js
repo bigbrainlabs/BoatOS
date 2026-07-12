@@ -290,6 +290,7 @@ const translations = {
         route_now_btn: "Jetzt",
         route_offline_btn: "Route offline",
         route_area_offline_btn: "Bereich offline",
+        route_weather_btn: "Route-Wetter",
         // Weather section
         weather_direction: "Richtung",
         weather_humidity_label: "Feuchte",
@@ -769,6 +770,7 @@ const translations = {
         route_now_btn: "Now",
         route_offline_btn: "Route offline",
         route_area_offline_btn: "Area offline",
+        route_weather_btn: "Route weather",
         // Weather section
         weather_direction: "Direction",
         weather_humidity_label: "Humidity",
