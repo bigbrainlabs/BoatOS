@@ -44,6 +44,11 @@ let _lastMapFollow = 0;
 
 // ---- Course Up mode ----
 let courseUpMode = false;
+let perspective3D = false;          // 3D-/Look-ahead-Kartenmodus (gekippt + head-up)
+let _courseUpBefore3D = false;
+let _zoomBefore3D = null;
+const PITCH_3D = 55;                // Kamera-Neigung im 3D-Modus (Grad)
+const ZOOM_3D_DELTA = 1.3;         // im 3D-Modus etwas reinzoomen (räumlicher)
 let _smoothHeading = null;
 const HEADING_EMA_ALPHA = 0.15; // low = very smooth bearing rotation
 
@@ -341,6 +346,10 @@ export async function initMap(options = {}) {
         // Gespeicherte Satelliteneinstellung wiederherstellen
         if (localStorage.getItem('satelliteMode') === 'true') {
             toggleSatellite(true);
+        }
+        // Gespeicherten 3D-/Look-ahead-Modus wiederherstellen
+        if (localStorage.getItem('perspective3D') === 'true') {
+            setTimeout(() => toggleMap3D(true), 600);
         }
 
         initMapMarkers();
@@ -1081,6 +1090,44 @@ function _updateCourseUpButton() {
     const ring = document.getElementById('compass-active-ring');
     if (ring) ring.setAttribute('opacity', courseUpMode ? '1' : '0');
 }
+
+// 3D-/Look-ahead-Perspektive: Karte gekippt + head-up + Boot in die untere
+// Bildhälfte (mehr Fahrrinne voraus sichtbar), auf den bestehenden IENC-Daten.
+export function toggleMap3D(active) {
+    if (typeof active !== 'boolean') active = !perspective3D;
+    perspective3D = active;
+    if (map) {
+        if (active) {
+            _courseUpBefore3D = courseUpMode;
+            courseUpMode = true;            // Look-ahead braucht Kurs oben
+            _updateCourseUpButton();
+            autoFollow = true;
+            updateFollowButton(true);
+            const h = (map.getContainer() && map.getContainer().clientHeight) || 600;
+            _zoomBefore3D = map.getZoom();
+            const opts = {
+                pitch: PITCH_3D,
+                zoom: Math.min(_zoomBefore3D + ZOOM_3D_DELTA, 20),
+                padding: { top: Math.round(h * 0.45), bottom: 0, left: 0, right: 0 },
+                duration: 600,
+            };
+            if (currentBoatHeading) opts.bearing = -_updateSmoothedHeading(currentBoatHeading);
+            map.easeTo(opts);
+        } else {
+            courseUpMode = _courseUpBefore3D;
+            _updateCourseUpButton();
+            const opts = { pitch: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 600 };
+            if (_zoomBefore3D != null) opts.zoom = _zoomBefore3D;
+            if (!courseUpMode) { opts.bearing = 0; _smoothHeading = null; }
+            map.easeTo(opts);
+        }
+    }
+    try { localStorage.setItem('perspective3D', active ? 'true' : 'false'); } catch (_) {}
+    const btn = document.getElementById('btn-map3d');
+    if (btn) btn.classList.toggle('active', active);
+}
+
+export function isPerspective3D() { return perspective3D; }
 
 function updateFollowButton(following) {
     const btn = document.getElementById('btn-follow-resume');

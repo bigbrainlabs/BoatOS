@@ -277,6 +277,7 @@ const translations = {
         map_qa_locks: "Schleusen",
         map_qa_gauges: "Pegel",
         map_qa_satellite: "Satellit",
+        map_qa_3d: "3D",
         // Bottom sheet tabs
         sheet_tab_weather: "Wetter",
         sheet_tab_logbook: "Logbuch",
@@ -755,6 +756,7 @@ const translations = {
         map_qa_locks: "Locks",
         map_qa_gauges: "Gauges",
         map_qa_satellite: "Satellite",
+        map_qa_3d: "3D",
         // Bottom sheet tabs
         sheet_tab_weather: "Weather",
         sheet_tab_logbook: "Logbook",
