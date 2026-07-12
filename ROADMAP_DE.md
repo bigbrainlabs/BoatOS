@@ -51,6 +51,7 @@
 | Fotos im Logbuch | Bilder zu Etappen hinzufügen — lokal auf dem Pi, kein Cloud-Upload | UX |
 | 3D-/Look-ahead-Kartenansicht (Deck) | Gekippte head-up-Perspektive der Fahrrinne voraus (wie Berufsschifffahrt-ECDIS, z. B. Tresco Navigis) — Kamera-Pitch + COG-Follow auf den bestehenden IENC-Vektordaten (MapLibre); Tonnen, km-Marken, Tiefenzonen, Sky-Layer | Karte |
 | Helm-Map-Engine für 3D-Perspektive | `flutter_map` ist 2D (nur Drehung, kein Pitch) — für die 3D-Ansicht auf dem Helm Wechsel auf eine MapLibre-native Flutter-Engine (GPU); flutter-pi-Ressourcen prüfen. Ohne Wechsel bleibt der Helm bei head-up 2D | Karte, Plattform |
+| 3D-Seezeichen — Ausbau & Feinschliff | Aufbauend auf den echten 3D-Tonnen (three.js + MapLibre Custom-Layer, IALA/S-57 aus `TOPSHP`/`COLOUR`, `js/buoy3d.js`): weitere `TOPSHP`-Codes, Baken als Stange statt Tonne, Leuchtfeuer(-Sektoren), `notmrk` als 3D-Tafelschilder, Klick-Popups auf 3D-Objekte; Feinschliff bei Beleuchtung/Anti-Aliasing, Größe & Sichtbarkeit (Zoom-Schwellen), Kardinal-Toppzeichen-Ausrichtung | Karte |
 
 ---
 

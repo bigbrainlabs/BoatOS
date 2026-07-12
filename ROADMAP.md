@@ -51,6 +51,7 @@
 | Photos in logbook | Attach images to trip legs — stored locally on the Pi, no cloud upload | UX |
 | 3D / look-ahead chart view (Deck) | Tilted head-up perspective of the fairway ahead (like professional inland ECDIS, e.g. Tresco Navigis) — camera pitch + COG-follow on the existing IENC vector data (MapLibre); buoys, km-marks, depth zones, sky layer | Map |
 | Helm map engine for 3D perspective | `flutter_map` is 2D (rotation only, no pitch) — a 3D view on the Helm needs switching to a MapLibre-native Flutter engine (GPU); check flutter-pi resources. Without the switch the Helm stays head-up 2D | Map, Platform |
+| 3D seamarks — expansion & fine-tuning | Building on the real 3D buoys (three.js + MapLibre custom layer, IALA/S-57 from `TOPSHP`/`COLOUR`, `js/buoy3d.js`): more `TOPSHP` codes, beacons as poles instead of buoys, lights (sectors), `notmrk` as 3D signboards, click popups on 3D objects; fine-tuning of lighting/anti-aliasing, size & visibility (zoom thresholds), cardinal topmark orientation | Map |
 
 ---
 
