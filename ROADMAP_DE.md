@@ -34,7 +34,6 @@
 |---------|-------------|-----------|
 | AIS-Kollisionswarnung | CPA/TCPA-Berechnung — Alert bei Kollisionskurs | Sicherheit |
 | Kursabweichungs-Alert (XTE) | Warnung wenn Boot vom geplanten Kurs abweicht | Sicherheit |
-| Sprachansagen (TTS) | "In 500 m nächster Wegpunkt" — Web Speech API, optional | UX |
 | Marina & Ankerplatz POIs | Konfigurierbare POI-Datenbank (OpenSeaMap-Import), revier-unabhängig | Karte |
 | Gezeitenintegration | Tidenkurven, ETA-Anpassung für tideabhängige Abschnitte | Daten, Routing |
 
@@ -48,7 +47,6 @@
 | Wetter-Alarme | Konfigurierbare Schwellwerte für Sturm, Starkwind, Sichteinschränkung | Sicherheit |
 | Wetter-Overlay auf Karte | Wind-Pfeile entlang der Route mit Farbcodierung nach Stärke | Karte |
 | Logbuch-Export (PDF / HTML) | Törnbericht mit Track-Karte — für Versicherung, Archiv | UX |
-| Fotos im Logbuch | Bilder zu Etappen hinzufügen — lokal auf dem Pi, kein Cloud-Upload | UX |
 | 3D-/Look-ahead-Kartenansicht (Deck) | Gekippte head-up-Perspektive der Fahrrinne voraus (wie Berufsschifffahrt-ECDIS, z. B. Tresco Navigis) — Kamera-Pitch + COG-Follow auf den bestehenden IENC-Vektordaten (MapLibre); Tonnen, km-Marken, Tiefenzonen, Sky-Layer | Karte |
 | Helm-Map-Engine für 3D-Perspektive | `flutter_map` ist 2D (nur Drehung, kein Pitch) — für die 3D-Ansicht auf dem Helm Wechsel auf eine MapLibre-native Flutter-Engine (GPU); flutter-pi-Ressourcen prüfen. Ohne Wechsel bleibt der Helm bei head-up 2D | Karte, Plattform |
 | 3D-Seezeichen — Ausbau & Feinschliff | Aufbauend auf den echten 3D-Tonnen (three.js + MapLibre Custom-Layer, IALA/S-57 aus `TOPSHP`/`COLOUR`, `js/buoy3d.js`): weitere `TOPSHP`-Codes, Baken als Stange statt Tonne, Leuchtfeuer(-Sektoren), `notmrk` als 3D-Tafelschilder, Klick-Popups auf 3D-Objekte; Feinschliff bei Beleuchtung/Anti-Aliasing, Größe & Sichtbarkeit (Zoom-Schwellen), Kardinal-Toppzeichen-Ausrichtung | Karte |
@@ -79,4 +77,4 @@
 
 ---
 
-*Versionierungsschema: `major.month.release` — nur letztes Segment inkrementieren.*
+*Versionierungsschema: `major.features.bugfixes` — zweites Segment für neue Features, letztes für Bugfixes.*
