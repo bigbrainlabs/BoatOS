@@ -15,19 +15,6 @@
 
 ---
 
-## v1.7.x — Stabilität
-
-| Feature | Beschreibung | Kategorie |
-|---------|-------------|-----------|
-| Strömung: Gewässer-Erkennung konfigurierbar | Strömungswerte sind bereits per Settings einstellbar. Fehlt: Bounding Boxes und Mündungspunkte für neue Gewässer ebenfalls aus Settings (statt hardcoded in water_current.py) | Routing, Platform |
-| Live Wasserstandsdaten | Pegelonline-API mit Cache-Schicht reaktivieren | Daten |
-| Routing-Profil-Wechsel via API | Region und Bootstyp aus der App wechseln — kein SSH nötig | Routing, Platform |
-| Strömungskorrektur sichtbar machen | Anzeige in Route-Info wenn ETA durch Strömung angepasst wurde | UX |
-| Schleusen-Anmelde-Historie | Status-Tracking: angemeldet / bestätigt / passiert | UX |
-| Nacht-Rotlicht-Modus | Rote Bildschirmbeleuchtung für Nachtfahrten | UX |
-
----
-
 ## v1.8 — Sicherheit & Komfort
 
 | Feature | Beschreibung | Kategorie |
@@ -75,6 +62,7 @@
 | NMEA 2000 | N2K-Bus-Anbindung für Motor, Tank, Wind, Tiefe | braucht CAN-Bus |
 | Smartphone-Companion | Position, ETA, Warnungen als PWA auf dem Handy | |
 | Autopilot-Anbindung | Kurs halten, Wegpunkt-Ansteuerung | braucht Hardware |
+| Schleusen-Anmelde-Historie | Status-Tracking: angemeldet / bestätigt / passiert. Aktuell gibt es nur den „Anmelden"-Button ohne Zustand | Konzept offen |
 
 ---
 
