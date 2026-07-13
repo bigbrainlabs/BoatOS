@@ -3897,150 +3897,184 @@ async def calculate_route(request: dict):
         return {"error": str(e)}
 
 # ==================== ROUTING REGIONS MANAGEMENT ====================
+# ==================== OSRM-REGION (Routing-Graph) ====================
+#
+# Der Wechsel läuft über systemd, NICHT über pkill+Popen: osrm.service hat
+# Restart=always — ein selbst gestarteter Prozess würde nach RestartSec vom
+# alten Graphen überschrieben (und ein Reboot setzt ihn ohnehin zurück).
+# Stattdessen wird ein Drop-in geschrieben, das ExecStart überschreibt:
+#   /etc/systemd/system/osrm.service.d/boatos-region.conf
+# Damit ist der Wechsel neustartfest und systemd bleibt der Eigentümer.
+
+_OSRM_DIR = _BASE_DIR / "data" / "osrm"
+_OSRM_DROPIN_DIR = "/etc/systemd/system/osrm.service.d"
+_OSRM_DROPIN = f"{_OSRM_DROPIN_DIR}/boatos-region.conf"
+_OSRM_BIN = "/usr/local/bin/osrm-routed"
+_OSRM_PORT = 5000
+
+_REGION_NAMES = {
+    "baden-wuerttemberg": "Baden-Württemberg",
+    "bayern": "Bayern",
+    "berlin": "Berlin",
+    "brandenburg": "Brandenburg",
+    "bremen": "Bremen",
+    "hamburg": "Hamburg",
+    "hessen": "Hessen",
+    "mecklenburg-vorpommern": "Mecklenburg-Vorpommern",
+    "niedersachsen": "Niedersachsen",
+    "nordrhein-westfalen": "Nordrhein-Westfalen",
+    "rheinland-pfalz": "Rheinland-Pfalz",
+    "saarland": "Saarland",
+    "sachsen": "Sachsen",
+    "sachsen-anhalt": "Sachsen-Anhalt",
+    "schleswig-holstein": "Schleswig-Holstein",
+    "thueringen": "Thüringen",
+    "germany": "Deutschland (komplett)",
+    "germany-waterways": "Deutschland (Wasserstraßen)",
+    "elbe": "Elbe (Sachsen-Anhalt + Brandenburg + Sachsen)",
+}
+
+
+def _osrm_graphs() -> list:
+    """Alle tatsächlich gebauten Graphen (nicht nur '*-latest')."""
+    graphs = []
+    for prop in sorted(_OSRM_DIR.glob("*.osrm.properties")):
+        base = prop.name[: -len(".osrm.properties")]          # z.B. "hamburg-latest"
+        short = base[: -len("-latest")] if base.endswith("-latest") else base
+        try:
+            size = sum(f.stat().st_size for f in _OSRM_DIR.glob(f"{base}.osrm.*") if f.is_file())
+        except OSError:
+            size = 0
+        graphs.append({
+            "id": base,
+            "name": _REGION_NAMES.get(short, short.replace("-", " ").title()),
+            "size_mb": round(size / (1024 * 1024)),
+        })
+    return graphs
+
+
+def _active_graph():
+    """Aktiver Graph aus dem EFFEKTIVEN systemd-ExecStart (Drop-in inklusive)."""
+    try:
+        r = subprocess.run(
+            ["systemctl", "show", "osrm", "--property=ExecStart", "--no-pager"],
+            capture_output=True, text=True, timeout=5,
+        )
+        m = re.search(r"/([A-Za-z0-9._-]+)\.osrm(?=[\s;])", r.stdout)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    # Fallback: laufender Prozess
+    try:
+        r = subprocess.run(["ps", "aux"], capture_output=True, text=True, timeout=5)
+        for line in r.stdout.splitlines():
+            if "osrm-routed" in line and "grep" not in line:
+                m = re.search(r"/([A-Za-z0-9._-]+)\.osrm(?=\s|$)", line)
+                if m:
+                    return m.group(1)
+    except Exception:
+        pass
+    return None
+
+
+def _wait_osrm_up(timeout: float = 30.0) -> bool:
+    """Wartet, bis osrm-routed den Port wieder annimmt."""
+    import socket, time
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", _OSRM_PORT), timeout=1):
+                return True
+        except OSError:
+            time.sleep(0.7)
+    return False
+
+
+def _apply_osrm_region(graph_id: str) -> dict:
+    """BLOCKING: Drop-in schreiben, systemd neu laden, Dienst neu starten."""
+    base_path = _OSRM_DIR / f"{graph_id}.osrm"
+    content = (
+        "# Von BoatOS erzeugt — aktive Routing-Region.\n"
+        "# Leeres ExecStart= loescht das Original, danach folgt der neue Befehl.\n"
+        "[Service]\n"
+        "ExecStart=\n"
+        f"ExecStart={_OSRM_BIN} --algorithm=MLD {base_path} --port {_OSRM_PORT}\n"
+    )
+    tmp = Path("/tmp/boatos-osrm-region.conf")
+    tmp.write_text(content, encoding="utf-8")
+
+    steps = [
+        ["sudo", "mkdir", "-p", _OSRM_DROPIN_DIR],
+        ["sudo", "cp", str(tmp), _OSRM_DROPIN],
+        ["sudo", "systemctl", "daemon-reload"],
+        ["sudo", "systemctl", "restart", "osrm"],
+    ]
+    for cmd in steps:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        if r.returncode != 0:
+            return {"success": False, "error": f"{' '.join(cmd[:3])}: {r.stderr.strip() or r.stdout.strip()}"}
+
+    if not _wait_osrm_up():
+        return {"success": False, "error": "OSRM ist nach dem Neustart nicht erreichbar (Port 5000)"}
+    return {"success": True}
+
+
 @app.get("/api/routing/regions")
 async def get_available_regions():
-    """
-    Get list of available OSRM regions
+    """Alle gebauten Routing-Graphen + aktuell aktiver."""
+    graphs = _osrm_graphs()
+    active = await asyncio.to_thread(_active_graph)
+    for g in graphs:
+        g["active"] = (g["id"] == active)
+    return {"regions": graphs, "count": len(graphs), "active": active}
 
-    Returns:
-        List of region names that are available for routing
-    """
-    osrm_dir = _BASE_DIR / "data" / "osrm"
-
-    # Find all .osrm.properties files
-    properties_files = list(osrm_dir.glob("*-latest.osrm.properties"))
-
-    regions = []
-    for prop_file in sorted(properties_files):
-        region_name = prop_file.name.replace("-latest.osrm.properties", "")
-
-        # Pretty names
-        display_names = {
-            "baden-wuerttemberg": "Baden-Württemberg",
-            "bayern": "Bayern",
-            "berlin": "Berlin",
-            "brandenburg": "Brandenburg",
-            "bremen": "Bremen",
-            "hamburg": "Hamburg",
-            "hessen": "Hessen",
-            "mecklenburg-vorpommern": "Mecklenburg-Vorpommern",
-            "niedersachsen": "Niedersachsen",
-            "nordrhein-westfalen": "Nordrhein-Westfalen",
-            "rheinland-pfalz": "Rheinland-Pfalz",
-            "saarland": "Saarland",
-            "sachsen": "Sachsen",
-            "sachsen-anhalt": "Sachsen-Anhalt",
-            "schleswig-holstein": "Schleswig-Holstein",
-            "thueringen": "Thüringen",
-            "germany": "Deutschland (komplett)",
-            "elbe": "Elbe (Sachsen-Anhalt + Brandenburg + Sachsen)"
-        }
-
-        regions.append({
-            "id": region_name,
-            "name": display_names.get(region_name, region_name.replace("-", " ").title())
-        })
-
-    return {"regions": regions, "count": len(regions)}
 
 @app.get("/api/routing/current-region")
 async def get_current_region():
-    """
-    Get currently active OSRM region
+    """Aktuell geladene Routing-Region."""
+    active = await asyncio.to_thread(_active_graph)
+    short = active[: -len("-latest")] if active and active.endswith("-latest") else active
+    return {
+        "region": active,
+        "name": _REGION_NAMES.get(short, short.replace("-", " ").title()) if short else None,
+        "running": _wait_osrm_up(timeout=1.5) if active else False,
+    }
 
-    Returns:
-        Currently loaded region name
-    """
-    try:
-        # Check which osrm-routed process is running
-        result = subprocess.run(
-            ["ps", "aux"],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-
-        for line in result.stdout.split('\n'):
-            if 'osrm-routed' in line and '--algorithm=MLD' in line:
-                # Extract filename from command line
-                match = re.search(r'/([^/]+)-latest\.osrm', line)
-                if match:
-                    region = match.group(1)
-                    return {"region": region, "running": True}
-
-        return {"region": None, "running": False}
-    except Exception as e:
-        return {"error": str(e), "running": False}
 
 @app.post("/api/routing/switch-region")
 async def switch_region(request: dict):
     """
-    Switch to a different OSRM region
+    Routing-Region wechseln (neustartfest via systemd-Drop-in).
 
-    Request body: {
-        "region": "region-name"  # e.g., "hamburg", "germany"
-    }
-
-    Returns:
-        Status of the region switch
+    Body: { "region": "<graph-id>" }  z.B. "hamburg-latest", "germany-waterways"
     """
-    region = request.get("region")
-
+    region = (request or {}).get("region")
     if not region:
-        return {"success": False, "error": "Region name required"}
+        return {"success": False, "error": "Region erforderlich"}
 
-    # Check if region files exist (use .osrm.properties as indicator)
-    osrm_properties = _BASE_DIR / "data" / "osrm" / f"{region}-latest.osrm.properties"
+    # Nur bekannte, tatsächlich gebaute Graphen zulassen (kein Pfad-Schmuggel)
+    valid = {g["id"] for g in _osrm_graphs()}
+    if region not in valid:
+        return {"success": False, "error": f"Graph '{region}' nicht gefunden"}
 
-    if not osrm_properties.exists():
-        return {"success": False, "error": f"Region '{region}' not found"}
+    # BLOCKING-Teil in den Thread — sonst blockiert der Restart den Event-Loop
+    result = await asyncio.to_thread(_apply_osrm_region, region)
+    if not result.get("success"):
+        return result
 
-    # osrm-routed needs the base path without extension
-    osrm_file = _BASE_DIR / "data" / "osrm" / f"{region}-latest.osrm"
+    active = await asyncio.to_thread(_active_graph)
+    print(f"✅ Routing-Region gewechselt: {region} (aktiv: {active})")
+    return {"success": True, "region": active or region}
 
-    try:
-        # Kill current osrm-routed process
-        subprocess.run(["pkill", "-9", "osrm-routed"], timeout=5)
-        print(f"🛑 Stopped osrm-routed")
+@app.get("/api/routing/waterways")
+async def get_waterways():
+    """
+    Wirksame Gewässer-Konfiguration für die Strömungsberechnung
+    (Code-Defaults + Overrides aus waterCurrent.byName).
+    """
+    return {"waterways": water_current_service.get_waterways()}
 
-        # Wait a moment for process to fully terminate
-        await asyncio.sleep(1)
-
-        # Start new osrm-routed with selected region
-        subprocess.Popen([
-            "/usr/local/bin/osrm-routed",
-            "--algorithm=MLD",
-            str(osrm_file),
-            "--port", "5000"
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-        print(f"✅ Started osrm-routed with region: {region}")
-
-        # Wait for OSRM to start
-        await asyncio.sleep(2)
-
-        # Verify it started
-        result = subprocess.run(
-            ["ps", "aux"],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-
-        if 'osrm-routed' in result.stdout and region in result.stdout:
-            return {
-                "success": True,
-                "region": region,
-                "message": f"Successfully switched to region: {region}"
-            }
-        else:
-            return {
-                "success": False,
-                "error": "OSRM failed to start with new region"
-            }
-
-    except Exception as e:
-        return {"success": False, "error": str(e)}
 
 # ==================== ROUTING GRAPH UPLOAD ====================
 

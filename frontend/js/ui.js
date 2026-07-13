@@ -1631,6 +1631,205 @@ async function loadRoutingGraphs() {
     }
 }
 
+// ==================== GEWÄSSER-EDITOR (Strömung + Geografie) ====================
+//
+// Ersetzt die früher fest verdrahteten 6 Flüsse. Jedes Gewässer bringt seine
+// Geografie selbst mit (bbox grenzt ein WO es liegt, mouth bestimmt berg/tal).
+// Leere Geo-Felder = die eingebauten Defaults aus water_current.py greifen weiter.
+
+const WW_TYPES = ['river', 'canal', 'stream', 'lake'];
+const WW_TYPE_LABEL = { river: 'Fluss', canal: 'Kanal', stream: 'Bach', lake: 'See' };
+
+function _wwNum(v) {
+    return (v === null || v === undefined || v === '') ? '' : v;
+}
+
+function _waterwayRow(w) {
+    const bbox = w.bbox || [];
+    const mouth = w.mouth || [];
+    const types = WW_TYPES.map(t =>
+        `<option value="${t}"${(w.type || 'river') === t ? ' selected' : ''}>${WW_TYPE_LABEL[t]}</option>`).join('');
+    // Eingebaute Gewässer: Name nicht änderbar (sonst verliert man den Default-Bezug)
+    const nameField = w.builtin
+        ? `<span class="ww-name" data-name="${escapeHTML(w.name)}" style="flex:1;font-weight:600;">${escapeHTML(w.name)}</span>`
+        : `<input class="setting-input ww-name" value="${escapeHTML(w.name)}" placeholder="Name" style="flex:1;min-width:90px;">`;
+
+    return `
+    <div class="ww-row" data-builtin="${w.builtin ? '1' : '0'}"
+         style="border-bottom:1px solid var(--border);padding:6px 0;">
+        <div style="display:flex;gap:6px;align-items:center;">
+            ${nameField}
+            <input type="number" class="setting-input ww-current" value="${_wwNum(w.current_kmh)}"
+                   step="0.1" min="0" placeholder="km/h" title="Strömung (km/h)" style="width:70px;">
+            <select class="setting-select ww-type" style="width:80px;">${types}</select>
+            <span title="Geografie" style="cursor:pointer;opacity:0.7;"
+                  onclick="BoatOS.ui.toggleWaterwayGeo(this)">🌍</span>
+            ${w.builtin ? '' : `<span title="Entfernen" style="cursor:pointer;opacity:0.6;"
+                  onclick="BoatOS.ui.removeWaterway(this)">🗑</span>`}
+        </div>
+        <div class="ww-geo" style="display:none;padding:8px 0 4px 4px;">
+            <div style="color:var(--text-dim);font-size:11px;margin-bottom:4px;">
+                Bounding-Box (lat min/max, lon min/max)
+            </div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">
+                <input type="number" class="setting-input ww-bbox" value="${_wwNum(bbox[0])}" step="0.001" placeholder="lat min" style="width:82px;">
+                <input type="number" class="setting-input ww-bbox" value="${_wwNum(bbox[1])}" step="0.001" placeholder="lat max" style="width:82px;">
+                <input type="number" class="setting-input ww-bbox" value="${_wwNum(bbox[2])}" step="0.001" placeholder="lon min" style="width:82px;">
+                <input type="number" class="setting-input ww-bbox" value="${_wwNum(bbox[3])}" step="0.001" placeholder="lon max" style="width:82px;">
+            </div>
+            <div style="color:var(--text-dim);font-size:11px;margin-bottom:4px;">
+                Mündung (lat, lon) — bestimmt die Fließrichtung · optional feste Peilung
+            </div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                <input type="number" class="setting-input ww-mouth" value="${_wwNum(mouth[0])}" step="0.001" placeholder="lat" style="width:82px;">
+                <input type="number" class="setting-input ww-mouth" value="${_wwNum(mouth[1])}" step="0.001" placeholder="lon" style="width:82px;">
+                <input type="number" class="setting-input ww-bearing" value="${_wwNum(w.flow_bearing)}" step="1" min="0" max="359" placeholder="Peilung°" style="width:82px;">
+            </div>
+        </div>
+    </div>`;
+}
+
+async function loadWaterways() {
+    const el = document.getElementById('waterway-list');
+    if (!el) return;
+    try {
+        const r = await fetch('/api/routing/waterways', { cache: 'no-store' });
+        const data = await r.json();
+        const ww = data.waterways || [];
+        el.innerHTML = ww.length ? ww.map(_waterwayRow).join('') : '<em>Keine Gewässer konfiguriert</em>';
+    } catch {
+        el.textContent = 'Fehler beim Laden';
+    }
+}
+export { loadWaterways };
+
+export function addWaterway() {
+    const el = document.getElementById('waterway-list');
+    if (!el) return;
+    if (el.querySelector('em')) el.innerHTML = '';   // Platzhalter weg
+    el.insertAdjacentHTML('beforeend', _waterwayRow({ name: '', type: 'river', builtin: false }));
+    const rows = el.querySelectorAll('.ww-row');
+    const last = rows[rows.length - 1];
+    last.querySelector('.ww-geo').style.display = 'block';   // Geo gleich aufklappen
+    last.querySelector('.ww-name')?.focus();
+}
+
+export function removeWaterway(el) {
+    el.closest('.ww-row')?.remove();
+}
+
+export function toggleWaterwayGeo(el) {
+    const geo = el.closest('.ww-row')?.querySelector('.ww-geo');
+    if (geo) geo.style.display = (geo.style.display === 'none') ? 'block' : 'none';
+}
+
+/**
+ * Liest den Editor → byName-Objekt fürs Backend.
+ * Nur ausgefüllte Geo-Felder werden geschrieben; unvollständige werden
+ * weggelassen, damit sie nicht die Code-Defaults kaputt überschreiben.
+ */
+function collectWaterways() {
+    const el = document.getElementById('waterway-list');
+    if (!el) return null;
+
+    const out = {};
+    el.querySelectorAll('.ww-row').forEach(row => {
+        const nameEl = row.querySelector('.ww-name');
+        const name = (nameEl?.dataset.name ?? nameEl?.value ?? '').trim();
+        if (!name) return;
+
+        const entry = { type: row.querySelector('.ww-type')?.value || 'river' };
+
+        const cur = parseFloat(row.querySelector('.ww-current')?.value);
+        if (Number.isFinite(cur)) entry.current_kmh = cur;
+
+        const bbox = [...row.querySelectorAll('.ww-bbox')].map(i => parseFloat(i.value));
+        if (bbox.length === 4 && bbox.every(Number.isFinite)) entry.bbox = bbox;
+
+        const mouth = [...row.querySelectorAll('.ww-mouth')].map(i => parseFloat(i.value));
+        if (mouth.length === 2 && mouth.every(Number.isFinite)) entry.mouth = mouth;
+
+        const bearing = parseFloat(row.querySelector('.ww-bearing')?.value);
+        if (Number.isFinite(bearing)) entry.flow_bearing = bearing;
+
+        out[name] = entry;
+    });
+    return out;
+}
+window.collectWaterways = collectWaterways;
+
+// ==================== ROUTING-REGION (OSRM-Graph) ====================
+
+/**
+ * Lädt die gebauten Routing-Graphen und markiert den aktiven.
+ */
+async function loadRoutingRegions() {
+    const sel = document.getElementById('setting-routing-region');
+    const activeEl = document.getElementById('routing-region-active');
+    if (!sel || !activeEl) return;
+    try {
+        const r = await fetch('/api/routing/regions', { cache: 'no-store' });
+        const data = await r.json();
+        const regions = data.regions || [];
+        if (!regions.length) {
+            activeEl.textContent = 'Kein Graph gefunden';
+            sel.innerHTML = '';
+            return;
+        }
+        sel.innerHTML = regions
+            .map(g => `<option value="${g.id}"${g.active ? ' selected' : ''}>${g.name} · ${g.size_mb} MB</option>`)
+            .join('');
+        const active = regions.find(g => g.active);
+        activeEl.textContent = active ? active.name : (data.active || 'unbekannt');
+    } catch {
+        activeEl.textContent = 'Fehler beim Laden';
+    }
+}
+export { loadRoutingRegions };
+
+/**
+ * Wechselt die Routing-Region (Backend schreibt ein systemd-Drop-in und
+ * startet osrm.service neu — dauert ein paar Sekunden).
+ */
+export async function switchRoutingRegion() {
+    const sel = document.getElementById('setting-routing-region');
+    const btn = document.getElementById('routing-region-btn');
+    const status = document.getElementById('routing-region-status');
+    if (!sel || !sel.value) return;
+
+    const region = sel.value;
+    btn.disabled = true;
+    const oldLabel = btn.textContent;
+    btn.textContent = 'Wechselt…';
+    status.style.display = 'block';
+    status.style.color = 'var(--text-dim)';
+    status.textContent = 'OSRM wird mit dem neuen Graphen neu gestartet…';
+
+    try {
+        const r = await fetch('/api/routing/switch-region', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ region }),
+        });
+        const data = await r.json();
+        if (data.success) {
+            status.style.color = 'var(--success, #10b981)';
+            status.textContent = '✓ Region gewechselt';
+            await loadRoutingRegions();
+            showToast('Routing-Region gewechselt', 'success');
+        } else {
+            status.style.color = 'var(--danger, #ef4444)';
+            status.textContent = '✗ ' + (data.error || 'Fehler');
+        }
+    } catch (e) {
+        status.style.color = 'var(--danger, #ef4444)';
+        status.textContent = '✗ ' + e.message;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = oldLabel;
+    }
+}
+
 window._deleteRoutingGraph = async function(name, el) {
     if (!confirm(`Routing-Graph "${name}" wirklich löschen?`)) return;
     el.textContent = '…';
@@ -1931,3 +2130,5 @@ window.uploadMbtiles = uploadMbtiles;
 window.onRoutingFileSelected = onRoutingFileSelected;
 window.uploadRoutingFile = uploadRoutingFile;
 window.loadRoutingGraphs = loadRoutingGraphs;
+window.loadRoutingRegions = loadRoutingRegions;
+window.loadWaterways = loadWaterways;

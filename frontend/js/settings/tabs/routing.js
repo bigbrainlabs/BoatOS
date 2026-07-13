@@ -42,6 +42,22 @@ export const html = `
                 </div>
 
                 <div class="setting-group">
+                    <h4>Routing-Region</h4>
+                    <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">
+                        Welcher Routing-Graph im OSRM-Dienst geladen ist. Der Wechsel ist neustartfest.
+                    </p>
+                    <div style="font-size:12px;margin-bottom:8px;">
+                        Aktiv: <strong id="routing-region-active" style="color:var(--accent);">Wird geladen…</strong>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <select class="setting-select" id="setting-routing-region" style="flex:1;min-width:160px;"></select>
+                        <button id="routing-region-btn" class="btn-primary" style="min-width:120px;"
+                                onclick="BoatOS.ui.switchRoutingRegion()">Wechseln</button>
+                    </div>
+                    <div id="routing-region-status" style="font-size:11px;margin-top:6px;display:none;"></div>
+                </div>
+
+                <div class="setting-group">
                     <h4>Routing-Daten (grenzüberschreitend)</h4>
                     <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">
                         .routing-Dateien aus dem MBTiles Creator hochladen — ermöglicht Routen über Ländergrenzen.
@@ -80,33 +96,17 @@ export const html = `
 
                     <div id="water-current-settings">
                         <div style="background: var(--bg-card); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                            <h5 style="margin: 0 0 10px 0; color: var(--accent);">Gewässer-spezifisch (<span class="unit-speed">kn</span>)</h5>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                                <div class="setting-item" style="margin: 0;">
-                                    <span style="font-size: 12px;">Rhein</span>
-                                    <input type="number" class="setting-input" id="setting-current-rhein" value="3.2" step="0.1" min="0" style="width: 70px;">
-                                </div>
-                                <div class="setting-item" style="margin: 0;">
-                                    <span style="font-size: 12px;">Mosel</span>
-                                    <input type="number" class="setting-input" id="setting-current-mosel" value="1.6" step="0.1" min="0" style="width: 70px;">
-                                </div>
-                                <div class="setting-item" style="margin: 0;">
-                                    <span style="font-size: 12px;">Main</span>
-                                    <input type="number" class="setting-input" id="setting-current-main" value="1.3" step="0.1" min="0" style="width: 70px;">
-                                </div>
-                                <div class="setting-item" style="margin: 0;">
-                                    <span style="font-size: 12px;">Elbe</span>
-                                    <input type="number" class="setting-input" id="setting-current-elbe" value="2.2" step="0.1" min="0" style="width: 70px;">
-                                </div>
-                                <div class="setting-item" style="margin: 0;">
-                                    <span style="font-size: 12px;">Saale</span>
-                                    <input type="number" class="setting-input" id="setting-current-saale" value="1.1" step="0.1" min="0" style="width: 70px;">
-                                </div>
-                                <div class="setting-item" style="margin: 0;">
-                                    <span style="font-size: 12px;">Donau</span>
-                                    <input type="number" class="setting-input" id="setting-current-donau" value="2.7" step="0.1" min="0" style="width: 70px;">
-                                </div>
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                                <h5 style="margin:0;color:var(--accent);">Gewässer</h5>
+                                <button class="btn-secondary" style="padding:4px 10px;font-size:12px;"
+                                        onclick="BoatOS.ui.addWaterway()">+ Gewässer</button>
                             </div>
+                            <small style="color:var(--text-dim);font-size:11px;display:block;margin-bottom:10px;">
+                                Strömung in <strong>km/h</strong>. Über 🌍 auch die Geografie setzen:
+                                die <em>Bounding-Box</em> grenzt ein, wo das Gewässer liegen kann, die <em>Mündung</em>
+                                bestimmt die Fließrichtung (berg/tal). Leere Geo-Felder = eingebauter Standard.
+                            </small>
+                            <div id="waterway-list" style="font-size:12px;">Wird geladen…</div>
                         </div>
 
                         <div style="background: var(--bg-card); padding: 15px; border-radius: 8px;">
@@ -162,12 +162,8 @@ export function load(settings) {
         if (graphhopperApiKey && settings.routing.graphhopperApiKey) graphhopperApiKey.value = settings.routing.graphhopperApiKey;
         if (toggleWaterCurrent) toggleWaterCurrent.classList.toggle('active', settings.routing.waterCurrentEnabled === true);
 
-        if (settings.routing.currents) {
-            ['rhein', 'mosel', 'main', 'elbe', 'saale', 'donau'].forEach(name => {
-                const el = document.getElementById(`setting-current-${name}`);
-                if (el && settings.routing.currents[name] !== undefined) el.value = settings.routing.currents[name];
-            });
-        }
+        // Gewässer-Liste kommt dynamisch aus /api/routing/waterways (siehe onShow),
+        // nicht mehr aus fest verdrahteten Feldern.
         if (settings.routing.currentTypes) {
             ['river', 'canal', 'stream', 'lake'].forEach(type => {
                 const el = document.getElementById(`setting-current-type-${type}`);
@@ -192,13 +188,6 @@ export function collect(settings) {
     if (graphhopperApiKey) settings.routing.graphhopperApiKey = graphhopperApiKey.value;
     if (toggleWaterCurrent) settings.routing.waterCurrentEnabled = toggleWaterCurrent.classList.contains('active');
 
-    // Fließgeschwindigkeiten — Gewässer-spezifisch
-    settings.routing.currents = settings.routing.currents || {};
-    ['rhein', 'mosel', 'main', 'elbe', 'saale', 'donau'].forEach(name => {
-        const el = document.getElementById(`setting-current-${name}`);
-        if (el) settings.routing.currents[name] = parseFloat(el.value) || 0;
-    });
-
     // Fließgeschwindigkeiten — nach Typ
     settings.routing.currentTypes = settings.routing.currentTypes || {};
     ['river', 'canal', 'stream', 'lake'].forEach(type => {
@@ -206,21 +195,21 @@ export function collect(settings) {
         if (el) settings.routing.currentTypes[type] = parseFloat(el.value) || 0;
     });
 
-    // waterCurrent-Objekt im Format des Backend water_current_service
-    const nameMap = { rhein: 'Rhein', mosel: 'Mosel', main: 'Main', elbe: 'Elbe', saale: 'Saale', donau: 'Donau' };
+    // waterCurrent = einzige Quelle fürs Backend (water_current_service).
+    // byName kommt aus dem dynamischen Gewässer-Editor (inkl. bbox/mouth/flow_bearing);
+    // nur gesetzte Geo-Felder werden geschrieben — leere lassen die Code-Defaults greifen.
+    const byName = (window.collectWaterways ? window.collectWaterways() : null);
     settings.waterCurrent = {
         enabled: settings.routing.waterCurrentEnabled === true,
-        byName: {},
+        byName: byName || (settings.waterCurrent?.byName ?? {}),
         byType: settings.routing.currentTypes || {}
     };
-    ['rhein', 'mosel', 'main', 'elbe', 'saale', 'donau'].forEach(name => {
-        const val = settings.routing.currents?.[name];
-        if (val) settings.waterCurrent.byName[nameMap[name]] = { current_kmh: val, type: 'river' };
-    });
 }
 
 export function onShow(ctx) {
     if (window.loadRoutingGraphs) window.loadRoutingGraphs();
+    if (window.loadRoutingRegions) window.loadRoutingRegions();
+    if (window.loadWaterways) window.loadWaterways();
 }
 
 // ==================== AKTIONEN ====================
