@@ -26,16 +26,24 @@
 
 ---
 
+## Delivered — 3D chart & route weather (in the beta branch)
+
+| Feature | Description | Category |
+|---------|-------------|----------|
+| 3D / look-ahead chart view (Deck) | Tilted head-up perspective of the fairway ahead (camera pitch + COG-follow, target zoom), on the existing IENC vector data | Map |
+| Real 3D seamarks (Deck) | Buoys/beacons as true 3D objects via three.js + MapLibre custom layer, data-driven from IENC (`TOPSHP`/`COLOUR`/`CATCAM`). Performance verified on the target Pi. Expansion: see v1.9 | Map |
+| Route weather usable offline | `/api/weather/route` serves the forecast along the route (at each ETA), with a file cache → usable without internet. **GRIB is not needed for this** — the original GRIB item is thereby done | Data |
+| Logbook export (PDF) | Trip report as PDF (`pdf_export.py`, `GET /api/trip/pdf/{id}`), reachable from the logbook | UX |
+
+---
+
 ## v1.9 — Offline-First
 
 | Feature | Description | Category |
 |---------|-------------|----------|
-| Offline weather data (GRIB) | Download forecast for the active route and use without internet | Data |
-| Weather alerts | Configurable thresholds for storms, strong winds, low visibility | Safety |
-| Weather overlay on map | Wind arrows along the route, colour-coded by intensity | Map |
-| Logbook export (PDF / HTML) | Trip report with track map — for insurance, records, archive | UX |
-| 3D / look-ahead chart view (Deck) | Tilted head-up perspective of the fairway ahead (like professional inland ECDIS, e.g. Tresco Navigis) — camera pitch + COG-follow on the existing IENC vector data (MapLibre); buoys, km-marks, depth zones, sky layer | Map |
-| Helm map engine for 3D perspective | `flutter_map` is 2D (rotation only, no pitch) — a 3D view on the Helm needs switching to a MapLibre-native Flutter engine (GPU); check flutter-pi resources. Without the switch the Helm stays head-up 2D | Map, Platform |
+| Weather alerts | **Backend already exists** (`weather_alerts` module, `/api/weather/alerts` + `/cached`) — serves official warnings. Missing: the UI for it, plus the decision whether user-configurable thresholds (storm, strong wind, visibility) should be added | Safety |
+| Weather overlay on map | Wind arrows along the route, colour-coded by intensity. Currently there is only a DOM panel (`route-weather-overlay`), nothing on the map itself | Map |
+| Helm map engine for 3D perspective | `flutter_map` (^8.1.1) is 2D (rotation only, no pitch) — a 3D view on the Helm needs switching to a MapLibre-native Flutter engine (GPU); check flutter-pi resources. Without the switch the Helm stays head-up 2D | Map, Platform |
 | 3D seamarks — expansion & fine-tuning | Building on the real 3D buoys (three.js + MapLibre custom layer, IALA/S-57 from `TOPSHP`/`COLOUR`, `js/buoy3d.js`): more `TOPSHP` codes, beacons as poles instead of buoys, lights (sectors), `notmrk` as 3D signboards, click popups on 3D objects; fine-tuning of lighting/anti-aliasing, size & visibility (zoom thresholds), cardinal topmark orientation | Map |
 
 ---
