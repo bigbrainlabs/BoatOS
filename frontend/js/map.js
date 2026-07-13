@@ -48,7 +48,7 @@ let perspective3D = false;          // 3D-/Look-ahead-Kartenmodus (gekippt + hea
 let _courseUpBefore3D = false;
 let _zoomBefore3D = null;
 const PITCH_3D = 55;                // Kamera-Neigung im 3D-Modus (Grad)
-const ZOOM_3D_TARGET = 17.5;       // Ziel-Zoom in der 3D-Ansicht (nah, mehr Fahrgefühl)
+const ZOOM_3D_TARGET = 16.0;       // Ziel-Zoom in der 3D-Ansicht (nah, mehr Fahrgefühl)
 let _smoothHeading = null;
 const HEADING_EMA_ALPHA = 0.15; // low = very smooth bearing rotation
 
@@ -70,22 +70,26 @@ function _animateBoatMarker(ts) {
     _dispLat = _fromLat + (_targetLat - _fromLat) * e;
     _dispLon = _fromLon + (_targetLon - _fromLon) * e;
 
-    boatMarker.setLngLat([_dispLon, _dispLat]);
-
-    // Karte folgt gedrosselt (~14 fps) mit LINEARER, nahtlos verketteter Ease:
-    // Dauer == Drossel-Intervall → Eases überlappen nicht (kein Pulsen/Zucken),
-    // moderate GPU-Last → Pi bleibt für Marker/Gesten bedienbar.
-    if (autoFollow && ts - _lastMapFollow > 70) {
-        const opts = { center: [_dispLon, _dispLat], duration: 70, easing: (t) => t };
-        if (courseUpMode && currentBoatHeading !== 0) {
-            // Head-up: Fahrtrichtung nach oben → bearing = +heading (geglättet)
-            opts.bearing = _updateSmoothedHeading(currentBoatHeading);
+    if (autoFollow) {
+        // Marker UND Karte synchron im selben Tick per jumpTo bewegen (jumpTo
+        // rendert nur 1×, easeTo würde die ganze Dauer mit 60fps rendern → Pi-Last).
+        // Gedrosselt auf ~33 fps: gleichmäßiges Scrollen, Boot bleibt exakt
+        // zentriert (kein Wackeln relativ zur Karte), Pi bleibt bedienbar.
+        if (ts - _lastMapFollow > 30) {
+            const jt = { center: [_dispLon, _dispLat] };
+            if (courseUpMode && currentBoatHeading !== 0) {
+                // Head-up: Fahrtrichtung nach oben → bearing = +heading (geglättet)
+                jt.bearing = _updateSmoothedHeading(currentBoatHeading);
+            }
+            map.jumpTo(jt);
+            boatMarker.setLngLat([_dispLon, _dispLat]);
+            _lastMapFollow = ts;
+            if (courseUpMode && currentBoatHeading !== 0 && boatMarkerElement) {
+                boatMarkerElement.style.transform = `rotate(${currentBoatHeading - map.getBearing()}deg)`;
+            }
         }
-        map.easeTo(opts);
-        _lastMapFollow = ts;
-        if (courseUpMode && currentBoatHeading !== 0 && boatMarkerElement) {
-            boatMarkerElement.style.transform = `rotate(${currentBoatHeading - map.getBearing()}deg)`;
-        }
+    } else {
+        boatMarker.setLngLat([_dispLon, _dispLat]);   // ohne Follow: Marker frei, voll flüssig
     }
 
     if (t < 1) {
