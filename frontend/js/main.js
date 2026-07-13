@@ -238,6 +238,9 @@ let simDistanceTraveled = 0;
 let simMultiplier = 10; // ×10 = 100 kn Zeitraffer (max 20 über Slider)
 let simSavedPosition = null; // Boot-Position vor Simulation sichern
 let simLastGpsPost = 0;      // Throttle für Sim-GPS-Broadcast ans Backend
+let simLastTick = 0;         // Zeitstempel des letzten Ticks (für zeitbasierte Strecke)
+let simSavedTrack = null;    // echter GPS-Track, während der Simulation weggesichert
+let simCooldownUntil = 0;    // nach dem Stop kurz keine GPS-Updates annehmen (siehe stopSimulation)
 
 function simHaversine(lat1, lon1, lat2, lon2) {
     const R = 6371000;
@@ -278,8 +281,17 @@ function simTick() {
         : null;
     if (!routeCoords || routeCoords.length < 2) { stopSimulation(); return; }
 
-    // Meter pro Tick (100ms): Basis 10 kn × Multiplikator
-    simDistanceTraveled += simMultiplier * 10 * 1852 / 36000;
+    // ZEITBASIERT statt pro Tick: setInterval feuert unter Last NICHT zuverlässig
+    // alle 100 ms (im 3D-Modus bauen die 3D-Tonnen periodisch hunderte Meshes neu
+    // und blockieren den Main-Thread). Eine feste Strecke pro Tick würde das Boot
+    // dann real langsamer fahren lassen, als die SOG-Anzeige behauptet.
+    // Mit der echten Delta-Zeit stimmt die gefahrene Geschwindigkeit immer.
+    const nowT = performance.now();
+    const dt = simLastTick ? Math.min((nowT - simLastTick) / 1000, 0.5) : 0.1;  // s, gegen Ausreißer gedeckelt
+    simLastTick = nowT;
+
+    const speedKn = 10 * simMultiplier;          // Basis 10 kn × Multiplikator
+    simDistanceTraveled += speedKn * 1852 / 3600 * dt;   // kn → m/s → Meter
 
     const pos = interpolateAlongRoute(routeCoords, simDistanceTraveled);
     if (!pos) {
@@ -332,6 +344,23 @@ function startSimulation() {
     }
     simSavedPosition = window.currentPosition ? { ...window.currentPosition } : null;
     simDistanceTraveled = 0;
+    simLastTick = 0;   // erster Tick nimmt den Default-dt, nicht einen alten Zeitstempel
+
+    // Echten Track wegsichern und die Linie leeren. Sonst verbindet die Track-Linie
+    // den letzten ECHTEN GPS-Punkt mit dem ersten Sim-Punkt auf der Route — genau
+    // die verwirrende Luftlinie. Der echte Track kommt beim Stoppen zurück.
+    simSavedTrack = mapModule.getTrackHistory ? [...mapModule.getTrackHistory()] : null;
+    if (mapModule.clearTrack) mapModule.clearTrack();
+
+    // Boot SOFORT an den Routenanfang setzen (Sprung, kein Gleiten): über
+    // updateBoatPosition() würde der Marker wegen der GPS-Glättung sichtbar per
+    // Luftlinie von der echten Position zum ersten Wegpunkt ziehen.
+    const start = interpolateAlongRoute(routeCoords, 0);
+    if (start && mapModule.setBoatPositionImmediate) {
+        mapModule.setBoatPositionImmediate(start.lat, start.lon, start.bearing);
+        window.currentPosition = { lat: start.lat, lon: start.lon };
+    }
+
     simInterval = setInterval(simTick, 100);
     setSimButtonState(true);
     mapModule.setAutoFollow(true);
@@ -342,20 +371,32 @@ function startSimulation() {
 function stopSimulation() {
     if (simInterval) { clearInterval(simInterval); simInterval = null; }
     setSimButtonState(false);
+
+    // Der letzte Sim-Broadcast ans Backend liegt bis zu 500 ms zurueck und kann als
+    // WebSocket-Nachricht NACH dem Stop eintreffen. Ohne Sperre wuerde er Boot und
+    // SOG wieder auf die letzte Sim-Position/-Geschwindigkeit setzen.
+    simCooldownUntil = Date.now() + 2000;
     // Sim-GPS-Override im Backend aufheben → zurück zu echtem GPS (SignalK)
     const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
     fetch(`${apiUrl}/api/gps/external/disable`, { method: 'POST' }).catch(() => {});
-    // Boot-Marker zurück auf echte Position
-    if (simSavedPosition) {
-        mapModule.updateBoatPosition(simSavedPosition);
+    // Boot-Marker zurück auf die echte Position — ebenfalls als Sprung, sonst
+    // gleitet er per Luftlinie zurück und zieht wieder eine Track-Linie quer.
+    if (simSavedPosition && mapModule.setBoatPositionImmediate) {
+        mapModule.setBoatPositionImmediate(simSavedPosition.lat, simSavedPosition.lon);
         window.currentPosition = simSavedPosition;
     }
-    // Header-SOG/COG nicht auf dem letzten Sim-Wert hängen lassen (kein echter Fix)
-    const sogEl = document.getElementById('sog-value');
-    if (sogEl) sogEl.textContent = '0.0';
-    const cogEl = document.getElementById('cog-value');
-    if (cogEl) cogEl.textContent = '---°';
-    if (window.BoatOS?.context) { window.BoatOS.context.sog = 0; }
+
+    // Sim-Track verwerfen, echten Track wiederherstellen
+    if (mapModule.setTrackHistory) mapModule.setTrackHistory(simSavedTrack || []);
+    simSavedTrack = null;
+    // Header-SOG/COG sofort leeren (nicht erst, wenn die naechste GPS-Nachricht kommt)
+    if (sensors.clearNavigationHeader) sensors.clearNavigationHeader();
+    // Navi-Instrument + Dashboard-Widgets lesen aus dem Context — hier ebenfalls
+    // zuruecksetzen, sonst zeigen sie weiter die letzte Sim-Geschwindigkeit an.
+    if (window.BoatOS?.context) {
+        window.BoatOS.context.sog = 0;
+        window.BoatOS.context.cog = null;
+    }
 }
 
 function setSimButtonState(running) {
@@ -911,6 +952,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // GPS-Updates weiterleiten
     if (core.onGpsUpdate && sensors.handleGPSUpdate) {
         core.onGpsUpdate((gpsData) => {
+            // Nachlauf nach dem Sim-Stop: verspaetete Sim-Broadcasts komplett ignorieren.
+            // Muss VOR handleGPSUpdate greifen, sonst friert die SOG-Anzeige auf dem
+            // letzten Sim-Wert ein.
+            if (Date.now() < simCooldownUntil) return;
+
             sensors.handleGPSUpdate(gpsData); // Sensor-Anzeige immer aktualisieren
 
             if (simInterval !== null) return; // Position während Simulation einfrieren

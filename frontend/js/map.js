@@ -844,6 +844,44 @@ export function createBoatMarker(iconType = 'motorboat') {
  * Aktualisiert die Boot-Position auf der Karte
  * @param {Object} gps - GPS-Daten {lat, lon, course, heading}
  */
+/**
+ * Setzt das Boot SOFORT auf eine Position — ohne Glättung, ohne Animation und
+ * ohne Track-Eintrag. Für echte Sprünge (Simulation Start/Ende).
+ *
+ * Über updateBoatPosition() wäre das falsch: die EMA-/Ease-Glättung lässt den
+ * Marker sichtbar per LUFTLINIE zum Ziel gleiten, und addToTrackHistory()
+ * zeichnet die Sprungstrecke zusätzlich als Track-Linie mit ein.
+ */
+export function setBoatPositionImmediate(lat, lon, heading) {
+    if (!map || !boatMarker) return;
+
+    // Laufende Marker-Animation abbrechen (sonst gleitet sie weiter zum alten Ziel)
+    if (_animRafId) { cancelAnimationFrame(_animRafId); _animRafId = null; }
+
+    // Kompletten Glättungs-Zustand auf die neue Position setzen — kein Nachziehen
+    _emaLat = lat; _emaLon = lon;
+    _fromLat = lat; _fromLon = lon;
+    _targetLat = lat; _targetLon = lon;
+    _dispLat = lat; _dispLon = lon;
+
+    window.currentPosition = { lat, lon };   // bewusst OHNE addToTrackHistory()
+    boatMarker.setLngLat([lon, lat]);
+
+    if (typeof heading === 'number') {
+        currentBoatHeading = heading;
+        _smoothHeading = heading;            // Bearing nicht über die alte Richtung einschwenken lassen
+        if (boatMarkerElement) {
+            boatMarkerElement.style.transform = `rotate(${heading - map.getBearing()}deg)`;
+        }
+    }
+
+    if (autoFollow) {
+        const opts = { center: [lon, lat] };
+        if (courseUpMode && currentBoatHeading) opts.bearing = currentBoatHeading;
+        map.jumpTo(opts);
+    }
+}
+
 export function updateBoatPosition(gps) {
     if (!gps || !gps.lat || !gps.lon) return;
     if (!map || !boatMarker) return;
@@ -945,6 +983,15 @@ export function updateTrackLine() {
         type: 'LineString',
         coordinates: coordinates
     });
+}
+
+/**
+ * Setzt die Track-Historie (z.B. um den echten Track nach einer Simulation
+ * wiederherzustellen) und zeichnet die Linie neu.
+ */
+export function setTrackHistory(points) {
+    trackHistory = Array.isArray(points) ? points.slice(-maxTrackPoints) : [];
+    updateTrackLine();
 }
 
 /**
