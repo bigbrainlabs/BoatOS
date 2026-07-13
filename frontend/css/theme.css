@@ -124,6 +124,55 @@
 }
 
 /* ============================================
+   NACHT-MODUS (Rotlicht)
+   ============================================
+   Erhält die Nachtsichtfähigkeit: blaues/grünes Licht zerstört die
+   Dunkeladaption der Augen, rotes kaum. Daher rotes Monochrom auf Schwarz.
+
+   Nacht baut auf dem Dark-Theme auf: js/theme.js setzt data-theme="dark"
+   UND die Klasse .night. So greifen alle bestehenden Dark-Regeln weiter,
+   hier werden nur noch die Farben überschrieben.
+   (:root.night = Spezifität 0,2,0 → schlägt [data-theme="dark"] mit 0,1,0.)  */
+:root.night {
+    /* Hintergründe — tiefschwarz, damit das Rot maximal absticht */
+    --bg-main: #050101;
+    --bg-panel: rgba(16, 3, 3, 0.96);
+    --bg-card: rgba(64, 10, 8, 0.55);
+
+    /* Akzentfarben — kräftiges Rot statt Cyan */
+    --accent: #ff4234;
+    --accent-light: #ff8073;
+    --accent-dim: rgba(255, 66, 52, 0.20);
+
+    /* Rahmen & Schatten — deutlicher sichtbare Kanten */
+    --border: rgba(205, 62, 50, 0.60);
+    --shadow: rgba(0, 0, 0, 0.6);
+    --shadow-strong: rgba(0, 0, 0, 0.8);
+
+    /* Text — helleres Rot für Lesbarkeit, aber kein grelles Weiß */
+    --text: #ffb0a4;
+    --text-dim: #cc7a6f;
+
+    /* Status — bleibt im Rot-Spektrum, unterschieden über Helligkeit */
+    --danger: #ff4436;
+    --warning: #ff9a5c;
+    --success: #e08a76;
+
+    /* Spezielle Farben */
+    --water: #3a0f0f;
+    --track: #ff8073;
+    --route: #ff4234;
+}
+
+/* Karte ist ein Canvas — CSS-Variablen greifen dort nicht. Deshalb den
+   gesamten Karten-Canvas per Filter auf rotes Monochrom ziehen und abdunkeln.
+   (grayscale → sepia gibt Braunton → hue-rotate schiebt ihn nach Rot →
+    saturate verstärkt → brightness dimmt fürs Nachtsehen.) */
+:root.night #map {
+    filter: grayscale(1) sepia(1) hue-rotate(-28deg) saturate(3.8) brightness(0.68) contrast(1.35);
+}
+
+/* ============================================
    BASE STYLES
    ============================================ */
 * {
