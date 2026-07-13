@@ -617,6 +617,7 @@ window.BoatOS = {
     showLogbookTab: (tab, element) => logbook.showLogbookTab(tab, element),
     loadArchivedTrips: () => logbook.loadArchivedTrips(),
     exportTrip: (tripId) => logbook.exportTrip(tripId),
+    exportTripPdf: (tripId) => logbook.exportTripPdf(tripId),
     viewTripOnMap: (tripId) => logbook.viewTripOnMap(tripId),
     deleteTrip: (tripId) => logbook.deleteTrip(tripId),
     openTripDetail: (tripId) => logbook.openTripDetail(tripId),
