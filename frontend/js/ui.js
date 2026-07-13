@@ -19,7 +19,6 @@ const API_URL = window.location.hostname === 'localhost'
 
 // Favoriten State
 let favorites = [];
-let favoritesPanel = null;
 let favoriteMarkers = [];
 let favoritesVisible = false;
 
@@ -790,6 +789,9 @@ export function showSection(sectionId, tabElement) {
         tabElement.classList.add('active');
     }
 
+    // Favoriten-Marker gehören zur Favoriten-Sektion — beim Wechsel ausblenden
+    if (sectionId !== 'favorites') closeFavoritesPanel();
+
     // Schwebendes Info-Panel über dem Rondell einblenden
     const sheet = document.getElementById('bottomSheet');
     if (sheet) {
@@ -809,6 +811,8 @@ export function closePanel() {
     document.querySelectorAll('.qa-section, .sheet-tab').forEach(tab => {
         tab.classList.remove('active');
     });
+    // Favoriten-Marker gehören zum Panel — mit ausblenden
+    closeFavoritesPanel();
 }
 
 // ===========================================
@@ -1014,47 +1018,70 @@ export function selectSearchResult(lat, lon, name) {
 /**
  * Zeigt/versteckt Favoriten auf der Karte und öffnet das Favoriten-Panel
  */
-export async function showFavorites() {
+/**
+ * Favoriten als schwebende Sheet-Sektion öffnen (Rondell-Stil, wie Route/Logbuch).
+ * Zusätzlich werden die Favoriten-Marker auf der Karte eingeblendet; das Schließen
+ * des Panels (X) blendet sie über closePanel() wieder aus.
+ */
+export async function showFavorites(el) {
     const map = window.BoatOS?.map?.getMap?.() || window.map;
 
-    // Toggle: Wenn bereits sichtbar, alles ausblenden
-    if (favoritesVisible) {
-        hideFavoriteMarkers();
-        closeFavoritesPanel();
-        favoritesVisible = false;
+    showSection('favorites', el || document.getElementById('qa-favorites'));
 
-        // Button-Status aktualisieren
-        const favBtn = document.querySelector('.quick-action[onclick*="showFavorites"]');
-        if (favBtn) favBtn.classList.remove('active');
-
-        showToast(t('layerFavoritesHidden'), 'info');
-        return;
+    const listEl = document.getElementById('favorites-list');
+    const countEl = document.getElementById('favorites-count');
+    if (listEl) {
+        listEl.innerHTML =
+            `<div style="text-align:center;padding:var(--space-2xl);color:var(--text-dim);">${t('layerFavoritesLoading')}</div>`;
     }
 
-    // Favoriten laden
-    showToast(t('layerFavoritesLoading'), 'info');
     await loadFavorites();
+    renderFavoritesList();
+    if (countEl) countEl.textContent = favorites.length ? ` (${favorites.length})` : '';
 
-    if (favorites.length === 0) {
-        showToast(t('layerFavoritesNone'), 'warning');
+    if (favorites.length === 0) return;
+
+    if (map) showFavoriteMarkers(map);
+    favoritesVisible = true;
+}
+
+/**
+ * Rendert die Favoriten-Liste in die Sektion — durchgehend mit CSS-Variablen,
+ * damit sie Hell/Dunkel/Nacht mitmacht (das alte Panel hatte feste Farben).
+ */
+function renderFavoritesList() {
+    const listEl = document.getElementById('favorites-list');
+    if (!listEl) return;
+
+    if (!favorites.length) {
+        listEl.innerHTML =
+            `<div style="text-align:center;padding:var(--space-2xl);color:var(--text-dim);">${t('layerFavoritesNone')}</div>`;
         return;
     }
 
-    // Marker auf Karte anzeigen
-    if (map) {
-        showFavoriteMarkers(map);
-    }
+    listEl.innerHTML = favorites.map((fav, i) => `
+        <div class="favorite-item" data-idx="${i}"
+             style="display:flex;align-items:center;gap:var(--space-md);
+                    padding:var(--space-md);margin-bottom:var(--space-sm);
+                    background:var(--bg-card);border:1px solid var(--border);
+                    border-radius:var(--radius-md);cursor:pointer;">
+            <span style="font-size:var(--fs-3xl);">${getCategoryIcon(fav.category)}</span>
+            <div style="flex:1;min-width:0;">
+                <div style="color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    ${escapeHTML(fav.name)}
+                </div>
+                <div style="color:var(--text-dim);font-size:var(--fs-xs);">
+                    ${fav.lat.toFixed(4)}, ${fav.lon.toFixed(4)}
+                </div>
+            </div>
+        </div>`).join('');
 
-    // Panel anzeigen
-    openFavoritesPanel();
-
-    favoritesVisible = true;
-
-    // Button-Status aktualisieren
-    const favBtn = document.querySelector('.quick-action[onclick*="showFavorites"]');
-    if (favBtn) favBtn.classList.add('active');
-
-    showToast(t('layerFavoritesLoaded'), 'success');
+    listEl.querySelectorAll('.favorite-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const fav = favorites[Number(item.dataset.idx)];
+            if (fav) panToFavorite(fav);
+        });
+    });
 }
 
 /**
@@ -1151,115 +1178,16 @@ function showFavoritePopup(map, fav) {
         .addTo(map);
 }
 
-/**
- * Öffnet das Favoriten-Panel
- */
-function openFavoritesPanel() {
-    // Bestehendes Panel entfernen
-    closeFavoritesPanel();
-
-    const panel = document.createElement('div');
-    panel.id = 'favorites-panel';
-    panel.style.cssText = `
-        position: fixed;
-        right: 10px;
-        top: 70px;
-        width: 300px;
-        max-height: calc(100vh - 160px);
-        background: rgba(10, 25, 47, 0.95);
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-        z-index: 1000;
-        overflow: hidden;
-        border: 1px solid rgba(100, 255, 218, 0.2);
-    `;
-
-    // Header
-    const header = document.createElement('div');
-    header.style.cssText = `
-        padding: 15px;
-        background: rgba(42, 82, 152, 0.3);
-        border-bottom: 1px solid rgba(100, 255, 218, 0.2);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    `;
-    header.innerHTML = `
-        <span style="color: #64ffda; font-weight: 600; font-size: 16px;">${t('layerFavoritesTitle')} (${favorites.length})</span>
-        <button onclick="window.closeFavoritesPanel()" style="
-            background: none; border: none; color: #ccd6f6;
-            font-size: 20px; cursor: pointer; padding: 0;
-        ">&times;</button>
-    `;
-    panel.appendChild(header);
-
-    // Liste
-    const list = document.createElement('div');
-    list.style.cssText = `
-        max-height: calc(100vh - 240px);
-        overflow-y: auto;
-        padding: 10px;
-    `;
-
-    favorites.forEach(fav => {
-        const icon = getCategoryIcon(fav.category);
-        const item = document.createElement('div');
-        item.className = 'favorite-item';
-        item.style.cssText = `
-            padding: 12px;
-            background: rgba(42, 82, 152, 0.2);
-            border-radius: 8px;
-            margin-bottom: 8px;
-            cursor: pointer;
-            transition: background 0.2s;
-        `;
-        item.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 24px;">${icon}</span>
-                <div style="flex: 1; min-width: 0;">
-                    <div style="color: #ccd6f6; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                        ${escapeHTML(fav.name)}
-                    </div>
-                    <div style="color: #8892b0; font-size: 11px;">
-                        ${fav.lat.toFixed(4)}, ${fav.lon.toFixed(4)}
-                    </div>
-                </div>
-            </div>
-        `;
-
-        // Hover-Effekt
-        item.addEventListener('mouseenter', () => {
-            item.style.background = 'rgba(42, 82, 152, 0.4)';
-        });
-        item.addEventListener('mouseleave', () => {
-            item.style.background = 'rgba(42, 82, 152, 0.2)';
-        });
-
-        // Click: Zur Position fliegen
-        item.addEventListener('click', () => {
-            panToFavorite(fav);
-        });
-
-        list.appendChild(item);
-    });
-
-    panel.appendChild(list);
-    document.body.appendChild(panel);
-    favoritesPanel = panel;
-}
 
 /**
- * Schließt das Favoriten-Panel
+ * Favoriten-Ansicht beenden: Marker von der Karte nehmen.
+ * (Das Panel selbst ist jetzt eine Sheet-Sektion und wird über closePanel()
+ * geschlossen — es gibt kein eigenes DOM-Panel mehr, das entfernt werden müsste.)
  */
 export function closeFavoritesPanel() {
-    if (favoritesPanel) {
-        favoritesPanel.remove();
-        favoritesPanel = null;
-    }
-    const existingPanel = document.getElementById('favorites-panel');
-    if (existingPanel) {
-        existingPanel.remove();
-    }
+    if (!favoritesVisible) return;
+    hideFavoriteMarkers();
+    favoritesVisible = false;
 }
 
 /**
@@ -1330,11 +1258,13 @@ window.confirmDeleteFavorite = async function(favoriteId) {
     if (confirm(`Favorit "${fav.name}" wirklich löschen?`)) {
         const success = await deleteFavorite(favoriteId);
         if (success) {
-            // Marker aktualisieren
+            // Marker + Sektions-Liste aktualisieren
             const map = window.BoatOS?.map?.getMap?.() || window.map;
             if (map && favoritesVisible) {
                 showFavoriteMarkers(map);
-                openFavoritesPanel();
+                renderFavoritesList();
+                const countEl = document.getElementById('favorites-count');
+                if (countEl) countEl.textContent = favorites.length ? ` (${favorites.length})` : '';
             }
         }
     }

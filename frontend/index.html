@@ -251,7 +251,7 @@
                 <span class="icon">🔍</span>
                 <span class="label" data-i18n="map_qa_search">Suche</span>
             </div>
-            <div class="quick-action" onclick="BoatOS.ui.showFavorites()">
+            <div class="quick-action qa-section" id="qa-favorites" onclick="BoatOS.ui.showFavorites(this)">
                 <span class="icon">⭐</span>
                 <span class="label" data-i18n="map_qa_favorites">Favoriten</span>
             </div>
@@ -517,6 +517,17 @@
                     <div style="text-align: center; padding: var(--space-2xl); color: var(--text-dim);" data-i18n="locks_loading">
                         Schleusen werden geladen...
                     </div>
+                </div>
+            </div>
+
+            <!-- FAVORITES SECTION -->
+            <div id="section-favorites" class="section-hidden">
+                <div style="font-size: var(--fs-xl); font-weight: 600; margin-bottom: var(--space-md);">
+                    <span data-i18n="favorites_header">⭐ Favoriten</span>
+                    <span id="favorites-count" style="color: var(--text-dim); font-weight: 400;"></span>
+                </div>
+                <div id="favorites-list">
+                    <div style="text-align: center; padding: var(--space-2xl); color: var(--text-dim);">…</div>
                 </div>
             </div>
         </div>

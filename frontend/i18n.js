@@ -285,6 +285,7 @@ const translations = {
         sheet_tab_weather: "Wetter",
         sheet_tab_logbook: "Logbuch",
         sheet_tab_locks: "Schleusen",
+        favorites_header: "⭐ Favoriten",
         // Route section
         route_header: "Aktuelle Route",
         route_stat_time: "Zeit",
@@ -768,6 +769,7 @@ const translations = {
         sheet_tab_weather: "Weather",
         sheet_tab_logbook: "Logbook",
         sheet_tab_locks: "Locks",
+        favorites_header: "⭐ Favourites",
         // Route section
         route_header: "Current Route",
         route_stat_time: "Time",
