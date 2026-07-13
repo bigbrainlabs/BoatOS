@@ -131,6 +131,41 @@
         return m || null;
     }
 
+    // Gibt GPU-Ressourcen einer alten Szene frei (sonst WebGL-Speicherleck bei jedem Rebuild)
+    function _disposeScene(s) {
+        if (!s) return;
+        s.traverse((o) => {
+            if (o.geometry) o.geometry.dispose();
+            if (o.material) {
+                const mats = Array.isArray(o.material) ? o.material : [o.material];
+                mats.forEach((m) => m && m.dispose());
+            }
+        });
+    }
+
+    // Rebuild drosseln: das Follow-jumpTo feuert moveend ~30×/s → sonst 30 Szenen-
+    // Neuaufbauten pro Sekunde. Max. alle 500 ms, mit Nachlauf (settle).
+    let _rebuildTimer = null, _lastRebuildTs = 0;
+    const REBUILD_MIN_MS = 500;
+    function scheduleRebuild() {
+        const map = getMap(), THREE = window.THREE, maplibregl = window.maplibregl;
+        if (!CTX.active || !map || !THREE || !maplibregl) return;
+        const now = performance.now();
+        const since = now - _lastRebuildTs;
+        clearTimeout(_rebuildTimer); _rebuildTimer = null;
+        if (since >= REBUILD_MIN_MS) {
+            _lastRebuildTs = now;
+            rebuild(map, THREE, maplibregl);
+        } else {
+            _rebuildTimer = setTimeout(() => {
+                _rebuildTimer = null;
+                if (!CTX.active) return;
+                _lastRebuildTs = performance.now();
+                rebuild(getMap(), window.THREE, window.maplibregl);
+            }, REBUILD_MIN_MS - since);
+        }
+    }
+
     // Szene aus den aktuell sichtbaren IENC-Marken (neu) aufbauen
     function rebuild(map, THREE, maplibregl) {
         if (!map.getSource('ienc')) { clearScene(); return; }
@@ -169,6 +204,7 @@
             if (++count >= MAX_BUOYS) break;
         }
 
+        _disposeScene(CTX.scene);   // alte Szene freigeben (kein WebGL-Leck)
         CTX.scene = scene;
         if (!CTX.camera) CTX.camera = new THREE.Camera();
         if (!CTX.rotX) CTX.rotX = new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
@@ -177,6 +213,7 @@
     }
 
     function clearScene() {
+        _disposeScene(CTX.scene);
         if (CTX.scene) CTX.scene = new (window.THREE.Scene)();
         const map = getMap();
         if (map) map.triggerRepaint();
@@ -215,14 +252,17 @@
         if (on) {
             if (!map.isStyleLoaded()) { map.once('idle', () => setActive(true)); return; }
             ensureLayer(map, THREE);
+            _lastRebuildTs = performance.now();
             rebuild(map, THREE, maplibregl);
             if (!CTX.moveHandler) {
-                CTX.moveHandler = () => { if (CTX.active) rebuild(map, THREE, maplibregl); };
+                CTX.moveHandler = scheduleRebuild;   // gedrosselt (nicht bei jedem moveend voll neu bauen)
                 map.on('moveend', CTX.moveHandler);
             }
         } else {
             if (CTX.moveHandler) { map.off('moveend', CTX.moveHandler); CTX.moveHandler = null; }
+            clearTimeout(_rebuildTimer); _rebuildTimer = null;
             if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
+            _disposeScene(CTX.scene); CTX.scene = null;   // GPU-Ressourcen freigeben
             CTX.built = false;
             map.triggerRepaint();
         }

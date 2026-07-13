@@ -235,7 +235,7 @@ function updateWaypointList(context) {
 // ==================== SIMULATION ====================
 let simInterval = null;
 let simDistanceTraveled = 0;
-let simMultiplier = 25; // ×25 = ~13 m/tick
+let simMultiplier = 10; // ×10 = 100 kn Zeitraffer (max 20 über Slider)
 let simSavedPosition = null; // Boot-Position vor Simulation sichern
 let simLastGpsPost = 0;      // Throttle für Sim-GPS-Broadcast ans Backend
 
@@ -298,9 +298,9 @@ function simTick() {
         const ctx = window.BoatOS.context;
         ctx.currentPosition = { lat: pos.lat, lon: pos.lon };
         ctx.cog = pos.bearing;
-        // Realistische Reise-SOG (kn) fürs Instrument; der Sim-Multiplikator ist
-        // nur Zeitraffer (schnelleres Abfahren), keine echte Bootsgeschwindigkeit.
-        ctx.sog = 10;
+        // Tatsächliche Zeitraffer-Geschwindigkeit: Basis 10 kn × Multiplikator
+        // (bei ×20 also 200 kn). Wird auch im Header angezeigt.
+        ctx.sog = 10 * simMultiplier;
         if (navigation.isNavigationActive && navigation.isNavigationActive()) {
             navigation.updateNavigation(pos.lat, pos.lon, ctx);
         } else if (ctx.waypoints?.length >= 2) {
@@ -317,7 +317,7 @@ function simTick() {
         fetch(`${apiUrl}/api/gps/external`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lat: pos.lat, lon: pos.lon, speed: 10, heading: pos.bearing }),
+            body: JSON.stringify({ lat: pos.lat, lon: pos.lon, speed: 10 * simMultiplier, heading: pos.bearing }),
         }).catch(() => {});
     }
 }
@@ -350,6 +350,12 @@ function stopSimulation() {
         mapModule.updateBoatPosition(simSavedPosition);
         window.currentPosition = simSavedPosition;
     }
+    // Header-SOG/COG nicht auf dem letzten Sim-Wert hängen lassen (kein echter Fix)
+    const sogEl = document.getElementById('sog-value');
+    if (sogEl) sogEl.textContent = '0.0';
+    const cogEl = document.getElementById('cog-value');
+    if (cogEl) cogEl.textContent = '---°';
+    if (window.BoatOS?.context) { window.BoatOS.context.sog = 0; }
 }
 
 function setSimButtonState(running) {
@@ -704,7 +710,7 @@ window.BoatOS = {
     // === SIMULATION ===
     toggleSimulation: () => simInterval ? stopSimulation() : startSimulation(),
     setSimSpeed: (val) => {
-        simMultiplier = Math.max(1, Math.min(1000, val));
+        simMultiplier = Math.max(1, Math.min(20, val));
         const lbl = document.getElementById('sim-speed-label');
         if (lbl) lbl.textContent = '×' + simMultiplier;
     },
