@@ -4,19 +4,6 @@
 
 ---
 
-## v1.7.x — Stability
-
-| Feature | Description | Category |
-|---------|-------------|----------|
-| Current detection configurable | Current values are already settable via Settings. Missing: bounding boxes and mouth coordinates for new waterways from Settings too (instead of hardcoded in water_current.py) | Routing, Platform |
-| Live water level data | Re-enable Pegelonline API with a cache layer — was disabled due to timeouts | Data |
-| Routing profile switch via API | Change region and boat type from within the app — no SSH required | Routing, Platform |
-| Current correction indicator | Show in route info when ETA has been adjusted for water current | UX |
-| Lock registration history | Status tracking: registered / confirmed / passed | UX |
-| Night red-light mode | Red screen illumination for night cruising — preserves night vision | UX |
-
----
-
 ## v1.8 — Safety & Comfort
 
 | Feature | Description | Category |
@@ -62,6 +49,7 @@
 | NMEA 2000 | N2K bus integration for engine, tank, wind, depth | requires CAN bus hardware |
 | Smartphone companion | Position, ETA, alerts as a PWA on your phone | |
 | Autopilot integration | Course keeping, waypoint steering | requires hardware |
+| Lock registration history | Status tracking: registered / confirmed / passed. Currently there is only a "register" button with no state | concept open |
 
 ---
 
