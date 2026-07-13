@@ -126,6 +126,89 @@ def _lat_lon_to_tile_xyz(lat: float, lon: float, zoom: int) -> Tuple[int, int, i
     y = int((1 - math.log(math.tan(lat_r) + 1 / math.cos(lat_r)) / math.pi) / 2 * n)
     return x, y, zoom
 
+# ---------------------------------------------------------------------------
+# Geografie-Defaults je Gewässer
+#
+# Diese Werte sind nur noch VORGABEN. Über die Settings (waterCurrent.byName)
+# kann jedes Gewässer sie überschreiben — und neue Gewässer bringen ihre eigene
+# Geografie mit, ohne dass hier Code geändert werden muss:
+#
+#   "byName": {
+#     "Havel": {
+#       "current_kmh": 0.8,
+#       "type": "river",
+#       "bbox":  [52.3, 53.0, 12.0, 13.3],   # [lat_min, lat_max, lon_min, lon_max]
+#       "mouth": [52.855, 11.960],           # [lat, lon] — Mündung
+#       "flow_bearing": 270                   # optional; sonst aus der Mündung berechnet
+#     }
+#   }
+# ---------------------------------------------------------------------------
+
+# Fließrichtung (Peilung der Strömung in Grad)
+_DEFAULT_FLOW_DIRECTIONS = {
+    'Rhein': 0,    # Nord
+    'Main':  270,  # West
+    'Mosel': 45,   # Nordost
+    'Elbe':  270,  # West (Mittelelbe; nahe Hamburg eher 315°, 270° passt Aken–Magdeburg am besten)
+    'Saale': 0,    # Nord
+    'Donau': 90,   # Ost
+    'Weser': 0,    # Nord
+    'Oder':  0,    # Nord
+}
+
+# Bounding-Boxes [lat_min, lat_max, lon_min, lon_max] — schließen Gewässer aus,
+# die an der Routenposition geografisch gar nicht liegen können.
+_DEFAULT_RIVER_AREAS = {
+    'Rhein': (47.5, 52.0,  6.0,  9.0),
+    'Mosel': (49.2, 50.4,  6.0,  7.7),
+    'Main':  (49.7, 50.3,  8.0, 12.7),
+    'Elbe':  (50.9, 54.0,  9.0, 15.0),
+    'Saale': (51.0, 51.98, 11.5, 12.3),
+    'Donau': (47.5, 49.5,  9.0, 17.0),
+    'Weser': (51.3, 53.6,  8.0,  9.6),
+    'Oder':  (50.0, 53.8, 13.8, 15.0),
+}
+
+# Mündungskoordinaten (lat, lon) — wo das Gewässer ins nächste mündet.
+# Peilung von einem Punkt auf dem Fluss ZUR Mündung = lokale Fließrichtung.
+_DEFAULT_RIVER_MOUTHS = {
+    'Rhein': (51.960,  4.120),  # Hoek van Holland (Nordsee)
+    'Mosel': (50.370,  7.608),  # Koblenz (in den Rhein)
+    'Main':  (50.007,  8.274),  # Mainz (in den Rhein)
+    'Elbe':  (53.895,  8.668),  # Cuxhaven (Nordsee)
+    'Saale': (51.966, 11.897),  # Barby (in die Elbe)
+    'Donau': (45.217, 29.633),  # Sulina/Schwarzes Meer
+    'Weser': (53.537,  8.572),  # Bremerhaven (Nordsee)
+    'Oder':  (53.742, 14.568),  # Stettiner Haff
+}
+
+
+def _parse_bbox(value):
+    """[lat_min, lat_max, lon_min, lon_max] → Tuple, sonst None."""
+    try:
+        if value is None or len(value) != 4:
+            return None
+        lat_min, lat_max, lon_min, lon_max = (float(v) for v in value)
+        if lat_min >= lat_max or lon_min >= lon_max:
+            return None
+        return (lat_min, lat_max, lon_min, lon_max)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_point(value):
+    """[lat, lon] → Tuple, sonst None."""
+    try:
+        if value is None or len(value) != 2:
+            return None
+        lat, lon = float(value[0]), float(value[1])
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return None
+        return (lat, lon)
+    except (TypeError, ValueError):
+        return None
+
+
 class WaterCurrentService:
     def __init__(self):
         self.enabled = False
@@ -163,46 +246,74 @@ class WaterCurrentService:
             'byType': settings.get('byType', {})
         }
 
-        # Known flow directions (bearing = downstream direction in degrees)
-        # Elbe: flows W in middle section (Aken/Magdeburg), then WNW toward Hamburg → 270°
-        self.known_flow_directions = {
-            'Rhein': 0,    # North
-            'Main':  270,  # West
-            'Mosel': 45,   # Northeast
-            'Elbe':  270,  # West (middle Elbe; ~315° near Hamburg, but 270° fits Aken–Magdeburg best)
-            'Saale': 0,    # North
-            'Donau': 90,   # East
-            'Weser': 0,    # North
-            'Oder':  0,    # North
-        }
-        # Geographic bounding boxes [lat_min, lat_max, lon_min, lon_max]
-        # Used to eliminate rivers that can't physically be at the route location
-        self.river_areas = {
-            'Rhein': (47.5, 52.0,  6.0,  9.0),
-            'Mosel': (49.2, 50.4,  6.0,  7.7),
-            'Main':  (49.7, 50.3,  8.0, 12.7),
-            'Elbe':  (50.9, 54.0,  9.0, 15.0),
-            'Saale': (51.0, 51.98, 11.5, 12.3),
-            'Donau': (47.5, 49.5,  9.0, 17.0),
-            'Weser': (51.3, 53.6,  8.0,  9.6),
-            'Oder':  (50.0, 53.8, 13.8, 15.0),
-        }
-        # Mouth coordinates (lat, lon) — where the river flows into the next body of water.
-        # Bearing from any point on the river TO the mouth = local downstream direction.
-        self.river_mouths = {
-            'Rhein': (51.960,  4.120),  # Hoek van Holland (North Sea)
-            'Mosel': (50.370,  7.608),  # Koblenz (into Rhein)
-            'Main':  (50.007,  8.274),  # Mainz (into Rhein)
-            'Elbe':  (53.895,  8.668),  # Cuxhaven (North Sea)
-            'Saale': (51.966, 11.897),  # Barby (into Elbe)
-            'Donau': (45.217, 29.633),  # Sulina/Black Sea
-            'Weser': (53.537,  8.572),  # Bremerhaven (North Sea)
-            'Oder':  (53.742, 14.568),  # Szczecin Lagoon
-        }
+        # Geografie: mit den Defaults starten …
+        self.known_flow_directions = dict(_DEFAULT_FLOW_DIRECTIONS)
+        self.river_areas = dict(_DEFAULT_RIVER_AREAS)
+        self.river_mouths = dict(_DEFAULT_RIVER_MOUTHS)
+
+        # … und pro Gewässer aus den Settings überschreiben bzw. ergänzen.
+        # Dadurch kommen neue Gewässer ohne Code-Änderung dazu.
+        custom = 0
+        for name, cfg in (self.static_currents['byName'] or {}).items():
+            if not isinstance(cfg, dict):
+                continue
+            touched = False
+
+            bbox = _parse_bbox(cfg.get('bbox'))
+            if bbox:
+                self.river_areas[name] = bbox
+                touched = True
+            elif cfg.get('bbox') is not None:
+                print(f"⚠️  waterCurrent: ungültige bbox für '{name}' — ignoriert (erwartet [lat_min, lat_max, lon_min, lon_max])")
+
+            mouth = _parse_point(cfg.get('mouth'))
+            if mouth:
+                self.river_mouths[name] = mouth
+                touched = True
+            elif cfg.get('mouth') is not None:
+                print(f"⚠️  waterCurrent: ungültige mouth für '{name}' — ignoriert (erwartet [lat, lon])")
+
+            bearing = cfg.get('flow_bearing')
+            if bearing is not None:
+                try:
+                    self.known_flow_directions[name] = float(bearing) % 360
+                    touched = True
+                except (TypeError, ValueError):
+                    print(f"⚠️  waterCurrent: ungültiges flow_bearing für '{name}' — ignoriert")
+
+            if touched and name not in _DEFAULT_RIVER_AREAS:
+                custom += 1
 
         print(f"🌊 Water current service configured: {'enabled' if self.enabled else 'disabled'}")
         if self.enabled:
-            print(f"   Static data: {len(self.static_currents['byName'])} waterways")
+            print(f"   Static data: {len(self.static_currents['byName'])} waterways"
+                  f" ({len(self.river_areas)} mit Geografie, davon {custom} eigene)")
+
+    def get_waterways(self) -> list:
+        """
+        Wirksame Konfiguration je Gewässer (Defaults + Settings-Overrides).
+        Damit kann die UI anzeigen, was tatsächlich gilt — auch für die
+        Gewässer, deren Geografie nur als Code-Default existiert.
+        """
+        by_name = self.static_currents.get('byName') or {}
+        names = set(by_name) | set(self.river_areas) | set(self.river_mouths)
+
+        out = []
+        for name in sorted(names):
+            cfg = by_name.get(name) if isinstance(by_name.get(name), dict) else {}
+            bbox = self.river_areas.get(name)
+            mouth = self.river_mouths.get(name)
+            out.append({
+                'name': name,
+                'current_kmh': cfg.get('current_kmh'),
+                'type': cfg.get('type', 'river'),
+                'bbox': list(bbox) if bbox else None,
+                'mouth': list(mouth) if mouth else None,
+                'flow_bearing': self.known_flow_directions.get(name),
+                # builtin = Geografie kommt (auch) aus den Code-Defaults
+                'builtin': name in _DEFAULT_RIVER_AREAS,
+            })
+        return out
 
     def _is_canal(self, name: str) -> bool:
         """Heuristic: is this waterway likely a canal (no significant current)?"""
