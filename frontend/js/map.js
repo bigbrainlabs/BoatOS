@@ -130,20 +130,126 @@ let _activeRegions = null;
 export async function recheckOfflineTiles() {
     const regions = await _checkTileserver();
     const nowOk = regions !== null;
-    if (nowOk === window._tileserverAvailable) return;
+
+    // Nicht nur auf einen Verfügbarkeits-Wechsel reagieren, sondern auch darauf,
+    // dass sich die AKTIVE REGIONSLISTE geändert hat (z.B. Niederlande dazugeschaltet).
+    // Sonst blieb der Style unverändert — Source + Layer der neuen Region fehlten,
+    // und das Gebiet tauchte erst nach einem kompletten Reload auf.
+    const regionsChanged = nowOk &&
+        JSON.stringify(regions) !== JSON.stringify(_activeRegions);
+
+    if (nowOk === window._tileserverAvailable && !regionsChanged) return;
+
     window._tileserverAvailable = nowOk;
     _activeRegions = regions;
     if (!map) return;
+
+    // Route/Segmente/Track sichern, BEVOR der Style ersetzt wird
+    const snap = _snapshotDynamicSources();
+
+    // WICHTIG: diff:false erzwingt einen vollen Style-Reload.
+    // Mit dem Standard-Diffing entfernt MapLibre alles imperativ Hinzugefügte
+    // (Labels, Seezeichen, Satellit — steht ja nicht im neuen Style-Objekt) UND
+    // feuert 'style.load' nicht, weil der Style nicht neu geladen, sondern nur
+    // gepatcht wird. Dann liefe der Wiederherstellungs-Handler unten nie und es
+    // bliebe nur die nackte Basiskarte übrig.
     if (nowOk) {
-        map.setStyle(_vectorStyle(regions));
+        map.setStyle(_vectorStyle(regions), { diff: false });
         map.once('style.load', () => {
             addLabelsLayer();
             document.getElementById('tileserver-banner')?.remove();
-            addOpenSeaMapOverlays();
+            // Seezeichen kommen async — Sichtbarkeit erst danach wieder anwenden
+            Promise.resolve(addOpenSeaMapOverlays()).then(() => {
+                toggleSeamarkLayer(seaMarkLayerVisible);
+                toggleInlandLayer(inlandLayerVisible);
+            }).catch(() => {});
+            _restoreAfterStyleChange(snap);
         });
     } else {
-        map.setStyle(_rasterFallbackStyle());
-        map.once('style.load', () => _showTileserverBanner());
+        map.setStyle(_rasterFallbackStyle(), { diff: false });
+        map.once('style.load', () => {
+            _showTileserverBanner();
+            _restoreAfterStyleChange(snap);
+        });
+    }
+}
+
+// Dynamische GeoJSON-Sources, deren Inhalt ein Style-Reload verlieren würde
+const _DYNAMIC_SOURCES = [
+    'route', 'route-shadow', 'completed-segments',
+    'current-segment', 'remaining-segments', 'track-history'
+];
+
+/**
+ * Fotografiert die dynamischen Source-Inhalte VOR dem Style-Wechsel.
+ *
+ * Bewusst über map.getStyle(): das serialisiert die GeoJSON-Sources samt Daten.
+ * So ist es völlig egal, WER gezeichnet hat — navigation.js schreibt z.B. direkt
+ * in die 'route'-Source und geht an map.js/showRoute komplett vorbei, weshalb
+ * ein Restore über currentRouteCoordinates gar nicht funktionieren kann.
+ */
+function _snapshotDynamicSources() {
+    const snap = { sources: {}, routeColor: null };
+    if (!map) return snap;
+    try {
+        const style = map.getStyle();
+        for (const id of _DYNAMIC_SOURCES) {
+            const src = style.sources?.[id];
+            if (src && src.type === 'geojson' && src.data) snap.sources[id] = src.data;
+        }
+    } catch (_) {}
+    try {
+        if (map.getLayer('route-line')) {
+            snap.routeColor = map.getPaintProperty('route-line', 'line-color');
+        }
+    } catch (_) {}
+    return snap;
+}
+
+/**
+ * Stellt nach einem setStyle() den verlorenen Karten-Zustand wieder her.
+ *
+ * setStyle() ersetzt den kompletten Style — die GeoJSON-Sources (Route,
+ * Segmente, Track) werden LEER neu angelegt und der Satelliten-Layer (der
+ * sonst nur im map-load-Handler entsteht) fehlt. Marker (Boot, Pegel,
+ * Schleusen, AIS, Routen-Labels) sind DOM-basiert und überleben.
+ */
+function _restoreAfterStyleChange(snap) {
+    if (!map) return;
+
+    // Route, Segmente und Track aus dem Snapshot zurückspielen
+    if (snap && snap.sources) {
+        for (const [id, data] of Object.entries(snap.sources)) {
+            try {
+                const src = map.getSource(id);
+                if (src && data) src.setData(data);
+            } catch (_) {}
+        }
+    }
+    if (snap && snap.routeColor && map.getLayer('route-line')) {
+        try { map.setPaintProperty('route-line', 'line-color', snap.routeColor); } catch (_) {}
+    }
+
+    // Satelliten-Source/-Layer neu anlegen (existiert im frischen Style nicht mehr)
+    if (!map.getSource('satellite')) {
+        map.addSource('satellite', {
+            type: 'raster',
+            tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+            tileSize: 256,
+            attribution: '© Esri, Maxar, Earthstar Geographics',
+            maxzoom: 19
+        });
+    }
+    if (!map.getLayer('satellite-layer')) {
+        map.addLayer({
+            id: 'satellite-layer',
+            type: 'raster',
+            source: 'satellite',
+            layout: { visibility: 'none' }
+        }, 'background');
+    }
+    if (localStorage.getItem('satelliteMode') === 'true') {
+        toggleSatellite(true);
     }
 }
 
@@ -479,6 +585,11 @@ export function addLabelsLayer() {
  */
 export async function addOpenSeaMapOverlays() {
     try {
+        // Idempotent: nach einem Style-Reload erneut aufgerufen. Ohne diesen Guard
+        // wirft addSource("already exists") und der EINE try/catch unten verschluckt
+        // es — dann entsteht KEIN einziges Overlay mehr.
+        if (map.getSource('seamark-online')) return;
+
         // Online-Fallback immer als Source registrieren
         map.addSource('seamark-online', {
             type: 'raster',
