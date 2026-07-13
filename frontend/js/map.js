@@ -48,7 +48,7 @@ let perspective3D = false;          // 3D-/Look-ahead-Kartenmodus (gekippt + hea
 let _courseUpBefore3D = false;
 let _zoomBefore3D = null;
 const PITCH_3D = 55;                // Kamera-Neigung im 3D-Modus (Grad)
-const ZOOM_3D_DELTA = 1.3;         // im 3D-Modus etwas reinzoomen (räumlicher)
+const ZOOM_3D_TARGET = 17.5;       // Ziel-Zoom in der 3D-Ansicht (nah, mehr Fahrgefühl)
 let _smoothHeading = null;
 const HEADING_EMA_ALPHA = 0.15; // low = very smooth bearing rotation
 
@@ -72,14 +72,20 @@ function _animateBoatMarker(ts) {
 
     boatMarker.setLngLat([_dispLon, _dispLat]);
 
-    // Update map follow at max 10 fps to spare Pi GPU
-    if (autoFollow && ts - _lastMapFollow > 100) {
-        const easeOpts = { center: [_dispLon, _dispLat], duration: 120 };
+    // Karte folgt gedrosselt (~14 fps) mit LINEARER, nahtlos verketteter Ease:
+    // Dauer == Drossel-Intervall → Eases überlappen nicht (kein Pulsen/Zucken),
+    // moderate GPU-Last → Pi bleibt für Marker/Gesten bedienbar.
+    if (autoFollow && ts - _lastMapFollow > 70) {
+        const opts = { center: [_dispLon, _dispLat], duration: 70, easing: (t) => t };
         if (courseUpMode && currentBoatHeading !== 0) {
-            easeOpts.bearing = -_updateSmoothedHeading(currentBoatHeading);
+            // Head-up: Fahrtrichtung nach oben → bearing = +heading (geglättet)
+            opts.bearing = _updateSmoothedHeading(currentBoatHeading);
         }
-        map.easeTo(easeOpts);
+        map.easeTo(opts);
         _lastMapFollow = ts;
+        if (courseUpMode && currentBoatHeading !== 0 && boatMarkerElement) {
+            boatMarkerElement.style.transform = `rotate(${currentBoatHeading - map.getBearing()}deg)`;
+        }
     }
 
     if (t < 1) {
@@ -174,6 +180,25 @@ function _showTileserverBanner() {
     ].join(';');
     banner.textContent = '⚠ Offline-Karten nicht verfügbar · Online-Fallback (OpenStreetMap)';
     document.getElementById('map')?.appendChild(banner);
+}
+
+// Dezente Zoomstufen-Anzeige unten links (über den Zoom-Buttons)
+function _initZoomIndicator() {
+    if (!map || document.getElementById('zoom-indicator')) return;
+    const el = document.createElement('div');
+    el.id = 'zoom-indicator';
+    el.style.cssText = [
+        'position:absolute', 'left:10px', 'bottom:92px', 'z-index:90',
+        'padding:2px 7px', 'border-radius:5px', 'pointer-events:none',
+        'font:600 11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace', 'letter-spacing:0.3px',
+        'background:rgba(20,28,40,0.5)', 'color:#dfe8f2',
+        'backdrop-filter:blur(4px)', '-webkit-backdrop-filter:blur(4px)',
+        'border:1px solid rgba(255,255,255,0.12)'
+    ].join(';');
+    const upd = () => { el.textContent = 'Z ' + map.getZoom().toFixed(1); };
+    upd();
+    map.on('zoom', upd);
+    document.getElementById('map')?.appendChild(el);
 }
 
 function _vectorStyle(regions) {
@@ -316,6 +341,9 @@ export async function initMap(options = {}) {
 
     // Navigations-Controls hinzufuegen
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-left');
+
+    // Dezente Zoomstufen-Anzeige (Anhaltspunkt beim Reinzoomen)
+    _initZoomIndicator();
 
     // Nach vollstaendigem Laden weitere Layer hinzufuegen
     map.on('load', () => {
@@ -726,12 +754,13 @@ export function updateBoatPosition(gps) {
         _emaLon = GPS_EMA_ALPHA * rawLon + (1 - GPS_EMA_ALPHA) * _emaLon;
     }
 
-    // Heading (rotate marker)
+    // Heading (rotate marker) — Karten-Drehung abziehen, damit das Boot in
+    // Kurs-oben nach oben zeigt (in Nord-oben zeigt es Richtung heading).
     const heading = gps.course || gps.heading || 0;
     if (heading !== 0) {
         currentBoatHeading = heading;
         if (boatMarkerElement) {
-            boatMarkerElement.style.transform = `rotate(${heading}deg)`;
+            boatMarkerElement.style.transform = `rotate(${heading - map.getBearing()}deg)`;
         }
     }
 
@@ -1070,7 +1099,7 @@ export function centerOnBoat() {
             duration: 1000
         };
         if (courseUpMode && currentBoatHeading !== 0) {
-            flyOpts.bearing = -currentBoatHeading;
+            flyOpts.bearing = currentBoatHeading;   // Head-up: Fahrtrichtung nach oben
         }
         map.flyTo(flyOpts);
     }
@@ -1108,11 +1137,11 @@ export function toggleMap3D(active) {
             _zoomBefore3D = map.getZoom();
             const opts = {
                 pitch: PITCH_3D,
-                zoom: Math.min(_zoomBefore3D + ZOOM_3D_DELTA, 20),
+                zoom: Math.min(20, Math.max(_zoomBefore3D, ZOOM_3D_TARGET)),
                 padding: { top: Math.round(h * 0.45), bottom: 0, left: 0, right: 0 },
                 duration: 600,
             };
-            if (currentBoatHeading) opts.bearing = -_updateSmoothedHeading(currentBoatHeading);
+            if (currentBoatHeading) opts.bearing = _updateSmoothedHeading(currentBoatHeading);
             map.easeTo(opts);
         } else {
             courseUpMode = _courseUpBefore3D;
