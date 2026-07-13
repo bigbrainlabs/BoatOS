@@ -1,6 +1,6 @@
 # BoatOS Roadmap
 
-*Aktuell: **v1.6.11** · Stand Juli 2026*
+*Aktuell: **v1.7.3** · Stand Juli 2026*
 
 ---
 
