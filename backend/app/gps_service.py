@@ -47,9 +47,26 @@ def set_external_gps(lat, lon, speed=0.0, heading=0.0, accuracy=None):
 
 
 def clear_external_gps():
-    """Disable external GPS override, fall back to SignalK."""
+    """
+    Disable external GPS override, fall back to SignalK.
+
+    WICHTIG: Auch die Daten zuruecksetzen, nicht nur das Flag. Sonst bleiben die
+    letzten externen Werte (z.B. das Ende einer Simulation) in gps_data stehen und
+    werden weiter gebroadcastet: Das Boot springt dann von selbst zur letzten
+    Sim-Position zurueck und SOG bleibt eingefroren, solange SignalK keinen echten
+    Fix liefert. lat/lon muessen mit weg — das Frontend prueft nur auf lat/lon,
+    nicht auf 'fix'. Kommt ein echter Fix, ueberschreibt SignalK die Werte ohnehin.
+    """
     global _external_gps_active
     _external_gps_active = False
+    gps_data['lat'] = None
+    gps_data['lon'] = None
+    gps_data['speed'] = None
+    gps_data['heading'] = None
+    gps_data['satellites'] = 0
+    gps_data['hdop'] = None
+    gps_data['fix'] = False
+    gps_data['timestamp'] = None
 
 
 def is_external_gps_active():

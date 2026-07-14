@@ -116,6 +116,11 @@ export function handleGPSUpdate(gps) {
             backendGpsUnavailableStartTime = Date.now();
         }
 
+        // SOG/COG leeren. Ohne das bleibt der letzte Wert fuer immer stehen —
+        // nach einer Simulation die Sim-Geschwindigkeit, im Betrieb die letzte
+        // Fahrtgeschwindigkeit, obwohl gar keine Position mehr da ist.
+        clearNavigationHeader();
+
         // Quelle erst nach 5 Sekunden ohne gueltige Daten zuruecksetzen
         if (gpsSource === "backend" && lastBackendGpsTime &&
             (Date.now() - lastBackendGpsTime) > 5000) {
@@ -123,6 +128,17 @@ export function handleGPSUpdate(gps) {
             updateGpsSourceIndicator();
         }
     }
+}
+
+/**
+ * Leert SOG/COG im Header (keine gueltige Position → keine Geschwindigkeit).
+ * Bewusst "--" statt "0.0": ohne GPS wissen wir nicht, dass das Boot steht.
+ */
+export function clearNavigationHeader() {
+    const sogEl = document.getElementById('sog-value');
+    if (sogEl) sogEl.textContent = '--';
+    const cogEl = document.getElementById('cog-value');
+    if (cogEl) cogEl.textContent = '---°';
 }
 
 /**
