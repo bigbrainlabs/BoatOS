@@ -22,7 +22,14 @@ import { getMap } from './map.js';
 const SRC = 'wind-overlay';
 const LAYER_ARROWS = 'wind-overlay-arrows';
 const LAYER_LABELS = 'wind-overlay-labels';
+const GRID_SRC = 'wind-field';
+const GRID_LAYER = 'wind-field-arrows';
 const LS_KEY = 'windOverlay';
+
+// Windfeld: Raster kleiner Pfeile ueber den sichtbaren Ausschnitt.
+const GRID_PX = 88;        // Abstand der Rasterpunkte auf dem Bildschirm
+const GRID_MAX = 160;      // Deckel, damit der Pi nicht in die Knie geht
+const GRID_MIN_MS = 350;   // Neuaufbau drosseln (moveend feuert im Follow ~30x/s)
 
 // Schwellwerte identisch zum Route-Wetter-Panel (weather.js) — sonst zeigt die
 // Liste gruen, was die Karte gelb malt.
@@ -85,6 +92,29 @@ function arrowImage(color, boat) {
     return g.getImageData(0, 0, S, S);
 }
 
+/** Kleiner, schlanker Pfeil fuer das Windfeld-Raster (ohne Zahl, dezent). */
+function smallArrowImage(color) {
+    const S = 40, c = document.createElement('canvas');
+    c.width = c.height = S;
+    const g = c.getContext('2d');
+    g.translate(S / 2, S / 2);
+    g.beginPath();
+    g.moveTo(0, -15);           // Spitze
+    g.lineTo(6, -6);
+    g.lineTo(2.2, -6);
+    g.lineTo(2.2, 15);          // Schaft
+    g.lineTo(-2.2, 15);
+    g.lineTo(-2.2, -6);
+    g.lineTo(-6, -6);
+    g.closePath();
+    g.fillStyle = color;
+    g.fill();
+    g.lineWidth = 1.4;
+    g.strokeStyle = 'rgba(255,255,255,0.85)';   // Kontrast auf dunklem Wasser
+    g.stroke();
+    return g.getImageData(0, 0, S, S);
+}
+
 /** Zahl mit Halo als Bild — dreht sich NICHT mit dem Pfeil mit. */
 function labelImage(text, color) {
     const W = 96, H = 40, c = document.createElement('canvas');
@@ -106,8 +136,8 @@ function ensureIcons(map) {
     WIND_STEPS.forEach((s, i) => {
         const id = `wind-arrow-${i}`;
         if (!map.hasImage(id)) map.addImage(id, arrowImage(s.color, false));
-        const idBoat = `wind-arrow-boat-${i}`;
-        if (!map.hasImage(idBoat)) map.addImage(idBoat, arrowImage(s.color, true));
+        const idSm = `wind-sm-${i}`;
+        if (!map.hasImage(idSm)) map.addImage(idSm, smallArrowImage(s.color));
     });
 }
 
@@ -124,7 +154,10 @@ function ensureLabelIcon(map, kn) {
 function featureCollection(map) {
     const feats = [];
 
-    const push = (p, isBoat) => {
+    // BEWUSST kein Pfeil mehr auf der Bootsposition: der Boot-Marker liegt
+    // darueber und verdeckt ihn. Der aktuelle Wind steckt jetzt im Windfeld
+    // (Raster kleiner Pfeile ringsum), das ist ohnehin besser ablesbar.
+    routePoints.forEach((p) => {
         const kn = p.wind_speed;
         if (kn == null || p.wind_deg == null) return;
         if (typeof p.lat !== 'number' || typeof p.lon !== 'number') return;
@@ -141,16 +174,63 @@ function featureCollection(map) {
                 km: p.km ?? null,
                 temp: p.temp ?? null,
                 description: p.description || '',
-                boat: isBoat ? 1 : 0,
-                icon: (isBoat ? 'wind-arrow-boat-' : 'wind-arrow-') + bucket(kn),
+                icon: 'wind-arrow-' + bucket(kn),
                 label: ensureLabelIcon(map, kn),
             },
         });
+    });
+
+    return { type: 'FeatureCollection', features: feats };
+}
+
+/**
+ * Windfeld: Raster kleiner Pfeile ueber den sichtbaren Ausschnitt.
+ *
+ * Ehrlich gesagt, was das ist und was nicht: Wir haben EINE gemessene Windangabe
+ * (fuer den aktuellen Standort). Auf Kartenmassstab — wenige Kilometer — ist der
+ * Wind praktisch einheitlich; genau darum holen wir ihn auch erst ab 10 km
+ * Ortswechsel neu. Das Raster zeigt also denselben Wind an vielen Stellen, damit
+ * die Richtung ueberall ablesbar ist. Es ist KEIN gemessenes Gitter pro Zelle —
+ * dafuer braeuchte es einen API-Call je Punkt (oder GRIB-Daten).
+ *
+ * Die Rasterpunkte werden aus BILDSCHIRM-Koordinaten zurueckgerechnet
+ * (map.unproject). Damit stimmt das Raster automatisch bei Drehung und in der
+ * gekippten 3D-Ansicht — dort waere ein geografisches Gitter perspektivisch
+ * voellig ungleichmaessig.
+ */
+function gridCollection(map) {
+    if (!currentWind || currentWind.wind_speed == null || currentWind.wind_deg == null) {
+        return { type: 'FeatureCollection', features: [] };
+    }
+    const kn = currentWind.wind_speed;
+    const props = {
+        kn,
+        deg: currentWind.wind_deg,
+        rot: (currentWind.wind_deg + 180) % 360,
+        icon: 'wind-sm-' + bucket(kn),
     };
 
-    routePoints.forEach(p => push(p, false));
-    if (currentWind) push(currentWind, true);
+    const c = map.getCanvas();
+    const W = c.clientWidth || 0, H = c.clientHeight || 0;
+    if (!W || !H) return { type: 'FeatureCollection', features: [] };
 
+    // In der gekippten Ansicht liegt der obere Bildbereich quasi am Horizont —
+    // dort wuerden Rasterpunkte ins Unendliche laufen. Oberes Drittel auslassen.
+    const yStart = map.getPitch() > 30 ? Math.round(H * 0.32) : 0;
+
+    const feats = [];
+    for (let y = yStart + GRID_PX / 2; y < H && feats.length < GRID_MAX; y += GRID_PX) {
+        for (let x = GRID_PX / 2; x < W && feats.length < GRID_MAX; x += GRID_PX) {
+            let ll;
+            try { ll = map.unproject([x, y]); } catch (_) { continue; }
+            if (!ll || !isFinite(ll.lng) || !isFinite(ll.lat)) continue;
+            feats.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [ll.lng, ll.lat] },
+                properties: props,
+            });
+        }
+    }
     return { type: 'FeatureCollection', features: feats };
 }
 
@@ -175,11 +255,30 @@ function draw() {
     ensureIcons(map);
     const data = featureCollection(map);
 
-    if (!map.getSource(SRC)) {
-        map.addSource(SRC, { type: 'geojson', data });
+    // ---- Windfeld (Raster) — zuerst, damit es UNTER den Routen-Pfeilen liegt
+    if (!map.getSource(GRID_SRC)) {
+        map.addSource(GRID_SRC, { type: 'geojson', data: gridCollection(map) });
     } else {
-        map.getSource(SRC).setData(data);
+        map.getSource(GRID_SRC).setData(gridCollection(map));
     }
+    if (!map.getLayer(GRID_LAYER)) {
+        map.addLayer({
+            id: GRID_LAYER,
+            type: 'symbol',
+            source: GRID_SRC,
+            layout: {
+                'icon-image': ['get', 'icon'],
+                'icon-rotate': ['get', 'rot'],
+                'icon-rotation-alignment': 'map',
+                'icon-pitch-alignment': 'map',
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true,
+                'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 12, 0.62, 16, 0.8],
+            },
+            paint: { 'icon-opacity': 0.72 },   // dezent — die Karte bleibt lesbar
+        });
+    }
+    bindGridRefresh(map);
 
     if (!map.getLayer(LAYER_ARROWS)) {
         map.addLayer({
@@ -219,10 +318,35 @@ function draw() {
     bindPopup(map);
 }
 
+/**
+ * Das Raster haengt am sichtbaren Ausschnitt, muss also beim Verschieben/Zoomen
+ * neu gesetzt werden. Gedrosselt: im Follow-Modus feuert 'moveend' ~30x/s.
+ */
+let _gridBound = false;
+let _gridTimer = null, _gridLast = 0;
+function bindGridRefresh(map) {
+    if (_gridBound) return;
+    _gridBound = true;
+    map.on('moveend', () => {
+        if (!visible) return;
+        const now = performance.now();
+        const since = now - _gridLast;
+        clearTimeout(_gridTimer);
+        const run = () => {
+            _gridLast = performance.now();
+            const src = map.getSource(GRID_SRC);
+            if (src) src.setData(gridCollection(map));
+        };
+        if (since >= GRID_MIN_MS) run();
+        else _gridTimer = setTimeout(run, GRID_MIN_MS - since);
+    });
+}
+
 function removeLayers(map) {
-    [LAYER_LABELS, LAYER_ARROWS].forEach(id => {
+    [LAYER_LABELS, LAYER_ARROWS, GRID_LAYER].forEach(id => {
         if (map.getLayer(id)) map.removeLayer(id);
     });
+    if (map.getSource(GRID_SRC)) map.removeSource(GRID_SRC);
     if (map.getSource(SRC)) map.removeSource(SRC);
     if (popup) { popup.remove(); popup = null; }
 }
@@ -237,9 +361,9 @@ function bindPopup(map) {
         if (!f) return;
         const p = f.properties;
         const fmtSpd = window.formatSpeed || ((k) => `${Math.round(k)} kn`);
-        const when = p.boat == 1
-            ? 'jetzt'
-            : (p.eta ? new Date(p.eta).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' (ETA)' : '');
+        const when = p.eta
+            ? new Date(p.eta).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' (ETA)'
+            : '';
         const gust = p.gust ? ` · Böen ${fmtSpd(Number(p.gust), 0)}` : '';
         const temp = (p.temp != null && p.temp !== '')
             ? (typeof window.formatTemperature === 'function' ? window.formatTemperature(Number(p.temp)) : `${p.temp}°`)
@@ -270,7 +394,10 @@ export function setRouteWind(points) {
     draw();
 }
 
-/** Aktueller Wind am Boot (aus /api/weather + aktueller Position). */
+/**
+ * Aktueller Wind (aus /api/weather + aktueller Position) — speist das Windfeld,
+ * also das Raster kleiner Pfeile rings um das Boot.
+ */
 export function setCurrentWind(lat, lon, windSpeedKn, windDeg, gust = null) {
     if (typeof lat !== 'number' || typeof lon !== 'number' || windSpeedKn == null || windDeg == null) {
         currentWind = null;
@@ -310,7 +437,9 @@ export function updateToggleButton() {
  * addImage-Bilder weg — map.js ruft das hier aus dem style.load-Handler auf.
  */
 export function redrawWindOverlay() {
-    popupBound = false;   // Handler hingen am alten Style-Layer
+    // popupBound/_gridBound NICHT zuruecksetzen: map.on(...) haengt am Map-Objekt,
+    // nicht am Style, und ueberlebt den Wechsel. Ein erneutes Binden gaebe doppelte
+    // Handler — also zwei Popups pro Klick und doppelte Raster-Neuaufbauten.
     draw();
 }
 
