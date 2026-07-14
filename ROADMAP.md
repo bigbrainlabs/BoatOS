@@ -21,23 +21,34 @@
 |---------|-------------|----------|
 | AIS collision warning | CPA/TCPA calculation — alert when collision course detected | Safety |
 | Cross-track error alert (XTE) | Warning when the boat deviates from the planned course | Safety |
-| Voice guidance (TTS) | "Waypoint in 500 m" — Web Speech API, optional | UX |
 | Marina & anchorage POIs | Configurable POI database (OpenSeaMap import), region-independent | Map |
 | Tidal integration | Tide curves, automatic ETA adjustment for tidal sections | Data, Routing |
 
 ---
 
-## v1.9 — Offline-First
+## v1.9 — 3D chart & weather
+
+The `v1.9.x-dev` development branch. The 3D chart view is the centrepiece of this
+release — see the preview at the top of the [README](README.md).
+
+### Delivered
 
 | Feature | Description | Category |
 |---------|-------------|----------|
-| Offline weather data (GRIB) | Download forecast for the active route and use without internet | Data |
-| Weather alerts | Configurable thresholds for storms, strong winds, low visibility | Safety |
-| Weather overlay on map | Wind arrows along the route, colour-coded by intensity | Map |
-| Logbook export (PDF / HTML) | Trip report with track map — for insurance, records, archive | UX |
-| Photos in logbook | Attach images to trip legs — stored locally on the Pi, no cloud upload | UX |
-| 3D / look-ahead chart view (Deck) | Tilted head-up perspective of the fairway ahead (like professional inland ECDIS, e.g. Tresco Navigis) — camera pitch + COG-follow on the existing IENC vector data (MapLibre); buoys, km-marks, depth zones, sky layer | Map |
-| Helm map engine for 3D perspective | `flutter_map` is 2D (rotation only, no pitch) — a 3D view on the Helm needs switching to a MapLibre-native Flutter engine (GPU); check flutter-pi resources. Without the switch the Helm stays head-up 2D | Map, Platform |
+| **3D / look-ahead chart view (Deck)** | Tilted head-up perspective of the fairway ahead: the camera follows the course (COG), you look where you are going, the boat sits in the lower half of the screen. Pitch adjustable via buttons (20–75°, remembered), target zoom depends on screen width (16.0 phone … 17.5 desktop). Built on the existing IENC vector data — no extra data needed | Map |
+| **Real 3D seamarks (Deck)** | Buoys and beacons as true 3D objects (three.js + MapLibre custom layer), data-driven from the official IENC data (`_cls`/`COLOUR`/`TOPSHP`/`CATCAM`) — colours and topmarks come from the chart, not from an assumption. Performance verified on the target Pi. Expansion: see below | Map |
+| Weather alerts | Official warnings (DWD via Bright Sky, default) or OpenWeather One Call 3.0 as an opt-in; plus a user-defined wind threshold. Badge in the top bar + panel; API key configurable (Settings → Weather) | Safety |
+| Wind overlay on the map | Wind arrows along the route — at each waypoint the forecast for **that leg's ETA** — plus the current wind at the boat. Colour-coded by strength, click popup with gusts and the direction the wind comes from | Map |
+| Position-aware weather | Weather and warnings follow the current position instead of a fixed one; refetched after 15 min or once you have moved 10 km | Data |
+| Route weather usable offline | `/api/weather/route` serves the forecast along the route (at each ETA), with a file cache → usable without internet. **GRIB is not needed for this** — the original GRIB item is thereby done | Data |
+| Logbook export (PDF) | Trip report as PDF (`pdf_export.py`, `GET /api/trip/pdf/{id}`), reachable from the logbook (also in `main` by now) | UX |
+
+### Open
+
+| Feature | Description | Category |
+|---------|-------------|----------|
+| 3D seamarks — expansion & fine-tuning | Building on the real 3D buoys (`js/buoy3d.js`): more `TOPSHP` codes, beacons as poles instead of buoys, lights (sectors), `notmrk` as 3D signboards, click popups on 3D objects; fine-tuning of lighting/anti-aliasing, size & visibility (zoom thresholds), cardinal topmark orientation | Map |
+| Helm map engine for 3D perspective | `flutter_map` (^8.1.1) is 2D (rotation only, no pitch) — a 3D view on the Helm needs switching to a MapLibre-native Flutter engine (GPU); check flutter-pi resources. Without the switch the Helm stays head-up 2D | Map, Platform |
 
 ---
 
@@ -66,4 +77,4 @@
 
 ---
 
-*Versioning scheme: `major.month.release` — increment only the last segment.*
+*Versioning scheme: `major.features.bugfixes` — bump the middle segment for features, the last for bug fixes.*
