@@ -195,11 +195,10 @@
 .fab-container {
     position: fixed;
     right: var(--space-base);
-    /* Auf gleicher Hoehe wie die Karten-Tasten links: schmal ueber dem Rondell
-       (das reicht dort bis an beide Raender), breit unten am Rand. Vorher hing
-       die Position noch am alten Bottom-Sheet (--sheet-peek), das es seit dem
-       Rondell gar nicht mehr gibt — daher schwebten die Buttons auf halber Hoehe. */
-    bottom: calc(102px + env(safe-area-inset-bottom));
+    /* Unten am Rand, auf Hoehe der Karten-Tasten links. (Vorher hing die
+       Position am alten Bottom-Sheet --sheet-peek, das es seit dem Rondell
+       nicht mehr gibt — daher schwebten die Buttons auf halber Hoehe.) */
+    bottom: max(10px, env(safe-area-inset-bottom));
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -250,12 +249,10 @@
        untersten Karten-Tasten — die waren dadurch schlicht nicht mehr klickbar.
        Der Container selbst faengt nichts ab (pointer-events:none von MapLibre),
        nur die Buttons darin. */
+    /* ueber dem Rondell (z-index 1001), damit die Tasten klickbar bleiben —
+       das Karussell laesst links/rechts Platz fuer genau diese Spalten frei
+       (Breite in rondell.css). */
     z-index: 1002;
-    /* Ueber das Rondell schieben — auf JEDER Breite. Das Karussell nutzt jetzt
-       die volle Zeile und reicht auch auf mittleren Bildschirmen bis an die
-       Raender; bliebe die Reihe unten, ueberlagerten sich die Trefferflaechen
-       (inklusive des Rondell-Pfeils, der genau in dieser Spalte sitzt). */
-    padding-bottom: 92px;
 }
 
 @media (min-width: 1000px) {

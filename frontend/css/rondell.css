@@ -87,9 +87,11 @@
 .qa-carousel .quick-actions {
     display: block;
     position: relative;
-    /* Volle Zeilenbreite — wie viele Elemente hineinpassen, rechnet
-       quick-actions.js/_computeHalf aus dem Platz aus. */
-    width: min(1100px, calc(100vw - 16px));
+    /* Breite Zeile, aber links und rechts bleiben die Spalten fuer die
+       Karten-Tasten und die FABs frei (je ~75 px) — sonst liegt das Karussell
+       ueber ihnen und faengt deren Klicks ab. Wie viele Elemente hineinpassen,
+       rechnet quick-actions.js/_computeHalf aus dieser Breite aus. */
+    width: min(1100px, calc(100vw - 150px));
     height: 70px;
     margin: 0 auto;
     padding: 0;

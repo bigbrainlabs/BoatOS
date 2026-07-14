@@ -17,6 +17,7 @@ let _half = 2;          // sichtbare Elemente je Seite (2 → 5 sichtbar)
 let _swipeMoved = false;
 let _arrowL = null;
 let _arrowR = null;
+let _strip = null;      // Karussell-Container (.quick-actions) — gibt die nutzbare Breite vor
 
 /**
  * Wie viele Elemente passen je Seite neben das mittlere?
@@ -30,7 +31,11 @@ function _computeHalf() {
     const w = (_els[0] && _els[0].offsetWidth) || 58;
     const spacing = w * 0.92;
     const arrows = 2 * ((_arrowL && _arrowL.offsetWidth) || 30) + 24;   // + Luft
-    const avail = (window.innerWidth || 800) - arrows - 16;
+    // Breite des KARUSSELLS, nicht des Fensters: links und rechts sind Spalten
+    // fuer Karten-Tasten und FABs reserviert (siehe rondell.css). Mit der
+    // Fensterbreite gerechnet wuerde das Rondell in diese Spalten hineinwachsen.
+    const box = (_strip && _strip.clientWidth) || (window.innerWidth || 800);
+    const avail = box - arrows;
     // (2*half) * spacing + w  <=  avail
     const half = Math.floor((avail - w) / (2 * spacing));
     return Math.max(1, Math.min(3, half));   // mind. 3, hoechstens 7 sichtbar
@@ -100,6 +105,7 @@ export function initQuickActionsCarousel() {
     const wrap = document.querySelector('.quick-actions-wrap');
     const strip = document.querySelector('.quick-actions');
     if (!wrap || !strip) return;
+    _strip = strip;
     _els = Array.from(strip.querySelectorAll('.quick-action'));
     if (!_els.length) return;
 

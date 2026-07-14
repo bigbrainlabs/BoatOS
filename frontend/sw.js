@@ -4,7 +4,7 @@
  */
 
 // App shell cache — bump this version on any app update
-const CACHE_NAME = 'boatos-v37';
+const CACHE_NAME = 'boatos-v38';
 
 // Satellite tile cache — intentionally versioned separately so it is NEVER
 // wiped when the app cache version changes (tiles take a long time to download)
