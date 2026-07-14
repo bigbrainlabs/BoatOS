@@ -41,6 +41,8 @@
     position: relative;
     width: min(560px, 94vw);
     max-height: 52vh;
+    /* Breite waechst mit dem Bildschirm — auf grossen Displays weniger
+       Umbrueche in den Karten (Wetter-Kacheln, Route-Statistiken, Logbuch). */
     overflow-y: auto;
     padding: var(--space-lg);
     padding-top: 34px;                  /* Platz für das X */
@@ -85,7 +87,9 @@
 .qa-carousel .quick-actions {
     display: block;
     position: relative;
-    width: min(420px, 92vw);
+    /* Volle Zeilenbreite — wie viele Elemente hineinpassen, rechnet
+       quick-actions.js/_computeHalf aus dem Platz aus. */
+    width: min(1100px, calc(100vw - 16px));
     height: 70px;
     margin: 0 auto;
     padding: 0;
@@ -167,6 +171,23 @@
     background: var(--accent);
     color: #fff;
     border-color: var(--accent);
+}
+
+/* ── Breitere Info-Panels auf großen Bildschirmen ────────────────────────────
+   Die Panels waren fix auf 560px begrenzt — auf einem 1920er-Display brachen
+   dadurch Wetter-Kacheln, Routen-Statistiken und Logbuch-Zeilen unnötig um,
+   während links und rechts Platz brachlag. Höhe darf ebenfalls mehr nutzen. */
+@media (min-width: 1000px) {
+    .sheet-content {
+        width: min(760px, 92vw);
+        max-height: 60vh;
+    }
+}
+@media (min-width: 1500px) {
+    .sheet-content {
+        width: min(920px, 88vw);
+        max-height: 64vh;
+    }
 }
 
 /* ── Größere Auflösungen: Icon + Text nebeneinander, Text größer ──────────────

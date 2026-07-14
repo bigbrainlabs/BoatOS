@@ -183,6 +183,14 @@
             });
         } catch (_) { feats = []; }
 
+        // Leeres Ergebnis heisst nicht "hier gibt es keine Tonnen" — bei schneller
+        // Fahrt (Simulation) laufen wir den Tiles davon, und querySourceFeatures
+        // liefert fuer noch nicht geladene Tiles nichts. Die vorhandene Szene dann
+        // stehen lassen statt sie wegzuwischen (sonst blinkt die Betonnung weg).
+        let sourceLoaded = true;
+        try { sourceLoaded = map.isSourceLoaded('ienc'); } catch (_) {}
+        if (feats.length === 0 && !sourceLoaded && CTX.scene) return;
+
         const scene = new THREE.Scene();
         scene.add(new THREE.AmbientLight(0xffffff, 0.95));
         const dir = new THREE.DirectionalLight(0xffffff, 0.7);
@@ -250,7 +258,16 @@
         if (!THREE || !maplibregl || !map) return;
 
         if (on) {
-            if (!map.isStyleLoaded()) { map.once('idle', () => setActive(true)); return; }
+            // NICHT auf isStyleLoaded()/'idle' warten! isStyleLoaded() ist false,
+            // solange irgendeine Source noch Tiles nachlaedt, und 'idle' feuert erst,
+            // wenn die Karte STILLSTEHT und alles geladen ist. In der Simulation
+            // bewegt das Follow-jumpTo die Karte dauerhaft → es laedt immer etwas
+            // nach, 'idle' kam nie, und die 3D-Betonnung wurde schlicht nie aktiviert.
+            // Zum Anlegen von Layer und Szene reicht: die IENC-Source existiert.
+            if (!map.getSource('ienc')) {
+                map.once('styledata', () => { if (CTX.active) setActive(true); });
+                return;
+            }
             ensureLayer(map, THREE);
             _lastRebuildTs = performance.now();
             rebuild(map, THREE, maplibregl);

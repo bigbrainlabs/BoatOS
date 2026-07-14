@@ -876,31 +876,6 @@ export function toggleMode() {
 // Layer Panel
 // ===========================================
 
-/**
- * Zeigt/versteckt das Layer-Panel
- */
-export function toggleFabDial() {
-    const dial = document.getElementById('fabSpeedDial');
-    const trigger = document.getElementById('fabTrigger');
-    if (!dial) return;
-    const isOpen = dial.classList.toggle('open');
-    if (trigger) {
-        trigger.textContent = isOpen ? '✕' : '🗺️';
-        trigger.classList.toggle('open', isOpen);
-    }
-    if (isOpen) {
-        const close = (e) => {
-            const container = document.getElementById('fabContainer');
-            if (container && !container.contains(e.target)) {
-                dial.classList.remove('open');
-                if (trigger) { trigger.textContent = '🗺️'; trigger.classList.remove('open'); }
-                document.removeEventListener('click', close, true);
-            }
-        };
-        setTimeout(() => document.addEventListener('click', close, true), 0);
-    }
-}
-
 export function toggleLayers() {
     window.BoatOS?.settings?.open('map');
 }

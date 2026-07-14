@@ -143,3 +143,6 @@ tools/mbtiles-creator/build/
 tools/mbtiles-creator/tmp/
 tools/mbtiles-creator/data/
 tools/mbtiles-creator/creator_config.json
+
+# Planetiler-Tool (89 MB Download-Artefakt, kein Repo-Inhalt)
+tools/mbtiles-creator/planetiler.jar

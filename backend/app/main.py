@@ -3,7 +3,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, F
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 from fastapi.staticfiles import StaticFiles
-import asyncio, json, websockets, os, shutil, zipfile, subprocess, re, sqlite3 as _sqlite3, gzip as _gzip
+import asyncio, json, websockets, os, shutil, zipfile, subprocess, re, time, sqlite3 as _sqlite3, gzip as _gzip
 from datetime import datetime
 from typing import List, Dict, Any
 import paho.mqtt.client as mqtt
@@ -72,8 +72,42 @@ gps_module_data: Dict[str, Any] = {}
 chart_layers: List[Dict[str, Any]] = []
 
 # OpenWeatherMap API Configuration
+# Fallback aus der Umgebung (.env). WICHTIG: Der Key gehoert NICHT ins Image —
+# jedes Geraet soll seinen eigenen eintragen. Deshalb hat der in den Settings
+# hinterlegte Key Vorrang, und ein leerer .env-Key ist der Normalfall.
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
 OPENWEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5"
+
+# Settings-Datei modul-relativ (backend/data/settings.json) — nicht ueber das
+# Arbeitsverzeichnis, sonst haengt es davon ab, wo der Dienst gestartet wurde.
+_SETTINGS_PATH = Path(__file__).resolve().parents[1] / "data" / "settings.json"
+
+
+def _read_settings() -> Dict[str, Any]:
+    try:
+        with open(_SETTINGS_PATH, "r", encoding="utf-8") as f:
+            return json.load(f) or {}
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+def openweather_key() -> str:
+    """
+    Aktiver OpenWeather-Key: Settings zuerst, dann .env.
+
+    Bewusst bei JEDEM Aufruf gelesen (nicht beim Start gecacht), damit ein in den
+    Einstellungen eingetragener Key sofort greift — ohne Dienst-Neustart.
+
+    Der Platzhalter aus .env.example zaehlt als KEIN Key: install.sh kopiert
+    .env.example nach .env, ein frisch installiertes BoatOS hat also
+    "your_api_key_here" stehen. Ohne diese Pruefung wuerde damit sinnlos gegen
+    OpenWeather gefragt und der Fehler saehe aus wie ein defekter Key.
+    """
+    key = (_read_settings().get("weather") or {}).get("apiKey")
+    key = (key or OPENWEATHER_API_KEY or "").strip()
+    if key.lower() in ("", "your_api_key_here", "dein_api_key", "changeme"):
+        return ""
+    return key
 
 # ELWIS ENC Download: Konfiguration und Pipeline liegen in ienc.py
 
@@ -2336,31 +2370,104 @@ async def _run_enc_convert(chart: dict):
     })
 
 # ==================== WEATHER ====================
-@app.get("/api/weather")
-async def get_weather(lang: str = "de"):
-    """Get weather data with optional language parameter (de/en)"""
-    # If weather_data is empty or language changed, fetch it
-    if not weather_data or lang != weather_data.get("lang", "de"):
-        await fetch_weather_once(lang)
-    return weather_data
+# ==================== POSITION FÜR WETTER/WARNUNGEN ====================
 
-async def fetch_weather_once(lang: str = "de"):
-    """Fetch weather data once with specified language"""
+_WEATHER_FALLBACK = (51.855, 12.046)      # Aken/Elbe — nur wenn NICHTS bekannt ist
+_WEATHER_TTL_S = 900                      # 15 min
+_WEATHER_MOVE_KM = 10                     # ab dieser Strecke neu holen
+
+
+def _valid_pos(lat, lon) -> bool:
+    try:
+        lat, lon = float(lat), float(lon)
+    except (TypeError, ValueError):
+        return False
+    return not (lat == 0 and lon == 0) and -90 <= lat <= 90 and -180 <= lon <= 180
+
+
+def resolve_position(lat=None, lon=None):
+    """
+    Standort für Wetter/Warnungen: explizit übergeben > Backend-GPS > Fallback.
+
+    Der Client darf eine Position mitgeben, weil er Quellen kennen kann, die das
+    Backend nicht hat (z.B. Browser-Geolocation). Der Aken-Fallback greift nur,
+    wenn wirklich keine Position bekannt ist — er ist eine Notbremse, keine
+    Standardeinstellung.
+    """
+    if _valid_pos(lat, lon):
+        return float(lat), float(lon), "client"
+    g = sensor_data.get("gps") or {}
+    if _valid_pos(g.get("lat"), g.get("lon")):
+        return float(g["lat"]), float(g["lon"]), "gps"
+    return _WEATHER_FALLBACK[0], _WEATHER_FALLBACK[1], "fallback"
+
+
+def _km_between(a, b):
+    import math
+    lat1, lon1 = a
+    lat2, lon2 = b
+    r = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(min(1.0, math.sqrt(h)))
+
+
+@app.get("/api/weather")
+async def get_weather(lang: str = "de", lat: float = None, lon: float = None):
+    """
+    Wetterdaten für den AKTUELLEN Standort.
+
+    Zwei Fehler waren hier begraben:
+    1. Es wurde nur neu geholt, wenn der Cache leer war oder die Sprache wechselte
+       — kein TTL, keine Positionspruefung. Einmal geholt, waren die Daten fuer
+       immer eingefroren; auch das 30-Minuten-Polling bekam nur denselben Blob.
+    2. Fehlender/ungueltiger Key lief ins Leere (kein else-Zweig bei != 200), das
+       Panel blieb ohne jeden Hinweis leer.
+    """
+    if not openweather_key():
+        return {"error": "no_api_key",
+                "message": "Kein OpenWeather-API-Key hinterlegt — Einstellungen → Wetter"}
+
+    pos_lat, pos_lon, source = resolve_position(lat, lon)
+
+    stale = True
+    if weather_data and lang == weather_data.get("lang", "de"):
+        age = time.time() - (weather_data.get("_fetched_at") or 0)
+        old_pos = weather_data.get("_pos")
+        moved = _km_between(old_pos, (pos_lat, pos_lon)) if old_pos else 999
+        stale = age > _WEATHER_TTL_S or moved > _WEATHER_MOVE_KM
+
+    if stale:
+        await fetch_weather_once(lang, pos_lat, pos_lon)
+
+    if not weather_data:
+        return {"error": "fetch_failed",
+                "message": "Wetterdaten konnten nicht geladen werden (API-Key gültig?)"}
+
+    return {**weather_data, "position_source": source}
+
+async def fetch_weather_once(lang: str = "de", lat: float = None, lon: float = None):
+    """Wetterdaten einmalig holen — für die uebergebene bzw. aktuell bekannte Position."""
     global weather_data
     try:
-        lat = sensor_data["gps"]["lat"]
-        lon = sensor_data["gps"]["lon"]
-        # Use fallback location if GPS not available (Aken/Elbe)
-        if lat == 0 or lon == 0 or lat is None or lon is None:
-            lat, lon = 51.855, 12.046
+        import time as _t
+        lat, lon, _src = resolve_position(lat, lon)
 
         async with aiohttp.ClientSession() as session:
-            current_url = f"{OPENWEATHER_BASE_URL}/weather?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang={lang}"
+            current_url = f"{OPENWEATHER_BASE_URL}/weather?lat={lat}&lon={lon}&appid={openweather_key()}&units=metric&lang={lang}"
             async with session.get(current_url) as resp:
+                if resp.status != 200:
+                    # Wurde vorher STILL verschluckt (es gab keinen else-Zweig):
+                    # bei ungueltigem Key blieb das Wetter-Panel einfach leer.
+                    reason = "API-Key ungueltig" if resp.status == 401 else f"HTTP {resp.status}"
+                    print(f"⚠️ OpenWeather /weather fehlgeschlagen: {reason}")
+                    return
                 if resp.status == 200:
                     current = await resp.json()
 
-                    forecast_url = f"{OPENWEATHER_BASE_URL}/forecast?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang={lang}"
+                    forecast_url = f"{OPENWEATHER_BASE_URL}/forecast?lat={lat}&lon={lon}&appid={openweather_key()}&units=metric&lang={lang}"
                     async with session.get(forecast_url) as fresp:
                         if fresp.status == 200:
                             forecast = await fresp.json()
@@ -2375,9 +2482,17 @@ async def fetch_weather_once(lang: str = "de"):
                                     "description": current["weather"][0]["description"],
                                     "icon": current["weather"][0]["icon"],
                                     "wind_speed": round(current["wind"]["speed"] * 1.94384, 1),
-                                    "wind_deg": current["wind"].get("direction", 0),
+                                    # OpenWeather nennt das Feld "deg", nicht "direction" —
+                                    # bisher war die Windrichtung deshalb IMMER 0.
+                                    "wind_deg": current["wind"].get("deg", 0),
                                     "clouds": current["clouds"]["all"],
                                     "visibility": current.get("visibility", 0) / 1852,
+                                    # Niederschlag der letzten Stunde (mm); OWM liefert die
+                                    # Bloecke nur, wenn es tatsaechlich faellt
+                                    "precip": round(
+                                        (current.get("rain", {}) or {}).get("1h", 0) or 0
+                                        + (current.get("snow", {}) or {}).get("1h", 0) or 0, 1),
+                                    "location": current.get("name") or "",
                                     "timestamp": datetime.fromtimestamp(current["dt"]).isoformat()
                                 },
                                 "forecast": []
@@ -2391,10 +2506,18 @@ async def fetch_weather_once(lang: str = "de"):
                                     "description": f["weather"][0]["description"],
                                     "icon": f["weather"][0]["icon"],
                                     "wind_speed": round(f["wind"]["speed"] * 1.94384, 1),
-                                    "wind_deg": f["wind"].get("deg", 0)
+                                    "wind_deg": f["wind"].get("deg", 0),
+                                    "precip": round((f.get("rain", {}) or {}).get("3h", 0) or 0, 1),
                                 })
 
-                            print(f"✅ Weather updated ({lang}): {weather_data['current']['temp']}°C, {weather_data['current']['description']}")
+                            # Cache-Metadaten: WANN und WOFÜR geholt — sonst kann
+                            # get_weather() nicht erkennen, dass die Daten alt sind
+                            # oder das Boot inzwischen woanders ist.
+                            weather_data["_fetched_at"] = _t.time()
+                            weather_data["_pos"] = (lat, lon)
+
+                            print(f"✅ Weather updated ({lang}) @ {lat:.3f},{lon:.3f}: "
+                                  f"{weather_data['current']['temp']}°C, {weather_data['current']['description']}")
                 else:
                     print(f"⚠️ Weather API error: {resp.status}")
     except Exception as e:
@@ -2452,7 +2575,7 @@ async def _owm_forecast_list(session, lat, lon):
     if c and now - c[0] < 1800:
         return c[1]
     url = (f"{OPENWEATHER_BASE_URL}/forecast?lat={key[0]}&lon={key[1]}"
-           f"&appid={OPENWEATHER_API_KEY}&units=metric&lang=de")
+           f"&appid={openweather_key()}&units=metric&lang=de")
     async with session.get(url) as r:
         if r.status != 200:
             return None
@@ -2528,19 +2651,26 @@ async def weather_route(request: Request):
 
 # ==================== WEATHER ALERTS (DWD) ====================
 @app.get("/api/weather/alerts")
-async def get_weather_alerts():
-    """Get current weather alerts from DWD via Bright Sky API"""
+async def get_weather_alerts(lat: float = None, lon: float = None):
+    """
+    Aktive Wetterwarnungen für den AKTUELLEN Standort.
+
+    Quelle über settings.weather.alertSource:
+      - "dwd" (Standard): DWD über Bright Sky — amtlich, kostenlos, ohne Key,
+        aber NUR Deutschland.
+      - "owm": OpenWeather One Call 3.0 — deckt auch das Ausland ab, braucht aber
+        ein separates "One Call by Call"-Abo (der normale 2.5-Key reicht nicht).
+    """
     try:
-        lat = sensor_data["gps"]["lat"]
-        lon = sensor_data["gps"]["lon"]
+        lat, lon, pos_source = resolve_position(lat, lon)
 
-        # Use fallback location if GPS not available (Aken/Elbe)
-        if lat == 0 or lon == 0 or lat is None or lon is None:
-            lat, lon = 51.855, 12.046
+        source = ((_read_settings().get("weather") or {}).get("alertSource") or "dwd").lower()
 
-        alerts_data = await weather_alerts.fetch_weather_alerts(lat, lon)
+        if source == "owm":
+            alerts_data = await weather_alerts.fetch_owm_alerts(lat, lon, openweather_key())
+        else:
+            alerts_data = await weather_alerts.fetch_weather_alerts(lat, lon)
 
-        # Format alerts for UI
         formatted_alerts = [
             weather_alerts.format_alert_for_ui(alert)
             for alert in alerts_data.get("alerts", [])
@@ -2549,8 +2679,12 @@ async def get_weather_alerts():
         return {
             "alerts": formatted_alerts,
             "count": len(formatted_alerts),
+            "source": source,
+            "position_source": pos_source,     # client | gps | fallback
             "last_updated": alerts_data.get("last_updated"),
-            "location": alerts_data.get("location")
+            "location": alerts_data.get("location"),
+            # Fehler nicht verschlucken: fehlendes One-Call-Abo muss die UI zeigen
+            **({"error": alerts_data["error"]} if alerts_data.get("error") else {}),
         }
     except Exception as e:
         print(f"❌ Weather alerts endpoint error: {e}")

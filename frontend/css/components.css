@@ -203,9 +203,12 @@ select option {
 .weather-desc { color: var(--text-dim); font-size: var(--fs-lg); text-transform: capitalize; }
 .weather-location { font-size: var(--fs-base); color: var(--text-dim); margin-top: 3px; }
 
+/* Flexibles Raster statt starrer 4 Spalten: die Kachelzahl darf wachsen
+   (Niederschlag kam dazu) und auf breiten Panels passen mehr nebeneinander,
+   ohne dass eine Kachel allein in der naechsten Zeile haengt. */
 .weather-details {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
     gap: var(--space-md);
     margin-bottom: var(--space-lg);
 }
@@ -243,6 +246,13 @@ select option {
 .forecast-item .time { font-size: var(--fs-sm); color: var(--text-dim); }
 .forecast-item .icon { font-size: var(--fs-4xl); margin: var(--space-xs) 0; }
 .forecast-item .temp { font-size: var(--fs-lg); font-weight: 600; color: var(--accent); }
+.forecast-item .fc-wind,
+.forecast-item .fc-rain {
+    font-size: var(--fs-2xs);
+    color: var(--text-dim);
+    white-space: nowrap;
+    margin-top: 2px;
+}
 
 /* ============================================
    LOGBOOK SECTION

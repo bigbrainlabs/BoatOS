@@ -6,6 +6,20 @@ Ein vollständiges Marine-Navigationssystem für Binnenschifffahrt und Küstenna
 
 <div align="center">
 
+![BoatOS 3D Route Simulation](3d-preview.gif)
+
+### 🚧 3D-Kartenansicht — Coming Soon
+
+**Schaut euch die Simulation in Aktion an:** gekippte Head-up-Perspektive mit Blick voraus und echten 3D-Seezeichen (Tonnen, Baken, Toppzeichen) — direkt aus den amtlichen Inland-ENC-Daten gerendert.
+
+*Aktuell im Entwicklungszweig `v1.9`.*
+
+</div>
+
+---
+
+<div align="center">
+
 ### 💾 Fertig-Image — einfach flashen, sofort lossegeln
 
 **[⬇️ Download v1.7.0 (~7,5 GB)](https://archive.org/download/boatos-distri-image/boatos_v1.7.0.img.gz)**

@@ -18,8 +18,22 @@ let _swipeMoved = false;
 let _arrowL = null;
 let _arrowR = null;
 
+/**
+ * Wie viele Elemente passen je Seite neben das mittlere?
+ *
+ * Frueher ein fester Breakpoint (<560 px → 1, sonst 2). Das verschenkte Platz:
+ * Auf dem Handy standen 3 Elemente in der Mitte, links und rechts blieb die
+ * halbe Zeile leer. Jetzt aus der TATSAECHLICH verfuegbaren Breite gerechnet —
+ * abzueglich der beiden Pfeile — sodass die Zeile immer voll genutzt wird.
+ */
 function _computeHalf() {
-    return (window.innerWidth || 800) < 560 ? 1 : 2;   // schmal 3, breit 5
+    const w = (_els[0] && _els[0].offsetWidth) || 58;
+    const spacing = w * 0.92;
+    const arrows = 2 * ((_arrowL && _arrowL.offsetWidth) || 30) + 24;   // + Luft
+    const avail = (window.innerWidth || 800) - arrows - 16;
+    // (2*half) * spacing + w  <=  avail
+    const half = Math.floor((avail - w) / (2 * spacing));
+    return Math.max(1, Math.min(3, half));   // mind. 3, hoechstens 7 sichtbar
 }
 
 function _spacing() {

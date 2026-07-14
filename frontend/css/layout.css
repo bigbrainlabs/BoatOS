@@ -195,7 +195,11 @@
 .fab-container {
     position: fixed;
     right: var(--space-base);
-    bottom: calc(var(--sheet-peek) + var(--space-2xl));
+    /* Auf gleicher Hoehe wie die Karten-Tasten links: schmal ueber dem Rondell
+       (das reicht dort bis an beide Raender), breit unten am Rand. Vorher hing
+       die Position noch am alten Bottom-Sheet (--sheet-peek), das es seit dem
+       Rondell gar nicht mehr gibt — daher schwebten die Buttons auf halber Hoehe. */
+    bottom: calc(102px + env(safe-area-inset-bottom));
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -230,42 +234,59 @@
 .fab.danger { border-color: var(--danger); color: var(--danger); }
 .fab.danger:hover, .fab.danger:active { background: var(--danger); color: white; }
 
-/* Speed Dial */
-.fab-speed-dial {
+/* ---- Karten-Controls unten links: Anzeige | Zoom | Neigung ----------------
+   Schmal (Handy): untereinander. Ab 1000 px nebeneinander — da ist Platz, und
+   gestapelt wandern die Tasten sonst unnoetig weit nach oben. */
+/* ACHTUNG: MapLibre haengt Controls in den UNTEREN Ecken per insertBefore ein —
+   die DOM-Reihenfolge ist also GENAU UMGEKEHRT zur Reihenfolge der addControl-
+   Aufrufe (Anzeige, Zoom, Neigung). Darum -reverse: damit steht die Info-Box
+   wieder oben bzw. links, und die Neigungstasten ganz aussen. */
+.maplibregl-ctrl-bottom-left {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--space-sm);
+    flex-direction: column-reverse;   /* oben: Anzeige → Zoom → Neigung */
+    align-items: flex-start;
+    /* Ueber das schwebende Rondell (.bottom-sheet, z-index 1001) heben: dessen
+       Karussell ist auf dem Handy fast bildschirmbreit und lag genau ueber den
+       untersten Karten-Tasten — die waren dadurch schlicht nicht mehr klickbar.
+       Der Container selbst faengt nichts ab (pointer-events:none von MapLibre),
+       nur die Buttons darin. */
+    z-index: 1002;
+    /* Ueber das Rondell schieben — auf JEDER Breite. Das Karussell nutzt jetzt
+       die volle Zeile und reicht auch auf mittleren Bildschirmen bis an die
+       Raender; bliebe die Reihe unten, ueberlagerten sich die Trefferflaechen
+       (inklusive des Rondell-Pfeils, der genau in dieser Spalte sitzt). */
+    padding-bottom: 92px;
 }
 
-.fab-speed-dial-items {
+@media (min-width: 1000px) {
+    .maplibregl-ctrl-bottom-left {
+        flex-direction: row-reverse;  /* links: Anzeige → Zoom → Neigung */
+        align-items: flex-end;
+    }
+}
+
+/* Pitch-Tasten: nur in der 3D-Ansicht sichtbar — in der Draufsicht waere
+   Neigung sinnlos. body.map3d-active setzt map.js/toggleMap3D. */
+.maplibregl-ctrl-group.pitch-ctrl { display: none; }
+body.map3d-active .maplibregl-ctrl-group.pitch-ctrl { display: block; }
+
+/* Zoomstufe + Neigung — dezente Pille, keine Klickflaeche */
+.map-readout {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: var(--space-sm);
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.35s ease;
+    gap: 6px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    pointer-events: none;
+    font: 600 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: 0.3px;
+    background: rgba(20, 28, 40, 0.5);
+    color: #dfe8f2;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
 }
-
-.fab-speed-dial.open .fab-speed-dial-items {
-    max-height: 280px;
-}
-
-.fab-sub {
-    opacity: 0;
-    transform: translateY(12px) scale(0.8);
-    transition: opacity 0.2s ease, transform 0.2s ease, background 0.2s, box-shadow 0.2s;
-}
-
-.fab-speed-dial.open .fab-sub { opacity: 1; transform: translateY(0) scale(1); }
-.fab-speed-dial.open .fab-sub:nth-child(4) { transition-delay: 0.04s; }
-.fab-speed-dial.open .fab-sub:nth-child(3) { transition-delay: 0.08s; }
-.fab-speed-dial.open .fab-sub:nth-child(2) { transition-delay: 0.12s; }
-.fab-speed-dial.open .fab-sub:nth-child(1) { transition-delay: 0.16s; }
-
-.fab-trigger { position: relative; }
-.fab-trigger.open { background: var(--accent); color: white; }
+.map-readout #pitch-indicator { display: none; }
 
 /* ============================================
    BOTTOM SHEET

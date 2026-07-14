@@ -12,6 +12,11 @@
 // Diese Variablen müssen aus core.js importiert werden, wenn das Modul-System verwendet wird
 // import { API_URL } from './core.js';
 
+import {
+    setRouteWind, setCurrentWind, windColor,
+    isWindOverlayVisible,
+} from './weather-map.js';
+
 // ==================== STATE ====================
 // Wetterdaten werden hier gecached
 let weatherData = null;
@@ -26,6 +31,21 @@ const WEATHER_UPDATE_INTERVAL = 1800000; // 30 Minuten
  * Lädt Wetterdaten vom Backend API
  * Wird regelmäßig aufgerufen, um aktuelle Daten zu erhalten
  */
+/**
+ * Aktuelle Bootsposition als Query-Parameter — damit Wetter und Warnungen vom
+ * TATSAECHLICHEN Standort kommen und nicht vom Aken-Fallback.
+ *
+ * Das Frontend kennt teils Positionen, die das Backend nicht hat (Browser-
+ * Geolocation). Fehlt sie, entscheidet das Backend selbst (Backend-GPS, sonst
+ * Fallback).
+ */
+function posQuery() {
+    const p = window.currentPosition;
+    if (!p || typeof p.lat !== 'number' || typeof p.lon !== 'number') return '';
+    if (p.lat === 0 && p.lon === 0) return '';
+    return `&lat=${p.lat.toFixed(5)}&lon=${p.lon.toFixed(5)}`;
+}
+
 async function fetchWeather() {
     try {
         // Sprache aus i18n.js holen, Fallback auf Deutsch
@@ -34,10 +54,23 @@ async function fetchWeather() {
         // API_URL sollte global verfügbar sein (aus core.js oder app.js)
         const apiUrl = typeof API_URL !== 'undefined' ? API_URL : '';
 
-        const response = await fetch(`${apiUrl}/api/weather?lang=${lang}`);
+        const response = await fetch(`${apiUrl}/api/weather?lang=${lang}${posQuery()}`);
         if (response.ok) {
-            weatherData = await response.json();
+            const data = await response.json();
+
+            // Backend meldet jetzt fehlenden/ungueltigen Key, statt still leer zu bleiben
+            if (data && data.error) {
+                weatherData = null;
+                showWeatherProblem(data.message || 'Wetterdaten nicht verfügbar');
+                return;
+            }
+
+            weatherData = data;
+            rememberFetchPos();      // Bezugspunkt fuer den Bewegungs-Watcher
+            showWeatherProblem(null);
             updateWeatherDisplay();
+            renderWeatherAlerts();   // eigener Wind-Alarm haengt am aktuellen Wind
+            pushCurrentWindToMap();  // Wind-Pfeil am Boot aktualisieren
             console.log('Wetterdaten geladen:', weatherData);
         } else {
             console.warn('Wetter API antwortet nicht:', response.status);
@@ -53,6 +86,212 @@ async function fetchWeather() {
  */
 function loadWeatherData() {
     fetchWeather();
+    fetchWeatherAlerts();
+}
+
+/**
+ * Zeigt in der Wetter-Sektion an, WARUM keine Daten da sind (statt leerem Panel).
+ * Der haeufigste Fall: kein OpenWeather-API-Key hinterlegt — ein frisch
+ * installiertes BoatOS hat nur den Platzhalter aus .env.example.
+ */
+function showWeatherProblem(message) {
+    const box = document.getElementById('weather-problem');
+    if (!box) return;
+    if (!message) {
+        box.style.display = 'none';
+        return;
+    }
+    box.style.display = 'block';
+    box.innerHTML = `
+        <div style="background:var(--bg-card); border:1px solid var(--warning, #f59e0b);
+                    border-left:4px solid var(--warning, #f59e0b);
+                    border-radius:var(--radius-md); padding:var(--space-md);
+                    margin-bottom:var(--space-sm); font-size:var(--fs-sm); color:var(--text);">
+            ⚠ ${_esc(message)}
+            <div style="margin-top:6px;">
+                <button class="btn-secondary" style="padding:4px 10px; font-size:12px;"
+                        onclick="BoatOS.settings.open('weather')">Einstellungen öffnen</button>
+            </div>
+        </div>`;
+}
+
+// ==================== WETTER-WARNUNGEN ====================
+//
+// Zwei Quellen, bewusst getrennt:
+//  1. AMTLICH — DWD über Bright Sky (Backend /api/weather/alerts), vier Stufen.
+//     Standardmäßig aktiv; das ist der Default-Alarm.
+//  2. EIGENER SCHWELLWERT — optional. Alarm, sobald der aktuelle Wind den in den
+//     Settings gesetzten Wert erreicht. Default 0 = aus.
+// Windwerte sind überall in KNOTEN; umgerechnet wird nur für die Anzeige.
+
+let officialAlerts = [];
+let alertsInterval = null;
+const ALERTS_UPDATE_INTERVAL = 900000;   // 15 Minuten
+
+const SEVERITY_COLOR = {
+    Minor:    '#FFD700',
+    Moderate: '#FF8C00',
+    Severe:   '#FF4500',
+    Extreme:  '#8B0000',
+};
+
+function _weatherSettings() {
+    const s = (typeof window.loadSettings === 'function') ? (window.loadSettings() || {}) : {};
+    return s.weather || {};
+}
+
+/**
+ * Eigener Wind-Alarm — nur wenn ein Schwellwert gesetzt ist und der aktuelle
+ * Wind ihn erreicht. Gibt ein Alert-Objekt im selben Format wie die amtlichen
+ * zurück, damit die Anzeige nicht zwei Fälle kennen muss.
+ */
+function getOwnWindAlert() {
+    const threshold = Number(_weatherSettings().windAlertKn) || 0;
+    const wind = weatherData?.current?.wind_speed;
+    if (!threshold || typeof wind !== 'number' || wind < threshold) return null;
+
+    const fmt = (kn) => (window.formatSpeed ? window.formatSpeed(kn, 0) : `${kn.toFixed(0)} kn`);
+    return {
+        id: 'own-wind',
+        own: true,
+        event: 'Wind-Alarm',
+        headline: `Wind ${fmt(wind)} — Schwelle ${fmt(threshold)} erreicht`,
+        description: '',
+        instruction: '',
+        severity: 'Moderate',
+        severity_level: 2,
+        color: SEVERITY_COLOR.Moderate,
+    };
+}
+
+/** Alle aktiven Warnungen (amtlich + eigener Schwellwert), stärkste zuerst. */
+function getActiveAlerts() {
+    const w = _weatherSettings();
+    const list = (w.alertsEnabled !== false) ? [...officialAlerts] : [];
+    const own = getOwnWindAlert();
+    if (own) list.push(own);
+    return list.sort((a, b) => (b.severity_level || 1) - (a.severity_level || 1));
+}
+
+let alertsPlace = '';    // Ort/Warnzelle, für die die Warnungen gelten
+let alertsSource = 'dwd';
+
+async function fetchWeatherAlerts() {
+    try {
+        const apiUrl = typeof API_URL !== 'undefined' ? API_URL : '';
+        const res = await fetch(`${apiUrl}/api/weather/alerts?_${posQuery()}`, { cache: 'no-store' });
+        if (res.ok) {
+            const data = await res.json();
+            officialAlerts = data.alerts || [];
+            alertsSource = data.source || 'dwd';
+            // DWD/Bright Sky liefert die amtliche Warnzelle mit Namen; OpenWeather
+            // kennt keinen Ortsnamen — dann den Ort der Wetterdaten verwenden.
+            alertsPlace = data.location?.name || weatherData?.current?.location || '';
+        }
+    } catch (e) {
+        console.warn('Wetter-Warnungen konnten nicht geladen werden:', e.message);
+    }
+    renderWeatherAlerts();
+}
+
+/** Warnungen in der Wetter-Sektion + Badge in der Kopfzeile aktualisieren. */
+function renderWeatherAlerts() {
+    const alerts = getActiveAlerts();
+
+    // --- Badge oben (nur die stärkste Warnung) ---
+    const badge = document.getElementById('weather-alert-badge');
+    if (badge) {
+        if (alerts.length) {
+            const top = alerts[0];
+            badge.style.display = 'flex';
+            badge.style.background = top.color || SEVERITY_COLOR.Minor;
+            badge.style.color = (top.severity === 'Minor') ? '#1A1200' : '#ffffff';
+            badge.textContent = `⚠ ${top.event}` + (alerts.length > 1 ? ` +${alerts.length - 1}` : '');
+            badge.title = top.headline || top.event;
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    // --- Liste in der Wetter-Sektion ---
+    const box = document.getElementById('weather-alerts');
+    if (!box) return;
+
+    if (!alerts.length) {
+        box.innerHTML = '';
+        return;
+    }
+
+    // Wofür gilt das? Ohne Ortsangabe ist eine Warnung wertlos.
+    const srcLabel = (alertsSource === 'owm') ? 'OpenWeather' : 'DWD';
+    const head = `
+        <div style="font-size:var(--fs-xs); color:var(--text-dim); margin-bottom:var(--space-xs);">
+            Warnungen${alertsPlace ? ` für <strong>${_esc(alertsPlace)}</strong>` : ''} · Quelle ${srcLabel}
+        </div>`;
+
+    box.innerHTML = head + alerts.map(a => {
+        const when = _alertTimeRange(a);
+        return `
+        <div style="border-left:4px solid ${a.color || SEVERITY_COLOR.Minor};
+                    background:var(--bg-card); border:1px solid var(--border);
+                    border-radius:var(--radius-md); padding:var(--space-md);
+                    margin-bottom:var(--space-sm);">
+            <div style="font-weight:600; color:var(--text);">
+                ⚠ ${_esc(a.event)}${a.own ? '' : ` <span style="font-weight:400;color:var(--text-dim);font-size:var(--fs-xs);">(DWD)</span>`}
+            </div>
+            ${a.headline ? `<div style="font-size:var(--fs-sm); color:var(--text); margin-top:2px;">${_esc(a.headline)}</div>` : ''}
+            ${when ? `<div style="font-size:var(--fs-xs); color:var(--text-dim); margin-top:2px;">${when}</div>` : ''}
+            ${a.instruction ? `<div style="font-size:var(--fs-xs); color:var(--text-dim); margin-top:6px;">${_esc(a.instruction)}</div>` : ''}
+        </div>`;
+    }).join('');
+}
+
+function _alertTimeRange(a) {
+    const fmt = (iso) => {
+        try {
+            return new Date(iso).toLocaleString('de-DE',
+                { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        } catch { return null; }
+    };
+    const from = a.onset || a.effective;
+    const to = a.expires;
+    if (from && to) return `${fmt(from)} – ${fmt(to)}`;
+    if (from) return `ab ${fmt(from)}`;
+    return '';
+}
+
+function _esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g,
+        c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/** Badge-Klick → Wetter-Panel öffnen. */
+function openWeatherAlerts() {
+    const tab = document.querySelector('.qa-section[onclick*="\'weather\'"]');
+    if (window.BoatOS?.ui?.showSection) window.BoatOS.ui.showSection('weather', tab);
+}
+
+/**
+ * Settings geändert (Warnquelle, Schwellwert, API-Key) → sofort neu auswerten.
+ *
+ * Ohne das blieb nach einem Quellenwechsel die ALTE Warnung stehen, bis der
+ * 15-Minuten-Takt das nächste Mal lief — man stellt auf DWD um und sieht weiter
+ * die OpenWeather-Warnung. Genauso greift ein frisch eingetragener API-Key erst
+ * dann, wenn die Wetterdaten neu geholt werden.
+ */
+window.addEventListener('settingsChanged', () => {
+    fetchWeather();          // neuer API-Key / neue Einheiten
+    fetchWeatherAlerts();    // neue Quelle / neuer Schwellwert
+});
+
+function startAlertUpdates() {
+    stopAlertUpdates();
+    fetchWeatherAlerts();
+    alertsInterval = setInterval(fetchWeatherAlerts, ALERTS_UPDATE_INTERVAL);
+}
+
+function stopAlertUpdates() {
+    if (alertsInterval) { clearInterval(alertsInterval); alertsInterval = null; }
 }
 
 // ==================== WETTER UI AKTUALISIEREN ====================
@@ -61,38 +300,93 @@ function loadWeatherData() {
  * Aktualisiert die Wetter-Anzeige im Dashboard-Tile
  * Zeigt Temperatur, Beschreibung und Icon an
  */
+const COMPASS_16 = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO',
+                    'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+
+function windDirLabel(deg) {
+    if (typeof deg !== 'number' || Number.isNaN(deg)) return '--';
+    const idx = Math.round(((deg % 360) + 360) % 360 / 22.5) % 16;
+    return `${COMPASS_16[idx]} (${Math.round(deg)}°)`;
+}
+
+function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+}
+
+/**
+ * Füllt das Wetter-Panel.
+ *
+ * ACHTUNG, das war komplett kaputt: Die alte Fassung schrieb den Wind nach
+ * "#wind" (existiert nicht — im Panel heißt es "weather-wind"), setzte .src auf
+ * das Icon (das ist ein <div> mit Emoji, kein <img>) und füllte Ort, Richtung,
+ * Feuchte, Druck und Vorhersage überhaupt nicht. Die restliche Render-Logik lag
+ * in updateWeatherPanel()/renderWeatherForecast(), die auf IDs einer längst
+ * abgelösten UI zeigen (weather-panel-*, #weather-forecast) und nie aufgerufen
+ * wurden. Deshalb kam nur Temperatur und Beschreibung an.
+ */
 function updateWeatherDisplay() {
     if (!weatherData || !weatherData.current) return;
+    const c = weatherData.current;
 
-    const current = weatherData.current;
+    // Icon ist ein <div> mit Emoji — kein <img>
+    const iconEl = document.getElementById('weather-icon');
+    if (iconEl) iconEl.textContent = getWeatherEmoji(c.icon);
 
-    // Wetter-Tile aktualisieren
-    const tempElement = document.getElementById('weather-temp');
-    const descElement = document.getElementById('weather-desc');
-    const iconElement = document.getElementById('weather-icon');
+    setText('weather-temp', `${c.temp.toFixed(1)}°C`);
+    setText('weather-desc', c.description || '--');
+    setText('weather-location', c.location ? `📍 ${c.location}` : '📍 --');
 
-    if (tempElement) {
-        tempElement.textContent = current.temp.toFixed(1);
-    }
-    if (descElement) {
-        descElement.textContent = current.description;
-    }
-    if (iconElement) {
-        iconElement.src = `https://openweathermap.org/img/wn/${current.icon}@2x.png`;
-    }
+    // Wind in der eingestellten Einheit
+    const units = (typeof window.getUnitSettings === 'function')
+        ? window.getUnitSettings() : { speed: 'kn' };
+    const label = { kn: 'kn', kmh: 'km/h', mph: 'mph', ms: 'm/s' }[units.speed] || 'kn';
+    const factor = { kn: 1, kmh: 1.852, mph: 1.15078, ms: 0.514444 }[units.speed] || 1;
 
-    // Wind im Wind-Tile aktualisieren (falls vorhanden)
-    if (current.wind_speed !== undefined) {
-        const windElement = document.getElementById('wind');
-        if (windElement) {
-            // Einheiten aus globalen Settings nutzen
-            const units = typeof window.getUnitSettings === 'function' ? window.getUnitSettings() : { speed: 'kn' };
-            const speedLabel = units.speed === 'kmh' ? 'km/h' : 'kn';
-            const speedValue = units.speed === 'kmh' ? current.wind_speed * 1.852 : current.wind_speed;
-            windElement.innerHTML =
-                `${speedValue.toFixed(0)}<span class="tile-unit">${speedLabel}</span>`;
-        }
+    if (typeof c.wind_speed === 'number') {
+        setText('weather-wind', (c.wind_speed * factor).toFixed(1));
+        setText('weather-wind-label', `Wind (${label})`);
     }
+    setText('weather-wind-dir', windDirLabel(c.wind_deg));
+    setText('weather-humidity', `${c.humidity ?? '--'}%`);
+    setText('weather-pressure', `${c.pressure ?? '--'}`);
+    setText('weather-precip', `${(c.precip ?? 0).toFixed(1)} mm`);
+
+    renderForecastList();
+}
+
+/**
+ * Vorhersage in die tatsächlich vorhandene Liste (#forecast-list) rendern.
+ *
+ * WICHTIG: .forecast-list ist ein HORIZONTALER Scroller mit schmalen
+ * Hochkant-Kacheln (.forecast-item, min-width ~60-70px, mit .time/.icon/.temp).
+ * Breite Zeilen mit Beschreibungstext werden darin zerquetscht — deshalb hier
+ * bewusst kompakt: Tag, Symbol, Temperatur, Wind. Die ausführliche Beschreibung
+ * hängt im title-Tooltip.
+ */
+function renderForecastList() {
+    const el = document.getElementById('forecast-list');
+    if (!el || !weatherData?.forecast?.length) return;
+
+    const units = (typeof window.getUnitSettings === 'function')
+        ? window.getUnitSettings() : { speed: 'kn' };
+    const label = { kn: 'kn', kmh: 'km/h', mph: 'mph', ms: 'm/s' }[units.speed] || 'kn';
+    const factor = { kn: 1, kmh: 1.852, mph: 1.15078, ms: 0.514444 }[units.speed] || 1;
+
+    el.innerHTML = weatherData.forecast.map(f => {
+        const day = new Date(f.date).toLocaleDateString('de-DE', { weekday: 'short' });
+        const wind = (typeof f.wind_speed === 'number')
+            ? `${(f.wind_speed * factor).toFixed(0)} ${label}` : '--';
+        const rain = (f.precip > 0) ? `<div class="fc-rain">🌧️ ${f.precip.toFixed(1)}</div>` : '';
+        return `
+        <div class="forecast-item" title="${_esc(f.description || '')}">
+            <div class="time">${day}</div>
+            <div class="icon">${getWeatherEmoji(f.icon)}</div>
+            <div class="temp">${f.temp.toFixed(0)}°</div>
+            <div class="fc-wind">💨 ${wind}</div>
+            ${rain}
+        </div>`;
+    }).join('');
 }
 
 /**
@@ -311,6 +605,47 @@ function getCurrentWindSpeed() {
  * Startet das automatische Wetter-Update
  * Lädt Wetter sofort und dann alle 30 Minuten
  */
+// Position, fuer die zuletzt geholt wurde — plus Bewegungswaechter
+let lastFetchPos = null;
+let moveWatchInterval = null;
+const WEATHER_MOVE_KM = 10;      // ab hier gelten Wetter/Warnungen als ortsfremd
+
+/** Merkt sich, fuer WELCHEN Ort die aktuellen Daten geholt wurden. */
+function rememberFetchPos() {
+    const p = window.currentPosition;
+    if (!p || typeof p.lat !== 'number' || typeof p.lon !== 'number') return;
+    if (p.lat === 0 && p.lon === 0) return;
+    lastFetchPos = { lat: p.lat, lon: p.lon };
+}
+
+function _kmBetween(a, b) {
+    const R = 6371, rad = (d) => d * Math.PI / 180;
+    const dLat = rad(b.lat - a.lat), dLon = rad(b.lon - a.lon);
+    const h = Math.sin(dLat / 2) ** 2 +
+              Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/**
+ * Bewegungswaechter: Wetter und Warnungen gelten fuer einen ORT. Faehrt man
+ * weiter, sind sie irgendwann schlicht falsch — 30 Minuten Warten reicht dann
+ * nicht. Ab 10 km Ortsveraenderung wird sofort neu geholt.
+ */
+function startMoveWatch() {
+    if (moveWatchInterval) clearInterval(moveWatchInterval);
+    moveWatchInterval = setInterval(() => {
+        const p = window.currentPosition;
+        if (!p || typeof p.lat !== 'number' || typeof p.lon !== 'number') return;
+        if (p.lat === 0 && p.lon === 0) return;
+        if (lastFetchPos && _kmBetween(lastFetchPos, p) < WEATHER_MOVE_KM) return;
+
+        rememberFetchPos();
+        console.log('Standort deutlich geaendert → Wetter + Warnungen neu holen');
+        fetchWeather();
+        fetchWeatherAlerts();
+    }, 60000);
+}
+
 function startWeatherUpdates() {
     // Wetter sofort laden
     fetchWeather();
@@ -322,7 +657,15 @@ function startWeatherUpdates() {
 
     // Neues Intervall starten (alle 30 Minuten)
     weatherInterval = setInterval(fetchWeather, WEATHER_UPDATE_INTERVAL);
-    console.log('Wetter-Updates gestartet (Intervall: 30 Minuten)');
+
+    // Warnungen laufen in ihrem eigenen, schnelleren Takt (15 min) — eine
+    // Unwetterwarnung darf nicht bis zu 30 Minuten alt sein.
+    startAlertUpdates();
+
+    // …und beides zusaetzlich, sobald sich der Standort deutlich aendert
+    startMoveWatch();
+
+    console.log('Wetter-Updates gestartet (Wetter: 30 min, Warnungen: 15 min, +Ortswechsel)');
 }
 
 /**
@@ -351,23 +694,16 @@ async function showRouteWeather() {
         '<div style="padding:24px;text-align:center;color:var(--text-dim)">Wetter wird geladen…</div>';
     overlay.style.display = 'flex';
 
-    const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
-    const depEl = document.getElementById('departure-datetime');
-    let departure = null;
-    if (depEl && depEl.value) { try { departure = new Date(depEl.value).toISOString(); } catch (_) {} }
-    // Geplante Geschwindigkeit der Route für die ETA (kn); Fallback 6 kn.
-    const rd = window.BoatOS?.navigation?.getCurrentRouteData?.();
-    const speedKn = (rd && rd.plannedSpeed) ? rd.plannedSpeed : 6;
-    try {
-        const res = await fetch(`${apiUrl}/api/weather/route`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ coords: coords.map(c => [c.lat, c.lon]), departure, speedKn }),
-        });
-        overlay.querySelector('.rw-body').innerHTML = _renderRouteWx(await res.json());
-    } catch (e) {
+    const data = await fetchRouteWeather(coords);
+    if (!data) {
         overlay.querySelector('.rw-body').innerHTML =
             '<div style="padding:24px;text-align:center;color:var(--danger)">Fehler beim Laden.</div>';
+        return;
     }
+    overlay.querySelector('.rw-body').innerHTML = _renderRouteWx(data);
+
+    // Dieselben Punkte auch auf die Karte — wenn das Overlay eingeschaltet ist.
+    if (data.available && isWindOverlayVisible()) setRouteWind(data.points || []);
 }
 
 function _routeWxOverlay() {
@@ -389,11 +725,67 @@ function _routeWxOverlay() {
     return ov;
 }
 
+// Eine Quelle fuer die Farbskala — Liste und Karten-Pfeile duerfen nicht
+// auseinanderlaufen (gruen <11 kn, gelb <22 kn, rot darueber).
 function _windColor(kn) {
-    if (kn == null) return 'var(--text-dim)';
-    if (kn < 11) return '#3fb950';
-    if (kn < 22) return '#e3b341';
-    return '#f85149';
+    return windColor(kn);
+}
+
+/**
+ * Wind-Pfeil am Boot: nimmt die aktuelle Bootsposition; ohne GPS die Position,
+ * fuer die das Backend das Wetter geholt hat (`_pos`) — dann steht der Pfeil
+ * ehrlich dort, wo die Daten herkommen, statt gar nicht.
+ */
+function pushCurrentWindToMap() {
+    const c = weatherData?.current;
+    if (!c) return setCurrentWind(null, null, null, null);
+
+    const p = window.currentPosition;
+    let lat = null, lon = null;
+    if (p && typeof p.lat === 'number' && typeof p.lon === 'number' && !(p.lat === 0 && p.lon === 0)) {
+        lat = p.lat; lon = p.lon;
+    } else if (Array.isArray(weatherData._pos) && weatherData._pos.length === 2) {
+        lat = weatherData._pos[0]; lon = weatherData._pos[1];
+    }
+    setCurrentWind(lat, lon, c.wind_speed, c.wind_deg, c.gust ?? null);
+}
+
+/**
+ * Wird beim Einschalten des Overlays gerufen: aktuellen Wind sofort setzen und
+ * — sofern eine Route existiert — den Routen-Forecast nachladen, damit der
+ * Nutzer die Pfeile nicht erst ueber den Route-Wetter-Dialog "freischalten" muss.
+ */
+async function refreshWindOverlay() {
+    if (!isWindOverlayVisible()) return;
+    pushCurrentWindToMap();
+
+    const coords = (window.BoatOS?.navigation?.getCurrentRouteCoordinates?.() || []);
+    if (!coords || coords.length < 2) {
+        setRouteWind([]);
+        return;
+    }
+    const data = await fetchRouteWeather(coords);
+    if (data && data.available) setRouteWind(data.points || []);
+}
+
+/** Holt den Routen-Forecast (POST /api/weather/route) — von Dialog UND Overlay genutzt. */
+async function fetchRouteWeather(coords) {
+    const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
+    const depEl = document.getElementById('departure-datetime');
+    let departure = null;
+    if (depEl && depEl.value) { try { departure = new Date(depEl.value).toISOString(); } catch (_) {} }
+    const rd = window.BoatOS?.navigation?.getCurrentRouteData?.();
+    const speedKn = (rd && rd.plannedSpeed) ? rd.plannedSpeed : 6;
+    try {
+        const res = await fetch(`${apiUrl}/api/weather/route`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ coords: coords.map(c => [c.lat, c.lon]), departure, speedKn }),
+        });
+        return await res.json();
+    } catch (e) {
+        console.warn('Route-Wetter fehlgeschlagen:', e);
+        return null;
+    }
 }
 
 function _renderRouteWx(data) {
@@ -453,6 +845,18 @@ export {
     getWeatherData,
     getCurrentTemperature,
     getCurrentWindSpeed,
+
+    // Warnungen
+    fetchWeatherAlerts,
+    renderWeatherAlerts,
+    getActiveAlerts,
+    openWeatherAlerts,
+    startAlertUpdates,
+    stopAlertUpdates,
+
+    // Wind-Overlay auf der Karte
+    refreshWindOverlay,
+    pushCurrentWindToMap,
 
     // Intervall-Management
     startWeatherUpdates,

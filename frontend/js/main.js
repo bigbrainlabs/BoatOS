@@ -12,6 +12,7 @@ import * as mapModule from './map.js';
 import { initQuickActionsCarousel } from './quick-actions.js';
 import * as navigation from './navigation.js';
 import * as weather from './weather.js';
+import * as weatherMap from './weather-map.js';
 import * as sensors from './sensors.js';
 import * as ui from './ui.js';
 import * as ais from './ais.js';
@@ -376,9 +377,16 @@ function stopSimulation() {
     // WebSocket-Nachricht NACH dem Stop eintreffen. Ohne Sperre wuerde er Boot und
     // SOG wieder auf die letzte Sim-Position/-Geschwindigkeit setzen.
     simCooldownUntil = Date.now() + 2000;
-    // Sim-GPS-Override im Backend aufheben → zurück zu echtem GPS (SignalK)
+    // Sim-GPS-Override im Backend aufheben → zurück zu echtem GPS (SignalK).
+    // ZWEIMAL, mit Abstand: der letzte Sim-POST (/api/gps/external) ist bis zu
+    // 500 ms alt und kann das disable UEBERHOLEN. Dann steht der Override wieder,
+    // das Backend broadcastet ewig die letzte Sim-Position — und das Boot kroch
+    // nach Ablauf der Nachlaufsperre per Luftlinie dorthin zurueck.
     const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
-    fetch(`${apiUrl}/api/gps/external/disable`, { method: 'POST' }).catch(() => {});
+    const disableSimGps = () =>
+        fetch(`${apiUrl}/api/gps/external/disable`, { method: 'POST' }).catch(() => {});
+    disableSimGps();
+    setTimeout(disableSimGps, 900);
     // Boot-Marker zurück auf die echte Position — ebenfalls als Sprung, sonst
     // gleitet er per Luftlinie zurück und zieht wieder eine Track-Linie quer.
     if (simSavedPosition && mapModule.setBoatPositionImmediate) {
@@ -462,6 +470,7 @@ window.BoatOS = {
     map: mapModule,
     navigation,
     weather,
+    weatherMap,
     sensors,
     ui,
     ais,
@@ -942,6 +951,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Wetter starten
     if (weather.startWeatherUpdates) weather.startWeatherUpdates();
 
+    // Wind-Overlay: Button-Zustand setzen und — falls zuletzt aktiv — zeichnen
+    weatherMap.initWindOverlay();
+    if (weatherMap.isWindOverlayVisible()) weather.refreshWindOverlay();
+
     // AIS initialisieren
     if (ais.initAISModule) {
         ais.initAISModule(mapInstance, context.currentPosition);
@@ -962,12 +975,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (simInterval !== null) return; // Position während Simulation einfrieren
 
+            // updateBoatPosition() traegt den Punkt bereits selbst in die
+            // Track-Historie ein — ein zusaetzlicher addToTrackHistory()-Aufruf
+            // hier hat jeden Punkt DOPPELT gespeichert und das 500-Punkte-Fenster
+            // damit halbiert (der Track war nur halb so lang wie eingestellt).
             if (mapModule.updateBoatPosition && gpsData.lat && gpsData.lon) {
                 mapModule.updateBoatPosition(gpsData);
-            }
-
-            if (mapModule.addToTrackHistory && gpsData.lat && gpsData.lon) {
-                mapModule.addToTrackHistory(gpsData.lat, gpsData.lon);
             }
 
             window.BoatOS.context.currentPosition = { lat: gpsData.lat, lon: gpsData.lon };
@@ -989,6 +1002,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (sensors.startBrowserGpsFallback) {
         sensors.startBrowserGpsFallback((pos) => {
             if (simInterval !== null) return; // Position während Simulation einfrieren
+            if (Date.now() < simCooldownUntil) return;  // Nachlaufsperre gilt auch hier
             if (mapModule.updateBoatPosition) mapModule.updateBoatPosition(pos);
             window.BoatOS.context.currentPosition = { lat: pos.lat, lon: pos.lon };
             if (navigation.isNavigationActive && navigation.isNavigationActive()) {

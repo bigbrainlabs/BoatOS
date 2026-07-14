@@ -42,13 +42,107 @@ let _animStart = null;
 let _animRafId = null;
 let _lastMapFollow = 0;
 
+/**
+ * Laufende Kamerafahrt (3D-Wechsel, Nord-oben-Rueckkehr) — bis zu diesem
+ * Zeitpunkt (performance.now()) darf die Follow-Animation NICHT dazwischenfunken.
+ *
+ * Grund: map.jumpTo() bricht ein laufendes map.easeTo() sofort ab. Die
+ * Follow-Animation feuert alle 30 ms ein jumpTo — der 600-ms-easeTo des
+ * 3D-Wechsels war damit nach spaetestens 30 ms tot. Sichtbar war genau das:
+ * die Karte "zuckt" kurz und bleibt 2D. Waehrend der Kamerafahrt bewegt sich
+ * nur noch der Marker; danach uebernimmt Follow wieder.
+ */
+let _camTransitionUntil = 0;
+function _beginCameraTransition(durationMs) {
+    _camTransitionUntil = performance.now() + durationMs + 80;   // + Puffer
+}
+
 // ---- Course Up mode ----
 let courseUpMode = false;
 let perspective3D = false;          // 3D-/Look-ahead-Kartenmodus (gekippt + head-up)
 let _courseUpBefore3D = false;
 let _zoomBefore3D = null;
-const PITCH_3D = 55;                // Kamera-Neigung im 3D-Modus (Grad)
-const ZOOM_3D_TARGET = 16.0;       // Ziel-Zoom in der 3D-Ansicht (nah, mehr Fahrgefühl)
+const PITCH_3D = 65;                // Standard-Neigung im 3D-Modus (Grad) — braucht maxPitch > 60 (siehe initMap)
+const PITCH_MIN = 20, PITCH_MAX = 75, PITCH_STEP = 5;
+
+// Vom Nutzer per Pitch-Buttons gewaehlte Neigung (bleibt ueber Sitzungen erhalten)
+let _pitch3D = (() => {
+    const v = parseFloat(localStorage.getItem('pitch3D'));
+    return (Number.isFinite(v) && v >= PITCH_MIN && v <= PITCH_MAX) ? v : PITCH_3D;
+})();
+
+/** Neigung setzen — wirkt sofort, wenn 3D aktiv ist; sonst beim naechsten Wechsel. */
+function _setPitch3D(deg) {
+    _pitch3D = Math.max(PITCH_MIN, Math.min(PITCH_MAX, Math.round(deg)));
+    try { localStorage.setItem('pitch3D', String(_pitch3D)); } catch (_) {}
+    if (map && perspective3D) {
+        // Kamerafahrt anmelden, sonst killt das naechste Follow-jumpTo sie sofort
+        _beginCameraTransition(250);
+        map.easeTo({ pitch: _pitch3D, duration: 250 });
+    }
+    _updatePitchIndicator();
+}
+
+export function pitchUp()   { _setPitch3D(_pitch3D + PITCH_STEP); }   // flacher (mehr Vorausschau)
+export function pitchDown() { _setPitch3D(_pitch3D - PITCH_STEP); }   // steiler (mehr Draufsicht)
+export function getPitch3D() { return _pitch3D; }
+
+/**
+ * Zwei Neigungs-Tasten als eigene MapLibre-Control-Gruppe — sie landen damit
+ * direkt bei den Zoom-Tasten (NavigationControl, bottom-left) und sehen aus wie
+ * deren Zwillinge, statt in einem separaten UI-Element zu leben.
+ */
+class PitchControl {
+    onAdd() {
+        const c = document.createElement('div');
+        c.className = 'maplibregl-ctrl maplibregl-ctrl-group pitch-ctrl';
+
+        // SVG statt Text-Glyphe: Die Control-Buttons sind IMMER weiss (MapLibre-
+        // Style), eine per var(--text) eingefaerbte Glyphe war im Dark-Theme also
+        // weiss auf weiss — schlicht unsichtbar. Fester dunkler Strich, wie die
+        // Zoom-Icons von MapLibre selbst.
+        const icon = (up) => `
+            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 18 h18" stroke="#333" stroke-width="2" stroke-linecap="round" fill="none"/>
+              <path d="${up ? 'M12 4 l5 7 h-10 z' : 'M12 14 l5 -7 h-10 z'}" fill="#333"/>
+            </svg>`;
+        const mk = (up, title, fn) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.title = title;
+            b.setAttribute('aria-label', title);
+            b.innerHTML = icon(up);
+            b.addEventListener('click', (e) => { e.preventDefault(); fn(); });
+            c.appendChild(b);
+        };
+        mk(true,  'Neigung flacher (mehr Vorausschau)', pitchUp);
+        mk(false, 'Neigung steiler (mehr Draufsicht)', pitchDown);
+        this._c = c;
+        return c;
+    }
+    onRemove() { this._c?.remove(); this._c = null; }
+}
+
+/**
+ * Ziel-Zoom der 3D-Ansicht — abhaengig von der Bildschirmbreite.
+ *
+ * Ein fester Wert kann nicht fuer alle stimmen: Zoom bestimmt den Massstab, die
+ * Bildschirmbreite aber, WIE VIEL Fluss davon ins Bild passt. 17.5 gibt auf einem
+ * breiten Display schoenes Fahrgefuehl; auf dem Handy klebt man damit auf dem Bug.
+ * Darum je schmaler der Screen, desto weiter raus.
+ */
+const ZOOM_3D_PHONE = 16.0;         // < 768 px  — schmales Handy-Display
+const ZOOM_3D_TABLET = 17.0;        // < 1200 px — Tablet / Pi-Touchscreen
+const ZOOM_3D_WIDE = 17.5;          // ab 1200 px — Desktop / grosses Kartenplotter-Display
+
+function _zoom3dTarget() {
+    // Breite des Karten-Containers, nicht window: das Deck laeuft auch eingebettet.
+    const w = (map && map.getContainer() && map.getContainer().clientWidth) ||
+              window.innerWidth || 1200;
+    if (w < 768) return ZOOM_3D_PHONE;
+    if (w < 1200) return ZOOM_3D_TABLET;
+    return ZOOM_3D_WIDE;
+}
 let _smoothHeading = null;
 const HEADING_EMA_ALPHA = 0.15; // low = very smooth bearing rotation
 
@@ -70,11 +164,12 @@ function _animateBoatMarker(ts) {
     _dispLat = _fromLat + (_targetLat - _fromLat) * e;
     _dispLon = _fromLon + (_targetLon - _fromLon) * e;
 
-    if (autoFollow) {
+    if (autoFollow && ts >= _camTransitionUntil) {
         // Marker UND Karte synchron im selben Tick per jumpTo bewegen (jumpTo
         // rendert nur 1×, easeTo würde die ganze Dauer mit 60fps rendern → Pi-Last).
         // Gedrosselt auf ~33 fps: gleichmäßiges Scrollen, Boot bleibt exakt
         // zentriert (kein Wackeln relativ zur Karte), Pi bleibt bedienbar.
+        // Waehrend einer Kamerafahrt (3D-Wechsel) ausgesetzt — jumpTo wuerde sie killen.
         if (ts - _lastMapFollow > 30) {
             const jt = { center: [_dispLon, _dispLat] };
             if (courseUpMode && currentBoatHeading !== 0) {
@@ -272,6 +367,11 @@ function _restoreAfterStyleChange(snap) {
     if (localStorage.getItem('satelliteMode') === 'true') {
         toggleSatellite(true);
     }
+
+    // Wind-Overlay neu zeichnen: Source, Layer UND die addImage-Pfeilbilder sind
+    // mit dem alten Style verschwunden. Ueber den Namespace statt per Import —
+    // weather-map.js importiert map.js, ein Rueckimport waere ein Zyklus.
+    try { window.BoatOS?.weatherMap?.redrawWindOverlay?.(); } catch (_) {}
 }
 
 function _showTileserverBanner() {
@@ -290,23 +390,30 @@ function _showTileserverBanner() {
     document.getElementById('map')?.appendChild(banner);
 }
 
-// Dezente Zoomstufen-Anzeige unten links (über den Zoom-Buttons)
-function _initZoomIndicator() {
-    if (!map || document.getElementById('zoom-indicator')) return;
-    const el = document.createElement('div');
-    el.id = 'zoom-indicator';
-    el.style.cssText = [
-        'position:absolute', 'left:10px', 'bottom:92px', 'z-index:90',
-        'padding:2px 7px', 'border-radius:5px', 'pointer-events:none',
-        'font:600 11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace', 'letter-spacing:0.3px',
-        'background:rgba(20,28,40,0.5)', 'color:#dfe8f2',
-        'backdrop-filter:blur(4px)', '-webkit-backdrop-filter:blur(4px)',
-        'border:1px solid rgba(255,255,255,0.12)'
-    ].join(';');
-    const upd = () => { el.textContent = 'Z ' + map.getZoom().toFixed(1); };
-    upd();
-    map.on('zoom', upd);
-    document.getElementById('map')?.appendChild(el);
+/**
+ * Zoom-/Neigungs-Anzeige als eigenes MapLibre-Control.
+ *
+ * Bewusst NICHT frei positioniert: als Control flieszt die Anzeige mit den
+ * Zoom-/Pitch-Tasten im selben Container. Frei platziert (left/bottom in Pixeln)
+ * lag sie zwangslaeufig irgendwann UNTER den Buttons — der Stapel waechst ja,
+ * sobald die Pitch-Tasten dazukommen. Genau das ist passiert.
+ */
+class ReadoutControl {
+    onAdd(m) {
+        const c = document.createElement('div');
+        c.className = 'maplibregl-ctrl map-readout';
+        c.innerHTML = '<span id="zoom-indicator"></span><span id="pitch-indicator"></span>';
+        const upd = () => {
+            const z = c.querySelector('#zoom-indicator');
+            if (z) z.textContent = 'Z ' + m.getZoom().toFixed(1);
+        };
+        upd();
+        m.on('zoom', upd);
+        this._c = c;
+        setTimeout(_updatePitchIndicator, 0);
+        return c;
+    }
+    onRemove() { this._c?.remove(); this._c = null; }
 }
 
 function _vectorStyle(regions) {
@@ -431,6 +538,10 @@ export async function initMap(options = {}) {
         style: tileserverOk ? _vectorStyle(regions) : _rasterFallbackStyle(),
         center: [defaultPosition.lon, defaultPosition.lat],
         zoom: options.zoom || 13,
+        // MapLibre deckelt den Pitch per Default bei 60° und kappt hoehere Werte
+        // STILL — ein pitch:70 waere wirkungslos "angekommen". Fuer die flache
+        // Look-ahead-Perspektive das Limit anheben.
+        maxPitch: 75,
         attributionControl: false
     });
 
@@ -447,11 +558,10 @@ export async function initMap(options = {}) {
         if (needle) needle.style.transform = `rotate(${-map.getBearing()}deg)`;
     });
 
-    // Navigations-Controls hinzufuegen
+    // Reihenfolge = Anordnung im bottom-left-Stapel: Anzeige, Zoom, Neigung
+    map.addControl(new ReadoutControl(), 'bottom-left');
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-left');
-
-    // Dezente Zoomstufen-Anzeige (Anhaltspunkt beim Reinzoomen)
-    _initZoomIndicator();
+    map.addControl(new PitchControl(), 'bottom-left');   // nur in der 3D-Ansicht sichtbar
 
     // Nach vollstaendigem Laden weitere Layer hinzufuegen
     map.on('load', () => {
@@ -875,7 +985,7 @@ export function setBoatPositionImmediate(lat, lon, heading) {
         }
     }
 
-    if (autoFollow) {
+    if (autoFollow && performance.now() >= _camTransitionUntil) {
         const opts = { center: [lon, lat] };
         if (courseUpMode && currentBoatHeading) opts.bearing = currentBoatHeading;
         map.jumpTo(opts);
@@ -1268,8 +1378,9 @@ export function centerOnBoat() {
 export function toggleCourseUp() {
     courseUpMode = !courseUpMode;
     if (!courseUpMode) {
-        // Zurück zu Norden
-        if (map) map.easeTo({ bearing: 0, duration: 600 });
+        // Zurück zu Norden — Follow waehrend der Drehung pausieren, sonst killt
+        // das erste jumpTo die Kamerafahrt und die Karte bleibt schief stehen.
+        if (map) { _beginCameraTransition(600); map.easeTo({ bearing: 0, duration: 600 }); }
         _smoothHeading = null;
     }
     _updateCourseUpButton();
@@ -1296,12 +1407,16 @@ export function toggleMap3D(active) {
             const h = (map.getContainer() && map.getContainer().clientHeight) || 600;
             _zoomBefore3D = map.getZoom();
             const opts = {
-                pitch: PITCH_3D,
-                zoom: Math.min(20, Math.max(_zoomBefore3D, ZOOM_3D_TARGET)),
+                pitch: _pitch3D,
+                zoom: Math.min(20, Math.max(_zoomBefore3D, _zoom3dTarget())),
                 padding: { top: Math.round(h * 0.45), bottom: 0, left: 0, right: 0 },
                 duration: 600,
             };
             if (currentBoatHeading) opts.bearing = _updateSmoothedHeading(currentBoatHeading);
+            // Boot mitnehmen: waehrend der Kamerafahrt pausiert Follow (siehe
+            // _beginCameraTransition), sonst wuerde die Fahrt sofort abgebrochen.
+            if (_dispLat != null && _dispLon != null) opts.center = [_dispLon, _dispLat];
+            _beginCameraTransition(opts.duration);
             map.easeTo(opts);
         } else {
             courseUpMode = _courseUpBefore3D;
@@ -1309,12 +1424,26 @@ export function toggleMap3D(active) {
             const opts = { pitch: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 600 };
             if (_zoomBefore3D != null) opts.zoom = _zoomBefore3D;
             if (!courseUpMode) { opts.bearing = 0; _smoothHeading = null; }
+            if (_dispLat != null && _dispLon != null) opts.center = [_dispLon, _dispLat];
+            _beginCameraTransition(opts.duration);
             map.easeTo(opts);
         }
     }
     try { localStorage.setItem('perspective3D', active ? 'true' : 'false'); } catch (_) {}
     const btn = document.getElementById('btn-map3d');
     if (btn) btn.classList.toggle('active', active);
+
+    // Pitch-Buttons gibt es nur in 3D — in der Draufsicht waeren sie sinnlos.
+    document.body.classList.toggle('map3d-active', active);
+    _updatePitchIndicator();
+}
+
+/** Zeigt die aktuelle Neigung neben der Zoomstufe an (nur im 3D-Modus). */
+function _updatePitchIndicator() {
+    const el = document.getElementById('pitch-indicator');
+    if (!el) return;
+    el.textContent = `${Math.round(_pitch3D)}°`;
+    el.style.display = perspective3D ? 'inline-block' : 'none';
 }
 
 export function isPerspective3D() { return perspective3D; }

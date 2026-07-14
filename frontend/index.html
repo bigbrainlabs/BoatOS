@@ -11,9 +11,9 @@
 
     <!-- BoatOS Styles -->
     <link rel="stylesheet" href="css/theme.css?v=12">
-    <link rel="stylesheet" href="css/layout.css?v=15">
-    <link rel="stylesheet" href="css/components.css?v=12">
-    <link rel="stylesheet" href="css/rondell.css?v=3">
+    <link rel="stylesheet" href="css/layout.css?v=23">
+    <link rel="stylesheet" href="css/components.css?v=13">
+    <link rel="stylesheet" href="css/rondell.css?v=5">
 </head>
 <body>
     <!-- ============================================
@@ -47,6 +47,13 @@
         </div>
 
         <div class="top-bar-right">
+            <div id="weather-alert-badge"
+                onclick="BoatOS.weather.openWeatherAlerts()"
+                title="Wetterwarnung"
+                style="display:none; align-items:center; gap:5px; background:#FF8C00; color:#fff;
+                       padding:4px 10px; border-radius:6px; font-size:12px; font-weight:700;
+                       cursor:pointer; white-space:nowrap;">
+            </div>
             <div id="update-badge"
                 onclick="BoatOS.settings.open('system')"
                 title="Update verfügbar — klicken für Details"
@@ -199,15 +206,10 @@
          FLOATING ACTION BUTTONS
          ============================================ -->
     <div class="fab-container" id="fabContainer">
-        <div class="fab-speed-dial" id="fabSpeedDial">
-            <div class="fab-speed-dial-items">
-                <button class="fab fab-sub" onclick="BoatOS.map.centerOnBoat()" title="Zentrieren">🎯</button>
-                <button class="fab fab-sub" onclick="BoatOS.map.zoomIn()" title="Zoom +">+</button>
-                <button class="fab fab-sub" onclick="BoatOS.map.zoomOut()" title="Zoom -">−</button>
-                <button class="fab fab-sub" onclick="BoatOS.ui.toggleLayers()" title="Layer">🗂️</button>
-            </div>
-            <button class="fab fab-trigger" id="fabTrigger" onclick="BoatOS.ui.toggleFabDial()" title="Werkzeuge">🗺️</button>
-        </div>
+        <!-- Das Speed-Dial ist entfallen: Zoom doppelte die MapLibre-Tasten links
+             unten, "Layer" oeffnete nur die Einstellungen (auch ueber das Zahnrad
+             erreichbar). Geblieben ist das Einzige ohne Zweitweg — Zentrieren. -->
+        <button class="fab" id="btn-center-boat" onclick="BoatOS.map.centerOnBoat()" title="Auf Boot zentrieren">🎯</button>
         <button class="fab danger" onclick="BoatOS.core.manOverBoard()" title="Mann über Bord — Notruf">🆘</button>
     </div>
 
@@ -359,6 +361,18 @@
 
             <!-- WEATHER SECTION -->
             <div id="section-weather" class="section-hidden">
+                <!-- Problem-Hinweis (z.B. fehlender API-Key) -->
+                <div id="weather-problem" style="display:none;"></div>
+
+                <!-- Aktive Warnungen (DWD/OpenWeather + eigener Wind-Schwellwert) -->
+                <div id="weather-alerts"></div>
+
+                <!-- Wind-Pfeile auf der Karte: Route (zur ETA) + aktueller Wind am Boot -->
+                <button id="btn-wind-overlay" class="layer-toggle-btn" onclick="BoatOS.weatherMap.toggleWindOverlay()">
+                    <span>💨</span>
+                    <span data-i18n="wind_overlay_btn">Wind auf Karte</span>
+                </button>
+
                 <div class="weather-current">
                     <div class="weather-icon" id="weather-icon">🌤️</div>
                     <div class="weather-main">
@@ -388,6 +402,11 @@
                         <div class="icon">📊</div>
                         <div class="value" id="weather-pressure">--</div>
                         <div class="label">hPa</div>
+                    </div>
+                    <div class="weather-detail">
+                        <div class="icon">🌧️</div>
+                        <div class="value" id="weather-precip">0.0 mm</div>
+                        <div class="label" data-i18n="weather_precip_label">Niederschlag</div>
                     </div>
                 </div>
 
@@ -682,6 +701,7 @@
                 <button class="settings-nav-item" data-tab="boat"    data-i18n="settings_boat"        onclick="BoatOS.settings.showTab('boat')">Boot</button>
                 <button class="settings-nav-item" data-tab="map"     data-i18n="settings_tab_map"     onclick="BoatOS.settings.showTab('map')">Karte</button>
                 <button class="settings-nav-item" data-tab="nav"     data-i18n="settings_tab_nav"     onclick="BoatOS.settings.showTab('nav')">Navigation</button>
+                <button class="settings-nav-item" data-tab="weather" data-i18n="settings_weather"     onclick="BoatOS.settings.showTab('weather')">Wetter</button>
                 <button class="settings-nav-item" data-tab="ais"     data-i18n="settings_tab_ais"     onclick="BoatOS.settings.showTab('ais')">AIS</button>
                 <button class="settings-nav-item" data-tab="charts"  data-i18n="settings_tab_charts"  onclick="BoatOS.settings.showTab('charts')">Seekarten</button>
                 <button class="settings-nav-item" data-tab="gps"     data-i18n="settings_tab_gps"     onclick="BoatOS.settings.showTab('gps')">GPS</button>

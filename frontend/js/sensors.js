@@ -93,9 +93,12 @@ export function handleGPSUpdate(gps) {
             updateGpsSourceIndicator();
         }
 
-        // Karte auf erste GPS-Position zentrieren
+        // Karte einmalig auf die erste GPS-Position zentrieren — aber NICHT, wenn
+        // die Karte dem Boot ohnehin schon folgt (Auto-Follow/Simulation/3D). Der
+        // 1,5-s-flyTo wuerde sonst mitten in eine laufende Kamerafahrt grätschen.
         const map = getMap();
-        if (!firstGpsPositionReceived && map) {
+        const following = window.BoatOS?.map?.isAutoFollowEnabled?.() ?? false;
+        if (!firstGpsPositionReceived && map && !following) {
             firstGpsPositionReceived = true;
             console.log('GPS: Erste Position empfangen - zentriere Karte auf: ' +
                 gps.lat.toFixed(6) + ', ' + gps.lon.toFixed(6));
@@ -252,15 +255,29 @@ export function processGPSData(gpsData) {
 // ==================== BOOT-POSITION UPDATE ====================
 
 /**
- * Aktualisiert die Boot-Position auf der Karte
+ * Verarbeitet eine neue GPS-Position — OHNE die Karte anzufassen.
+ *
+ * ACHTUNG, hier lag ein handfester Bug: Diese Funktion hat frueher zusaetzlich
+ * den Boot-Marker gesetzt, in die Track-Source geschrieben und mit einem eigenen
+ * `autoFollow` (Default: true!) `map.easeTo()` gefeuert — parallel zu map.js,
+ * das genau dasselbe tut. Zwei Besitzer fuer eine Karte, mit drei Folgen:
+ *
+ *  1. Der Track: sensors und map.js fuehren je eine EIGENE Punktliste, schreiben
+ *     aber in dieselbe Source 'track-history'. Nach dem Sim-Stop hat map.js den
+ *     echten Track wiederhergestellt — und das naechste GPS-Paket hat ihn mit der
+ *     sensors-Liste (echte Punkte + Sim-Sprung) sofort wieder ueberschrieben:
+ *     die beruechtigte Luftlinie quer ueber die Karte.
+ *  2. Der Marker: beide setzten die Position, map.js zusaetzlich animiert. Das
+ *     Boot lief nach dem Sim-Stop deshalb "von allein" weiter.
+ *  3. Die Kamera: dieses easeTo (und das jumpTo der Follow-Animation) brechen
+ *     JEDE laufende Kamerafahrt ab — deshalb blieb der 3D-Wechsel wirkungslos.
+ *
+ * Karte, Marker, Track und Auto-Follow gehoeren jetzt allein map.js. Hier bleibt,
+ * was Sensorik ist: Position merken, Kompassrose, GPS-Alter.
  *
  * @param {Object} gps - GPS-Daten mit lat, lon, course, heading
  */
 export function updateBoatPosition(gps) {
-    const map = getMap();
-    const boatMarker = getBoatMarker();
-    const boatMarkerElement = getBoatMarkerElement();
-
     if (gps && gps.lat && gps.lon) {
         const newLat = gps.lat;
         const newLon = gps.lon;
@@ -272,39 +289,18 @@ export function updateBoatPosition(gps) {
 
         currentPosition = { lat: newLat, lon: newLon };
 
-        // Zur Track-Historie hinzufuegen
-        addToTrackHistory(newLat, newLon);
-
-        // Boot-Marker Position aktualisieren - MapLibre nutzt [lon, lat]
-        if (boatMarker) {
-            boatMarker.setLngLat([newLon, newLat]);
-        }
-
-        // Marker basierend auf Kurs rotieren (falls verfuegbar)
-        let heading = gps.course || gps.heading || 0;
-        if (heading !== undefined && heading !== 0) {
+        // Kompassrose mit Kurs/Heading aktualisieren (Marker-Rotation macht map.js —
+        // dort wird die Kartendrehung abgezogen, was hier fehlte: in Kurs-oben zeigte
+        // das Boot sonst in die falsche Richtung)
+        const heading = gps.course || gps.heading || 0;
+        if (heading !== 0) {
             currentBoatHeading = heading;
-            // Boot-Marker Element rotieren
-            if (boatMarkerElement) {
-                boatMarkerElement.style.transform = `rotate(${heading}deg)`;
-            }
-            // Kompassrose mit Heading aktualisieren
             updateCompassRose(heading);
         } else if (gps.heading !== undefined) {
-            // Heading verwenden wenn Kurs nicht verfuegbar
             updateCompassRose(gps.heading);
         }
 
-        // Karte folgt Boot wenn Auto-Follow aktiv
-        if (autoFollow && map) {
-            map.easeTo({
-                center: [newLon, newLat],
-                duration: 500
-            });
-        }
-
         lastGpsUpdate = Date.now();
-        console.log(`GPS: ${newLat.toFixed(6)}, ${newLon.toFixed(6)}`);
 
         // Externe Callback-Funktionen aufrufen (falls vorhanden)
         if (typeof window.onBoatPositionUpdate === 'function') {
@@ -338,15 +334,10 @@ export function addToTrackHistory(lat, lon) {
         trackHistory.shift(); // Aeltesten Punkt entfernen
     }
 
-    // GeoJSON-Quelle aktualisieren - MapLibre nutzt [lon, lat]
-    const coordinates = trackHistory.map(point => [point.lon, point.lat]);
-    const map = getMap();
-    if (map && map.getSource('track-history')) {
-        map.getSource('track-history').setData({
-            type: 'LineString',
-            coordinates: coordinates
-        });
-    }
+    // BEWUSST kein Schreiben in die Karten-Source 'track-history': die gehoert
+    // map.js. Frueher schrieben beide Module ihre je eigene Punktliste dorthin —
+    // wer zuletzt kam, gewann. Nach dem Sim-Stop hat das den wiederhergestellten
+    // echten Track sofort wieder durch die Sim-Luftlinie ersetzt.
 }
 
 /**

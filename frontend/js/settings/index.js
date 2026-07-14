@@ -19,7 +19,7 @@
 
 import { t, setLang } from '../i18n.js';
 
-export const TAB_IDS = ['general', 'boat', 'map', 'nav', 'ais', 'charts', 'gps', 'data', 'routing', 'wifi', 'system'];
+export const TAB_IDS = ['general', 'boat', 'map', 'nav', 'weather', 'ais', 'charts', 'gps', 'data', 'routing', 'wifi', 'system'];
 
 const API_URL = window.API_URL || (window.location.hostname === 'localhost'
     ? 'http://localhost:8000'
