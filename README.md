@@ -6,6 +6,20 @@ A complete marine navigation system for inland waterways and coastal navigation.
 
 <div align="center">
 
+![BoatOS 3D Route Simulation](3d-preview.gif)
+
+### 🚧 3D Chart View — Coming Soon
+
+**See the simulation in action:** tilted head-up look-ahead perspective with real 3D navigation marks (buoys, beacons, topmarks) — rendered from official Inland ENC data.
+
+*Currently in the `v1.9` development branch.*
+
+</div>
+
+---
+
+<div align="center">
+
 ### 💾 Ready-to-Flash Image — flash it, start sailing
 
 **[⬇️ Download v1.7.0 (~7.5 GB)](https://archive.org/download/boatos-distri-image/boatos_v1.7.0.img.gz)**
