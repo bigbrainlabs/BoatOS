@@ -26,25 +26,29 @@
 
 ---
 
-## Delivered — 3D chart & route weather (in the beta branch)
+## v1.9 — 3D chart & weather
+
+The `v1.9.x-dev` development branch. The 3D chart view is the centrepiece of this
+release — see the preview at the top of the [README](README.md).
+
+### Delivered
 
 | Feature | Description | Category |
 |---------|-------------|----------|
-| 3D / look-ahead chart view (Deck) | Tilted head-up perspective of the fairway ahead (camera pitch + COG-follow, target zoom), on the existing IENC vector data | Map |
-| Real 3D seamarks (Deck) | Buoys/beacons as true 3D objects via three.js + MapLibre custom layer, data-driven from IENC (`TOPSHP`/`COLOUR`/`CATCAM`). Performance verified on the target Pi. Expansion: see v1.9 | Map |
+| **3D / look-ahead chart view (Deck)** | Tilted head-up perspective of the fairway ahead: the camera follows the course (COG), you look where you are going, the boat sits in the lower half of the screen. Pitch adjustable via buttons (20–75°, remembered), target zoom depends on screen width (16.0 phone … 17.5 desktop). Built on the existing IENC vector data — no extra data needed | Map |
+| **Real 3D seamarks (Deck)** | Buoys and beacons as true 3D objects (three.js + MapLibre custom layer), data-driven from the official IENC data (`_cls`/`COLOUR`/`TOPSHP`/`CATCAM`) — colours and topmarks come from the chart, not from an assumption. Performance verified on the target Pi. Expansion: see below | Map |
+| Weather alerts | Official warnings (DWD via Bright Sky, default) or OpenWeather One Call 3.0 as an opt-in; plus a user-defined wind threshold. Badge in the top bar + panel; API key configurable (Settings → Weather) | Safety |
+| Wind overlay on the map | Wind arrows along the route — at each waypoint the forecast for **that leg's ETA** — plus the current wind at the boat. Colour-coded by strength, click popup with gusts and the direction the wind comes from | Map |
+| Position-aware weather | Weather and warnings follow the current position instead of a fixed one; refetched after 15 min or once you have moved 10 km | Data |
 | Route weather usable offline | `/api/weather/route` serves the forecast along the route (at each ETA), with a file cache → usable without internet. **GRIB is not needed for this** — the original GRIB item is thereby done | Data |
-| Logbook export (PDF) | Trip report as PDF (`pdf_export.py`, `GET /api/trip/pdf/{id}`), reachable from the logbook | UX |
+| Logbook export (PDF) | Trip report as PDF (`pdf_export.py`, `GET /api/trip/pdf/{id}`), reachable from the logbook (also in `main` by now) | UX |
 
----
-
-## v1.9 — Offline-First
+### Open
 
 | Feature | Description | Category |
 |---------|-------------|----------|
-| Weather alerts | **Backend already exists** (`weather_alerts` module, `/api/weather/alerts` + `/cached`) — serves official warnings. Missing: the UI for it, plus the decision whether user-configurable thresholds (storm, strong wind, visibility) should be added | Safety |
-| Weather overlay on map | Wind arrows along the route, colour-coded by intensity. Currently there is only a DOM panel (`route-weather-overlay`), nothing on the map itself | Map |
+| 3D seamarks — expansion & fine-tuning | Building on the real 3D buoys (`js/buoy3d.js`): more `TOPSHP` codes, beacons as poles instead of buoys, lights (sectors), `notmrk` as 3D signboards, click popups on 3D objects; fine-tuning of lighting/anti-aliasing, size & visibility (zoom thresholds), cardinal topmark orientation | Map |
 | Helm map engine for 3D perspective | `flutter_map` (^8.1.1) is 2D (rotation only, no pitch) — a 3D view on the Helm needs switching to a MapLibre-native Flutter engine (GPU); check flutter-pi resources. Without the switch the Helm stays head-up 2D | Map, Platform |
-| 3D seamarks — expansion & fine-tuning | Building on the real 3D buoys (three.js + MapLibre custom layer, IALA/S-57 from `TOPSHP`/`COLOUR`, `js/buoy3d.js`): more `TOPSHP` codes, beacons as poles instead of buoys, lights (sectors), `notmrk` as 3D signboards, click popups on 3D objects; fine-tuning of lighting/anti-aliasing, size & visibility (zoom thresholds), cardinal topmark orientation | Map |
 
 ---
 

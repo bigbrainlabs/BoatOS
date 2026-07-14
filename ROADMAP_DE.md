@@ -26,25 +26,29 @@
 
 ---
 
-## Umgesetzt — 3D-Karte & Route-Wetter (im Beta-Zweig)
+## v1.9 — 3D-Karte & Wetter
+
+Der Entwicklungszweig `v1.9.x-dev`. Die 3D-Darstellung ist der Schwerpunkt dieser
+Version — siehe die Vorschau oben in der [README](README_DE.md).
+
+### Umgesetzt
 
 | Feature | Beschreibung | Kategorie |
 |---------|-------------|-----------|
-| 3D-/Look-ahead-Kartenansicht (Deck) | Gekippte head-up-Perspektive der Fahrrinne voraus (Kamera-Pitch + COG-Follow, Zoom-Ziel), auf den bestehenden IENC-Vektordaten | Karte |
-| Echte 3D-Seezeichen (Deck) | Tonnen/Baken als echte 3D-Objekte via three.js + MapLibre-Custom-Layer, datengetrieben aus IENC (`TOPSHP`/`COLOUR`/`CATCAM`). Perf auf dem Ziel-Pi verifiziert. Ausbau siehe v1.9 | Karte |
+| **3D-/Look-ahead-Kartenansicht (Deck)** | Gekippte head-up-Perspektive der Fahrrinne voraus: Kamera folgt dem Kurs (COG), Blick in Fahrtrichtung, Boot in die untere Bildhälfte. Neigung per Tasten regelbar (20–75°, gemerkt), Zoom-Ziel je nach Bildschirmbreite (16.0 Handy … 17.5 Desktop). Basiert auf den bestehenden IENC-Vektordaten — keine zusätzlichen Daten nötig | Karte |
+| **Echte 3D-Seezeichen (Deck)** | Tonnen und Baken als echte 3D-Objekte (three.js + MapLibre-Custom-Layer), datengetrieben aus den amtlichen IENC-Daten (`_cls`/`COLOUR`/`TOPSHP`/`CATCAM`) — Farben und Toppzeichen kommen aus der Karte, nicht aus einer Annahme. Performance auf dem Ziel-Pi verifiziert. Ausbau siehe unten | Karte |
+| Wetter-Alarme | Amtliche Warnungen (DWD über Bright Sky, Standard) oder OpenWeather One Call 3.0 als Opt-in; zusätzlich eigener Wind-Schwellwert. Badge in der Kopfzeile + Panel; API-Key konfigurierbar (Settings → Wetter) | Sicherheit |
+| Wind-Overlay auf der Karte | Wind-Pfeile entlang der Route — je Stützpunkt die Vorhersage zur **jeweiligen ETA** —, dazu der aktuelle Wind am Boot. Farbcodiert nach Stärke, Klick-Popup mit Böen und Herkunftsrichtung | Karte |
+| Standortgenaues Wetter | Wetter und Warnungen kommen vom aktuellen Standort statt von einer festen Position; Neuabruf nach 15 min oder ab 10 km Ortswechsel | Daten |
 | Route-Wetter offline nutzbar | `/api/weather/route` liefert den Forecast entlang der Route (an der jeweiligen ETA), mit Datei-Cache → ohne Internet nutzbar. **GRIB wird dafür nicht gebraucht** — der ursprüngliche GRIB-Punkt ist damit erledigt | Daten |
-| Logbuch-Export (PDF) | Törnbericht als PDF (`pdf_export.py`, `GET /api/trip/pdf/{id}`), aus dem Logbuch heraus abrufbar | UX |
+| Logbuch-Export (PDF) | Törnbericht als PDF (`pdf_export.py`, `GET /api/trip/pdf/{id}`), aus dem Logbuch heraus abrufbar (inzwischen auch in `main`) | UX |
 
----
-
-## v1.9 — Offline-First
+### Offen
 
 | Feature | Beschreibung | Kategorie |
 |---------|-------------|-----------|
-| Wetter-Alarme | **Backend existiert bereits** (`weather_alerts`-Modul, `/api/weather/alerts` + `/cached`) — liefert amtliche Warnungen. Fehlt: die UI dafür, und die Entscheidung, ob zusätzlich eigene Schwellwerte (Sturm, Starkwind, Sicht) konfigurierbar sein sollen | Sicherheit |
-| Wetter-Overlay auf Karte | Wind-Pfeile entlang der Route mit Farbcodierung nach Stärke. Aktuell gibt es nur ein DOM-Panel (`route-weather-overlay`), nichts auf der Karte selbst | Karte |
+| 3D-Seezeichen — Ausbau & Feinschliff | Aufbauend auf den echten 3D-Tonnen (`js/buoy3d.js`): weitere `TOPSHP`-Codes, Baken als Stange statt Tonne, Leuchtfeuer(-Sektoren), `notmrk` als 3D-Tafelschilder, Klick-Popups auf 3D-Objekte; Feinschliff bei Beleuchtung/Anti-Aliasing, Größe & Sichtbarkeit (Zoom-Schwellen), Kardinal-Toppzeichen-Ausrichtung | Karte |
 | Helm-Map-Engine für 3D-Perspektive | `flutter_map` (^8.1.1) ist 2D (nur Drehung, kein Pitch) — für die 3D-Ansicht auf dem Helm Wechsel auf eine MapLibre-native Flutter-Engine (GPU); flutter-pi-Ressourcen prüfen. Ohne Wechsel bleibt der Helm bei head-up 2D | Karte, Plattform |
-| 3D-Seezeichen — Ausbau & Feinschliff | Aufbauend auf den echten 3D-Tonnen (three.js + MapLibre Custom-Layer, IALA/S-57 aus `TOPSHP`/`COLOUR`, `js/buoy3d.js`): weitere `TOPSHP`-Codes, Baken als Stange statt Tonne, Leuchtfeuer(-Sektoren), `notmrk` als 3D-Tafelschilder, Klick-Popups auf 3D-Objekte; Feinschliff bei Beleuchtung/Anti-Aliasing, Größe & Sichtbarkeit (Zoom-Schwellen), Kardinal-Toppzeichen-Ausrichtung | Karte |
 
 ---
 
