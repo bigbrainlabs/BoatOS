@@ -28,7 +28,6 @@
 
 | Feature | Description | Category |
 |---------|-------------|----------|
-| AIS collision warning | CPA/TCPA calculation — alert when collision course detected | Safety |
 | Cross-track error alert (XTE) | Warning when the boat deviates from the planned course | Safety |
 | Tides — expansion | Harmonic **prediction** of high/low water (offline, from reference-port constants) + ETA adjustment via tidal current for tidal sections | Data, Routing |
 
@@ -82,6 +81,7 @@ release — see the preview at the top of the [README](README.md).
 | Smartphone companion | Position, ETA, alerts as a PWA on your phone | |
 | Autopilot integration | Course keeping, waypoint steering | requires hardware |
 | Lock registration history | Status tracking: registered / confirmed / passed. Currently there is only a "register" button with no state | concept open |
+| AIS collision warning | CPA/TCPA calculation — alert when collision course detected | requires AIS reception |
 
 ---
 

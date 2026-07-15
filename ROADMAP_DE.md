@@ -28,7 +28,6 @@
 
 | Feature | Beschreibung | Kategorie |
 |---------|-------------|-----------|
-| AIS-Kollisionswarnung | CPA/TCPA-Berechnung — Alert bei Kollisionskurs | Sicherheit |
 | Kursabweichungs-Alert (XTE) | Warnung wenn Boot vom geplanten Kurs abweicht | Sicherheit |
 | Gezeiten — Ausbau | Harmonische **Vorhersage** von Hoch-/Niedrigwasser (offline, aus Bezugsort-Konstanten) + ETA-Anpassung durch Tidenstrom für tideabhängige Abschnitte | Daten, Routing |
 
@@ -82,6 +81,7 @@ Version — siehe die Vorschau oben in der [README](README_DE.md).
 | Smartphone-Companion | Position, ETA, Warnungen als PWA auf dem Handy | |
 | Autopilot-Anbindung | Kurs halten, Wegpunkt-Ansteuerung | braucht Hardware |
 | Schleusen-Anmelde-Historie | Status-Tracking: angemeldet / bestätigt / passiert. Aktuell gibt es nur den „Anmelden"-Button ohne Zustand | Konzept offen |
+| AIS-Kollisionswarnung | CPA/TCPA-Berechnung — Alert bei Kollisionskurs | braucht AIS-Empfang |
 
 ---
 
