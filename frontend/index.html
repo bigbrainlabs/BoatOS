@@ -10,9 +10,9 @@
     <link rel="preload" as="script" href="/lib/maplibre-gl.js">
 
     <!-- BoatOS Styles -->
-    <link rel="stylesheet" href="css/theme.css?v=12">
+    <link rel="stylesheet" href="css/theme.css?v=13">
     <link rel="stylesheet" href="css/layout.css?v=15">
-    <link rel="stylesheet" href="css/components.css?v=13">
+    <link rel="stylesheet" href="css/components.css?v=14">
     <link rel="stylesheet" href="css/rondell.css?v=3">
 </head>
 <body>
@@ -230,6 +230,10 @@
                 <span class="icon">🌦️</span>
                 <span class="label" data-i18n="sheet_tab_weather">Wetter</span>
             </div>
+            <div class="quick-action qa-section" onclick="BoatOS.tides.open(this)">
+                <span class="icon">🌊</span>
+                <span class="label" data-i18n="sheet_tab_tides">Gezeiten</span>
+            </div>
             <div class="quick-action qa-section" onclick="BoatOS.ui.showSection('logbook', this)">
                 <span class="icon">📖</span>
                 <span class="label" data-i18n="sheet_tab_logbook">Logbuch</span>
@@ -347,6 +351,11 @@
                         <span data-i18n="route_area_offline_btn">Bereich offline</span>
                     </button>
                 </div>
+            </div>
+
+            <!-- TIDES SECTION (Gezeiten, MVP) -->
+            <div id="section-tides" class="section-hidden">
+                <div id="tides-body"></div>
             </div>
 
             <!-- WEATHER SECTION -->

@@ -429,31 +429,70 @@ function updateAISSettings(settings) {
 /**
  * Holt Infrastruktur-POIs (Schleusen, Brücken, Häfen) vom Backend
  */
-async function fetchInfrastructurePOIs() {
+// Laufende Anfrage durchnummerieren → veraltete (out-of-order) Antworten
+// verwerfen, statt mit ihnen die aktuellen Marker zu überschreiben.
+let _infraReqSeq = 0;
+// Kartenzentrum/-zoom beim letzten erfolgreichen Abruf. Solange sich die Karte
+// nur wenig bewegt, wird NICHT neu geladen → keine flackernden Marker bei
+// kleinen Verschiebungen. Query bleibt bewusst = Viewport (klein), weil Overpass
+// bei großen bbox unzuverlässig wird (Verbindungsfehler/Timeout).
+let _infraLastCenter = null;
+let _infraLastZoom = null;
+
+async function fetchInfrastructurePOIs(force = false) {
     if (!infrastructureSettings.enabled || !map) {
         return;
     }
 
+    const bounds = map.getBounds();
+    const center = map.getCenter();
+    const zoom = map.getZoom();
+
+    // Nur wenig bewegt (< 35% der Viewport-Ausdehnung) und gleicher Zoom?
+    // Dann Marker einfach stehen lassen, statt neu zu laden.
+    if (!force && _infraLastCenter && Math.abs(zoom - _infraLastZoom) < 0.5) {
+        const spanLon = bounds.getEast() - bounds.getWest();
+        const spanLat = bounds.getNorth() - bounds.getSouth();
+        const dLon = Math.abs(center.lng - _infraLastCenter.lng);
+        const dLat = Math.abs(center.lat - _infraLastCenter.lat);
+        if (dLon < spanLon * 0.35 && dLat < spanLat * 0.35) return;
+    }
+
+    const mySeq = ++_infraReqSeq;
     try {
-        // Kartenbereich abrufen
-        const bounds = map.getBounds();
-        const types = infrastructureSettings.types.join(',');
         const params = new URLSearchParams({
-            lat_min: bounds.getSouth(),
-            lon_min: bounds.getWest(),
-            lat_max: bounds.getNorth(),
-            lon_max: bounds.getEast(),
-            types: types
+            lat_min: bounds.getSouth(), lon_min: bounds.getWest(),
+            lat_max: bounds.getNorth(), lon_max: bounds.getEast(),
+            types: infrastructureSettings.types.join(','),
         });
 
         const response = await fetch(`${API_URL}/api/infrastructure?${params}`);
-        if (response.ok) {
-            const data = await response.json();
-            updateInfrastructureMarkers(data.pois);
+        if (!response.ok) return;
+        const data = await response.json();
+
+        // Antwort einer überholten Anfrage? Verwerfen.
+        if (mySeq !== _infraReqSeq) return;
+
+        // Overpass-Fehler liefert data.error → NICHT die Marker leeren (ein
+        // Timeout gab sonst [] zurück, ununterscheidbar von "hier gibt es nichts").
+        if (data.error) {
+            console.warn('Infrastruktur: Datenquelle-Fehler, Marker bleiben:', data.error);
+            return;
         }
+        _infraLastCenter = { lng: center.lng, lat: center.lat };
+        _infraLastZoom = zoom;
+        updateInfrastructureMarkers(data.pois || []);
     } catch (error) {
         console.warn('Infrastruktur Abruf-Fehler:', error);
     }
+}
+
+// moveend feuert im Follow-/Sim-Modus laufend → entprellen, sonst löst jede
+// Mini-Bewegung einen (langsamen) Overpass-Abruf aus.
+let _infraMoveTimer = null;
+function _fetchInfrastructureDebounced() {
+    clearTimeout(_infraMoveTimer);
+    _infraMoveTimer = setTimeout(fetchInfrastructurePOIs, 600);
 }
 
 /**
@@ -489,8 +528,9 @@ function updateInfrastructureMarkers(pois) {
                 .setLngLat([poi.lon, poi.lat])
                 .addTo(map);
 
-            // Popup bei Klick hinzufügen
-            const popup = new maplibregl.Popup({ offset: 15 })
+            // Popup bei Klick — themed (poi-popup), X-Button + Klick-daneben
+            // schließt (MapLibre-Default). Style-Muster wie gauge-popup (theme.css).
+            const popup = new maplibregl.Popup({ offset: 15, className: 'poi-popup' })
                 .setHTML(createInfrastructurePopup(poi));
             marker.setPopup(popup);
 
@@ -532,10 +572,15 @@ function createInfrastructureElement(poi) {
         const dots = svc
             ? `<div class="poi-svc">${'<i></i>'.repeat(Math.min(svc, 4))}</div>`
             : '';
+        // KEINE CSS-Animation/-transition und kein transform auf diesem Element:
+        // MapLibre positioniert den Marker ausschließlich über sein eigenes
+        // inline-transform. Jede zusätzliche Transform-Ebene hier hat in der
+        // Vergangenheit die Positionierung gestört (gestapelt/versetzt). Der
+        // <g>-transform steckt im SVG-Koordinatensystem und ist davon unberührt.
         const el = document.createElement('div');
         el.className = 'poi-pin';
         el.innerHTML = `${dots}
-            <svg viewBox="0 0 40 48" width="34" height="41" aria-hidden="true">
+            <svg viewBox="0 0 40 48" width="27" height="32" aria-hidden="true">
               <path d="M20 47 C10 33 2 27 2 17 A18 18 0 0 1 38 17 C38 27 30 33 20 47 Z"
                     fill="${c}" stroke="#fff" stroke-width="1.5"/>
               <g transform="translate(8 5)" fill="#fff">${POI_GLYPH[type]}</g>
@@ -580,7 +625,7 @@ function createInfrastructurePopup(poi) {
         `<p style="margin:4px 0;font-size:12px;">${label}: <b>${escapeHTML(String(val))}</b></p>`;
 
     let html = `<div style="min-width: 160px;">
-        <h4 style="margin: 0 0 8px 0; color: #2c3e50;">${typeNames[poi.type] || poi.type}</h4>
+        <h4 style="margin: 0 0 8px 0; color: var(--accent);">${typeNames[poi.type] || poi.type}</h4>
         <p style="margin: 0; font-weight: 600;">${escapeHTML(poi.name)}</p>`;
 
     // Marina/Hafen
@@ -612,7 +657,7 @@ function createInfrastructurePopup(poi) {
 
     if (p.website) {
         const url = p.website.startsWith('http') ? p.website : 'https://' + p.website;
-        html += `<p style="margin:6px 0 0;font-size:12px;"><a href="${escapeHTML(url)}" target="_blank" rel="noopener">Website ↗</a></p>`;
+        html += `<p style="margin:6px 0 0;font-size:12px;"><a href="${escapeHTML(url)}" target="_blank" rel="noopener" style="color:var(--accent);">Website ↗</a></p>`;
     }
 
     html += `</div>`;
@@ -779,6 +824,14 @@ function closeInfrastructureDetails() {
 function updateInfrastructureSettings(settings) {
     infrastructureSettings = settings;
 
+    // Map noch nicht gesetzt (Aufruf vor initAISModule)? Zustand merken, aber
+    // keine Map-Operation — sonst "map is null". Die Aktivierung holt main.js
+    // nach initAISModule nach.
+    if (!map) {
+        console.warn('Infrastruktur-Settings vor Map-Init — verschoben');
+        return;
+    }
+
     // Interval löschen
     if (infrastructureUpdateInterval) {
         clearInterval(infrastructureUpdateInterval);
@@ -788,15 +841,18 @@ function updateInfrastructureSettings(settings) {
     // Alle Marker entfernen (MapLibre)
     Object.values(infrastructurePOIs).forEach(({marker}) => marker.remove());
     infrastructurePOIs = {};
+    _infraLastCenter = null;   // Bewegungs-Bezug vergessen → nächster Abruf lädt neu
+    _infraLastZoom = null;
 
     // Starten wenn aktiviert
     if (settings.enabled) {
-        fetchInfrastructurePOIs();
-        // Bei Kartenbewegung/-zoom aktualisieren
-        map.on('moveend', fetchInfrastructurePOIs);
+        fetchInfrastructurePOIs(true);
+        // Bei Kartenbewegung/-zoom aktualisieren (entprellt)
+        map.on('moveend', _fetchInfrastructureDebounced);
         console.log('Infrastruktur-Layer aktiviert');
     } else {
-        map.off('moveend', fetchInfrastructurePOIs);
+        map.off('moveend', _fetchInfrastructureDebounced);
+        clearTimeout(_infraMoveTimer);
         console.log('Infrastruktur-Layer deaktiviert');
     }
 }

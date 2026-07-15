@@ -222,5 +222,123 @@ class PegelOnline:
             print(f"⚠️ Referenz-Pegel konnten nicht geladen werden: {e}")
             return []
 
+    # ==================== GEZEITEN (MVP: gemessene Tidenkurve) ====================
+    # Bewusst simpel: an der Küste (Elbe/Weser/Ems/Nordsee) zeigt der gemessene
+    # Wasserstand die Tide direkt. Keine harmonische Vorhersage — das kommt später.
+
+    def _all_stations_index(self) -> List[Dict[str, Any]]:
+        """Leichter Stations-Index (uuid, Name, Position, Gewässer) — einmal gecacht."""
+        cache_key = "stations_index"
+        if self._is_cache_valid(cache_key):
+            return self.cache[cache_key]['data']
+        try:
+            resp = requests.get(f"{self.base_url}/stations.json",
+                                headers={'User-Agent': 'BoatOS/1.0'}, timeout=15)
+            resp.raise_for_status()
+            idx = []
+            for s in resp.json():
+                lat, lon = s.get('latitude'), s.get('longitude')
+                if lat is None or lon is None:
+                    continue
+                idx.append({
+                    'uuid': s.get('uuid'),
+                    'name': (s.get('longname') or s.get('shortname') or 'Pegel').title(),
+                    'lat': lat, 'lon': lon,
+                    'water': (s.get('water') or {}).get('longname', ''),
+                })
+            self.cache[cache_key] = {'data': idx, 'timestamp': datetime.now()}
+            print(f"✅ Pegel-Stationsindex: {len(idx)} Stationen (gecacht)")
+            return idx
+        except Exception as e:
+            print(f"⚠️ Stationsindex konnte nicht geladen werden: {e}")
+            return []
+
+    def nearest_station(self, lat: float, lon: float) -> Optional[Dict[str, Any]]:
+        """Nächstgelegene Pegelstation zu einer Position (grobe ebene Distanz reicht)."""
+        idx = self._all_stations_index()
+        if not idx:
+            return None
+        import math
+        def d2(s):
+            dlat = (s['lat'] - lat) * 111.0
+            dlon = (s['lon'] - lon) * 111.0 * math.cos(math.radians(lat))
+            return dlat * dlat + dlon * dlon
+        return min(idx, key=d2)
+
+    def fetch_tide_curve(self, uuid: str, hours: int = 30) -> List[Dict[str, Any]]:
+        """Wasserstands-Zeitreihe (W) einer Station der letzten `hours` Stunden."""
+        try:
+            resp = requests.get(
+                f"{self.base_url}/stations/{uuid}/W/measurements.json",
+                params={'start': f'P{max(1, hours // 24 + 1)}D'},
+                headers={'User-Agent': 'BoatOS/1.0'}, timeout=12
+            )
+            resp.raise_for_status()
+            cutoff = datetime.now() - timedelta(hours=hours)
+            out = []
+            for m in resp.json():
+                ts = m.get('timestamp')
+                v = m.get('value')
+                if ts is None or v is None:
+                    continue
+                try:
+                    t = datetime.fromisoformat(ts)
+                    if t.replace(tzinfo=None) < cutoff:
+                        continue
+                except Exception:
+                    pass
+                out.append({'t': ts, 'cm': v})
+            return out
+        except Exception as e:
+            print(f"⚠️ Tidenkurve ({uuid}) fehlgeschlagen: {e}")
+            return []
+
+    def get_tide(self, lat: float, lon: float) -> Dict[str, Any]:
+        """
+        MVP-Gezeiten für eine Position: nächste Station + gemessene Kurve,
+        aktueller Stand, Trend (Flut/Ebbe) und letztes Hoch-/Niedrigwasser.
+        BLOCKING (requests) → im Endpoint via to_thread aufrufen.
+        """
+        st = self.nearest_station(lat, lon)
+        if not st:
+            return {'available': False, 'reason': 'Keine Pegelstation gefunden'}
+        curve = self.fetch_tide_curve(st['uuid'], hours=30)
+        if len(curve) < 3:
+            return {'available': False, 'reason': 'Keine Messreihe', 'station': st['name']}
+
+        cur = curve[-1]
+        # Trend aus den letzten ~30 min: steigend = Flut, fallend = Ebbe
+        prev = curve[-2]
+        for c in reversed(curve[:-1]):
+            try:
+                if (datetime.fromisoformat(cur['t']) - datetime.fromisoformat(c['t'])).total_seconds() >= 1800:
+                    prev = c
+                    break
+            except Exception:
+                pass
+        diff = cur['cm'] - prev['cm']
+        trend = 'rising' if diff > 1 else ('falling' if diff < -1 else 'slack')
+
+        # Letztes Hoch-/Niedrigwasser als Extrema der gemessenen Kurve
+        vals = [c['cm'] for c in curve]
+        hi = max(range(len(vals)), key=lambda i: vals[i])
+        lo = min(range(len(vals)), key=lambda i: vals[i])
+
+        return {
+            'available': True,
+            'station': st['name'],
+            'water': st['water'],
+            'lat': st['lat'], 'lon': st['lon'],
+            'current_cm': round(cur['cm']),
+            'current_m': round(cur['cm'] / 100, 2),
+            'current_t': cur['t'],
+            'trend': trend,          # rising (Flut) / falling (Ebbe) / slack
+            'last_high': {'cm': round(vals[hi]), 'm': round(vals[hi] / 100, 2), 't': curve[hi]['t']},
+            'last_low':  {'cm': round(vals[lo]), 'm': round(vals[lo] / 100, 2), 't': curve[lo]['t']},
+            # Kurve auf ~150 Punkte ausdünnen — reicht für die Sparkline, spart Daten
+            'curve': [{'t': c['t'], 'm': round(c['cm'] / 100, 2)}
+                      for c in curve[::max(1, len(curve) // 150)]],
+        }
+
 # Global instance
 pegelonline = PegelOnline()

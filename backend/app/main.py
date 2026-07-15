@@ -25,6 +25,7 @@ import fuel_tracking
 import statistics
 import weather_alerts
 import locks_storage
+import harbor_storage
 import dashboard_dsl
 import ienc
 
@@ -1116,10 +1117,37 @@ async def get_infrastructure(lat_min: float, lon_min: float, lat_max: float, lon
 
     Returns:
     - List of infrastructure POIs with details
+
+    Häfen/Marinas/Ankerplätze kommen jetzt OFFLINE aus dem Vorab-Import
+    (harbor_storage, alle paar Tage per Scheduler aktualisiert) — kein
+    Live-Overpass mehr pro Kartenbewegung. Schleusen/Brücken/Wehre werden
+    weiterhin live geholt (falls angefragt), sind aber selten genutzt.
     """
     type_list = [t.strip() for t in types.split(',') if t.strip()]
-    pois = waterway_infrastructure.fetch_infrastructure(lat_min, lon_min, lat_max, lon_max, type_list)
-    return {"pois": pois, "count": len(pois)}
+
+    # Häfen + Ankerplätze offline aus dem Storage bbox-filtern (schnell, kein Netz)
+    harbor_types = {'harbor', 'anchorage'}
+    pois = []
+    if harbor_types & set(type_list):
+        stored = harbor_storage.get_in_bounds(lat_min, lon_min, lat_max, lon_max)
+        pois.extend(p for p in stored if p.get('type') in type_list)
+
+    # Übrige Typen (lock/bridge/weir/dam) weiterhin live — im Thread, damit ein
+    # blockierender Overpass-Aufruf nicht den Event-Loop einfriert.
+    live_types = [t for t in type_list if t not in harbor_types]
+    if live_types:
+        try:
+            live = await asyncio.to_thread(
+                waterway_infrastructure.fetch_infrastructure,
+                lat_min, lon_min, lat_max, lon_max, live_types
+            )
+            pois.extend(live)
+        except Exception as e:
+            # Nur die Live-Typen fehlen dann; die Offline-Häfen bleiben.
+            return {"pois": pois, "count": len(pois), "error": str(e)}
+
+    return {"pois": pois, "count": len(pois),
+            "harbors_fetched_at": harbor_storage.fetched_at()}
 
 # ==================== WATER LEVEL GAUGES (PEGELONLINE) ====================
 @app.get("/api/gauges")
@@ -1133,8 +1161,22 @@ async def get_water_level_gauges(lat_min: float, lon_min: float, lat_max: float,
     Returns:
     - List of gauge stations with current water levels
     """
-    gauges = pegelonline.fetch_gauges(lat_min, lon_min, lat_max, lon_max)
+    # Ebenfalls blockierendes requests → in Thread, sonst friert der Event-Loop
+    # ein, solange PEGELONLINE antwortet (gleiche Falle wie /api/infrastructure).
+    gauges = await asyncio.to_thread(pegelonline.fetch_gauges, lat_min, lon_min, lat_max, lon_max)
     return {"gauges": gauges, "count": len(gauges)}
+
+@app.get("/api/tides")
+async def get_tides(lat: float, lon: float):
+    """
+    Gezeiten (MVP): gemessene Tidenkurve der nächsten Pegelstation.
+    An der Küste (Elbe/Weser/Ems/Nordsee) zeigt der Wasserstand die Tide direkt.
+    Blockierendes requests → in einen Thread auslagern.
+    """
+    try:
+        return await asyncio.to_thread(pegelonline.get_tide, lat, lon)
+    except Exception as e:
+        return {"available": False, "reason": str(e)}
 
 # ==================== LOCKS (SCHLEUSEN) ====================
 @app.get("/api/locks")
@@ -1575,6 +1617,168 @@ def _verify_positions_sync():
         "avg_distance_fixed": int(sum(i['distance'] for i in issues) / len(issues)) if issues else 0,
         "issues": issues,
     }
+
+# ==================== HÄFEN & ANKERPLÄTZE — VORAB-IMPORT ====================
+# Statt bei jeder Kartenbewegung live Overpass zu fragen (wird rate-limitiert/
+# geblockt), einmal alle paar Tage importieren und offline vorhalten.
+
+_HARBOR_REFRESH_HOURS = 48      # Standard-Intervall des Scheduler-Refresh
+_harbor_import_state = {"running": False, "progress": "", "result": None}
+
+
+async def _run_harbor_import():
+    """
+    Häfen, Marinas und Ankerplätze für die aktiven Karten-Regionen von Overpass
+    holen (async, pro Region) und in harbor_storage persistieren. Länderneutral:
+    die bbox je Region kommt aus den MBTiles-Metadaten.
+    """
+    if _harbor_import_state["running"]:
+        return {"success": False, "error": "Import läuft bereits", "running": True}
+    _harbor_import_state.update({"running": True, "progress": "Starte…", "result": None})
+    try:
+        regions = _get_active_regions()
+        bboxes = []
+        for r in regions:
+            p = MBTILES_DIR / f"{r}.mbtiles"
+            if p.exists():
+                b = _mbtiles_bounds(p)
+                if b:
+                    bboxes.append((r, b))
+        if not bboxes:
+            result = {"success": False, "error": "Keine aktiven Karten-Regionen mit MBTiles"}
+            _harbor_import_state.update({"running": False, "progress": "Abgebrochen", "result": result})
+            return result
+
+        # Ganze Länder-bbox in einer Abfrage läuft in den Overpass-Timeout (504).
+        # Darum in Kacheln (max ~2°) zerlegen und pro Kachel abfragen.
+        TILE_DEG = 2.0
+
+        def _tiles(lon_min, lat_min, lon_max, lat_max):
+            lat = lat_min
+            while lat < lat_max:
+                lat2 = min(lat + TILE_DEG, lat_max)
+                lon = lon_min
+                while lon < lon_max:
+                    lon2 = min(lon + TILE_DEG, lon_max)
+                    yield (lon, lat, lon2, lat2)
+                    lon = lon2
+                lat = lat2
+
+        def _parse(elements):
+            n = 0
+            for el in elements:
+                poi = waterway_infrastructure._parse_element(el)
+                if poi and poi.get("type") in ("harbor", "anchorage"):
+                    by_id[poi["id"]] = poi
+                    n += 1
+            return n
+
+        by_id = {}          # OSM-id → POI (dedupliziert über Kacheln/Regionen)
+        per_region = {}
+        errors = 0
+        async with aiohttp.ClientSession() as session:
+            for region, bounds in bboxes:
+                tiles = list(_tiles(*bounds))
+                region_cnt = 0
+                for ti, (lo1, la1, lo2, la2) in enumerate(tiles, 1):
+                    _harbor_import_state["progress"] = f"{region}: Kachel {ti}/{len(tiles)}…"
+                    bbox = f"{la1},{lo1},{la2},{lo2}"
+                    query = f"""
+                    [out:json][timeout:120];
+                    (
+                      node["amenity"="marina"]({bbox});
+                      way["amenity"="marina"]({bbox});
+                      node["harbour"="yes"]({bbox});
+                      way["harbour"="yes"]({bbox});
+                      node["seamark:type"="anchorage"]({bbox});
+                      way["seamark:type"="anchorage"]({bbox});
+                      node["seamark:type"="anchor_berth"]({bbox});
+                      way["seamark:type"="anchor_berth"]({bbox});
+                    );
+                    out body center qt;
+                    """
+                    try:
+                        async with session.post(
+                            "https://overpass-api.de/api/interpreter",
+                            data={"data": query},
+                            headers={"User-Agent": "BoatOS/1.0 (marine navigation)"},
+                            timeout=aiohttp.ClientTimeout(total=140),
+                        ) as resp:
+                            if resp.status != 200:
+                                errors += 1
+                                continue
+                            data = await resp.json(content_type=None)
+                    except Exception:
+                        errors += 1
+                        continue
+                    region_cnt += await asyncio.to_thread(_parse, data.get("elements", []))
+                    # Overpass fair behandeln: kurze Pause zwischen den Kacheln
+                    await asyncio.sleep(1.0)
+                per_region[region] = f"{len(tiles)} Kacheln"
+                _harbor_import_state["progress"] = f"{region}: {region_cnt} Häfen/Ankerplätze"
+
+        # Nur speichern, wenn wirklich etwas kam — sonst alten Bestand behalten
+        if by_id:
+            pois = list(by_id.values())
+            await asyncio.to_thread(harbor_storage.save, pois)
+            result = {"success": True, "count": len(pois), "per_region": per_region, "tile_errors": errors}
+            print(f"⚓ Hafen-Import: {len(pois)} POIs gespeichert ({per_region}, {errors} Kachel-Fehler)")
+        else:
+            result = {"success": False, "error": "Keine Daten von Overpass — Bestand behalten",
+                      "per_region": per_region, "tile_errors": errors}
+            print(f"⚠️ Hafen-Import: nichts erhalten, alter Bestand bleibt ({per_region})")
+        _harbor_import_state.update({"running": False, "progress": "Fertig", "result": result})
+        return result
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        _harbor_import_state.update({"running": False, "progress": "Fehler", "result": result})
+        print(f"⚠️ Hafen-Import fehlgeschlagen: {e}")
+        return result
+
+
+async def harbor_import_scheduler():
+    """
+    Beim Start (nach kurzer Verzögerung) importieren, wenn der Bestand fehlt oder
+    älter als _HARBOR_REFRESH_HOURS ist; danach im festen Intervall auffrischen.
+    Overpass-Ausfälle sind unkritisch — der alte Bestand bleibt, nächster Lauf
+    versucht es erneut.
+    """
+    await asyncio.sleep(90)   # Boot nicht mit der Overpass-Abfrage belasten
+    while True:
+        try:
+            if harbor_storage.is_stale(_HARBOR_REFRESH_HOURS):
+                print(f"⚓ Hafen-Import: Bestand fehlt/veraltet (Alter "
+                      f"{harbor_storage.age_hours()}h) → importiere")
+                await _run_harbor_import()
+            else:
+                print(f"⚓ Hafen-Import: Bestand frisch ({harbor_storage.count()} POIs, "
+                      f"{harbor_storage.age_hours():.1f}h alt) → übersprungen")
+        except Exception as e:
+            print(f"⚠️ Hafen-Scheduler-Fehler: {e}")
+        # Stündlich prüfen; importiert wird nur, wenn wirklich veraltet
+        await asyncio.sleep(3600)
+
+
+@app.get("/api/infrastructure/status")
+async def infrastructure_import_status():
+    """Zustand des Hafen-/Ankerplatz-Vorabimports (für UI + Debugging)."""
+    return {
+        "count": harbor_storage.count(),
+        "fetched_at": harbor_storage.fetched_at(),
+        "age_hours": harbor_storage.age_hours(),
+        "refresh_hours": _HARBOR_REFRESH_HOURS,
+        "import": _harbor_import_state,
+    }
+
+
+@app.post("/api/infrastructure/import")
+async def trigger_infrastructure_import():
+    """Manuell einen Neuimport anstoßen (Einstellungen / Test)."""
+    if _harbor_import_state["running"]:
+        return {"success": False, "error": "Import läuft bereits", "running": True}
+    asyncio.create_task(_run_harbor_import())
+    return {"success": True, "started": True}
+
 
 @app.get("/api/locks/{lock_id}")
 async def get_lock_details(lock_id: int):
@@ -4847,6 +5051,7 @@ async def startup_event():
     asyncio.create_task(pegel_tracker_loop())
     asyncio.create_task(fetch_weather())
     asyncio.create_task(fetch_weather_alerts_periodic())  # Start periodic weather alerts
+    asyncio.create_task(harbor_import_scheduler())  # Häfen/Ankerplätze vorab importieren + auffrischen
     asyncio.create_task(gps_service.read_gps_from_signalk())  # Start GPS service from SignalK
     load_known_topics()  # Load persistent topic history
     mqtt_client_init()
