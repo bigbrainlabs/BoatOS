@@ -27,6 +27,10 @@ export const html = `
                         <div class="toggle" id="toggle-pegel" onclick="BoatOS.ui.toggleSettingToggle(this, 'showPegel')"></div>
                     </div>
                     <div class="setting-item">
+                        <span data-i18n="settings_show_harbors">Häfen &amp; Ankerplätze</span>
+                        <div class="toggle" id="toggle-harbors" onclick="BoatOS.ui.toggleSettingToggle(this, 'showHarbors')"></div>
+                    </div>
+                    <div class="setting-item">
                         <span data-i18n="settings_show_track">Track anzeigen</span>
                         <div class="toggle active" id="toggle-track" onclick="BoatOS.ui.toggleSettingToggle(this, 'showTrack')"></div>
                     </div>
@@ -98,6 +102,7 @@ export function load(settings) {
         'toggle-ienc': settings.map.showIENC,
         'toggle-locks': settings.map.showLocks,
         'toggle-pegel': settings.map.showPegel,
+        'toggle-harbors': settings.map.showHarbors,
         'toggle-track': settings.map.showTrack,
         'toggle-autocenter': settings.map.autoCenter,
         'toggle-headingup': settings.map.headingUp
@@ -118,6 +123,7 @@ export function collect(settings) {
     const toggleIENC = document.getElementById('toggle-ienc');
     const toggleLocks = document.getElementById('toggle-locks');
     const togglePegel = document.getElementById('toggle-pegel');
+    const toggleHarbors = document.getElementById('toggle-harbors');
     const toggleTrack = document.getElementById('toggle-track');
     const toggleAutoCenter = document.getElementById('toggle-autocenter');
     const toggleHeadingUp = document.getElementById('toggle-headingup');
@@ -126,6 +132,7 @@ export function collect(settings) {
     if (toggleIENC) settings.map.showIENC = toggleIENC.classList.contains('active');
     if (toggleLocks) settings.map.showLocks = toggleLocks.classList.contains('active');
     if (togglePegel) settings.map.showPegel = togglePegel.classList.contains('active');
+    if (toggleHarbors) settings.map.showHarbors = toggleHarbors.classList.contains('active');
     if (toggleTrack) settings.map.showTrack = toggleTrack.classList.contains('active');
     if (toggleAutoCenter) settings.map.autoCenter = toggleAutoCenter.classList.contains('active');
     if (toggleHeadingUp) settings.map.headingUp = toggleHeadingUp.classList.contains('active');

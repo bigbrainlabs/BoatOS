@@ -968,3 +968,44 @@ select option {
     .tank-overview { grid-template-columns: 1fr; }
     .trip-stats { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* ============================================
+   POI-Tropfen-Pins (Marina / Ankerplatz)
+   js/ais.js: createInfrastructureElement()
+   ============================================ */
+.poi-pin {
+    position: relative;
+    cursor: pointer;
+    filter: drop-shadow(0 3px 4px rgba(11, 22, 34, 0.4));
+    animation: poi-drop 0.35s cubic-bezier(0.22, 1.2, 0.4, 1) both;
+    line-height: 0;
+}
+.poi-pin svg { display: block; overflow: visible; }
+.poi-pin:hover { transform: translateY(-2px); transition: transform 0.15s; }
+
+/* Grüne Service-Punkte über der Marina (Sprit/Strom/Wasser/WC/Dusche) */
+.poi-pin .poi-svc {
+    position: absolute;
+    left: 50%;
+    top: -6px;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 3px;
+    z-index: 1;
+}
+.poi-pin .poi-svc i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #3a9d5d;
+    border: 1px solid #fff;
+}
+
+@keyframes poi-drop {
+    from { transform: translateY(-14px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .poi-pin { animation: none; }
+    .poi-pin:hover { transform: none; }
+}
