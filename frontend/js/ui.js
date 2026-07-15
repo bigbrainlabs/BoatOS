@@ -1937,6 +1937,11 @@ export function toggleSettingToggle(toggleElement, settingKey) {
         setPegelVisible(isActive);
     }
 
+    // Häfen & Ankerplätze umschalten
+    if (settingKey === 'showHarbors') {
+        setHarborsVisible(isActive);
+    }
+
     // Amtliche IENC-Karten umschalten
     if (settingKey === 'showIENC') {
         window.BoatOS?.map?.toggleIENCLayer?.(isActive);
@@ -2029,6 +2034,21 @@ function setPegelVisible(visible) {
 }
 
 /**
+ * Setzt die Sichtbarkeit der Häfen & Ankerplätze (Infrastruktur-Layer, auf
+ * harbor+anchorage beschränkt — Schleusen laufen über ihr eigenes System).
+ * @param {boolean} visible - Sichtbar ja/nein
+ */
+function setHarborsVisible(visible) {
+    if (window.BoatOS?.ais?.updateInfrastructureSettings) {
+        window.BoatOS.ais.updateInfrastructureSettings({
+            enabled: visible,
+            types: ['harbor', 'anchorage']
+        });
+    }
+    console.log(`Häfen & Ankerplätze ${visible ? 'aktiviert' : 'deaktiviert'}`);
+}
+
+/**
  * Toggle-Funktion für Schleusen Quick-Action Button
  */
 export function toggleLocks() {
@@ -2084,6 +2104,12 @@ export function initLayerVisibility() {
     // (waterLevel.enabled = Alt-Format als Fallback)
     const pegelEnabled = (settings.map?.showPegel ?? settings.waterLevel?.enabled) === true;
     pegelVisible = pegelEnabled;
+
+    // Häfen & Ankerplätze standardmäßig inaktiv — Settings-Key ist map.showHarbors
+    const harborsEnabled = settings.map?.showHarbors === true;
+    if (harborsEnabled) setHarborsVisible(true);
+    const harborsToggle = document.getElementById('toggle-harbors');
+    if (harborsToggle) harborsToggle.classList.toggle('active', harborsEnabled);
 
     // Amtliche IENC-Karten standardmäßig aktiv (Layer erscheinen ohnehin nur,
     // wenn Gewässer installiert sind) — Settings-Key ist map.showIENC

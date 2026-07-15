@@ -479,10 +479,13 @@ function updateInfrastructureMarkers(pois) {
             infrastructurePOIs[poi.id].data = poi;
         } else {
             // Neuen MapLibre Marker erstellen
-            const el = createInfrastructureElement(poi.type);
+            const el = createInfrastructureElement(poi);
             el.title = poi.name;
 
-            const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+            // Tropfen-Pins zeigen mit der Spitze auf die Position (anchor unten),
+            // Emoji-Symbole sitzen mittig.
+            const isPin = poi.type === 'harbor' || poi.type === 'anchorage';
+            const marker = new maplibregl.Marker({ element: el, anchor: isPin ? 'bottom' : 'center' })
                 .setLngLat([poi.lon, poi.lat])
                 .addTo(map);
 
@@ -496,29 +499,58 @@ function updateInfrastructureMarkers(pois) {
     });
 }
 
+// Glyphen für die Tropfen-Pins (weiß, im farbigen Pin-Körper)
+const POI_GLYPH = {
+    // Segelboot — Marina/Hafen
+    harbor: '<path d="M12 4 L12 15.5 L5.5 15.5 Z"/><rect x="11.4" y="4" width="1.2" height="12"/><path d="M4.5 16.5 H19.5 L17 20 H7 Z"/>',
+    // Anker — Ankerplatz
+    anchorage: '<circle cx="12" cy="4.4" r="2.1" fill="none" stroke="#fff" stroke-width="1.6"/><rect x="11.2" y="6" width="1.6" height="13"/><rect x="8" y="8.4" width="8" height="1.6"/><path d="M5 13.5 a7 7 0 0 0 14 0" fill="none" stroke="#fff" stroke-width="1.7"/><path d="M3.4 13.9 L6.6 13.1 L5.4 16 Z"/><path d="M20.6 13.9 L17.4 13.1 L18.6 16 Z"/>',
+};
+const POI_COLOR = { harbor: '#c0478e', anchorage: '#2f6f9f' };   // Chart-Magenta, Marine-Blau
+
+/** Welche der bekannten Service-Ausstattungen hat eine Marina? (für die grünen Punkte) */
+function _marinaServiceCount(props) {
+    if (!props) return 0;
+    return ['fuel', 'electricity', 'water', 'toilets', 'shower']
+        .filter(k => props[k] && props[k] !== 'no').length;
+}
+
 /**
- * Erstellt das HTML-Element für ein Infrastruktur-Symbol
- * @param {string} type - Typ der Infrastruktur (lock, bridge, harbor, etc.)
+ * Erstellt das Marker-Element. Marina und Ankerplatz als Tropfen-Pin
+ * (farbig, mit weißem Glyph); alle anderen Typen wie gehabt als Emoji.
+ * @param {Object} poi - POI-Objekt (Typ + Eigenschaften)
  * @returns {HTMLElement} DOM-Element für den Marker
  */
-function createInfrastructureElement(type) {
+function createInfrastructureElement(poi) {
+    const type = poi.type;
+
+    // ---- Tropfen-Pin für Hafen/Marina und Ankerplatz ----
+    if (type === 'harbor' || type === 'anchorage') {
+        const c = POI_COLOR[type];
+        // Service-Punkte nur bei Marina, und nur wenn Ausstattung bekannt ist
+        const svc = type === 'harbor' ? _marinaServiceCount(poi.properties) : 0;
+        const dots = svc
+            ? `<div class="poi-svc">${'<i></i>'.repeat(Math.min(svc, 4))}</div>`
+            : '';
+        const el = document.createElement('div');
+        el.className = 'poi-pin';
+        el.innerHTML = `${dots}
+            <svg viewBox="0 0 40 48" width="34" height="41" aria-hidden="true">
+              <path d="M20 47 C10 33 2 27 2 17 A18 18 0 0 1 38 17 C38 27 30 33 20 47 Z"
+                    fill="${c}" stroke="#fff" stroke-width="1.5"/>
+              <g transform="translate(8 5)" fill="#fff">${POI_GLYPH[type]}</g>
+            </svg>`;
+        return el;
+    }
+
+    // ---- Übrige Typen: Emoji wie bisher ----
     const icons = {
-        'lock': '🔒',     // Schloss-Emoji
-        'bridge': '🌉',   // Brücken-Emoji
-        'harbor': '⚓',         // Anker-Emoji
-        'weir': '〰️',     // Wellen-Emoji
-        'dam': '🏗️' // Baustellen-Emoji
+        'lock': '🔒', 'bridge': '🌉', 'weir': '〰️', 'dam': '🏗️'
     };
-
     const colors = {
-        'lock': '#e74c3c',
-        'bridge': '#3498db',
-        'harbor': '#2ecc71',
-        'weir': '#9b59b6',
-        'dam': '#f39c12'
+        'lock': '#e74c3c', 'bridge': '#3498db', 'weir': '#9b59b6', 'dam': '#f39c12'
     };
-
-    const emoji = icons[type] || '📍'; // Standard: Pin
+    const emoji = icons[type] || '📍';
     const color = colors[type] || '#95a5a6';
 
     const el = document.createElement('div');
@@ -539,26 +571,48 @@ function createInfrastructurePopup(poi) {
         'lock': t('infraLock'),
         'bridge': t('infraBridge'),
         'harbor': t('infraHarbor'),
+        'anchorage': t('infraAnchorage'),
         'weir': t('infraWeir'),
         'dam': t('infraDam')
     };
+    const p = poi.properties || {};
+    const row = (label, val) =>
+        `<p style="margin:4px 0;font-size:12px;">${label}: <b>${escapeHTML(String(val))}</b></p>`;
 
-    let html = `<div style="min-width: 150px;">
+    let html = `<div style="min-width: 160px;">
         <h4 style="margin: 0 0 8px 0; color: #2c3e50;">${typeNames[poi.type] || poi.type}</h4>
         <p style="margin: 0; font-weight: 600;">${escapeHTML(poi.name)}</p>`;
 
-    // Wichtige Eigenschaften hinzufügen
-    if (poi.properties.height) {
-        html += `<p style="margin: 4px 0; font-size: 12px;">${t('infraHeight')}: ${poi.properties.height}</p>`;
+    // Marina/Hafen
+    if (poi.type === 'harbor') {
+        if (p.berths) html += row(t('infraBerths'), p.berths);
+        else if (p.capacity) html += row(t('infraBerths'), p.capacity);
+        if (p.vhf_channel) html += row(t('infraVHF'), p.vhf_channel);
+        // Service-Chips: nur vorhandene Ausstattung, nicht "fehlt"
+        const svc = [];
+        if (p.fuel && p.fuel !== 'no') svc.push('⛽');
+        if (p.electricity && p.electricity !== 'no') svc.push('⚡');
+        if (p.water) svc.push('🚰');
+        if (p.toilets && p.toilets !== 'no') svc.push('🚻');
+        if (p.shower && p.shower !== 'no') svc.push('🚿');
+        if (svc.length) {
+            html += `<p style="margin:6px 0 0;font-size:16px;letter-spacing:2px;">${svc.join(' ')}</p>`;
+        }
+    // Ankerplatz
+    } else if (poi.type === 'anchorage') {
+        if (p.depth) html += row(t('infraDepth'), p.depth + ' m');
+        if (p.seabed) html += row(t('infraSeabed'), p.seabed);
+    // Übrige Typen: bestehende Felder
+    } else {
+        if (p.height) html += row(t('infraHeight'), p.height);
+        if (p.clearance_height || p.max_height) html += row(t('infraClearance'), p.clearance_height || p.max_height);
+        if (p.length) html += row(t('infraLength'), p.length);
+        if (p.vhf_channel) html += row(t('infraVHF'), p.vhf_channel);
     }
-    if (poi.properties.clearance_height || poi.properties.max_height) {
-        html += `<p style="margin: 4px 0; font-size: 12px;">${t('infraClearance')}: ${poi.properties.clearance_height || poi.properties.max_height}</p>`;
-    }
-    if (poi.properties.length) {
-        html += `<p style="margin: 4px 0; font-size: 12px;">${t('infraLength')}: ${poi.properties.length}</p>`;
-    }
-    if (poi.properties.vhf_channel) {
-        html += `<p style="margin: 4px 0; font-size: 12px;">${t('infraVHF')}: ${poi.properties.vhf_channel}</p>`;
+
+    if (p.website) {
+        const url = p.website.startsWith('http') ? p.website : 'https://' + p.website;
+        html += `<p style="margin:6px 0 0;font-size:12px;"><a href="${escapeHTML(url)}" target="_blank" rel="noopener">Website ↗</a></p>`;
     }
 
     html += `</div>`;
