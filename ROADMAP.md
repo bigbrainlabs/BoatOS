@@ -17,12 +17,20 @@
 
 ## v1.8 — Safety & Comfort
 
+### Delivered
+
+| Feature | Description | Category |
+|---------|-------------|----------|
+| **Marina & anchorage POIs** | Harbours/marinas (OSM) and anchorages (OpenSeaMap seamarks) as teardrop pins on the map, with a detail popup (berths, VHF, services, depth). **Offline pre-import** every 48 h instead of a live query per map move → no rate-limiting, works without internet. Toggle in the map settings | Map |
+| **Tides (MVP)** | Tide curve of the nearest gauge (PegelOnline): current level, trend (flood/ebb), last high/low water, SVG sparkline — follows the map centre. Measured; harmonic prediction see below | Data |
+
+### Open
+
 | Feature | Description | Category |
 |---------|-------------|----------|
 | AIS collision warning | CPA/TCPA calculation — alert when collision course detected | Safety |
 | Cross-track error alert (XTE) | Warning when the boat deviates from the planned course | Safety |
-| Marina & anchorage POIs | Configurable POI database (OpenSeaMap import), region-independent | Map |
-| Tidal integration | Tide curves, automatic ETA adjustment for tidal sections | Data, Routing |
+| Tides — expansion | Harmonic **prediction** of high/low water (offline, from reference-port constants) + ETA adjustment via tidal current for tidal sections | Data, Routing |
 
 ---
 
