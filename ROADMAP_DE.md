@@ -17,12 +17,20 @@
 
 ## v1.8 — Sicherheit & Komfort
 
+### Umgesetzt
+
+| Feature | Beschreibung | Kategorie |
+|---------|-------------|-----------|
+| **Marina & Ankerplatz POIs** | Häfen/Marinas (OSM) und Ankerplätze (OpenSeaMap-Seamarks) als Tropfen-Pins auf der Karte, mit Detail-Popup (Liegeplätze, UKW, Service-Ausstattung, Tiefe). **Offline-Vorabimport** alle 48 h statt Live-Abfrage pro Kartenbewegung → kein Rate-Limit, funktioniert ohne Netz. Ein-/Ausschalter in den Karten-Settings | Karte |
+| **Gezeiten (MVP)** | Tidenkurve der nächsten Pegelstation (PegelOnline): aktueller Stand, Trend (Flut/Ebbe), letztes Hoch-/Niedrigwasser, SVG-Sparkline — folgt der Kartenmitte. Gemessen; harmonische Vorhersage siehe unten | Daten |
+
+### Offen
+
 | Feature | Beschreibung | Kategorie |
 |---------|-------------|-----------|
 | AIS-Kollisionswarnung | CPA/TCPA-Berechnung — Alert bei Kollisionskurs | Sicherheit |
 | Kursabweichungs-Alert (XTE) | Warnung wenn Boot vom geplanten Kurs abweicht | Sicherheit |
-| Marina & Ankerplatz POIs | Konfigurierbare POI-Datenbank (OpenSeaMap-Import), revier-unabhängig | Karte |
-| Gezeitenintegration | Tidenkurven, ETA-Anpassung für tideabhängige Abschnitte | Daten, Routing |
+| Gezeiten — Ausbau | Harmonische **Vorhersage** von Hoch-/Niedrigwasser (offline, aus Bezugsort-Konstanten) + ETA-Anpassung durch Tidenstrom für tideabhängige Abschnitte | Daten, Routing |
 
 ---
 
