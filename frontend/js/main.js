@@ -12,6 +12,7 @@ import * as mapModule from './map.js';
 import { initQuickActionsCarousel } from './quick-actions.js';
 import * as navigation from './navigation.js';
 import * as weather from './weather.js';
+import * as tides from './tides.js';
 import * as weatherMap from './weather-map.js';
 import * as sensors from './sensors.js';
 import * as ui from './ui.js';
@@ -471,6 +472,7 @@ window.BoatOS = {
     navigation,
     weather,
     weatherMap,
+    tides,
     sensors,
     ui,
     ais,
@@ -1041,6 +1043,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Backend-merged Settings-Stand.
         if (mapInstance && merged?.map?.showPegel === true && ais.updateWaterLevelSettings) {
             ais.updateWaterLevelSettings({ enabled: true });
+        }
+
+        // Häfen & Ankerplätze ebenso erst hier aktivieren — updateInfrastructureSettings
+        // registriert einen moveend-Listener und braucht die gesetzte Map-Referenz.
+        if (mapInstance && merged?.map?.showHarbors === true && ais.updateInfrastructureSettings) {
+            ais.updateInfrastructureSettings({ enabled: true, types: ['harbor', 'anchorage'] });
         }
     });
 

@@ -2010,9 +2010,10 @@ export function initLayerVisibility() {
     const pegelEnabled = (settings.map?.showPegel ?? settings.waterLevel?.enabled) === true;
     pegelVisible = pegelEnabled;
 
-    // Häfen & Ankerplätze standardmäßig inaktiv — Settings-Key ist map.showHarbors
+    // Häfen & Ankerplätze standardmäßig inaktiv — Settings-Key ist map.showHarbors.
+    // Hier NUR den Button-Zustand setzen; die eigentliche Aktivierung (moveend-
+    // Listener → Map-Zugriff) passiert in main.js NACH initAISModule, wie bei Pegel.
     const harborsEnabled = settings.map?.showHarbors === true;
-    if (harborsEnabled) setHarborsVisible(true);
     const harborsToggle = document.getElementById('toggle-harbors');
     if (harborsToggle) harborsToggle.classList.toggle('active', harborsEnabled);
 

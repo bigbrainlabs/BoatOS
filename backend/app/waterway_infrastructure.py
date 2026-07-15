@@ -125,11 +125,15 @@ class WaterwayInfrastructure:
             return pois
 
         except requests.exceptions.RequestException as e:
+            # NICHT [] zurueckgeben: ein leeres Ergebnis ist im Frontend nicht von
+            # "hier gibt es nichts" zu unterscheiden und wischt die aktuellen
+            # Marker weg. Weiterreichen → der Endpoint meldet einen Fehler, das
+            # Frontend behaelt die Marker.
             print(f"⚠️ Error fetching infrastructure from OSM: {e}")
-            return []
+            raise
         except Exception as e:
             print(f"⚠️ Error parsing infrastructure data: {e}")
-            return []
+            raise
 
     def _parse_element(self, element: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Parse OSM element to POI format"""

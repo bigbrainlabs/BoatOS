@@ -973,17 +973,22 @@ select option {
    POI-Tropfen-Pins (Marina / Ankerplatz)
    js/ais.js: createInfrastructureElement()
    ============================================ */
+/* WICHTIG: .poi-pin wird von MapLibre positioniert und bekommt dazu
+   `position: absolute` (aus der .maplibregl-marker-Klasse). Hier NICHT auf
+   `position: relative` setzen — das hat MapLibres absolute-Positionierung
+   überschrieben, der Marker landete im normalen Dokumentfluss und "klebte"
+   beim Zoomen/Verschieben. Die absolut positionierten Service-Punkte nehmen
+   .poi-pin (selbst absolute) ohnehin als Bezug. Auch KEIN transform/animation/
+   transition — das konkurriert mit MapLibres inline-transform. Nur Schatten. */
 .poi-pin {
-    position: relative;
     cursor: pointer;
     filter: drop-shadow(0 3px 4px rgba(11, 22, 34, 0.4));
-    animation: poi-drop 0.35s cubic-bezier(0.22, 1.2, 0.4, 1) both;
     line-height: 0;
 }
 .poi-pin svg { display: block; overflow: visible; }
-.poi-pin:hover { transform: translateY(-2px); transition: transform 0.15s; }
 
-/* Grüne Service-Punkte über der Marina (Sprit/Strom/Wasser/WC/Dusche) */
+/* Grüne Service-Punkte über der Marina (Sprit/Strom/Wasser/WC/Dusche).
+   translateX auf dem KIND ist unkritisch — MapLibre transformiert nur .poi-pin. */
 .poi-pin .poi-svc {
     position: absolute;
     left: 50%;
@@ -999,13 +1004,4 @@ select option {
     border-radius: 50%;
     background: #3a9d5d;
     border: 1px solid #fff;
-}
-
-@keyframes poi-drop {
-    from { transform: translateY(-14px); opacity: 0; }
-    to   { transform: translateY(0); opacity: 1; }
-}
-@media (prefers-reduced-motion: reduce) {
-    .poi-pin { animation: none; }
-    .poi-pin:hover { transform: none; }
 }

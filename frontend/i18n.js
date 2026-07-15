@@ -297,6 +297,7 @@ const translations = {
         // Bottom sheet tabs
         sheet_tab_route: "Route",
         sheet_tab_weather: "Wetter",
+        sheet_tab_tides: "Gezeiten",
         sheet_tab_logbook: "Logbuch",
         sheet_tab_locks: "Schleusen",
         favorites_header: "⭐ Favoriten",
@@ -797,6 +798,7 @@ const translations = {
         // Bottom sheet tabs
         sheet_tab_route: "Route",
         sheet_tab_weather: "Weather",
+        sheet_tab_tides: "Tides",
         sheet_tab_logbook: "Logbook",
         sheet_tab_locks: "Locks",
         favorites_header: "⭐ Favourites",

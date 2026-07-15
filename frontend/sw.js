@@ -4,7 +4,7 @@
  */
 
 // App shell cache — bump this version on any app update
-const CACHE_NAME = 'boatos-v40';
+const CACHE_NAME = 'boatos-v51';
 
 // Satellite tile cache — intentionally versioned separately so it is NEVER
 // wiped when the app cache version changes (tiles take a long time to download)
@@ -95,8 +95,14 @@ self.addEventListener('fetch', event => {
     }
 
     // --- App shell resources: Network-First with cache fallback ---
+    // cache:'no-store' erzwingt eine FRISCHE Netz-Antwort und umgeht den
+    // HTTP-Cache des Browsers. Ohne das konnte eine alte, HTTP-gecachte
+    // ais.js/main.js (ES-Import ohne ?v=-Query) hängenbleiben, während die
+    // versionierte CSS schon neu war → inkonsistenter Mix, sichtbar u.a. an
+    // "klebenden" Kartenmarkern. Die SW-eigene Cache-Storage-Kopie unten bleibt
+    // als Offline-Fallback erhalten.
     event.respondWith(
-        fetch(event.request)
+        fetch(event.request, { cache: 'no-store' })
             .then(response => {
                 // Store fresh copy in app cache for offline use
                 const responseClone = response.clone();
