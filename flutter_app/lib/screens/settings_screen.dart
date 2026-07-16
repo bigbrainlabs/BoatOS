@@ -33,6 +33,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     (Icons.storage, l.settingsSectionData),
     (Icons.brightness_2, l.settingsSectionDisplay),
     (Icons.system_update_alt, l.settingsSectionSystem),
+    (Icons.info_outline, 'Über'),
   ];
 
   int _sel = 0;
@@ -51,6 +52,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<String> _updateLog = [];
   Timer? _updatePollTimer;
   final _updateScrollCtrl = ScrollController();
+
+  // About / Sponsoren (live aus dem Repo, graceful bei Fehler)
+  List<Map<String, dynamic>> _sponsors = [];
+  bool _aboutLoaded = false;
 
   // Schiff
   late TextEditingController _boatName, _boatLength, _boatBeam, _boatDraft,
@@ -328,7 +333,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             final (icon, label) = sections[i];
             final sel = i == _sel;
             return InkWell(
-              onTap: () { setState(() => _sel = i); if (i == 12) _checkVersion(); if (i == 6) _fetchPiIps(); },
+              onTap: () { setState(() => _sel = i); if (i == 12) _checkVersion(); if (i == 6) _fetchPiIps(); if (i == 13) _loadAbout(); },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
@@ -370,7 +375,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             return Padding(
               padding: const EdgeInsets.only(right: 4),
               child: GestureDetector(
-                onTap: () { setState(() => _sel = i); if (i == 12) _checkVersion(); if (i == 6) _fetchPiIps(); },
+                onTap: () { setState(() => _sel = i); if (i == 12) _checkVersion(); if (i == 6) _fetchPiIps(); if (i == 13) _loadAbout(); },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -414,6 +419,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               6  => _mqtt(svc),
               11 => _display(svc),
               12 => _system(svc),
+              13 => _about(svc),
               _  => <Widget>[],
             };
             inner = Column(
@@ -1271,6 +1277,160 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await http.post(Uri.parse('http://localhost:8000/api/system/shutdown'));
     } catch (_) {}
+  }
+
+  // ── Section: Über (About) ───────────────────────────────────────────────────
+
+  Future<void> _loadAbout() async {
+    if (_verCurrent == '…') _checkVersion();   // Version holen, falls noch nicht
+    if (_aboutLoaded) return;
+    _aboutLoaded = true;
+    try {
+      final r = await http
+          .get(Uri.parse('https://raw.githubusercontent.com/bigbrainlabs/BoatOS/main/sponsors.json'))
+          .timeout(const Duration(seconds: 8));
+      if (r.statusCode == 200) {
+        final d = jsonDecode(r.body);
+        final list = (d['sponsors'] as List?) ?? const [];
+        _sponsors = list
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    } catch (_) {
+      _sponsors = [];   // offline/Fehler → leere Liste, kein Absturz
+    }
+    if (mounted) setState(() {});
+  }
+
+  List<Widget> _about(SettingsService s) {
+    const accent = Color(0xFF4FC3F7);
+    const text   = Color(0xFFE6EDF3);
+    const dim    = Color(0xFF8B98A5);
+    const cardBg = Color(0xFF161B22);
+    const border = Color(0xFF30363D);
+
+    Widget card(Widget child) => Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: border),
+          ),
+          child: child,
+        );
+
+    List<String> byTier(String t) => _sponsors
+        .where((x) => x['tier'] == t && '${x['name'] ?? ''}'.isNotEmpty)
+        .map((x) => '${x['name']}')
+        .toList();
+    final firstMates = byTier('first_mate');
+    // Crew + Einträge mit unbekanntem Tier (nicht verschlucken)
+    final crew = <String>[
+      ...byTier('crew'),
+      ..._sponsors
+          .where((x) => x['name'] != null && x['tier'] != 'first_mate' && x['tier'] != 'crew')
+          .map((x) => '${x['name']}'),
+    ];
+
+    Widget tierBlock(String label, List<String> names) => names.isEmpty
+        ? const SizedBox.shrink()
+        : Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label,
+                  style: const TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w700, color: accent, letterSpacing: 0.6)),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: names
+                    .map((n) => Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF21262D),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: border),
+                          ),
+                          child: Text(n, style: const TextStyle(fontSize: 14, color: text)),
+                        ))
+                    .toList(),
+              ),
+            ]),
+          );
+
+    Widget linkRow(String icon, String label, String url) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(icon, style: const TextStyle(fontSize: 16)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(label, style: const TextStyle(fontSize: 14, color: text)),
+                Text(url, style: const TextStyle(fontSize: 11, color: dim)),
+              ]),
+            ),
+          ]),
+        );
+
+    final hasSponsors = firstMates.isNotEmpty || crew.isNotEmpty;
+
+    return [
+      const SizedBox(height: 12),
+      Center(
+        child: Column(children: [
+          Container(
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFF0C1929), Color(0xFF1E3A5F)]),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Icon(Icons.sailing, color: accent, size: 42),
+          ),
+          const SizedBox(height: 10),
+          const Text('BoatOS',
+              style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: text, letterSpacing: 0.5)),
+          Text(_verCurrent, style: const TextStyle(fontSize: 13, color: accent)),
+          const SizedBox(height: 6),
+          const Text('Open Source Marine OS for Raspberry Pi',
+              style: TextStyle(fontSize: 13, color: dim)),
+        ]),
+      ),
+      _header('Danke an'),
+      card(hasSponsors
+          ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              tierBlock('First Mate', firstMates),
+              tierBlock('Crew', crew),
+            ])
+          : const Text('Noch keine Einträge — oder offline.',
+              style: TextStyle(fontSize: 13, color: dim))),
+      _header('Links'),
+      card(Column(children: [
+        linkRow('🐙', 'GitHub', 'github.com/bigbrainlabs/BoatOS'),
+        linkRow('📕', 'Buchreihe (DE)', 'amzn.to/4e5swN6'),
+        linkRow('📗', 'Buchreihe (EN)', 'amzn.to/4vxWr5W'),
+        linkRow('🎗️', 'Patreon', 'patreon.com/cw/logbook_without_posing'),
+      ])),
+      _header('Unterstützen'),
+      card(Column(children: [
+        linkRow('💜', 'GitHub Sponsors', 'github.com/sponsors/bigbrainlabs'),
+        linkRow('🎗️', 'Patreon', 'patreon.com/cw/logbook_without_posing'),
+      ])),
+      _header('Haftungsausschluss'),
+      card(const Text(
+        'BoatOS wird ohne jede Gewähr bereitgestellt („as is"), die Nutzung erfolgt auf eigenes Risiko. '
+        'Für Schäden an Hard- oder Software, am Boot, an Personen oder für Folgeschäden wird keine Haftung '
+        'übernommen. BoatOS ersetzt keine amtlichen Seekarten und keine sorgfältige Navigation — verlasse '
+        'dich niemals allein auf diese Software.',
+        style: TextStyle(fontSize: 12, height: 1.5, color: dim),
+      )),
+      const SizedBox(height: 14),
+      const Center(child: Text('Lizenz: GPL-3.0 · 🐾', style: TextStyle(fontSize: 12, color: dim))),
+      const SizedBox(height: 8),
+    ];
   }
 
   Widget _header(String title) => Padding(
