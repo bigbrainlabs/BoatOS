@@ -1005,3 +1005,60 @@ select option {
     background: #3a9d5d;
     border: 1px solid #fff;
 }
+
+/* ============================================
+   ABOUT / Über-Seite (Settings-Tab about)
+   js/settings/tabs/about.js
+   ============================================ */
+.about-hero { text-align: center; padding: var(--space-lg) 0 var(--space-2xl); }
+.about-logo { width: 72px; height: 72px; margin-bottom: var(--space-md); }
+.about-title { font-size: var(--fs-4xl); font-weight: 800; letter-spacing: 0.5px; color: var(--text); }
+.about-version { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--fs-base); color: var(--accent); margin-top: 2px; }
+.about-tagline { color: var(--text-dim); font-size: var(--fs-base); margin-top: var(--space-sm); }
+
+.about-sponsors { display: flex; flex-direction: column; gap: var(--space-md); }
+.about-sponsors-loading, .about-sponsors-empty { color: var(--text-dim); font-size: var(--fs-sm); }
+.about-tier-label {
+    font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--accent); font-weight: 700; margin-bottom: var(--space-xs);
+}
+.about-tier-names { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.about-sponsor {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-2xl);
+    padding: 4px 12px; font-size: var(--fs-base); color: var(--text);
+}
+
+.about-links { display: flex; flex-direction: column; gap: var(--space-sm); }
+.about-link {
+    display: flex; align-items: center; gap: var(--space-md);
+    padding: var(--space-md); background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius-md); color: var(--text); text-decoration: none; font-size: var(--fs-lg);
+}
+.about-link:hover { border-color: var(--accent); }
+
+.about-support { display: flex; gap: var(--space-md); flex-wrap: wrap; }
+.about-btn {
+    flex: 1; min-width: 150px; text-align: center; text-decoration: none;
+    padding: var(--space-md); border-radius: var(--radius-md); font-weight: 700; font-size: var(--fs-lg);
+    color: #fff;
+}
+.about-btn-github  { background: #6f42c1; }
+.about-btn-patreon { background: #ff424d; }
+.about-btn:hover { filter: brightness(1.08); }
+
+.about-foot {
+    text-align: center; color: var(--text-dim); font-size: var(--fs-sm);
+    margin-top: var(--space-2xl); padding-top: var(--space-lg); border-top: 1px solid var(--border);
+}
+
+/* Haftungsausschluss auf der About-Seite — dezent, gut lesbar */
+.about-disclaimer {
+    margin: 0;
+    font-size: var(--fs-sm);
+    line-height: 1.6;
+    color: var(--text-dim);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+}
