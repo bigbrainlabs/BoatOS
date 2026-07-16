@@ -62,5 +62,7 @@ jobs:
             - `app.so` — Helm-App (Flutter, arm64 generic)
           files: flutter_app/build/flutter-pi/aarch64-generic/app.so
           draft: false
-          prerelease: false
-          make_latest: true
+          # Vorab-Tags (v1.8.0-rc6 …) sind Prereleases und NICHT "Latest";
+          # nur stabile Tags (v1.8.0) werden Latest. Erkennung am "-" im Tag.
+          prerelease: ${{ contains(steps.tag.outputs.TAG, '-') }}
+          make_latest: ${{ !contains(steps.tag.outputs.TAG, '-') }}
