@@ -1,5 +1,8 @@
 # ⚓ BoatOS
 
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/bigbrainlabs?style=flat&logo=github&label=Sponsor&color=pink)](https://github.com/sponsors/bigbrainlabs)
+[![Patreon](https://img.shields.io/badge/Patreon-Support-orange?style=flat&logo=patreon)](https://www.patreon.com/cw/logbook_without_posing)
+
 > **Modern Marine Navigation System — Open Source, Touch-Optimized, Offline-First**
 
 A complete marine navigation system for inland waterways and coastal navigation. Built for Raspberry Pi with touchscreen, runs completely offline, no subscriptions, no cloud lock-in.
