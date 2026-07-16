@@ -15,6 +15,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # volle Historie + Tags, damit der Changelog gebaut werden kann
 
       - name: Install arm64 cross-compiler
         run: |
@@ -41,6 +43,27 @@ jobs:
         id: tag
         run: echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
+      - name: Changelog seit letztem Release
+        id: changelog
+        run: |
+          TAG="${{ steps.tag.outputs.TAG }}"
+          # vorheriges Tag (vom Eltern-Commit aus gesehen); leer beim allerersten Release
+          PREV=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
+          if [ -n "$PREV" ]; then
+            RANGE="${PREV}..${TAG}"
+          else
+            RANGE="${TAG}"
+          fi
+          # Merge-Commits und Version-Bumps rausfiltern
+          LOG=$(git log --no-merges --pretty=format:'- %s' "$RANGE" \
+                | grep -viE 'bump version|^- Merge ' || true)
+          [ -z "$LOG" ] && LOG="- (keine nennenswerten Änderungen)"
+          {
+            echo "BODY<<CHANGELOG_EOF"
+            echo "$LOG"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -48,6 +71,9 @@ jobs:
           name: BoatOS ${{ steps.tag.outputs.TAG }}
           body: |
             ## BoatOS ${{ steps.tag.outputs.TAG }}
+
+            ### Änderungen seit dem letzten Release
+            ${{ steps.changelog.outputs.BODY }}
 
             ### Automatisches Update
             In BoatOS → Einstellungen → System → **Jetzt aktualisieren** tippen.
