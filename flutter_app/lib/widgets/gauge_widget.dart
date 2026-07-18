@@ -869,6 +869,18 @@ class _HorizonDisplay extends StatelessWidget {
   Widget build(BuildContext context) {
     final rs = roll  >= 0 ? '+' : '';
     final ps = pitch >= 0 ? '+' : '';
+
+    Widget graphic() => LayoutBuilder(builder: (_, bc) {
+          final dim = math.min(bc.maxWidth, bc.maxHeight);
+          return Center(
+            child: SizedBox.square(
+              dimension: dim,
+              child: CustomPaint(
+                  painter: _HorizonPainter(roll: roll, pitch: pitch)),
+            ),
+          );
+        });
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
@@ -879,35 +891,61 @@ class _HorizonDisplay extends StatelessWidget {
         ),
       ),
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-      child: Column(
-        children: [
-          const Text('Lage',
-              style: TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
-          const SizedBox(height: 4),
-          Expanded(
-            child: LayoutBuilder(builder: (_, bc) {
-              final dim = math.min(bc.maxWidth, bc.maxHeight);
-              return Center(
-                child: SizedBox.square(
-                  dimension: dim,
-                  child: CustomPaint(
-                      painter: _HorizonPainter(roll: roll, pitch: pitch)),
-                ),
-              );
-            }),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+      child: LayoutBuilder(builder: (_, box) {
+        // Breite, flache Kacheln (häufig im Dashboard): Grafik links über die
+        // VOLLE Höhe, Titel + Roll/Pitch rechts daneben statt darunter. Sonst ist
+        // der Horizont-Kreis auf die kleine Kachelhöhe beschränkt (quadratisch)
+        // und schrumpft zu einem unlesbaren Fleck, während die Breite leer bleibt.
+        final wide = box.maxWidth > box.maxHeight * 1.25;
+        if (wide) {
+          return Row(
             children: [
-              _val('$rs${roll.toStringAsFixed(1)}°', 'Roll'),
-              const SizedBox(width: 20),
-              _val('$ps${pitch.toStringAsFixed(1)}°', 'Pitch'),
+              Expanded(flex: 3, child: graphic()),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Lage',
+                        style:
+                            TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
+                    const SizedBox(height: 10),
+                    _val('$rs${roll.toStringAsFixed(1)}°', 'Roll'),
+                    const SizedBox(height: 8),
+                    _val('$ps${pitch.toStringAsFixed(1)}°', 'Pitch'),
+                  ],
+                ),
+              ),
             ],
-          ),
-          const SizedBox(height: 2),
-        ],
-      ),
+          );
+        }
+
+        // Hohe/quadratische Kachel: Grafik oben, Werte darunter. In sehr flachen
+        // schmalen Kacheln die Zahlen weglassen, damit der Kreis nicht schrumpft.
+        final showVals = box.maxHeight > 150;
+        return Column(
+          children: [
+            const Text('Lage',
+                style: TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
+            const SizedBox(height: 4),
+            Expanded(child: graphic()),
+            if (showVals) ...[
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _val('$rs${roll.toStringAsFixed(1)}°', 'Roll'),
+                  const SizedBox(width: 20),
+                  _val('$ps${pitch.toStringAsFixed(1)}°', 'Pitch'),
+                ],
+              ),
+              const SizedBox(height: 2),
+            ],
+          ],
+        );
+      }),
     );
   }
 
