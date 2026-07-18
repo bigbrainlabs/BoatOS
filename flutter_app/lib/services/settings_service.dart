@@ -59,6 +59,7 @@ class SettingsService extends ChangeNotifier {
   }
 
   Future<void> load() async {
+    if (loading) return; // ein Ladevorgang genügt — verhindert gestapelte Polls
     loading = true;
     error = null;
     notifyListeners();
@@ -80,10 +81,6 @@ class SettingsService extends ChangeNotifier {
             _gpsDevice = json.decode(r2.body) as Map<String, dynamic>;
           }
           error = null;
-          _pollTimer ??= Timer.periodic(
-            const Duration(seconds: 60),
-            (_) => load(),
-          );
           break; // success
         }
       } catch (_) {
@@ -92,6 +89,12 @@ class SettingsService extends ChangeNotifier {
         }
       }
     }
+
+    // Poll-Timer IMMER armen — auch wenn das Erstladen scheiterte. Beim Boot kann
+    // das Backend erst NACH dem ~30s-Retry-Fenster bereit sein (Boot-Race); der
+    // 60s-Poll heilt Settings/Dashboard dann selbst, sobald das Backend kommt.
+    // (Früher wurde der Timer nur im Erfolgsfall gearmt → dauerhaft leer.)
+    _pollTimer ??= Timer.periodic(const Duration(seconds: 60), (_) => load());
 
     loading = false;
     notifyListeners();

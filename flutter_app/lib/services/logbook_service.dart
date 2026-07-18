@@ -126,16 +126,31 @@ class LogbookService extends ChangeNotifier {
     _loadingTrips = true;
     _error = null;
     notifyListeners();
-    try {
-      final r = await http.get(Uri.parse('$_base/api/logbook/trips'));
-      if (r.statusCode == 200) {
-        final data = json.decode(r.body);
-        final list = data is List ? data : (data['trips'] as List<dynamic>? ?? []);
-        _trips = list.map((e) => TripSummary.fromJson(e as Map<String, dynamic>)).toList();
+
+    // Retry bei Verbindungsfehlern — beim Boot kann das Backend noch nicht
+    // bereit sein (Boot-Race). Auf eine echte Server-Antwort NICHT weiter hämmern.
+    const maxAttempts = 8;
+    const retryDelay = Duration(seconds: 2);
+    for (int attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        final r = await http
+            .get(Uri.parse('$_base/api/logbook/trips'))
+            .timeout(const Duration(seconds: 5));
+        if (r.statusCode == 200) {
+          final data = json.decode(r.body);
+          final list = data is List ? data : (data['trips'] as List<dynamic>? ?? []);
+          _trips = list.map((e) => TripSummary.fromJson(e as Map<String, dynamic>)).toList();
+          _error = null;
+        }
+        break; // Server hat geantwortet — fertig
+      } catch (e) {
+        _error = e.toString();
+        if (attempt < maxAttempts - 1) {
+          await Future.delayed(retryDelay);
+        }
       }
-    } catch (e) {
-      _error = e.toString();
     }
+
     _loadingTrips = false;
     notifyListeners();
   }
