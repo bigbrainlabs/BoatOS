@@ -941,6 +941,11 @@ class _HorizonPainter extends CustomPainter {
     final r  = math.min(cx, cy) - 14.0;
     if (r < 10) return;
 
+    // Kleine Dashboard-Kacheln: die volle Flug-Attitude-Detailfülle (Pitch-
+    // Gradzahlen, Boots-Silhouette, alle Roll-Striche) wird zu unlesbarem
+    // Gewusel. Ab hier vereinfachen.
+    final compact = r < 66;
+
     final rollRad = roll  * math.pi / 180;
     final pitchPx = pitch * r / _kDegPerR;
     final bigR    = r * 2.4;
@@ -972,7 +977,7 @@ class _HorizonPainter extends CustomPainter {
       ).createShader(seaRect));
 
     // Pitch scale lines
-    _drawPitchLines(canvas, r);
+    _drawPitchLines(canvas, r, compact);
 
     // Horizon glow
     canvas.drawLine(Offset(-bigR, 0), Offset(bigR, 0), Paint()
@@ -1001,7 +1006,7 @@ class _HorizonPainter extends CustomPainter {
     canvas.restore(); // end clip
 
     // ── Roll scale (outside clip, around rim) ─────────────────────────────────
-    _drawRollScale(canvas, c, r);
+    _drawRollScale(canvas, c, r, compact);
 
     // ── Bezel ring ────────────────────────────────────────────────────────────
     canvas.drawCircle(c, r, Paint()
@@ -1012,24 +1017,26 @@ class _HorizonPainter extends CustomPainter {
     canvas.save();
     canvas.clipPath(
         Path()..addOval(Rect.fromCircle(center: c, radius: r - 1)));
-    _drawFixedReticle(canvas, c, r);
+    _drawFixedReticle(canvas, c, r, compact);
     canvas.restore();
   }
 
-  void _drawPitchLines(Canvas canvas, double r) {
+  void _drawPitchLines(Canvas canvas, double r, bool compact) {
     final pxPerDeg = r / _kDegPerR;
     final major = Paint()
       ..color = Colors.white.withOpacity(0.55)..strokeWidth = 1.5;
     final minor = Paint()
       ..color = Colors.white.withOpacity(0.28)..strokeWidth = 1.0;
 
-    for (int deg = -60; deg <= 60; deg += 5) {
+    // Kleine Kachel: nur die 10°-Striche, keine Zwischenstriche, keine Zahlen
+    final step = compact ? 10 : 5;
+    for (int deg = -60; deg <= 60; deg += step) {
       if (deg == 0) continue;
       final y  = -deg * pxPerDeg;
       final isMajor = deg % 10 == 0;
       final hl = isMajor ? r * 0.28 : r * 0.14;
       canvas.drawLine(Offset(-hl, y), Offset(hl, y), isMajor ? major : minor);
-      if (isMajor) {
+      if (isMajor && !compact) {
         final tp = TextPainter(
           text: TextSpan(
               text: deg.abs().toString(),
@@ -1042,8 +1049,12 @@ class _HorizonPainter extends CustomPainter {
     }
   }
 
-  void _drawRollScale(Canvas canvas, Offset c, double r) {
-    const kAngles = [-60, -45, -30, -20, -10, 0, 10, 20, 30, 45, 60];
+  void _drawRollScale(Canvas canvas, Offset c, double r, bool compact) {
+    // Kleine Kachel: nur die Hauptmarken (0/±30/±60), sonst wirkt der Rand
+    // wie ein Sonnen-Burst.
+    const kAll     = [-60, -45, -30, -20, -10, 0, 10, 20, 30, 45, 60];
+    const kMajors  = [-60, -30, 0, 30, 60];
+    final kAngles  = compact ? kMajors : kAll;
     for (final deg in kAngles) {
       final rad     = (deg - 90.0) * math.pi / 180;
       final isMajor = deg % 30 == 0 || deg == 0;
@@ -1068,7 +1079,28 @@ class _HorizonPainter extends CustomPainter {
     canvas.drawPath(fixPath, Paint()..color = Colors.white.withOpacity(0.80));
   }
 
-  void _drawFixedReticle(Canvas canvas, Offset c, double r) {
+  void _drawFixedReticle(Canvas canvas, Offset c, double r, bool compact) {
+    // Kleine Kachel: schlichtes Zentrum statt der detaillierten Boots-Silhouette
+    // (die wird bei der Größe nur ein Blob). Kurze Flügel + Mittelpunkt.
+    if (compact) {
+      final wing = r * 0.42;
+      final gap  = r * 0.12;
+      final sh = Paint()
+        ..color = Colors.black.withOpacity(0.4)
+        ..strokeWidth = 3.5
+        ..strokeCap = StrokeCap.round;
+      final wh = Paint()
+        ..color = Colors.white.withOpacity(0.9)
+        ..strokeWidth = 2.0
+        ..strokeCap = StrokeCap.round;
+      for (final p in [sh, wh]) {
+        canvas.drawLine(Offset(c.dx - wing, c.dy), Offset(c.dx - gap, c.dy), p);
+        canvas.drawLine(Offset(c.dx + gap, c.dy), Offset(c.dx + wing, c.dy), p);
+      }
+      canvas.drawCircle(c, 2.6, Paint()..color = Colors.white.withOpacity(0.95));
+      return;
+    }
+
     final shadow = Paint()
       ..color = Colors.black.withOpacity(0.35)
       ..strokeWidth = 3.0
