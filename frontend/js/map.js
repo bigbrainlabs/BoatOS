@@ -333,6 +333,9 @@ function _snapshotDynamicSources() {
 function _restoreAfterStyleChange(snap) {
     if (!map) return;
 
+    // sky ist eine STYLE-Eigenschaft — setStyle() wirft sie mit weg.
+    _applySky();
+
     // Route, Segmente und Track aus dem Snapshot zurückspielen
     if (snap && snap.sources) {
         for (const [id, data] of Object.entries(snap.sources)) {
@@ -563,9 +566,17 @@ export async function initMap(options = {}) {
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-left');
     map.addControl(new PitchControl(), 'bottom-left');   // nur in der 3D-Ansicht sichtbar
 
+    // Himmel/Wolken an jede Kamerabewegung koppeln (Horizontlinie wandert mit
+    // Neigung und Zoom). 'move' feuert auch waehrend easeTo — also auch
+    // waehrend der 3D-Kamerafahrt.
+    map.on('move', _updateSkyOverlay);
+    map.on('resize', _updateSkyOverlay);
+
     // Nach vollstaendigem Laden weitere Layer hinzufuegen
     map.on('load', () => {
         console.log('Karte geladen');
+        _applySky();
+        _ensureSkyOverlay();
         if (tileserverOk) {
             addLabelsLayer();
         } else {
@@ -1389,6 +1400,80 @@ export function toggleCourseUp() {
 function _updateCourseUpButton() {
     const ring = document.getElementById('compass-active-ring');
     if (ring) ring.setAttribute('opacity', courseUpMode ? '1' : '0');
+}
+
+/* ── Himmel in der 3D-Ansicht ────────────────────────────────────────────────
+ *
+ * Zwei Ebenen, bewusst getrennt:
+ *  1. Der VERLAUF kommt von MapLibre selbst (map.setSky, seit 4.x im Style-Spec):
+ *     kraeftiges Blau im Zenit, heller Dunst zum Horizont, plus Fog, der die
+ *     Karte in der Ferne ausblendet. Das rendert die GPU im Karten-Shader —
+ *     also korrekt hinter allem und ohne eigenes Zutun bei jeder Neigung.
+ *  2. Die WOLKEN sind ein DOM-Overlay ueber dem Canvas. MapLibre kann keine
+ *     Wolken; ein three.js-Skydome waere fuer den Pi zu teuer. Zwei driftende
+ *     Schichten aus CSS-Radial-Gradienten geben Parallaxe. Bewusst KEIN
+ *     filter: blur() — das erzeugt auf der Pi-GPU Artefakte (siehe Seezeichen).
+ *
+ * Der Nachtmodus braucht keine Sonderbehandlung: der Rotfilter aus theme.css
+ * liegt auf #map und damit auf Canvas UND Overlay.
+ */
+function _applySky() {
+    if (!map || typeof map.setSky !== 'function') return;
+    try {
+        map.setSky({
+            'sky-color': '#4b8fd6',          // Zenit
+            'horizon-color': '#cfe4f5',      // Dunst kurz ueber dem Horizont
+            'fog-color': '#e3edf5',          // Ferne der Karte
+            'sky-horizon-blend': 0.7,        // wie weit das Blau nach unten reicht
+            'horizon-fog-blend': 0.55,
+            'fog-ground-blend': 0.35,
+        });
+    } catch (_) { /* aeltere MapLibre ohne sky-Spec: dann eben ohne */ }
+}
+
+let _skyEl = null;
+
+function _ensureSkyOverlay() {
+    if (_skyEl || !map) return;
+    const host = map.getCanvasContainer && map.getCanvasContainer();
+    const canvas = map.getCanvas && map.getCanvas();
+    if (!host || !canvas) return;
+    const el = document.createElement('div');
+    el.className = 'map-sky';
+    el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = '<div class="map-sky-clouds far"></div><div class="map-sky-clouds near"></div>';
+    // Direkt hinter den Canvas: Marker haengen im selben Container und werden
+    // spaeter angehaengt — sie bleiben damit ueber den Wolken.
+    canvas.insertAdjacentElement('afterend', el);
+    _skyEl = el;
+    _updateSkyOverlay();
+}
+
+/**
+ * Setzt die Hoehe des Wolkenbands auf die Horizontlinie.
+ *
+ * transform.getHorizon() liefert den Abstand der Horizontlinie von der
+ * Bildmitte — dieselbe Rechnung nutzt MapLibre intern fuer den Sky-Shader und
+ * fuer getBounds(). Interne API: faellt sie weg, bleibt das Band einfach leer
+ * (der Verlauf aus setSky ist davon unabhaengig und bleibt sichtbar).
+ */
+function _updateSkyOverlay() {
+    if (!map || !_skyEl) return;
+    let y = 0;
+    try {
+        const t = map.transform;
+        const h = (map.getContainer() && map.getContainer().clientHeight) || 0;
+        if (t && typeof t.getHorizon === 'function') {
+            // 1.3× : bis zur Horizontlinie reicht der sky-Verlauf, darunter
+            // folgt noch der Dunststreifen bis zum Kartenrand (Far-Plane). Die
+            // Wolken duerfen leicht hineinlaufen — die Maske blendet sie dort
+            // ohnehin aus, und ein harter Schnitt genau auf der Linie faellt
+            // staerker auf als ein paar ferne Wolken im Dunst.
+            const horizonY = h / 2 - t.getHorizon();
+            y = Math.max(0, Math.min(h, horizonY * 1.3));
+        }
+    } catch (_) { y = 0; }
+    _skyEl.style.height = Math.round(y) + 'px';
 }
 
 // 3D-/Look-ahead-Perspektive: Karte gekippt + head-up + Boot in die untere
