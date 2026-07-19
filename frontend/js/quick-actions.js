@@ -18,6 +18,16 @@ let _swipeMoved = false;
 let _arrowL = null;
 let _arrowR = null;
 let _strip = null;      // Karussell-Container (.quick-actions) — gibt die nutzbare Breite vor
+const GAP_LOOSE = 0.92;   // Wunschabstand zwischen zwei Kacheln (× Kachelbreite)
+const GAP_TIGHT = 0.78;   // engster erlaubter Abstand, bevor eine Position wegfaellt
+const MAX_HALF  = 3;      // hoechstens 7 sichtbar (nur in der breiten Darstellung)
+
+let _gapFactor = GAP_LOOSE;   // aktueller Abstandsfaktor (siehe _computeHalf)
+
+/** Skalierung des Elements an Position |d| (muss zu _layout passen). */
+function _scaleAt(ad) {
+    return Math.max(0.4, 1 - ad * 0.16);
+}
 
 /**
  * Wie viele Elemente passen je Seite neben das mittlere?
@@ -26,24 +36,48 @@ let _strip = null;      // Karussell-Container (.quick-actions) — gibt die nut
  * Auf dem Handy standen 3 Elemente in der Mitte, links und rechts blieb die
  * halbe Zeile leer. Jetzt aus der TATSAECHLICH verfuegbaren Breite gerechnet —
  * abzueglich der beiden Pfeile — sodass die Zeile immer voll genutzt wird.
+ *
+ * Zwei Korrekturen gegenueber der ersten Fassung, damit 7 Elemente frueher
+ * greifen statt erst auf sehr breiten Fenstern:
+ *  - Die aeusseren Kacheln sind HERUNTERSKALIERT (_scaleAt). Vorher wurde fuer
+ *    jede Position die volle Kachelbreite reserviert — der Arc galt als zu
+ *    breit und fiel unnoetig auf 5 zurueck.
+ *  - Reicht es knapp nicht, wird erst der Abstand bis GAP_TIGHT gestrafft,
+ *    bevor eine Position aufgegeben wird. Enger zusammenruecken sieht besser
+ *    aus als eine halb leere Zeile.
  */
 function _computeHalf() {
     const w = (_els[0] && _els[0].offsetWidth) || 58;
-    const spacing = w * 0.92;
     const arrows = 2 * ((_arrowL && _arrowL.offsetWidth) || 30) + 24;   // + Luft
     // Breite des KARUSSELLS, nicht des Fensters: links und rechts sind Spalten
     // fuer Karten-Tasten und FABs reserviert (siehe rondell.css). Mit der
     // Fensterbreite gerechnet wuerde das Rondell in diese Spalten hineinwachsen.
     const box = (_strip && _strip.clientWidth) || (window.innerWidth || 800);
-    const avail = box - arrows;
-    // (2*half) * spacing + w  <=  avail
-    const half = Math.floor((avail - w) / (2 * spacing));
-    return Math.max(1, Math.min(3, half));   // mind. 3, hoechstens 7 sichtbar
+    // Unterhalb des CSS-Breakpoints (schmale, vertikale Kacheln) bleibt es bei
+    // der bisherigen Rechnung — die Handy-/Tablet-Ansicht soll sich NICHT
+    // aendern. Die genauere Formel unten greift nur in der breiten Darstellung.
+    if ((window.innerWidth || 800) < 768) {
+        _gapFactor = GAP_LOOSE;
+        const half = Math.floor((box - arrows - w) / (2 * w * GAP_LOOSE));
+        return Math.max(1, Math.min(MAX_HALF, half));
+    }
+
+    const halfAvail = (box - arrows) / 2;
+    for (let half = MAX_HALF; half > 1; half--) {
+        // halfAvail >= half * (w * gap) + (w * scale(half)) / 2   → nach gap aufloesen
+        const gap = (halfAvail - (w * _scaleAt(half)) / 2) / (half * w);
+        if (gap >= GAP_TIGHT) {
+            _gapFactor = Math.min(GAP_LOOSE, gap);
+            return half;
+        }
+    }
+    _gapFactor = GAP_LOOSE;
+    return 1;
 }
 
 function _spacing() {
     const w = (_els[0] && _els[0].offsetWidth) || 64;
-    return w * 0.92;
+    return w * _gapFactor;
 }
 
 export function rotateQuickActions(dir) {
@@ -72,10 +106,15 @@ function _layout() {
             return;
         }
         const x = d * spacing;
-        const scale = 1 - ad * 0.16;
-        const opacity = 1 - ad * 0.32;
-        const ry = -d * 16;                     // Arc-Rotation
-        const tz = -ad * 38;                    // nach hinten in die Tiefe
+        const scale = _scaleAt(ad);
+        // Fade/Tiefe werden GESTRECKT, sobald mehr als 5 sichtbar sind: mit dem
+        // festen Schritt 0.32 laege das aeusserste Element bei 7 Sichtbaren
+        // (ad=3) auf Deckkraft 0.04 — praktisch unsichtbar. So endet der Arc
+        // immer bei ~0.36, und bei _half 1/2 rechnet es exakt wie vorher.
+        const k = Math.max(2, _half);
+        const opacity = 1 - ad * (0.64 / k);
+        const ry = -d * (32 / k);               // Arc-Rotation
+        const tz = -ad * (76 / k);              // nach hinten in die Tiefe
         el.style.opacity = String(opacity);
         el.style.pointerEvents = 'auto';
         el.style.zIndex = String(100 - ad);
@@ -94,7 +133,7 @@ function _layout() {
 function _positionArrows(spacing) {
     if (!_arrowL || !_arrowR) return;
     const w = (_els[0] && _els[0].offsetWidth) || 58;
-    const outerScale = Math.max(0.4, 1 - _half * 0.16);
+    const outerScale = _scaleAt(_half);
     const edge = _half * spacing + (w * outerScale) / 2 + 6;
     const arrowW = _arrowL.offsetWidth || 30;
     _arrowL.style.left = `calc(50% - ${edge + arrowW}px)`;
