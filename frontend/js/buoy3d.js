@@ -144,37 +144,61 @@
     }
 
     /**
-     * Tonnen-Cache: fertige Meshes ueber Rebuilds hinweg wiederverwenden.
+     * Tonnen-Bestand: EINE dauerhafte Szene, die Tonnen bleiben darin.
      *
-     * Ohne ihn baut jeder Rebuild (max. alle 500 ms) ALLE sichtbaren Tonnen neu
-     * auf — bei bis zu MAX_BUOYS je ein Group mit mehreren Geometrien und
-     * Materialien. Das sind tausende Objekte samt GPU-Upload in einem Rutsch,
-     * und der Main-Thread steht so lange. In der Simulation war genau das als
-     * regelmaessiges Stocken sichtbar (nur in 3D, weil es die Betonnung nur
-     * dort gibt).
+     * Frueher baute jeder Rebuild (max. alle 500 ms) eine neue Szene mit ALLEN
+     * sichtbaren Tonnen — bei bis zu MAX_BUOYS je ein Group mit mehreren
+     * Geometrien und Materialien. Das sind tausende Objekte samt GPU-Upload in
+     * einem Rutsch, und der Main-Thread steht so lange. In der Simulation war
+     * das als regelmaessiges Stocken sichtbar (nur in 3D, weil es die
+     * Betonnung nur dort gibt).
      *
-     * Beim Fahren bleibt der Grossteil der Tonnen ja dieselbe Menge — neu zu
-     * bauen sind nur die, die gerade in Sicht kommen. Der Cache haelt sie am
-     * Schluessel (Position auf ~1 m), damit ein Rebuild fast nur noch aus
-     * Umhaengen und Neupositionieren besteht.
+     * Beim Fahren bleibt der Grossteil der Tonnen dieselbe Menge. Ein Rebuild
+     * ist deshalb nur noch ein Abgleich: neu Hinzugekommene bauen, alle
+     * Positionen (die relativ zum Kartenmittelpunkt sind) nachziehen,
+     * Verschwundene ausblenden.
+     *
+     * WEM GEHOEREN DIE MESHES: ausschliesslich dieser Map. Die Szene ist nur
+     * Anzeige — sie wird nie ersetzt und gibt nie etwas frei. Damit gibt es
+     * genau einen Ort, an dem disposed wird (_dropBuoy), und keine Situation
+     * mehr, in der eine "alte" Szene noch benutzte Geometrien mitreisst.
      */
-    const _buoyCache = new Map();     // key → THREE.Group
-    const MAX_CACHE = 3 * MAX_BUOYS;
-    let _cacheSize = SIZE.m;          // Groesse, mit der der Cache gebaut wurde
+    const _buoys = new Map();         // key → THREE.Group (Eigentuemer)
+    const MAX_BUOY_POOL = 3 * MAX_BUOYS;
+    let _builtSize = SIZE.m;          // Groesse, mit der die Tonnen gebaut wurden
 
-    function _clearCache() {
-        _buoyCache.forEach(_disposeObject);
-        _buoyCache.clear();
+    /** Legt die Szene samt Licht einmalig an; danach immer dieselbe. */
+    function _ensureScene(THREE) {
+        if (CTX.scene) return CTX.scene;
+        const scene = new THREE.Scene();
+        scene.add(new THREE.AmbientLight(0xffffff, 0.95));
+        const dir = new THREE.DirectionalLight(0xffffff, 0.7);
+        dir.position.set(0.4, 1, 0.5);
+        scene.add(dir);
+        CTX.scene = scene;
+        return scene;
     }
 
-    /** Haelt den Cache klein: aelteste Eintraege raus, die gerade nicht sichtbar sind. */
-    function _trimCache(seen) {
-        if (_buoyCache.size <= MAX_CACHE) return;
-        for (const key of _buoyCache.keys()) {
-            if (_buoyCache.size <= MAX_CACHE) break;
+    /** Einzige Stelle, die eine Tonne freigibt: aus Szene UND Bestand raus. */
+    function _dropBuoy(key) {
+        const b = _buoys.get(key);
+        if (!b) return;
+        if (b.parent) b.parent.remove(b);
+        _disposeObject(b);
+        _buoys.delete(key);
+    }
+
+    function _clearBuoys() {
+        Array.from(_buoys.keys()).forEach(_dropBuoy);
+    }
+
+    /** Haelt den Bestand klein: aelteste Tonnen raus, die gerade nicht sichtbar sind. */
+    function _trimBuoys(seen) {
+        if (_buoys.size <= MAX_BUOY_POOL) return;
+        for (const key of Array.from(_buoys.keys())) {
+            if (_buoys.size <= MAX_BUOY_POOL) break;
             if (seen.has(key)) continue;      // gerade sichtbar → behalten
-            _disposeObject(_buoyCache.get(key));
-            _buoyCache.delete(key);
+            _dropBuoy(key);
         }
     }
 
@@ -224,15 +248,12 @@
         // stehen lassen statt sie wegzuwischen (sonst blinkt die Betonnung weg).
         let sourceLoaded = true;
         try { sourceLoaded = map.isSourceLoaded('ienc'); } catch (_) {}
-        if (feats.length === 0 && !sourceLoaded && CTX.scene) return;
+        if (feats.length === 0 && !sourceLoaded && _buoys.size) return;
 
-        const scene = new THREE.Scene();
-        scene.add(new THREE.AmbientLight(0xffffff, 0.95));
-        const dir = new THREE.DirectionalLight(0xffffff, 0.7);
-        dir.position.set(0.4, 1, 0.5); scene.add(dir);
+        const scene = _ensureScene(THREE);
 
         // Groesse per setSize() geaendert → gecachte Meshes haben die alte Groesse
-        if (_cacheSize !== S) { _clearCache(); _cacheSize = S; }
+        if (_builtSize !== S) { _clearBuoys(); _builtSize = S; }
 
         const mLat = 111320, mLon = 111320 * Math.cos(c.lat * Math.PI / 180);
         const seen = new Set();
@@ -244,27 +265,27 @@
             const key = lng.toFixed(5) + ',' + lat.toFixed(5);   // ~1 m: Tile-Grenzen-Duplikate zusammenfassen
             if (seen.has(key)) continue;
             seen.add(key);
-            let b = _buoyCache.get(key);
+            let b = _buoys.get(key);
             if (b) {
-                // Wiederverwendet → in der Map ans Ende, damit _trimCache die
+                // Wiederverwendet → in der Map ans Ende, damit _trimBuoys die
                 // laenger ungenutzten zuerst wegwirft (LRU).
-                _buoyCache.delete(key);
+                _buoys.delete(key);
             } else {
                 b = makeBuoy(THREE, describe(f.properties || {}), S);
             }
-            _buoyCache.set(key, b);
+            _buoys.set(key, b);
             // Positionen sind relativ zum Kartenmittelpunkt — muessen also auch
-            // bei wiederverwendeten Tonnen jedes Mal neu gesetzt werden.
+            // bei bereits vorhandenen Tonnen jedes Mal neu gesetzt werden.
             b.position.set((lng - c.lng) * mLon, 0, -(lat - c.lat) * mLat);   // (east, up, -north)
-            scene.add(b);   // three.js haengt automatisch aus der alten Szene aus
+            if (!b.visible) b.visible = true;
+            if (!b.parent) scene.add(b);
             if (++count >= MAX_BUOYS) break;
         }
 
-        // WICHTIG: die alte Szene NICHT mehr komplett disposen — ihre Tonnen
-        // stecken im Cache und werden weiterbenutzt. Freigegeben wird nur, was
-        // aus dem Cache faellt.
-        _trimCache(seen);
-        CTX.scene = scene;
+        // Nicht mehr sichtbare Tonnen ausblenden statt aushaengen: sie bleiben
+        // im Bestand und sind sofort wieder da, wenn wir zurueckfahren.
+        _buoys.forEach((b, key) => { if (!seen.has(key)) b.visible = false; });
+        _trimBuoys(seen);
         if (!CTX.camera) CTX.camera = new THREE.Camera();
         if (!CTX.rotX) CTX.rotX = new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
         map.triggerRepaint();
@@ -272,8 +293,7 @@
     }
 
     function clearScene() {
-        _clearCache();   // gibt die Tonnen frei; die Szene selbst haelt keine eigenen Ressourcen
-        if (CTX.scene) CTX.scene = new (window.THREE.Scene)();
+        _clearBuoys();   // Szene bleibt bestehen (nur Licht), die Tonnen sind raus
         const map = getMap();
         if (map) map.triggerRepaint();
     }
@@ -330,7 +350,7 @@
             if (CTX.moveHandler) { map.off('moveend', CTX.moveHandler); CTX.moveHandler = null; }
             clearTimeout(_rebuildTimer); _rebuildTimer = null;
             if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
-            _clearCache(); CTX.scene = null;   // GPU-Ressourcen freigeben
+            _clearBuoys(); CTX.scene = null;   // GPU-Ressourcen freigeben
             CTX.built = false;
             map.triggerRepaint();
         }
