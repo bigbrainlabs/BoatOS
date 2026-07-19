@@ -16,7 +16,10 @@
     const LAYER_ID = 'ienc-buoys-3d-gl';
     const BUOY_CLASSES = ['boylat', 'boycar', 'boyisd', 'boysaw', 'boyspp',
                           'bcnlat', 'bcncar', 'bcnisd', 'bcnsaw', 'bcnspp', 'daymar'];
-    const MAX_BUOYS = 500;
+    // Obergrenze sichtbarer Marken. Seit dem Instancing kostet eine zusaetzliche
+    // Tonne nur noch eine Matrix statt eines eigenen Draw-Calls — die Grenze
+    // darf deshalb deutlich hoeher liegen als die frueheren 500.
+    const MAX_BUOYS = 2000;
     // Feste reale Größe (Meter): die Tonnen skalieren dann beim Zoomen von selbst
     // mit (echtes 3D-Objekt). Über BoatOS3D.setSize(m) einstellbar.
     const SIZE = { m: 15 };
@@ -66,35 +69,77 @@
     }
 
     // ---- Geometrie ----
-    function makeBuoy(THREE, K, S) {
-        const g = new THREE.Group();
-        const mat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.55, metalness: 0.1, side: THREE.DoubleSide });
+    //
+    // Gebaut wird nicht mehr pro Tonne, sondern pro ERSCHEINUNGSBILD (Form +
+    // Farbbaender + Toppzeichen). Aus so einer Bauanleitung entstehen dann
+    // InstancedMeshes, die alle Tonnen desselben Aussehens in einem Draw-Call
+    // zeichnen — siehe _ensureTemplate(). Geometrien und Materialien liegen in
+    // gemeinsamen Caches, weil sich verschiedene Erscheinungsbilder viele
+    // Bauteile teilen (jede Kugel gleicher Groesse ist dieselbe Geometrie).
+
+    const _geoms = new Map();     // Schluessel → THREE.BufferGeometry (Eigentuemer)
+    const _mats = new Map();      // Farbe      → THREE.MeshStandardMaterial (Eigentuemer)
+    let _dummy = null;            // Hilfsobjekt zum Zusammensetzen lokaler Matrizen
+    let _m = null;                // Arbeitsmatrix fuer die Instanzen (nicht pro Tonne neu)
+
+    function _geom(key, make) {
+        let g = _geoms.get(key);
+        if (!g) { g = make(); _geoms.set(key, g); }
+        return g;
+    }
+
+    function _mat(THREE, color) {
+        let m = _mats.get(color);
+        if (!m) {
+            m = new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.1, side: THREE.DoubleSide });
+            _mats.set(color, m);
+        }
+        return m;
+    }
+
+    /** Lokale Lage eines Bauteils innerhalb der Tonne als Matrix. */
+    function _local(THREE, y, rx, rz) {
+        if (!_dummy) _dummy = new THREE.Object3D();
+        _dummy.position.set(0, y, 0);
+        _dummy.rotation.set(rx || 0, 0, rz || 0);
+        _dummy.updateMatrix();
+        return _dummy.matrix.clone();
+    }
+
+    /** Bauanleitung eines Erscheinungsbildes: Liste aus { geometry, material, local }. */
+    function buoyParts(THREE, K, S) {
+        const parts = [];
+        const add = (geometry, color, y, rx, rz) =>
+            parts.push({ geometry, material: _mat(THREE, color), local: _local(THREE, y, rx, rz) });
         const bh = S, rB = S * 0.34, rT = S * 0.22;
 
         // Körper: Farbbänder (bands[0] = oben) als gestapelte Zylinder-Segmente
         if (K.shape === 'cone') {
-            const m = new THREE.Mesh(new THREE.ConeGeometry(rB, bh, 18), mat(K.bands[0]));
-            m.position.y = bh / 2; g.add(m);
+            add(_geom(`cone:${rB}:${bh}`, () => new THREE.ConeGeometry(rB, bh, 18)), K.bands[0], bh / 2);
         } else {
             const n = K.bands.length, seg = bh / n;
             for (let i = 0; i < n; i++) {                    // i: 0=unten .. n-1=oben
                 const yb = i * seg, yt = (i + 1) * seg;
                 const rb = rB + (rT - rB) * (yb / bh);
                 const rt = rB + (rT - rB) * (yt / bh);
-                const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, seg + 0.001, 18), mat(K.bands[n - 1 - i]));
-                m.position.y = (yb + yt) / 2; g.add(m);
+                const g = _geom(`cyl:${rt.toFixed(4)}:${rb.toFixed(4)}:${seg.toFixed(4)}`,
+                                () => new THREE.CylinderGeometry(rt, rb, seg + 0.001, 18));
+                add(g, K.bands[n - 1 - i], (yb + yt) / 2);
             }
         }
 
         // Mast + Toppzeichen (aus S-57 TOPSHP)
         const tc = K.topColor || COL.black;
-        const mast = (toY) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(S * 0.03, S * 0.03, toY - bh, 8), mat(COL.black)); m.position.y = (bh + toY) / 2; g.add(m); };
-        const cone = (up, y) => { const m = new THREE.Mesh(new THREE.ConeGeometry(S * 0.2, S * 0.36, 16), mat(tc)); m.position.y = y; if (!up) m.rotation.x = Math.PI; g.add(m); };
-        const ball = (y) => { const m = new THREE.Mesh(new THREE.SphereGeometry(S * 0.2, 16, 12), mat(tc)); m.position.y = y; g.add(m); };
-        const can  = (y) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(S * 0.17, S * 0.17, S * 0.34, 14), mat(tc)); m.position.y = y; g.add(m); };
-        const board = (y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(S * 0.55, S * 0.5, S * 0.06), mat(tc)); m.position.y = y; g.add(m); };
-        const cube = (y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(S * 0.34, S * 0.34, S * 0.34), mat(tc)); m.position.y = y; m.rotation.z = Math.PI / 4; g.add(m); };
-        const bar  = (y, rot, len) => { const m = new THREE.Mesh(new THREE.BoxGeometry(len, S * 0.12, S * 0.12), mat(tc)); m.position.y = y; m.rotation.z = rot; g.add(m); };
+        const mast = (toY) => add(_geom(`mast:${(toY - bh).toFixed(4)}`,
+            () => new THREE.CylinderGeometry(S * 0.03, S * 0.03, toY - bh, 8)), COL.black, (bh + toY) / 2);
+        const cone = (up, y) => add(_geom('tcone', () => new THREE.ConeGeometry(S * 0.2, S * 0.36, 16)),
+            tc, y, up ? 0 : Math.PI);
+        const ball = (y) => add(_geom('tball', () => new THREE.SphereGeometry(S * 0.2, 16, 12)), tc, y);
+        const can  = (y) => add(_geom('tcan', () => new THREE.CylinderGeometry(S * 0.17, S * 0.17, S * 0.34, 14)), tc, y);
+        const board = (y) => add(_geom('tboard', () => new THREE.BoxGeometry(S * 0.55, S * 0.5, S * 0.06)), tc, y);
+        const cube = (y) => add(_geom('tcube', () => new THREE.BoxGeometry(S * 0.34, S * 0.34, S * 0.34)), tc, y, 0, Math.PI / 4);
+        const bar  = (y, rot, len) => add(_geom(`tbar:${len.toFixed(4)}`,
+            () => new THREE.BoxGeometry(len, S * 0.12, S * 0.12)), tc, y, 0, rot);
 
         const T = bh;   // Oberkante Körper
         const shp = K.topShp;
@@ -119,7 +164,12 @@
                 default: ball(y1); break;
             }
         }
-        return g;
+        return parts;
+    }
+
+    /** Erscheinungsbild → Schluessel. Gleicher Schluessel = gleiche Bauanleitung. */
+    function buoySignature(K) {
+        return `${K.shape}|${K.bands.join(',')}|${K.topShp == null ? '-' : K.topShp}|${K.topColor}`;
     }
 
     // ---- Kontext ----
@@ -131,77 +181,83 @@
         return m || null;
     }
 
-    // Gibt GPU-Ressourcen eines Objekts/einer Szene frei (sonst WebGL-Speicherleck)
-    function _disposeObject(o) {
-        if (!o) return;
-        o.traverse((x) => {
-            if (x.geometry) x.geometry.dispose();
-            if (x.material) {
-                const mats = Array.isArray(x.material) ? x.material : [x.material];
-                mats.forEach((m) => m && m.dispose());
-            }
-        });
-    }
-
     /**
-     * Tonnen-Bestand: EINE dauerhafte Szene, die Tonnen bleiben darin.
+     * Tonnen-Bestand: EINE dauerhafte Szene, darin InstancedMeshes je Erscheinungsbild.
      *
-     * Frueher baute jeder Rebuild (max. alle 500 ms) eine neue Szene mit ALLEN
-     * sichtbaren Tonnen — bei bis zu MAX_BUOYS je ein Group mit mehreren
-     * Geometrien und Materialien. Das sind tausende Objekte samt GPU-Upload in
-     * einem Rutsch, und der Main-Thread steht so lange. In der Simulation war
-     * das als regelmaessiges Stocken sichtbar (nur in 3D, weil es die
-     * Betonnung nur dort gibt).
+     * Frueher war jede Tonne eine eigene Group aus 5–9 Meshes. Bei MAX_BUOYS
+     * waren das mehrere tausend Draw-Calls pro Bild — auf der Pi-GPU der
+     * teuerste Posten. Jetzt zeichnet ein InstancedMesh alle Tonnen desselben
+     * Aussehens auf einmal; uebrig bleiben so viele Draw-Calls, wie es
+     * unterschiedliche Erscheinungsbilder × Bauteile gibt (typisch < 200).
      *
-     * Beim Fahren bleibt der Grossteil der Tonnen dieselbe Menge. Ein Rebuild
-     * ist deshalb nur noch ein Abgleich: neu Hinzugekommene bauen, alle
-     * Positionen (die relativ zum Kartenmittelpunkt sind) nachziehen,
-     * Verschwundene ausblenden.
+     * Ein Rebuild baut deshalb nichts mehr auf, solange kein NEUES
+     * Erscheinungsbild auftaucht — er schreibt nur Matrizen.
      *
-     * WEM GEHOEREN DIE MESHES: ausschliesslich dieser Map. Die Szene ist nur
-     * Anzeige — sie wird nie ersetzt und gibt nie etwas frei. Damit gibt es
-     * genau einen Ort, an dem disposed wird (_dropBuoy), und keine Situation
-     * mehr, in der eine "alte" Szene noch benutzte Geometrien mitreisst.
+     * WEM GEHOERT WAS (eine Ebene, ein Eigentuemer):
+     *   _geoms      → die Geometrien       (geteilt ueber Erscheinungsbilder)
+     *   _mats       → die Materialien      (geteilt, je Farbe eines)
+     *   _templates  → die InstancedMeshes  (je Erscheinungsbild eines pro Bauteil)
+     * Die Szene ist nur Anzeige, sie wird nie ersetzt und gibt nie etwas frei.
      */
-    const _buoys = new Map();         // key → THREE.Group (Eigentuemer)
-    const MAX_BUOY_POOL = 3 * MAX_BUOYS;
-    let _builtSize = SIZE.m;          // Groesse, mit der die Tonnen gebaut wurden
+    const _templates = new Map();     // signature → { parts, meshes, capacity, n }
+    let _builtSize = SIZE.m;          // Groesse, mit der die Bauteile gebaut wurden
 
     /** Legt die Szene samt Licht einmalig an; danach immer dieselbe. */
     function _ensureScene(THREE) {
         if (CTX.scene) return CTX.scene;
         const scene = new THREE.Scene();
-        scene.add(new THREE.AmbientLight(0xffffff, 0.95));
-        const dir = new THREE.DirectionalLight(0xffffff, 0.7);
-        dir.position.set(0.4, 1, 0.5);
+        // Weniger Grundhelligkeit, dafuer gerichtetes Licht: mit Ambient 0.95
+        // war jede Flaeche gleich hell und die Tonnen wirkten wie flach
+        // eingefaerbte Silhouetten. Hemisphere gibt Himmel oben / Wasser unten.
+        scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+        scene.add(new THREE.HemisphereLight(0xbcd8f0, 0x4a5a63, 0.45));
+        const dir = new THREE.DirectionalLight(0xfff4e2, 0.95);
+        dir.position.set(0.5, 1, 0.35);
         scene.add(dir);
         CTX.scene = scene;
         return scene;
     }
 
-    /** Einzige Stelle, die eine Tonne freigibt: aus Szene UND Bestand raus. */
-    function _dropBuoy(key) {
-        const b = _buoys.get(key);
-        if (!b) return;
-        if (b.parent) b.parent.remove(b);
-        _disposeObject(b);
-        _buoys.delete(key);
+    /** Legt die InstancedMeshes einer Vorlage an (bzw. groesser neu an). */
+    function _allocTemplate(THREE, t, capacity) {
+        _freeMeshes(t);
+        t.capacity = capacity;
+        t.meshes = t.parts.map((p) => {
+            const im = new THREE.InstancedMesh(p.geometry, p.material, capacity);
+            im.frustumCulled = false;   // Position steckt in den Instanz-Matrizen
+            im.count = 0;
+            CTX.scene.add(im);
+            return im;
+        });
     }
 
+    /**
+     * Gibt NUR die InstancedMeshes frei — nicht Geometrie/Material, die gehoeren
+     * den gemeinsamen Caches und werden von anderen Vorlagen mitbenutzt.
+     */
+    function _freeMeshes(t) {
+        (t.meshes || []).forEach((im) => {
+            if (im.parent) im.parent.remove(im);
+            im.dispose();
+        });
+        t.meshes = [];
+    }
+
+    /** Einzige Stelle, die eine Vorlage freigibt. */
+    function _dropTemplate(sig) {
+        const t = _templates.get(sig);
+        if (!t) return;
+        _freeMeshes(t);
+        _templates.delete(sig);
+    }
+
+    /** Alles zurueck auf Anfang: Vorlagen UND die geteilten Ressourcen. */
     function _clearBuoys() {
-        Array.from(_buoys.keys()).forEach(_dropBuoy);
+        _geoms.forEach((g) => g.dispose());
+        _geoms.clear();
+        _mats.forEach((m) => m.dispose());
+        _mats.clear();
     }
-
-    /** Haelt den Bestand klein: aelteste Tonnen raus, die gerade nicht sichtbar sind. */
-    function _trimBuoys(seen) {
-        if (_buoys.size <= MAX_BUOY_POOL) return;
-        for (const key of Array.from(_buoys.keys())) {
-            if (_buoys.size <= MAX_BUOY_POOL) break;
-            if (seen.has(key)) continue;      // gerade sichtbar → behalten
-            _dropBuoy(key);
-        }
-    }
-
     // Rebuild drosseln: das Follow-jumpTo feuert moveend ~30×/s → sonst 30 Szenen-
     // Neuaufbauten pro Sekunde. Max. alle 500 ms, mit Nachlauf (settle).
     let _rebuildTimer = null, _lastRebuildTs = 0;
@@ -248,15 +304,17 @@
         // stehen lassen statt sie wegzuwischen (sonst blinkt die Betonnung weg).
         let sourceLoaded = true;
         try { sourceLoaded = map.isSourceLoaded('ienc'); } catch (_) {}
-        if (feats.length === 0 && !sourceLoaded && _buoys.size) return;
+        if (feats.length === 0 && !sourceLoaded && _templates.size) return;
 
-        const scene = _ensureScene(THREE);
+        _ensureScene(THREE);
 
-        // Groesse per setSize() geaendert → gecachte Meshes haben die alte Groesse
+        // Groesse per setSize() geaendert → die Bauteile haben die alte Groesse
         if (_builtSize !== S) { _clearBuoys(); _builtSize = S; }
 
+        // 1. Sichtbare Marken nach Erscheinungsbild sortieren
         const mLat = 111320, mLon = 111320 * Math.cos(c.lat * Math.PI / 180);
         const seen = new Set();
+        const bySig = new Map();     // signature → { K, pos: [x,y,z, x,y,z, …] }
         let count = 0;
         for (const f of feats) {
             const geo = f.geometry;
@@ -265,27 +323,54 @@
             const key = lng.toFixed(5) + ',' + lat.toFixed(5);   // ~1 m: Tile-Grenzen-Duplikate zusammenfassen
             if (seen.has(key)) continue;
             seen.add(key);
-            let b = _buoys.get(key);
-            if (b) {
-                // Wiederverwendet → in der Map ans Ende, damit _trimBuoys die
-                // laenger ungenutzten zuerst wegwirft (LRU).
-                _buoys.delete(key);
-            } else {
-                b = makeBuoy(THREE, describe(f.properties || {}), S);
-            }
-            _buoys.set(key, b);
-            // Positionen sind relativ zum Kartenmittelpunkt — muessen also auch
-            // bei bereits vorhandenen Tonnen jedes Mal neu gesetzt werden.
-            b.position.set((lng - c.lng) * mLon, 0, -(lat - c.lat) * mLat);   // (east, up, -north)
-            if (!b.visible) b.visible = true;
-            if (!b.parent) scene.add(b);
+            const K = describe(f.properties || {});
+            const sig = buoySignature(K);
+            let e = bySig.get(sig);
+            if (!e) { e = { K, pos: [] }; bySig.set(sig, e); }
+            // Positionen sind relativ zum Kartenmittelpunkt (east, up, -north)
+            e.pos.push((lng - c.lng) * mLon, 0, -(lat - c.lat) * mLat);
             if (++count >= MAX_BUOYS) break;
         }
 
-        // Nicht mehr sichtbare Tonnen ausblenden statt aushaengen: sie bleiben
-        // im Bestand und sind sofort wieder da, wenn wir zurueckfahren.
-        _buoys.forEach((b, key) => { if (!seen.has(key)) b.visible = false; });
-        _trimBuoys(seen);
+        // 2. Je Erscheinungsbild die Instanz-Matrizen schreiben
+        if (!_m) _m = new THREE.Matrix4();
+        _templates.forEach((t) => { t.n = 0; });
+        bySig.forEach((e, sig) => {
+            const n = e.pos.length / 3;
+            let t = _templates.get(sig);
+            if (!t) {
+                t = { parts: buoyParts(THREE, e.K, S), meshes: [], capacity: 0, n: 0 };
+                _templates.set(sig, t);
+            }
+            // Reserve mitwachsen lassen, damit nicht bei jeder neuen Tonne neu
+            // alloziert wird; schrumpfen erst, wenn deutlich zu gross.
+            if (n > t.capacity || n * 4 < t.capacity) {
+                _allocTemplate(THREE, t, Math.max(16, Math.ceil(n * 1.5)));
+            }
+            for (let i = 0; i < n; i++) {
+                for (let p = 0; p < t.parts.length; p++) {
+                    // Instanz = Verschiebung an die Tonnenposition × lokale Lage
+                    // des Bauteils. Da die Verschiebung rein translativ ist,
+                    // genuegt es, die Translationsspalte zu addieren.
+                    _m.copy(t.parts[p].local);
+                    _m.elements[12] += e.pos[i * 3];
+                    _m.elements[13] += e.pos[i * 3 + 1];
+                    _m.elements[14] += e.pos[i * 3 + 2];
+                    t.meshes[p].setMatrixAt(i, _m);
+                }
+            }
+            t.n = n;
+        });
+
+        // 3. Sichtbare Anzahl setzen; Vorlagen ohne Tonnen bleiben leer stehen
+        //    (kein Neuaufbau, wenn wir gleich wieder welche brauchen).
+        _templates.forEach((t) => {
+            t.meshes.forEach((im) => {
+                im.count = t.n;
+                im.instanceMatrix.needsUpdate = true;
+            });
+        });
+
         if (!CTX.camera) CTX.camera = new THREE.Camera();
         if (!CTX.rotX) CTX.rotX = new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(1, 0, 0), Math.PI / 2);
         map.triggerRepaint();
