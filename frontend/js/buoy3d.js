@@ -8,9 +8,30 @@
  * - Nur im 3D-/Look-ahead-Modus aktiv (map.js: toggleMap3D → BoatOS3D.setActive).
  * - Geometrie nach IALA/S-57 (Körperfarbbänder + charakteristisches Toppzeichen),
  *   Zuordnung datengetrieben aus _cls / COLOUR / CATCAM.
- * - Größe skaliert mit dem Zoom (≈ konstante Bildgröße), Neuaufbau bei moveend.
+ * - Größe skaliert mit dem Zoom (≈ konstante Bildgröße), Abgleich bei moveend.
  * - Kein Dauer-Repaint: die Szene ist statisch, gezeichnet wird nur, wenn die
- *   Karte ohnehin neu zeichnet (Interaktion) + einmalig nach jedem Neuaufbau.
+ *   Karte ohnehin neu zeichnet (Interaktion) + einmalig nach jedem Abgleich.
+ *
+ * AUFBAU (wichtig zu verstehen, bevor man hier etwas ändert)
+ * ----------------------------------------------------------
+ * Gebaut wird nicht pro Tonne, sondern pro ERSCHEINUNGSBILD — also je
+ * Kombination aus Form, Farbbändern und Toppzeichen (buoySignature). Aus so
+ * einer Bauanleitung (buoyParts) entsteht je Bauteil ein InstancedMesh, das
+ * alle Marken desselben Aussehens in einem einzigen Draw-Call zeichnet.
+ *
+ * Ein Abgleich (rebuild) baut deshalb nichts mehr auf, solange kein NEUES
+ * Erscheinungsbild ins Bild kommt — er schreibt nur Instanz-Matrizen. Das ist
+ * der Grund, warum MAX_BUOYS bei 2000 liegen kann und die Simulation nicht
+ * mehr stockt: eine zusätzliche Marke kostet eine Matrix, keinen Draw-Call.
+ *
+ * Wem gehört was — eine Ebene, ein Eigentümer:
+ *   _geoms      → die Geometrien      (geteilt: gleiche Kugel = eine Geometrie)
+ *   _mats       → die Materialien     (geteilt: eines je Farbe)
+ *   _templates  → die InstancedMeshes (je Erscheinungsbild eines pro Bauteil)
+ * Die Szene ist nur Anzeige: sie wird nie ersetzt und gibt nie etwas frei.
+ * _freeMeshes() räumt ausschließlich die InstancedMeshes ab (Geometrie und
+ * Material benutzen andere Vorlagen mit!); alle drei Ebenen räumt nur
+ * _clearBuoys() ab — beim Größenwechsel und beim Deaktivieren.
  */
 (function () {
     const LAYER_ID = 'ienc-buoys-3d-gl';
