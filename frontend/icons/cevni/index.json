@@ -1,0 +1,267 @@
+{
+ "1": {
+  "ar": 0.977,
+  "cevni": "A.1",
+  "img": "Verbotszeichen-A01a.png"
+ },
+ "10": {
+  "ar": 1.017,
+  "cevni": "A.8",
+  "img": "Verbotszeichen-A08.png"
+ },
+ "100": {
+  "ar": 1.0,
+  "cevni": "E.24",
+  "img": "Hinweiszeichen-E24.png"
+ },
+ "14": {
+  "ar": 1.017,
+  "cevni": "A.12",
+  "img": "Verbotszeichen-A12.png"
+ },
+ "15": {
+  "ar": 1.0,
+  "cevni": "A.13",
+  "img": "Verbotszeichen-A13.png"
+ },
+ "17": {
+  "ar": 1.0,
+  "cevni": "A.15",
+  "img": "Verbotszeichen-A15.png"
+ },
+ "23": {
+  "ar": 1.5,
+  "cevni": "B.1",
+  "img": "Gebotszeichen-B01.png"
+ },
+ "24": {
+  "ar": 1.5,
+  "cevni": "B.1",
+  "img": "Gebotszeichen-B01.png"
+ },
+ "25": {
+  "ar": 0.659,
+  "cevni": "B.2a",
+  "img": "Gebotszeichen-B02a.png"
+ },
+ "26": {
+  "ar": 0.659,
+  "cevni": "B.2b",
+  "img": "Gebotszeichen-B02b.png"
+ },
+ "28": {
+  "ar": 0.667,
+  "cevni": "B.3b",
+  "img": "Gebotszeichen-B03b.png"
+ },
+ "3": {
+  "ar": 0.674,
+  "cevni": "A.2",
+  "img": "Verbotszeichen-A02.png"
+ },
+ "31": {
+  "ar": 0.984,
+  "cevni": "B.5",
+  "img": "Gebotszeichen-B05.png"
+ },
+ "32": {
+  "ar": 1.017,
+  "cevni": "B.6",
+  "img": "Gebotszeichen-B06.png"
+ },
+ "33": {
+  "ar": 0.984,
+  "cevni": "B.7",
+  "img": "Gebotszeichen-B07.png"
+ },
+ "34": {
+  "ar": 0.984,
+  "cevni": "B.8",
+  "img": "Gebotszeichen-B08.png"
+ },
+ "35": {
+  "ar": 1.017,
+  "cevni": "B.11",
+  "img": "Gebotszeichen-B11a.png"
+ },
+ "38": {
+  "ar": 1.017,
+  "cevni": "C.1",
+  "img": "Einschraenkungszeichen-C1.png"
+ },
+ "39": {
+  "ar": 1.0,
+  "cevni": "C.2",
+  "img": "Einschraenkungszeichen-C2.png"
+ },
+ "4": {
+  "ar": 0.659,
+  "cevni": "A.3",
+  "img": "Verbotszeichen-A03.png"
+ },
+ "40": {
+  "ar": 1.0,
+  "cevni": "C.3",
+  "img": "Einschraenkungszeichen-C3.png"
+ },
+ "41": {
+  "ar": 1.517,
+  "cevni": "C.5",
+  "img": "Einschraenkungszeichen-C5.png"
+ },
+ "48": {
+  "ar": 1.7,
+  "cevni": "D.3",
+  "img": "Empfehlungszeichen-D3a.png"
+ },
+ "49": {
+  "ar": 1.7,
+  "cevni": "D.3",
+  "img": "Empfehlungszeichen-D3a.png"
+ },
+ "5": {
+  "ar": 0.659,
+  "cevni": "A.4",
+  "img": "Verbotszeichen-A04.png"
+ },
+ "50": {
+  "ar": 1.447,
+  "cevni": "E.1",
+  "img": "Hinweiszeichen-E01.png"
+ },
+ "51": {
+  "ar": 0.984,
+  "cevni": "E.2",
+  "img": "Hinweiszeichen-E02.png"
+ },
+ "52": {
+  "ar": 1.5,
+  "cevni": "E.3",
+  "img": "Hinweiszeichen-E03.png"
+ },
+ "53": {
+  "ar": 1.533,
+  "cevni": "E.4a",
+  "img": "Hinweiszeichen-E04a.png"
+ },
+ "54": {
+  "ar": 1.55,
+  "cevni": "E.4b",
+  "img": "Hinweiszeichen-E04b.png"
+ },
+ "55": {
+  "ar": 1.017,
+  "cevni": "E.5",
+  "img": "Hinweiszeichen-E05.png"
+ },
+ "56": {
+  "ar": 2.033,
+  "cevni": "E.5.2",
+  "img": "Hinweiszeichen-E052.png"
+ },
+ "58": {
+  "ar": 1.017,
+  "cevni": "E.5.3",
+  "img": "Hinweiszeichen-E053.png"
+ },
+ "6": {
+  "ar": 1.0,
+  "cevni": "A.5",
+  "img": "Verbotszeichen-A05.png"
+ },
+ "63": {
+  "ar": 0.984,
+  "cevni": "E.5.9",
+  "img": "Hinweiszeichen-E059.png"
+ },
+ "67": {
+  "ar": 0.984,
+  "cevni": "E.5.12",
+  "img": "Hinweiszeichen-E0512.png"
+ },
+ "68": {
+  "ar": 1.0,
+  "cevni": "E.5.13",
+  "img": "Hinweiszeichen-E0513.png"
+ },
+ "69": {
+  "ar": 1.017,
+  "cevni": "E.5.14",
+  "img": "Hinweiszeichen-E0514.png"
+ },
+ "71": {
+  "ar": 0.652,
+  "cevni": "E.6",
+  "img": "Hinweiszeichen-E06.png"
+ },
+ "72": {
+  "ar": 0.984,
+  "cevni": "E.7",
+  "img": "Hinweiszeichen-E07.png"
+ },
+ "74": {
+  "ar": 0.984,
+  "cevni": "E.8",
+  "img": "Hinweiszeichen-E08.png"
+ },
+ "75": {
+  "ar": 0.984,
+  "cevni": "E.9a",
+  "img": "Hinweiszeichen-E09a.png"
+ },
+ "76": {
+  "ar": 0.984,
+  "cevni": "E.9b",
+  "img": "Hinweiszeichen-E09b.png"
+ },
+ "77": {
+  "ar": 0.984,
+  "cevni": "E.9c",
+  "img": "Hinweiszeichen-E09c.png"
+ },
+ "8": {
+  "ar": 0.659,
+  "cevni": "A.6",
+  "img": "Verbotszeichen-A06.png"
+ },
+ "85": {
+  "ar": 1.034,
+  "cevni": "E.10b",
+  "img": "Hinweiszeichen-E10b.png"
+ },
+ "9": {
+  "ar": 1.0,
+  "cevni": "A.7",
+  "img": "Verbotszeichen-A07.png"
+ },
+ "90": {
+  "ar": 0.659,
+  "cevni": "E.11",
+  "img": "Hinweiszeichen-E11.png"
+ },
+ "91": {
+  "ar": 0.984,
+  "cevni": "E.13",
+  "img": "Hinweiszeichen-E13.png"
+ },
+ "92": {
+  "ar": 1.0,
+  "cevni": "E.14",
+  "img": "Hinweiszeichen-E14.png"
+ },
+ "94": {
+  "ar": 1.0,
+  "cevni": "E.16",
+  "img": "Hinweiszeichen-E16.png"
+ },
+ "95": {
+  "ar": 1.0,
+  "cevni": "E.17",
+  "img": "Hinweiszeichen-E17.png"
+ },
+ "98": {
+  "ar": 1.0,
+  "cevni": "E.20",
+  "img": "Hinweiszeichen-E20.png"
+ }
+}
