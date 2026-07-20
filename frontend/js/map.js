@@ -28,6 +28,21 @@ export { toggleIENCLayer, isIENCVisible };
 let map = null;
 let boatMarker = null;
 let boatMarkerElement = null;
+
+/**
+ * Haelt den Boot-Marker an seiner Stelle fest, obwohl GPS weiterlaeuft.
+ *
+ * Gesetzt beim Stoppen der Simulation: das Boot soll dort stehen bleiben, wo
+ * die Fahrt endete, damit man von dort weitersimulieren kann. Ohne die Sperre
+ * zieht ihn die naechste echte GPS-Nachricht zurueck, und der Marker springt
+ * zwischen Simulations- und Echtposition hin und her.
+ */
+let _positionHold = false;
+
+/** true = Marker bleibt stehen, bis centerOnBoat() oder ein Sim-Start ihn loest. */
+export function setPositionHold(on) { _positionHold = !!on; }
+export function isPositionHold() { return _positionHold; }
+
 let currentBoatHeading = 0;
 let autoFollow = false;
 
@@ -1018,6 +1033,13 @@ export function updateBoatPosition(gps) {
     window.currentPosition = { lat: rawLat, lon: rawLon };
     addToTrackHistory(rawLat, rawLon);
 
+    // Position festgehalten (z. B. nach einem Simulations-Stopp): Daten laufen
+    // weiter, nur der Marker bleibt stehen. Sonst zoege ihn die naechste
+    // GPS-Nachricht sofort zur echten Position zurueck — das staendige
+    // Hin- und Herspringen. Aufgehoben wird die Sperre bewusst nur durch
+    // centerOnBoat() (Ziel-Knopf) oder durch einen Simulationsstart.
+    if (_positionHold) return;
+
     // EMA filter: blend new measurement into smoothed target
     if (_emaLat === null) {
         _emaLat = rawLat; _emaLon = rawLon;
@@ -1373,6 +1395,15 @@ export function centerOnBoat() {
     autoFollow = true;
     updateFollowButton(true);
 
+    // Der Ziel-Knopf ist die EINZIGE Stelle, die eine festgehaltene Position
+    // wieder loest — genau das ist die bewusste Geste des Nutzers, „zeig mir,
+    // wo ich wirklich bin". Der Marker springt dabei hin, statt per Luftlinie
+    // hinzugleiten (das zoege quer ueber die Karte).
+    if (_positionHold) {
+        _positionHold = false;
+        setBoatPositionImmediate(currentPos.lat, currentPos.lon);
+    }
+
     if (map) {
         const flyOpts = {
             center: [currentPos.lon, currentPos.lat],
@@ -1482,6 +1513,7 @@ export function toggleMap3D(active) {
     if (typeof active !== 'boolean') active = !perspective3D;
     perspective3D = active;
     if (window.BoatOS3D) window.BoatOS3D.setActive(active);  // echte 3D-Seezeichen ein/aus
+
     if (map) {
         if (active) {
             _courseUpBefore3D = courseUpMode;

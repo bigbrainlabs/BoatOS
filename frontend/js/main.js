@@ -243,6 +243,14 @@ let simLastGpsPost = 0;      // Throttle für Sim-GPS-Broadcast ans Backend
 let simLastTick = 0;         // Zeitstempel des letzten Ticks (für zeitbasierte Strecke)
 let simSavedTrack = null;    // echter GPS-Track, während der Simulation weggesichert
 let simCooldownUntil = 0;    // nach dem Stop kurz keine GPS-Updates annehmen (siehe stopSimulation)
+let simRouteKey = null;      // erkennt einen Routenwechsel (siehe startSimulation)
+
+/** Kennung einer Route: Anfang, Ende und Punktzahl reichen zur Unterscheidung. */
+function _simRouteKey(coords) {
+    if (!coords || !coords.length) return null;
+    const a = coords[0], b = coords[coords.length - 1];
+    return `${coords.length}|${a.lat.toFixed(5)},${a.lon.toFixed(5)}|${b.lat.toFixed(5)},${b.lon.toFixed(5)}`;
+}
 
 function simHaversine(lat1, lon1, lat2, lon2) {
     const R = 6371000;
@@ -297,6 +305,10 @@ function simTick() {
 
     const pos = interpolateAlongRoute(routeCoords, simDistanceTraveled);
     if (!pos) {
+        // Route zu Ende: anhalten und die Strecke zuruecksetzen, damit der
+        // naechste Start wieder am Anfang beginnt statt hinter dem Ziel — dort
+        // gaebe es keine Position mehr und die Fahrt endete sofort wieder.
+        simDistanceTraveled = 0;
         stopSimulation();
         if (ui.showNotification) ui.showNotification(t('simEnded'), 'info');
         return;
@@ -345,8 +357,17 @@ function startSimulation() {
         return;
     }
     simSavedPosition = window.currentPosition ? { ...window.currentPosition } : null;
-    simDistanceTraveled = 0;
+
+    // Weiterfahren statt von vorn: nach einem Stopp steht das Boot dort, wo die
+    // Fahrt endete, und der naechste Start setzt sie an derselben Stelle fort.
+    // Nur bei einer ANDEREN Route faengt die Strecke wieder bei null an —
+    // sonst landete das Boot irgendwo mitten in der neuen Route.
+    const key = _simRouteKey(routeCoords);
+    if (key !== simRouteKey) { simDistanceTraveled = 0; simRouteKey = key; }
     simLastTick = 0;   // erster Tick nimmt den Default-dt, nicht einen alten Zeitstempel
+
+    // Marker folgt wieder der Simulation
+    if (mapModule.setPositionHold) mapModule.setPositionHold(false);
 
     // Echten Track wegsichern und die Linie leeren. Sonst verbindet die Track-Linie
     // den letzten ECHTEN GPS-Punkt mit dem ersten Sim-Punkt auf der Route — genau
@@ -354,10 +375,11 @@ function startSimulation() {
     simSavedTrack = mapModule.getTrackHistory ? [...mapModule.getTrackHistory()] : null;
     if (mapModule.clearTrack) mapModule.clearTrack();
 
-    // Boot SOFORT an den Routenanfang setzen (Sprung, kein Gleiten): über
+    // Boot SOFORT an die Startstelle setzen (Sprung, kein Gleiten): über
     // updateBoatPosition() würde der Marker wegen der GPS-Glättung sichtbar per
-    // Luftlinie von der echten Position zum ersten Wegpunkt ziehen.
-    const start = interpolateAlongRoute(routeCoords, 0);
+    // Luftlinie von der echten Position zum Startpunkt ziehen. Startstelle ist
+    // der Routenanfang oder — beim Fortsetzen — die zuletzt erreichte Stelle.
+    const start = interpolateAlongRoute(routeCoords, simDistanceTraveled);
     if (start && mapModule.setBoatPositionImmediate) {
         mapModule.setBoatPositionImmediate(start.lat, start.lon, start.bearing);
         window.currentPosition = { lat: start.lat, lon: start.lon };
@@ -388,12 +410,12 @@ function stopSimulation() {
         fetch(`${apiUrl}/api/gps/external/disable`, { method: 'POST' }).catch(() => {});
     disableSimGps();
     setTimeout(disableSimGps, 900);
-    // Boot-Marker zurück auf die echte Position — ebenfalls als Sprung, sonst
-    // gleitet er per Luftlinie zurück und zieht wieder eine Track-Linie quer.
-    if (simSavedPosition && mapModule.setBoatPositionImmediate) {
-        mapModule.setBoatPositionImmediate(simSavedPosition.lat, simSavedPosition.lon);
-        window.currentPosition = simSavedPosition;
-    }
+    // Boot bleibt STEHEN, wo die Fahrt endete — Voraussetzung dafuer, dass ein
+    // erneuter Start dort weitermacht. Ohne diese Sperre zoege ihn die naechste
+    // echte GPS-Nachricht sofort zurueck, und der Marker sprang zwischen
+    // Simulations- und Echtposition hin und her. Auf die echte Position kommt
+    // er nur noch, wenn der Nutzer den Ziel-Knopf drueckt (centerOnBoat).
+    if (mapModule.setPositionHold) mapModule.setPositionHold(true);
 
     // Sim-Track verwerfen, echten Track wiederherstellen
     if (mapModule.setTrackHistory) mapModule.setTrackHistory(simSavedTrack || []);
