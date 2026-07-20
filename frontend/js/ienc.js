@@ -320,10 +320,20 @@ function _layerDefs(vis) {
             layout: { visibility: vis },
             paint: {
                 'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 3.5, 15, 7],
-                // Farbe nach Zeichen-Funktion: Verbot/Gebot rot, Empfehlung/Hinweis blau
+                // Der Punkt traegt die KENNfarbe der Zeichengruppe, nicht die
+                // Tafelfarbe: bei 3–7 px ist die Fuellung alles, was man sieht,
+                // und echte Tafeln sind ueberwiegend weiss — als weisser Punkt
+                // auf heller Karte waren sie schlicht unsichtbar.
+                // Gruppen nach den amtlichen Abbildungen (BinSchStrO Anlage 7):
+                //   A Verbot, B Gebot, C Einschraenkung → weiss, ROTER Rand
+                //   D Empfehlung                        → weiss, SCHWARZER Rand
+                //   E Hinweis                           → BLAU, weisser Rand
+                // Der Punkt nimmt jeweils die kennzeichnende Farbe davon.
+                // (Vorher: Empfehlung blau, Einschraenkung orange — das
+                //  entsprach keiner Tafel.)
                 'circle-color': ['match', ['to-string', ['get', 'fnctnm']],
-                    '1', '#cc2222', '2', '#cc2222', '3', '#dd6644',
-                    '4', '#2266cc', '5', '#2288cc',
+                    '1', '#cc2222', '2', '#cc2222', '3', '#cc2222',
+                    '4', '#222222', '5', '#1b4f9c',
                     '#888888',
                 ],
                 'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff',
