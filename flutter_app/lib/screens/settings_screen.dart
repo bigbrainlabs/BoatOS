@@ -1281,6 +1281,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ── Section: Über (About) ───────────────────────────────────────────────────
 
+  /// Datenquellen mit Nennungspflicht — [Name, Adresse, wofür].
+  ///
+  /// ELWIS/WSV verlangt für übernommene Inhalte ausdrücklich die Quellenangabe
+  /// „www.elwis.de" (openData, kommerzielle Nachnutzung erlaubt), OpenStreetMap
+  /// die Nennung der Mitwirkenden. Bewusst eine Liste: es kommen weitere dazu.
+  /// Gegenstück im Deck: js/settings/tabs/about.js (SOURCES) — bei Änderungen
+  /// beide pflegen, die Angaben sollen sich nicht auseinanderentwickeln.
+  static const List<List<String>> _sources = [
+    ['ELWIS / WSV', 'www.elwis.de',
+     'Schifffahrtszeichen (BinSchStrO Anlage 7), IENC-Seekarten'],
+    ['PegelOnline / WSV', 'www.pegelonline.wsv.de', 'Wasserstände, Gezeiten'],
+    ['OpenStreetMap', 'openstreetmap.org/copyright',
+     'Kartendaten, Häfen und Ankerplätze (© OpenStreetMap-Mitwirkende)'],
+    ['OpenSeaMap', 'www.openseamap.org', 'Seezeichen-Overlay'],
+  ];
+
+
   Future<void> _loadAbout() async {
     if (_verCurrent == '…') _checkVersion();   // Version holen, falls noch nicht
     if (_aboutLoaded) return;
@@ -1375,6 +1392,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ]),
         );
 
+    // Quelle, Adresse, wofür — als Zeile mit Beschreibung, damit erkennbar
+    // bleibt, WAS von wem stammt.
+    Widget sourceRow(String name, String url, String what) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(name, style: const TextStyle(fontSize: 14, color: text, fontWeight: FontWeight.w600)),
+            Text(url, style: const TextStyle(fontSize: 11, color: dim)),
+            const SizedBox(height: 2),
+            Text(what, style: const TextStyle(fontSize: 12, height: 1.4, color: dim)),
+          ]),
+        );
+
     final hasSponsors = firstMates.isNotEmpty || crew.isNotEmpty;
 
     return [
@@ -1419,6 +1448,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         linkRow('💜', 'GitHub Sponsors', 'github.com/sponsors/bigbrainlabs'),
         linkRow('🎗️', 'Patreon', 'patreon.com/cw/logbook_without_posing'),
       ])),
+      _header('Datenquellen'),
+      card(Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: _sources
+            .map((s) => sourceRow(s[0], s[1], s[2]))
+            .toList(growable: false),
+      )),
       _header('Haftungsausschluss'),
       card(const Text(
         'BoatOS wird ohne jede Gewähr bereitgestellt („as is"), die Nutzung erfolgt auf eigenes Risiko. '

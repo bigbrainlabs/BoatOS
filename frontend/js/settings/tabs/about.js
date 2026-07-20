@@ -23,6 +23,25 @@ const LINKS = [
     { label: 'Patreon',       url: 'https://www.patreon.com/cw/logbook_without_posing',   icon: '🎗️' },
 ];
 
+/**
+ * Datenquellen mit Nennungspflicht.
+ *
+ * ELWIS/WSV verlangt fuer die uebernommenen Inhalte ausdruecklich die
+ * Quellenangabe „www.elwis.de" (openData, kommerzielle Nachnutzung erlaubt,
+ * siehe Haftungsausschluss und Nutzungsbedingungen auf elwis.de). Der
+ * Abschnitt ist bewusst als Liste angelegt — es kommen weitere Quellen dazu.
+ */
+const SOURCES = [
+    { name: 'ELWIS / WSV', url: 'https://www.elwis.de',
+      what: 'Schifffahrtszeichen (BinSchStrO Anlage 7), IENC-Seekarten' },
+    { name: 'PegelOnline / WSV', url: 'https://www.pegelonline.wsv.de',
+      what: 'Wasserstände, Gezeiten' },
+    { name: 'OpenStreetMap', url: 'https://www.openstreetmap.org/copyright',
+      what: 'Kartendaten, Häfen und Ankerplätze (© OpenStreetMap-Mitwirkende)' },
+    { name: 'OpenSeaMap', url: 'https://www.openseamap.org',
+      what: 'Seezeichen-Overlay' },
+];
+
 export const html = `
                 <div class="about-page">
                     <div class="about-hero">
@@ -51,6 +70,17 @@ export const html = `
                         <div class="about-support">
                             <a class="about-btn about-btn-github" href="https://github.com/sponsors/bigbrainlabs" target="_blank" rel="noopener">💜 GitHub Sponsors</a>
                             <a class="about-btn about-btn-patreon" href="https://www.patreon.com/cw/logbook_without_posing" target="_blank" rel="noopener">🎗️ Patreon</a>
+                        </div>
+                    </div>
+
+                    <div class="setting-group">
+                        <h4 data-i18n="about_sources">Datenquellen</h4>
+                        <div class="about-sources">
+                            ${SOURCES.map(s => `
+                            <div class="about-source">
+                                <a href="${s.url}" target="_blank" rel="noopener">${s.name} ↗</a>
+                                <span class="about-source-what">${s.what}</span>
+                            </div>`).join('')}
                         </div>
                     </div>
 

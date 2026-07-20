@@ -1051,6 +1051,23 @@ select option {
     margin-top: var(--space-2xl); padding-top: var(--space-lg); border-top: 1px solid var(--border);
 }
 
+/* Datenquellen auf der About-Seite — Nennung, wo die Lizenz sie verlangt.
+   Bewusst kompakter als die Links darüber: es ist eine Nachweisliste, kein
+   Angebot zum Anklicken, und sie wird mit der Zeit länger. */
+.about-sources { display: flex; flex-direction: column; gap: var(--space-sm); }
+.about-source {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+.about-source a {
+    color: var(--text); text-decoration: none;
+    font-size: var(--fs-base); font-weight: 600;
+}
+.about-source a:hover { color: var(--accent); }
+.about-source-what { color: var(--text-dim); font-size: var(--fs-sm); line-height: 1.45; }
+
 /* Haftungsausschluss auf der About-Seite — dezent, gut lesbar */
 .about-disclaimer {
     margin: 0;
