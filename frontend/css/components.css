@@ -540,6 +540,15 @@ select option {
 /* ============================================
    MAP MARKER STYLES
    ============================================ */
+/* Boot-Marker nur in der Draufsicht.
+   In der 3D-/Look-ahead-Ansicht sitzt die Kamera am Boot — das flache Symbol
+   laege mitten im Bild und verdeckte die Fahrrinne voraus.
+   Bewusst als CSS-Regel an der Klasse, die toggleMap3D() ohnehin auf <body>
+   setzt: der Marker wird an mehreren Stellen neu erzeugt (initMapMarkers,
+   createBoatMarker beim Wechsel des Boots-Icons), und ein per JavaScript
+   gesetztes style.display ging dabei jedes Mal verloren. */
+body.map3d-active .boat-marker { display: none; }
+
 .boat-marker {
     width: 40px;
     height: 40px;
