@@ -1,2 +1,0 @@
-websockets>=12.0
-evdev>=1.7.0

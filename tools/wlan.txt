@@ -1,7 +1,0 @@
-# BoatOS WLAN-Konfiguration
-# Diese Datei wird beim ersten Boot eingelesen und danach automatisch gelöscht.
-# Bitte SSID und PASSWORD eintragen, dann SD-Karte in den Pi einlegen und booten.
-
-SSID=MeinNetzwerk
-PASSWORD=meinpasswort
-COUNTRY=DE

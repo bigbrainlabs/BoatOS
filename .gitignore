@@ -1,144 +1,17 @@
-# Environment variables
-.env
-.env.local
+# Dieser Zweig führt nur die Website (siehe README.md).
+#
+# Weil alle Zweige dasselbe Arbeitsverzeichnis teilen, liegen beim Auschecken
+# von gh-pages noch Artefakte der Code-Zweige herum (flutter_app/.dart_tool,
+# tools/, build/ …). Statt sie einzeln aufzuzählen — das wäre ein Katz-und-
+# Maus-Spiel — wird hier alles ignoriert und nur Freigegebenes durchgelassen.
+#
+# ACHTUNG: Neue Website-Dateien (Bilder, CSS, JS) müssen unten eingetragen
+# werden, sonst zeigt `git status` sie nicht an. Notfalls `git add -f <datei>`.
 
-# Python
-backend/venv/
-backend/__pycache__/
-backend/app/__pycache__/
-*.pyc
-*.pyo
-*.egg-info
-.Python
+*
 
-# Node
-node_modules/
-npm-debug.log*
-
-# Data directories
-data/*
-!data/.gitkeep
-backend/data/*
-!backend/data/.gitkeep
-!backend/data/dashboard_templates.json
-
-# Routing engines (zu groß)
-brouter/
-valhalla/
-
-# Logs
-*.log
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Backup & temporary editor files
-*.backup
-*.backup_*
-*.bak
-*.broken
-*.broken2
-*.broken3
-*.before-*
-*.old
-*.orig
-*.rej
-*.tmp
-*.temp
-*~
-*.swp
-*.swo
-# Numbered/dated backups
-*_backup_*
-*_bak_*
-*.backup.*
-# Explicit suffixes used in this project
-*.backup-*
-*.full
-*.debug
-*.leaflet.*
-*.leaflet
-
-# SSL certificates & credentials
-*.key
-*.crt
-*.pem
-*.p12
-*.pfx
-*.der
-*.csr
-id_rsa
-id_rsa.pub
-id_ed25519
-id_ed25519.pub
-authorized_keys
-known_hosts
-*.nmconnection
-credentials.json
-secrets.json
-tools/wlan.txt
-
-# IDE
-.vscode/
-.idea/
-.claude/
-*.swp
-*.swo
-
-# Temp files
-*.tmp
-.cache/
-
-# Binary / large files
-*.bin
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.zip
-*.gz
-osrm-binaries/
-
-# Firmware files
-frontend/firmware*.bin
-
-# Instagram / Reel production files
-*.mp4
-build_reel*.py
-REEL_*.md
-FINAL_REEL_*.md
-reel_*.png
-pi-*.png
-boatos_live.png
-reel_material/
-
-# Development planning files
-TODO.md
-TODO_*.md
-PLAN_*.md
-*_PLANUNG.md
-PROJECT_STATUS.md
-
-# Development documentation (except main README.md and translations)
-README_*.md
-!README_DE.md
-
-# Internal docs (not for public repo)
-docs/v2-flutter-pi.md
-docs/distri-image.md
-docs/plugin-system-idea.md
-
-# Screenshots & local artifacts
-*screenshot*.png
-*_screenshot.*
-flutter_app/C*
-
-# PyInstaller build artifacts
-build/
-dist/
-*.spec
-tools/mbtiles-creator/dist/
-tools/mbtiles-creator/build/
-tools/mbtiles-creator/tmp/
-tools/mbtiles-creator/data/
-tools/mbtiles-creator/creator_config.json
+!.gitignore
+!.nojekyll
+!README.md
+!index.html
+!3d-preview.gif
