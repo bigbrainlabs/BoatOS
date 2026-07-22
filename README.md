@@ -8,6 +8,12 @@ Dieser Zweig enthält **ausschließlich die Projektseite**, die unter
 | `index.html`     | die komplette Seite — Markup, CSS und JS in einer Datei       |
 | `3d-preview.gif` | Vorschau der 3D-Kartenansicht (Kopie aus `v1.9.x-dev`)        |
 | `.nojekyll`      | schaltet die Jekyll-Verarbeitung ab, die Seite ist fertig     |
+| `.gitignore`     | Positivliste — **neue Website-Dateien hier eintragen**        |
+
+Die `.gitignore` ist bewusst eine Positivliste: alle Zweige teilen sich ein
+Arbeitsverzeichnis, deshalb liegen beim Auschecken von `gh-pages` noch
+Build-Artefakte der Code-Zweige herum. Die Kehrseite: wer ein Bild oder eine
+CSS-Datei ergänzt und sie nicht einträgt, sieht sie in `git status` nicht.
 
 ## Kein Quellcode hier
 
