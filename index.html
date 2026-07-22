@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BoatOS Ecosystem – Free Marine OS for Makers</title>
+<meta name="description" content="BoatOS is a free, open source marine operating system for the Raspberry Pi: offline navigation, official inland charts, AIS, engine monitoring, automatic logbook, weather and water levels. ~€250 of hardware instead of €2,000+ for a commercial chartplotter.">
+<link rel="canonical" href="https://bigbrainlabs.github.io/BoatOS/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://bigbrainlabs.github.io/BoatOS/">
+<meta property="og:title" content="BoatOS – the free Marine OS for boat makers">
+<meta property="og:description" content="Offline navigation, official inland charts, AIS, engine monitoring, logbook and weather on a Raspberry Pi. Flash the image, boot, sail. 100% open source, no subscriptions.">
+<meta property="og:image" content="https://bigbrainlabs.github.io/BoatOS/3d-preview.gif">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -145,6 +153,12 @@
   }
   .btn-secondary:hover { border-color: var(--cyan); color: var(--cyan); }
 
+  .hero-release {
+    font-family: var(--font-mono); font-size: 0.78rem;
+    color: var(--muted); margin-top: 1.5rem;
+  }
+  .hero-release strong { color: var(--cyan); font-weight: 500; }
+
   .hero-stats {
     display: flex; gap: 3rem; margin-top: 4rem;
     flex-wrap: wrap; justify-content: center;
@@ -252,6 +266,49 @@
     margin-bottom: 0.3rem;
   }
   .feature-item p { color: var(--muted); font-size: 0.88rem; line-height: 1.6; }
+  .chan {
+    font-family: var(--font-mono); font-size: 0.58rem;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    padding: 0.12rem 0.42rem; border-radius: 3px;
+    margin-left: 0.5rem; vertical-align: middle; white-space: nowrap;
+    border: 1px solid rgba(239,159,39,0.3);
+    background: rgba(239,159,39,0.1); color: var(--amber);
+  }
+  .chan-dev {
+    border-color: var(--border);
+    background: rgba(0,212,255,0.08); color: var(--cyan);
+  }
+
+  /* ── 3D PREVIEW ── */
+  .preview-frame {
+    border: 1px solid var(--border); border-radius: 12px;
+    background: var(--panel); padding: 0.75rem;
+    max-width: 720px; overflow: hidden;
+  }
+  .preview-frame img {
+    display: block; width: 100%; height: auto;
+    border-radius: 8px;
+  }
+  .preview-notes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.5rem; margin-top: 2.5rem;
+  }
+  .preview-note h4 {
+    font-family: var(--font-display);
+    font-size: 0.95rem; font-weight: 600; margin-bottom: 0.4rem;
+  }
+  .preview-note p { color: var(--muted); font-size: 0.85rem; line-height: 1.7; }
+  .preview-status {
+    margin-top: 2rem; color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .preview-status code {
+    font-family: var(--font-mono); font-size: 0.8rem;
+    color: var(--cyan); background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    padding: 0.1rem 0.4rem; border-radius: 4px;
+  }
 
   /* ── QUICK START ── */
   .steps { margin-top: 3rem; display: flex; flex-direction: column; gap: 1.5rem; }
@@ -335,6 +392,43 @@
   }
   .community-card p { color: var(--muted); font-size: 0.8rem; }
 
+  /* ── SPONSORS ── */
+  .sponsor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem; margin-top: 3rem;
+  }
+  .sponsor-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.8rem;
+    transition: border-color 0.2s;
+  }
+  .sponsor-card:hover { border-color: rgba(0,212,255,0.35); }
+  .sponsor-card h3 {
+    font-family: var(--font-display);
+    font-size: 1.2rem; font-weight: 600;
+    margin-bottom: 0.6rem;
+  }
+  .sponsor-card p { color: var(--muted); font-size: 0.88rem; line-height: 1.7; margin-bottom: 1rem; }
+  .sponsor-card .project-link { margin-right: 1.2rem; }
+  .sponsor-tier {
+    display: inline-block; margin-bottom: 0.8rem;
+    font-family: var(--font-mono); font-size: 0.65rem;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    padding: 0.2rem 0.6rem; border-radius: 4px;
+    background: rgba(239,159,39,0.1);
+    border: 1px solid rgba(239,159,39,0.3);
+    color: var(--amber);
+  }
+  .sponsor-tier-partner {
+    background: rgba(0,212,255,0.1);
+    border-color: var(--border); color: var(--cyan);
+  }
+  .sponsor-tier-open {
+    background: transparent; border-color: var(--border); color: var(--muted);
+  }
+  .sponsor-card-join { border-style: dashed; }
+
   /* ── BOOKS ── */
   .books-section {
     background: linear-gradient(135deg, var(--panel) 0%, rgba(0,212,255,0.05) 100%);
@@ -358,6 +452,15 @@
   .book-item:last-child { border-bottom: none; }
   .book-num { font-family: var(--font-mono); font-size: 0.7rem; color: var(--cyan); min-width: 2rem; }
   .book-title { font-size: 0.9rem; color: var(--text); }
+  .books-alt {
+    margin-top: 1.5rem; font-size: 0.85rem; color: var(--muted);
+  }
+  .books-alt a {
+    color: var(--cyan); text-decoration: none;
+    margin-left: 1rem; white-space: nowrap;
+  }
+  .books-alt a:hover { text-decoration: underline; }
+
   .book-live {
     margin-left: auto; font-family: var(--font-mono);
     font-size: 0.65rem; color: var(--amber);
@@ -401,9 +504,11 @@
   <ul class="nav-links">
     <li><a href="#projects"><span class="lang-en">Projects</span><span class="lang-de">Projekte</span></a></li>
     <li><a href="#features"><span class="lang-en">Features</span><span class="lang-de">Funktionen</span></a></li>
+    <li><a href="#preview">3D</a></li>
     <li><a href="#quickstart"><span class="lang-en">Quick Start</span><span class="lang-de">Schnellstart</span></a></li>
     <li><a href="#docs"><span class="lang-en">Docs</span><span class="lang-de">Doku</span></a></li>
     <li><a href="#community">Community</a></li>
+    <li><a href="#sponsors"><span class="lang-en">Sponsors</span><span class="lang-de">Sponsoren</span></a></li>
     <li><a href="#books"><span class="lang-en">Books</span><span class="lang-de">Bücher</span></a></li>
   </ul>
   <div class="nav-right">
@@ -445,13 +550,17 @@
     ~250 € Hardware statt 2.000 €+ für kommerzielle Kartenplotter. Flashen, booten, segeln.
   </p>
   <div class="hero-actions">
-    <a href="https://archive.org/download/boatos-distri-image/boatos_v1.6.2.img.gz" class="btn-primary" target="_blank">
-      ⬇ Download Image v1.6.2
+    <a href="https://archive.org/download/boatos-distri-image/boatos_v1.7.0.img.gz" class="btn-primary" target="_blank">
+      ⬇ Download Image v1.7.0
     </a>
     <a href="#quickstart" class="btn-secondary">
       <span class="lang-en">Quick Start Guide →</span><span class="lang-de">Schnellstart-Guide →</span>
     </a>
   </div>
+  <p class="hero-release">
+    <span class="lang-en">Stable <strong>v1.7.3</strong> · beta channel carries the v1.8 pre-releases · OTA updater built in</span>
+    <span class="lang-de">Stable <strong>v1.7.3</strong> · Beta-Kanal führt die v1.8-Vorabversionen · OTA-Updater eingebaut</span>
+  </p>
   <div class="hero-stats">
     <div class="stat"><span class="stat-num">~€250</span><span class="stat-label lang-en">Hardware Total</span><span class="stat-label lang-de">Hardware gesamt</span></div>
     <div class="stat"><span class="stat-num">100%</span><span class="stat-label">Open Source</span></div>
@@ -472,10 +581,10 @@
   <div class="projects-grid">
     <div class="project-card">
       <span class="project-icon">🖥️</span>
-      <span class="project-tag">v1.6.4 — Active</span>
+      <span class="project-tag">v1.7.3 — Active</span>
       <h3>BoatOS</h3>
-      <p class="lang-en">Complete marine operating system on Raspberry Pi. Offline navigation, AIS, engine monitoring, automatic logbook, weather and water level integration.</p>
-      <p class="lang-de">Komplettes Marine-Betriebssystem auf dem Raspberry Pi. Offline-Navigation, AIS, Motorüberwachung, automatisches Logbuch, Wetter- und Pegelintegration.</p>
+      <p class="lang-en">Complete marine operating system on Raspberry Pi. Offline navigation, official inland charts, AIS, engine monitoring, automatic logbook, weather and water level integration.</p>
+      <p class="lang-de">Komplettes Marine-Betriebssystem auf dem Raspberry Pi. Offline-Navigation, amtliche Binnenkarten, AIS, Motorüberwachung, automatisches Logbuch, Wetter- und Pegelintegration.</p>
       <span class="badge">Raspberry Pi 3/4/5</span>
       <span class="badge">Flutter + Python</span><br><br>
       <a href="https://github.com/bigbrainlabs/BoatOS" class="project-link" target="_blank">GitHub ↗</a>
@@ -494,20 +603,21 @@
       <span class="project-icon">🔥</span>
       <span class="project-tag lang-en">In development</span><span class="project-tag lang-de">In Entwicklung</span>
       <h3>ValveHeater</h3>
-      <p class="lang-en">Modular frost protection for valves and pipes. Hinged heating rings, click-velcro installation, ESP32 controller with BoatOS dashboard integration.</p>
-      <p class="lang-de">Modularer Frostschutz für Ventile und Leitungen. Scharnierende Heizringe, Klick-Klett-Montage, ESP32-Controller mit BoatOS-Dashboard-Integration.</p>
+      <p class="lang-en">Modular frost protection for valves and pipes. Hinged heating rings, click mounting, centrally controlled via a BoatOpenIO extension board — each ring switchable on its own from the BoatOS dashboard.</p>
+      <p class="lang-de">Modularer Frostschutz für Ventile und Leitungen. Scharnierende Heizringe, Klick-Montage, zentral über ein BoatOpenIO-Erweiterungsboard gesteuert — jeder Ring einzeln aus dem BoatOS-Dashboard schaltbar.</p>
       <span class="badge">12V DC</span>
       <span class="badge">3D printed ASA</span><br><br>
       <a href="https://github.com/bigbrainlabs/ValveHeater" class="project-link" target="_blank">GitHub ↗</a>
     </div>
     <div class="project-card">
       <span class="project-icon">📡</span>
-      <span class="project-tag lang-en">Planned — Volume 7</span><span class="project-tag lang-de">Geplant — Band 7</span>
+      <span class="project-tag lang-en">Prototype running</span><span class="project-tag lang-de">Prototyp läuft</span>
       <h3>AutoSat</h3>
-      <p class="lang-en">Automatic satellite dish alignment using GPS and compass. ~€150 DIY versus €3,000+ commercial. Self-orienting, always connected.</p>
-      <p class="lang-de">Automatische Satellitenausrichtung per GPS und Kompass. ~150 € DIY gegenüber 3.000 €+ kommerziell. Selbstausrichtend, immer verbunden.</p>
-      <span class="badge-amber badge lang-en">Coming soon</span><span class="badge-amber badge lang-de">Demnächst</span><br><br>
-      <a href="https://github.com/bigbrainlabs" class="project-link" target="_blank">bigbrainlabs ↗</a>
+      <p class="lang-en">Automatic satellite dish alignment with real-time tracking — holds the satellite even under way. Compass-based absolute azimuth tracking, stepper for azimuth, servo for elevation. ~€150 DIY versus €3,000+ commercial.</p>
+      <p class="lang-de">Automatische Satellitenausrichtung mit Echtzeit-Tracking — hält den Satelliten auch während der Fahrt. Absolutes Azimut-Tracking über Kompass, Schrittmotor für Azimut, Servo für Elevation. ~150 € DIY gegenüber 3.000 €+ kommerziell.</p>
+      <span class="badge">ESP32-C3 + IMU</span>
+      <span class="badge">3D printed</span><br><br>
+      <a href="https://github.com/bigbrainlabs/AutoSat" class="project-link" target="_blank">GitHub ↗</a>
     </div>
   </div>
 </section>
@@ -519,8 +629,8 @@
   <div class="section-inner">
     <div class="section-eyebrow"><span class="lang-en">What BoatOS does</span><span class="lang-de">Was BoatOS kann</span></div>
     <h2 class="section-title"><span class="lang-en">Everything in one system</span><span class="lang-de">Alles in einem System</span></h2>
-    <p class="section-sub lang-en">No subscriptions. No cloud dependency. Everything runs locally on the Pi — offline first, always.</p>
-    <p class="section-sub lang-de">Keine Abonnements. Keine Cloud-Abhängigkeit. Alles läuft lokal auf dem Pi — offline-first, immer.</p>
+    <p class="section-sub lang-en">No subscriptions. No cloud dependency. Everything runs locally on the Pi — offline first, always. Items marked <span class="chan">Beta</span> ship on the beta update channel, <span class="chan chan-dev">Dev</span> is still in the development branch.</p>
+    <p class="section-sub lang-de">Keine Abonnements. Keine Cloud-Abhängigkeit. Alles läuft lokal auf dem Pi — offline-first, immer. Punkte mit <span class="chan">Beta</span> laufen im Beta-Update-Kanal, <span class="chan chan-dev">Dev</span> steckt noch im Entwicklungszweig.</p>
     <div class="features-grid">
       <div class="feature-item">
         <span class="feature-icon">🗺️</span>
@@ -528,6 +638,36 @@
           <h4><span class="lang-en">Offline Navigation</span><span class="lang-de">Offline-Navigation</span></h4>
           <p class="lang-en">OpenSeaMap vector tiles stored locally on SSD. Works without mobile signal. Fairways, locks, buoys — all offline.</p>
           <p class="lang-de">OpenSeaMap-Vektorkacheln lokal auf SSD. Funktioniert ohne Mobilfunk. Wasserstraßen, Schleusen, Tonnen — alles offline.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">🧭</span>
+        <div>
+          <h4><span class="lang-en">Inland Routing with Locks</span><span class="lang-de">Binnen-Routing mit Schleusen</span></h4>
+          <p class="lang-en">OSRM tuned for rivers and canals — not roads. Locks along the route with opening hours and phone numbers, ETA including lock waiting time and current.</p>
+          <p class="lang-de">OSRM auf Flüsse und Kanäle getrimmt — nicht auf Straßen. Schleusen entlang der Route mit Betriebszeiten und Telefonnummern, ETA inklusive Schleusenwartezeit und Strömung.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">📜</span>
+        <div>
+          <h4>
+            <span class="lang-en">Official Inland Charts</span><span class="lang-de">Amtliche Binnenkarten</span>
+            <span class="chan">Beta</span>
+          </h4>
+          <p class="lang-en">Inland ENC from the German waterways authority (ELWIS), downloaded and converted on the Pi. Depth areas, fairway, bridges and weirs with clearance heights, CEVNI signs, buoyage, kilometre marks — in Deck and Helm.</p>
+          <p class="lang-de">Amtliche Inland-ENC der WSV (ELWIS), auf dem Pi geladen und konvertiert. Tiefenbereiche, Fahrrinne, Brücken und Wehre mit Durchfahrtshöhen, CEVNI-Zeichen, Betonnung, Kilometrierung — in Deck und Helm.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">⚠️</span>
+        <div>
+          <h4>
+            <span class="lang-en">Route Hazard Check</span><span class="lang-de">Routen-Hindernis-Warnung</span>
+            <span class="chan">Beta</span>
+          </h4>
+          <p class="lang-en">Every calculated route is checked against the official chart data: bridges too low for your air draft, shallows against your draft — corrected by the live water level — and weirs. Shown as markers plus a warning panel.</p>
+          <p class="lang-de">Jede berechnete Route wird gegen die amtlichen Kartendaten geprüft: zu niedrige Brücken für deine Durchfahrtshöhe, Flachstellen gegen den Tiefgang — korrigiert um den Live-Pegel — und Wehre. Als Marker plus Warn-Panel.</p>
         </div>
       </div>
       <div class="feature-item">
@@ -558,8 +698,8 @@
         <span class="feature-icon">🌦️</span>
         <div>
           <h4><span class="lang-en">Weather + Water Levels</span><span class="lang-de">Wetter + Pegel</span></h4>
-          <p class="lang-en">OpenWeatherMap warnings on the chart. PEGELONLINE water level data for inland waterways — live.</p>
-          <p class="lang-de">OpenWeatherMap-Warnungen auf der Karte. PEGELONLINE-Pegelstände für Binnenwasserstraßen — live.</p>
+          <p class="lang-en">Official DWD severe weather warnings (via Bright Sky), OpenWeather optional. Weather follows your actual position. PEGELONLINE water levels for inland waterways — live.</p>
+          <p class="lang-de">Amtliche DWD-Unwetterwarnungen (über Bright Sky), OpenWeather optional. Wetter folgt der tatsächlichen Position. PEGELONLINE-Pegelstände für Binnenwasserstraßen — live.</p>
         </div>
       </div>
       <div class="feature-item">
@@ -590,13 +730,88 @@
         <span class="feature-icon">🗺️</span>
         <div>
           <h4><span class="lang-en">60+ Map Regions</span><span class="lang-de">60+ Kartenregionen</span></h4>
-          <p class="lang-en">New MBTiles Creator tool for Windows — no Python, no terminal. Select region, create map, upload to Pi. Done.</p>
-          <p class="lang-de">Neues MBTiles-Creator-Tool für Windows — kein Python, kein Terminal. Region auswählen, Karte erstellen, auf den Pi laden. Fertig.</p>
+          <p class="lang-en">MBTiles Creator tool for Windows — no Python, no terminal. Select region, create map, upload to Pi. Done. Several regions side by side, switchable in Deck.</p>
+          <p class="lang-de">MBTiles-Creator-Tool für Windows — kein Python, kein Terminal. Region auswählen, Karte erstellen, auf den Pi laden. Fertig. Mehrere Regionen nebeneinander, in Deck umschaltbar.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">🌙</span>
+        <div>
+          <h4><span class="lang-en">Night Mode</span><span class="lang-de">Nacht-Rotlicht-Modus</span></h4>
+          <p class="lang-en">Three brightness stages down to a red-light theme with a red chart filter — keeps your night vision intact on a dark bridge.</p>
+          <p class="lang-de">Drei Helligkeitsstufen bis zum Rotlicht-Theme samt Rotfilter über der Karte — die Nachtsicht bleibt im dunklen Steuerhaus erhalten.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">⚓</span>
+        <div>
+          <h4>
+            <span class="lang-en">Marinas, Anchorages &amp; Tides</span><span class="lang-de">Häfen, Ankerplätze &amp; Gezeiten</span>
+            <span class="chan">Beta</span>
+          </h4>
+          <p class="lang-en">Harbours and anchorages as pins with berths, VHF channel and services — pre-imported every 48 h, so they work offline. Tidal curve of the nearest gauge with trend and last high/low water.</p>
+          <p class="lang-de">Häfen und Ankerplätze als Pins mit Liegeplätzen, UKW-Kanal und Service — alle 48 h vorab importiert, damit sie offline funktionieren. Tidenkurve der nächsten Pegelstation mit Trend und letztem Hoch-/Niedrigwasser.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">💨</span>
+        <div>
+          <h4>
+            <span class="lang-en">Wind Along the Route</span><span class="lang-de">Wind entlang der Route</span>
+            <span class="chan chan-dev">Dev</span>
+          </h4>
+          <p class="lang-en">Wind arrows at each waypoint showing the forecast for its own ETA, colour-coded by strength, with gusts in the popup. Cached to file, so it stays usable without internet.</p>
+          <p class="lang-de">Windpfeile an jedem Stützpunkt — je Punkt die Vorhersage zur eigenen ETA, farbcodiert nach Stärke, Böen im Popup. Datei-Cache, damit es ohne Internet nutzbar bleibt.</p>
+        </div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">🔄</span>
+        <div>
+          <h4><span class="lang-en">Stable and Beta Channel</span><span class="lang-de">Stable- und Beta-Kanal</span></h4>
+          <p class="lang-en">The built-in updater has two channels. Stay on stable, or switch to beta in the settings to get new features early — one tap, both directions.</p>
+          <p class="lang-de">Der eingebaute Updater hat zwei Kanäle. Auf Stable bleiben oder in den Einstellungen auf Beta wechseln, um neue Funktionen früher zu bekommen — ein Tipp, in beide Richtungen.</p>
         </div>
       </div>
     </div>
   </div>
 </div>
+
+<div class="divider"></div>
+
+<!-- 3D PREVIEW -->
+<section id="preview">
+  <div class="section-eyebrow"><span class="lang-en">In development</span><span class="lang-de">In Entwicklung</span></div>
+  <h2 class="section-title"><span class="lang-en">3D chart view</span><span class="lang-de">3D-Kartenansicht</span></h2>
+  <p class="section-sub lang-en">A tilted head-up look-ahead perspective of the fairway in front of you — with buoys, beacons and inland traffic signs as real 3D objects, built straight from the official chart data.</p>
+  <p class="section-sub lang-de">Eine gekippte head-up-Perspektive der Fahrrinne voraus — mit Tonnen, Baken und Schifffahrtszeichen als echte 3D-Objekte, direkt aus den amtlichen Kartendaten gebaut.</p>
+
+  <div class="preview-frame">
+    <img src="3d-preview.gif" alt="BoatOS 3D chart view — route simulation with 3D navigation marks" loading="lazy" width="599" height="286">
+  </div>
+
+  <div class="preview-notes">
+    <div class="preview-note">
+      <h4><span class="lang-en">Data-driven, not decorated</span><span class="lang-de">Datengetrieben, nicht dekoriert</span></h4>
+      <p class="lang-en">Colours, shapes and topmarks come from the chart attributes of each mark — not from a lookup table of pretty pictures. What you see is what the chart says.</p>
+      <p class="lang-de">Farben, Formen und Toppzeichen kommen aus den Kartenattributen der jeweiligen Marke — nicht aus einer Tabelle hübscher Bilder. Was zu sehen ist, steht so in der Karte.</p>
+    </div>
+    <div class="preview-note">
+      <h4><span class="lang-en">Signs you can read</span><span class="lang-de">Lesbare Schilder</span></h4>
+      <p class="lang-en">Inland traffic signs are rendered as boards carrying the official CEVNI artwork, turned to their real reading direction.</p>
+      <p class="lang-de">Schifffahrtszeichen erscheinen als Tafeln mit der amtlichen CEVNI-Grafik, gedreht in ihre echte Leserichtung.</p>
+    </div>
+    <div class="preview-note">
+      <h4><span class="lang-en">Runs on the Pi</span><span class="lang-de">Läuft auf dem Pi</span></h4>
+      <p class="lang-en">Rendered with three.js as a MapLibre custom layer, drawn with instancing so hundreds of marks cost a handful of draw calls. Verified on the target Raspberry Pi.</p>
+      <p class="lang-de">Gerendert mit three.js als MapLibre-Custom-Layer, per Instancing gezeichnet — hunderte Marken kosten eine Handvoll Draw-Calls. Auf dem Ziel-Raspberry-Pi verifiziert.</p>
+    </div>
+  </div>
+
+  <p class="preview-status">
+    <span class="lang-en">Currently in the <code>v1.9</code> development branch — not in the stable image yet.</span>
+    <span class="lang-de">Aktuell im Entwicklungszweig <code>v1.9</code> — noch nicht im Stable-Image.</span>
+  </p>
+</section>
 
 <div class="divider"></div>
 
@@ -611,9 +826,9 @@
       <span class="step-num">01</span>
       <div>
         <h4><span class="lang-en">Download the image</span><span class="lang-de">Image herunterladen</span></h4>
-        <p class="lang-en">Get the latest BoatOS image from archive.org. The image contains everything — OS, all services, map data for Germany, OTA updater.</p>
-        <p class="lang-de">Lade das neueste BoatOS-Image von archive.org. Das Image enthält alles — OS, alle Dienste, Kartendaten für Deutschland, OTA-Updater.</p>
-        <a href="https://archive.org/download/boatos-distri-image/boatos_v1.6.2.img.gz" class="code-block" target="_blank">⬇ boatos_v1.6.2.img.gz</a>
+        <p class="lang-en">Get the latest BoatOS image from archive.org (~7.5 GB). The image contains everything — OS, all services, map data for Germany, OTA updater. Anything newer than the image is pulled in later by the updater.</p>
+        <p class="lang-de">Lade das neueste BoatOS-Image von archive.org (~7,5 GB). Das Image enthält alles — OS, alle Dienste, Kartendaten für Deutschland, OTA-Updater. Alles Neuere als das Image holt der Updater später nach.</p>
+        <a href="https://archive.org/download/boatos-distri-image/boatos_v1.7.0.img.gz" class="code-block" target="_blank">⬇ boatos_v1.7.0.img.gz</a>
       </div>
     </div>
     <div class="step">
@@ -655,8 +870,8 @@ PASSWORD=YourPassword</div>
       <span class="step-num">06</span>
       <div>
         <h4><span class="lang-en">Stay up to date</span><span class="lang-de">Auf dem neuesten Stand bleiben</span></h4>
-        <p class="lang-en">BoatOS has a built-in OTA updater. New versions are applied on demand from the settings menu — no reflashing needed.</p>
-        <p class="lang-de">BoatOS hat einen eingebauten OTA-Updater. Neue Versionen werden auf Anforderung über das Einstellungsmenü eingespielt — kein Neuflashen erforderlich.</p>
+        <p class="lang-en">BoatOS has a built-in OTA updater. New versions are applied on demand from the settings menu — no reflashing needed. Pick your channel under <strong>Settings → System → Update channel</strong>: <em>stable</em> for released versions, <em>beta</em> to get the v1.8 pre-releases early. You can switch back at any time.</p>
+        <p class="lang-de">BoatOS hat einen eingebauten OTA-Updater. Neue Versionen werden auf Anforderung über das Einstellungsmenü eingespielt — kein Neuflashen erforderlich. Kanal wählen unter <strong>Einstellungen → System → Update-Kanal</strong>: <em>stable</em> für freigegebene Versionen, <em>beta</em> für die v1.8-Vorabversionen. Der Wechsel geht jederzeit in beide Richtungen.</p>
       </div>
     </div>
   </div>
@@ -672,10 +887,11 @@ PASSWORD=YourPassword</div>
   <p class="section-sub lang-de">Detaillierte Anleitungen für jedes Projekt im Ökosystem.</p>
 
   <div class="docs-nav">
-    <button class="docs-tab active" onclick="showTab('boatos')">BoatOS</button>
-    <button class="docs-tab" onclick="showTab('boatopenio')">BoatOpenIO</button>
-    <button class="docs-tab" onclick="showTab('valveheater')">ValveHeater</button>
-    <button class="docs-tab" onclick="showTab('maps')"><span class="lang-en">Offline Maps</span><span class="lang-de">Offline-Karten</span></button>
+    <button class="docs-tab active" onclick="showTab('boatos', this)">BoatOS</button>
+    <button class="docs-tab" onclick="showTab('boatopenio', this)">BoatOpenIO</button>
+    <button class="docs-tab" onclick="showTab('valveheater', this)">ValveHeater</button>
+    <button class="docs-tab" onclick="showTab('maps', this)"><span class="lang-en">Offline Maps</span><span class="lang-de">Offline-Karten</span></button>
+    <button class="docs-tab" onclick="showTab('charts', this)"><span class="lang-en">Official Charts</span><span class="lang-de">Amtliche Karten</span></button>
   </div>
 
   <div id="tab-boatos" class="docs-panel active">
@@ -695,9 +911,22 @@ PASSWORD=YourPassword</div>
       <li>Eigener Bordrouter hält das Bootnetz vom Marina-WLAN getrennt</li>
       <li>GPS-Maus braucht freie Sicht zum Himmel — außen oder nahe einer Luke montieren</li>
     </ul>
-    <h3><span class="lang-en">OTA Update Workaround (images before 2026-06-04)</span><span class="lang-de">OTA-Update-Workaround (Images vor 2026-06-04)</span></h3>
-    <p class="lang-en">If OTA update hangs on older images, run this once via terminal or PowerShell:</p>
-    <p class="lang-de">Falls der OTA-Update auf älteren Images hängt, einmalig im Terminal oder PowerShell ausführen:</p>
+    <h3><span class="lang-en">Update Channels</span><span class="lang-de">Update-Kanäle</span></h3>
+    <p class="lang-en">The updater knows two channels, switchable under <strong>Settings → System</strong> in both Helm and Deck:</p>
+    <p class="lang-de">Der Updater kennt zwei Kanäle, umschaltbar unter <strong>Einstellungen → System</strong> in Helm und Deck:</p>
+    <ul class="lang-en">
+      <li><strong>stable</strong> — released versions only. Currently <strong>v1.7.3</strong>. This is the default and what the image ships with.</li>
+      <li><strong>beta</strong> — pre-releases as well. Currently the <strong>v1.8</strong> line, which carries the official inland charts and the route hazard check.</li>
+    </ul>
+    <ul class="lang-de">
+      <li><strong>stable</strong> — nur freigegebene Versionen. Aktuell <strong>v1.7.3</strong>. Standard und das, womit das Image ausgeliefert wird.</li>
+      <li><strong>beta</strong> — auch Vorabversionen. Aktuell die <strong>v1.8</strong>-Linie mit den amtlichen Binnenkarten und der Routen-Hindernis-Warnung.</li>
+    </ul>
+    <p class="lang-en">Switching back to stable is safe — the updater picks the newest version of the selected channel, so the next stable release brings you back onto the released line.</p>
+    <p class="lang-de">Der Rückweg auf stable ist unkritisch — der Updater nimmt die neueste Version des gewählten Kanals, das nächste Stable-Release holt dich also wieder auf die freigegebene Linie.</p>
+    <h3><span class="lang-en">OTA Update Workaround (v1.6.2 image and older)</span><span class="lang-de">OTA-Update-Workaround (Image v1.6.2 und älter)</span></h3>
+    <p class="lang-en">Not needed on the v1.7.0 image. If OTA update hangs on an older image, run this once via terminal or PowerShell:</p>
+    <p class="lang-de">Beim v1.7.0-Image nicht nötig. Falls der OTA-Update auf einem älteren Image hängt, einmalig im Terminal oder PowerShell ausführen:</p>
     <div class="code-block">ssh boatos@boatos.local "rm ~/BoatOS/scripts/update.sh"</div>
     <p class="lang-en">Default password: <strong>boatos123</strong> (change this!). Then start the update from Helm or Deck settings.</p>
     <p class="lang-de">Standard-Passwort: <strong>boatos123</strong> (bitte ändern!). Danach Update in den Helm- oder Deck-Einstellungen starten.</p>
@@ -755,28 +984,68 @@ passwd</div>
 
   <div id="tab-maps" class="docs-panel">
     <h3>MBTiles Creator (Windows)</h3>
-    <p class="lang-en">New in v1.6.4: standalone Windows tool for creating offline map tiles. No Python, no terminal required.</p>
-    <p class="lang-de">Neu in v1.6.4: eigenständiges Windows-Tool zum Erstellen von Offline-Kartenkacheln. Kein Python, kein Terminal erforderlich.</p>
+    <p class="lang-en">Standalone Windows tool for creating offline map tiles. No Python, no terminal required. Shipped with every release — the link below always fetches the current one.</p>
+    <p class="lang-de">Eigenständiges Windows-Tool zum Erstellen von Offline-Kartenkacheln. Kein Python, kein Terminal erforderlich. Liegt jedem Release bei — der Link unten holt immer die aktuelle Fassung.</p>
     <ul class="lang-en">
-      <li><a href="https://github.com/bigbrainlabs/BoatOS/releases/download/v1.6.4/BoatOS-MBTiles-Creator.exe" target="_blank" style="color:var(--cyan)">⬇ Download BoatOS-MBTiles-Creator.exe</a></li>
+      <li><a href="https://github.com/bigbrainlabs/BoatOS/releases/latest/download/BoatOS-MBTiles-Creator.exe" target="_blank" style="color:var(--cyan)">⬇ Download BoatOS-MBTiles-Creator.exe</a></li>
       <li>Run the .exe — Java (planetiler) downloads automatically on first start</li>
       <li>Select your region from 60+ options (all German states, Scandinavia, UK, Ireland, USA, Canada, Australia…)</li>
       <li>Enter your BoatOS IP address, click Create &amp; Upload — the tool converts and uploads directly to your Pi</li>
       <li>Note: if you save or download the .mbtiles manually, you need to upload it yourself via Deck (Settings → Maps → Upload)</li>
     </ul>
     <ul class="lang-de">
-      <li><a href="https://github.com/bigbrainlabs/BoatOS/releases/download/v1.6.4/BoatOS-MBTiles-Creator.exe" target="_blank" style="color:var(--cyan)">⬇ BoatOS-MBTiles-Creator.exe herunterladen</a></li>
+      <li><a href="https://github.com/bigbrainlabs/BoatOS/releases/latest/download/BoatOS-MBTiles-Creator.exe" target="_blank" style="color:var(--cyan)">⬇ BoatOS-MBTiles-Creator.exe herunterladen</a></li>
       <li>.exe ausführen — Java (planetiler) wird beim ersten Start automatisch geladen</li>
       <li>Region aus 60+ Optionen auswählen (alle deutschen Bundesländer, Skandinavien, UK, Irland, USA, Kanada, Australien…)</li>
       <li>BoatOS-IP eingeben, Erstellen &amp; Hochladen klicken — das Tool konvertiert und lädt direkt auf den Pi</li>
       <li>Hinweis: Wenn du die .mbtiles-Datei manuell speicherst oder herunterlädst, musst du sie selbst hochladen: Deck → Einstellungen → Karten → Hochladen</li>
     </ul>
     <h3><span class="lang-en">Multiple Regions</span><span class="lang-de">Mehrere Regionen</span></h3>
-    <p class="lang-en">BoatOS v1.6.4 supports multiple map regions simultaneously. Upload several .mbtiles files and switch between them in Deck.</p>
-    <p class="lang-de">BoatOS v1.6.4 unterstützt mehrere Kartenregionen gleichzeitig. Mehrere .mbtiles-Dateien hochladen und in Deck zwischen ihnen wechseln.</p>
+    <p class="lang-en">BoatOS holds several map regions at once. Upload several .mbtiles files and switch between them in Deck. Since v1.7 the routing graph follows the region — change the map, and routes are calculated on that region's waterways.</p>
+    <p class="lang-de">BoatOS hält mehrere Kartenregionen gleichzeitig vor. Mehrere .mbtiles-Dateien hochladen und in Deck zwischen ihnen wechseln. Seit v1.7 folgt der Routing-Graph der Region — Karte wechseln, und Routen werden auf den Wasserstraßen dieser Region berechnet.</p>
     <h3><span class="lang-en">Manual Download (advanced)</span><span class="lang-de">Manueller Download (Fortgeschrittene)</span></h3>
     <p class="lang-en">Experienced users can download .mbtiles files directly from OpenSeaMap or create them with tilemaker on Linux/Mac.</p>
     <p class="lang-de">Erfahrene Nutzer können .mbtiles-Dateien direkt von OpenSeaMap herunterladen oder mit tilemaker unter Linux/Mac erstellen.</p>
+  </div>
+
+  <div id="tab-charts" class="docs-panel">
+    <h3><span class="lang-en">Inland ENC from ELWIS</span><span class="lang-de">Inland-ENC von ELWIS</span></h3>
+    <p class="lang-en">Beyond the OpenStreetMap-based offline maps, BoatOS can use the <strong>official Inland ENC</strong> published by the German waterways administration (WSV) via ELWIS. These are the same charts the professional inland skippers use — and they are free.</p>
+    <p class="lang-de">Neben den OpenStreetMap-basierten Offline-Karten kann BoatOS die <strong>amtlichen Inland-ENC</strong> der Wasserstraßen- und Schifffahrtsverwaltung (WSV) über ELWIS nutzen. Das sind dieselben Karten, mit denen die Berufsschifffahrt fährt — und sie sind kostenlos.</p>
+    <p class="lang-en"><span class="chan">Beta</span> This is part of the v1.8 line. Switch the update channel to <em>beta</em> in Settings → System to get it.</p>
+    <p class="lang-de"><span class="chan">Beta</span> Gehört zur v1.8-Linie. Update-Kanal in Einstellungen → System auf <em>beta</em> stellen, um sie zu bekommen.</p>
+    <h3><span class="lang-en">How to get them</span><span class="lang-de">So kommen sie aufs Boot</span></h3>
+    <ul class="lang-en">
+      <li>Open <strong>Settings → Charts</strong> in Deck and press <strong>Load catalogue</strong> — BoatOS reads the ELWIS catalogue and lists the available chart cells</li>
+      <li>Tick the waterways you sail and start the download; it runs as a background job with progress, so you can keep using the chart</li>
+      <li>The S-57 cells are converted to vector tiles on the Pi — nothing leaves your boat, and nothing needs a desktop GIS</li>
+      <li>The catalogue is cached, so a temporary ELWIS outage does not block you</li>
+    </ul>
+    <ul class="lang-de">
+      <li>In Deck <strong>Einstellungen → Seekarten</strong> öffnen und <strong>Katalog laden</strong> drücken — BoatOS liest den ELWIS-Katalog und listet die verfügbaren Kartenblätter</li>
+      <li>Die eigenen Reviere anhaken und den Download starten; er läuft als Hintergrund-Job mit Fortschritt, die Karte bleibt nutzbar</li>
+      <li>Die S-57-Zellen werden auf dem Pi in Vektorkacheln umgewandelt — nichts verlässt das Boot, kein Desktop-GIS nötig</li>
+      <li>Der Katalog wird zwischengespeichert, ein ELWIS-Ausfall blockiert also nicht</li>
+    </ul>
+    <h3><span class="lang-en">What you see on the chart</span><span class="lang-de">Was auf der Karte erscheint</span></h3>
+    <ul class="lang-en">
+      <li>Depth areas and the fairway boundary</li>
+      <li>Bridges, weirs and overhead cables with their clearance heights</li>
+      <li>Inland traffic signs (CEVNI), buoyage and beacons, kilometre marks</li>
+      <li>Click any object for its chart attributes — in Deck and in Helm</li>
+    </ul>
+    <ul class="lang-de">
+      <li>Tiefenbereiche und Fahrrinnengrenze</li>
+      <li>Brücken, Wehre und Freileitungen mit Durchfahrtshöhen</li>
+      <li>Schifffahrtszeichen (CEVNI), Betonnung und Baken, Kilometrierung</li>
+      <li>Klick auf ein Objekt zeigt seine Kartenattribute — in Deck und in Helm</li>
+    </ul>
+    <h3><span class="lang-en">Route hazard check</span><span class="lang-de">Routen-Hindernis-Warnung</span></h3>
+    <p class="lang-en">Enter your height and draft once under <strong>Settings → Boat</strong>. After every route calculation BoatOS checks the route against the chart data and flags bridges you do not fit under, shallows below your draft — corrected by the live water level — and weirs. Warnings appear as markers on the chart plus a list you can walk through.</p>
+    <p class="lang-de">Höhe und Tiefgang einmalig unter <strong>Einstellungen → Boot</strong> eintragen. Nach jeder Routenberechnung prüft BoatOS die Route gegen die Kartendaten und markiert Brücken, unter die das Boot nicht passt, Flachstellen unter dem Tiefgang — korrigiert um den Live-Pegel — und Wehre. Die Warnungen erscheinen als Marker auf der Karte plus als Liste zum Durchgehen.</p>
+    <h3><span class="lang-en">Coverage</span><span class="lang-de">Abdeckung</span></h3>
+    <p class="lang-en">ELWIS covers the German federal waterways. Outside Germany BoatOS falls back to the OpenStreetMap/OpenSeaMap layers described in the Offline Maps tab.</p>
+    <p class="lang-de">ELWIS deckt die deutschen Bundeswasserstraßen ab. Außerhalb Deutschlands greift BoatOS auf die OpenStreetMap-/OpenSeaMap-Ebenen aus dem Reiter Offline-Karten zurück.</p>
   </div>
 </section>
 
@@ -801,9 +1070,9 @@ passwd</div>
       <p class="lang-en">Professional marine open source community</p>
       <p class="lang-de">Professionelle marine Open-Source-Community</p>
     </a>
-    <a href="https://www.facebook.com/search/top?q=BoatOS" class="community-card" target="_blank">
+    <a href="https://www.facebook.com/profile.php?id=61590360750363" class="community-card" target="_blank">
       <span class="community-card-icon">📘</span>
-      <h4>Facebook – BoatOS</h4>
+      <h4>Facebook</h4>
       <p class="lang-en">Updates, builds, discussions</p>
       <p class="lang-de">Updates, Builds, Diskussionen</p>
     </a>
@@ -819,12 +1088,46 @@ passwd</div>
       <p class="lang-en">German sailing community (OBP section)</p>
       <p class="lang-de">Deutsche Segelgemeinschaft (OBP-Bereich)</p>
     </a>
-    <a href="https://www.mikrocontroller.net" class="community-card" target="_blank">
-      <span class="community-card-icon">⚡</span>
-      <h4>Mikrocontroller.net</h4>
-      <p class="lang-en">German electronics forum</p>
-      <p class="lang-de">Deutsches Elektronikforum</p>
+    <a href="https://www.tindie.com/stores/bigbrainlabs/" class="community-card" target="_blank">
+      <span class="community-card-icon">🛒</span>
+      <h4>Tindie</h4>
+      <p class="lang-en">Soon: complete DIY kits (some soldering still on you) and fully assembled boards</p>
+      <p class="lang-de">Demnächst: komplette DIY-Bausätze (etwas löten bleibt) und fertig bestückte Boards</p>
     </a>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- SPONSORS -->
+<section id="sponsors">
+  <div class="section-eyebrow"><span class="lang-en">Thank you</span><span class="lang-de">Danke</span></div>
+  <h2 class="section-title"><span class="lang-en">Sponsors &amp; supporters</span><span class="lang-de">Sponsoren &amp; Unterstützer</span></h2>
+  <p class="section-sub lang-en">This project is free and stays free. That works because people put their time, their equipment or their money into it. The names below are also shown inside BoatOS, under Settings → About.</p>
+  <p class="section-sub lang-de">Dieses Projekt ist kostenlos und bleibt es. Das geht, weil Leute ihre Zeit, ihre Technik oder ihr Geld hineinstecken. Die Namen unten stehen auch in BoatOS selbst, unter Einstellungen → Über.</p>
+
+  <div class="sponsor-grid">
+    <div class="sponsor-card">
+      <span class="sponsor-tier">First Mate</span>
+      <h3>Bernd</h3>
+      <p class="lang-en">Scans components in 3D so that housings, brackets and adapters can be designed to actually fit — instead of being measured by hand and reprinted three times.</p>
+      <p class="lang-de">Scannt Bauteile in 3D, damit Gehäuse, Halterungen und Adapter passgenau konstruiert werden können — statt von Hand gemessen und dreimal nachgedruckt zu werden.</p>
+    </div>
+    <div class="sponsor-card">
+      <span class="sponsor-tier sponsor-tier-partner"><span class="lang-en">Partner</span><span class="lang-de">Partner</span></span>
+      <h3>PCBWay</h3>
+      <p class="lang-en">Circuit board manufacturing for the BoatOpenIO boards and the mini-board family.</p>
+      <p class="lang-de">Leiterplattenfertigung für die BoatOpenIO-Boards und die Mini-Board-Familie.</p>
+      <a href="https://www.pcbway.com" class="project-link" target="_blank">pcbway.com ↗</a>
+    </div>
+    <div class="sponsor-card sponsor-card-join">
+      <span class="sponsor-tier sponsor-tier-open"><span class="lang-en">Open</span><span class="lang-de">Frei</span></span>
+      <h3><span class="lang-en">Your name here</span><span class="lang-de">Dein Name hier</span></h3>
+      <p class="lang-en">Hardware to test, a skill to lend, or a few euros a month — all of it moves the project forward, and all of it gets credited.</p>
+      <p class="lang-de">Hardware zum Testen, eine Fähigkeit, die du beisteuerst, oder ein paar Euro im Monat — alles bringt das Projekt weiter, und alles wird genannt.</p>
+      <a href="https://github.com/sponsors/bigbrainlabs" class="project-link" target="_blank">GitHub Sponsors ↗</a>
+      <a href="https://www.patreon.com/cw/logbook_without_posing" class="project-link" target="_blank">Patreon ↗</a>
+    </div>
   </div>
 </section>
 
@@ -854,6 +1157,12 @@ passwd</div>
       <a href="https://amzn.to/4gJNl29" class="btn-primary lang-de" target="_blank" style="display:inline-flex;">
         📚 Auf Amazon kaufen →
       </a>
+      <p class="books-alt">
+        <span class="lang-en">Not a reader? You can also support the work directly:</span>
+        <span class="lang-de">Kein Lesetyp? Du kannst die Arbeit auch direkt unterstützen:</span>
+        <a href="https://github.com/sponsors/bigbrainlabs" target="_blank">💜 GitHub Sponsors</a>
+        <a href="https://www.patreon.com/cw/logbook_without_posing" target="_blank">🎗️ Patreon</a>
+      </p>
     </div>
     <div class="books-list">
       <div class="book-item">
@@ -891,6 +1200,11 @@ passwd</div>
         <span class="book-title lang-en">The AutoSat</span><span class="book-title lang-de">Der AutoSat</span>
         <span class="book-live" style="color:var(--muted);background:transparent;border-color:var(--border)">PLANNED</span>
       </div>
+      <div class="book-item">
+        <span class="book-num">Vol.8</span>
+        <span class="book-title lang-en">In Real Use</span><span class="book-title lang-de">Im echten Einsatz</span>
+        <span class="book-live" style="color:var(--muted);background:transparent;border-color:var(--border)">PLANNED</span>
+      </div>
     </div>
   </div>
 </section>
@@ -904,8 +1218,11 @@ passwd</div>
     <a href="https://github.com/bigbrainlabs/BoatOpenIO" target="_blank">BoatOpenIO GitHub</a>
     <a href="https://open-boat-projects.org/de/boatos/" target="_blank">Open Boat Projects</a>
     <a href="https://hackaday.io/project/205823" target="_blank">Hackaday.io</a>
+    <a href="https://github.com/bigbrainlabs/AutoSat" target="_blank">AutoSat GitHub</a>
+    <a href="https://www.tindie.com/stores/bigbrainlabs/" target="_blank">Tindie</a>
     <a href="https://amzn.to/4gJNl29" target="_blank" class="lang-en">Books on Amazon</a>
     <a href="https://amzn.to/4gJNl29" target="_blank" class="lang-de">Bücher auf Amazon</a>
+    <a href="https://github.com/sponsors/bigbrainlabs" target="_blank">Sponsors</a>
   </div>
   <p><span class="lang-en">Made by</span><span class="lang-de">Gebaut von</span> <a href="https://github.com/bigbrainlabs" target="_blank">bigbrainlabs</a> · GPL v3 · 100% Open Source</p>
   <p style="margin-top:1rem;">
@@ -914,11 +1231,12 @@ passwd</div>
 </footer>
 
 <script>
-  function showTab(name) {
+  function showTab(name, el) {
     document.querySelectorAll('.docs-panel').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.docs-tab').forEach(t => t.classList.remove('active'));
     document.getElementById('tab-' + name).classList.add('active');
-    event.target.classList.add('active');
+    // Bei Tabs mit Sprach-<span> ist das Klickziel der span, nicht der Button
+    (el || document.querySelector(`.docs-tab[onclick*="'${name}'"]`)).classList.add('active');
   }
 
   function toggleLang() {
