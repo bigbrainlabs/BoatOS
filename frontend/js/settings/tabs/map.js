@@ -15,12 +15,20 @@ export const html = `
                         <div class="toggle active" id="toggle-openseamap" onclick="BoatOS.ui.toggleSettingToggle(this, 'openSeaMap')"></div>
                     </div>
                     <div class="setting-item">
+                        <span data-i18n="settings_show_ienc">Amtliche Karten (IENC)</span>
+                        <div class="toggle active" id="toggle-ienc" onclick="BoatOS.ui.toggleSettingToggle(this, 'showIENC')"></div>
+                    </div>
+                    <div class="setting-item">
                         <span data-i18n="settings_show_locks">Schleusen anzeigen</span>
                         <div class="toggle active" id="toggle-locks" onclick="BoatOS.ui.toggleSettingToggle(this, 'showLocks')"></div>
                     </div>
                     <div class="setting-item">
                         <span data-i18n="settings_show_gauges">Pegelstände anzeigen</span>
                         <div class="toggle" id="toggle-pegel" onclick="BoatOS.ui.toggleSettingToggle(this, 'showPegel')"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span data-i18n="settings_show_harbors">Häfen &amp; Ankerplätze</span>
+                        <div class="toggle" id="toggle-harbors" onclick="BoatOS.ui.toggleSettingToggle(this, 'showHarbors')"></div>
                     </div>
                     <div class="setting-item">
                         <span data-i18n="settings_show_track">Track anzeigen</span>
@@ -91,8 +99,10 @@ export function load(settings) {
 
     const toggles = {
         'toggle-openseamap': settings.map.openSeaMap,
+        'toggle-ienc': settings.map.showIENC,
         'toggle-locks': settings.map.showLocks,
         'toggle-pegel': settings.map.showPegel,
+        'toggle-harbors': settings.map.showHarbors,
         'toggle-track': settings.map.showTrack,
         'toggle-autocenter': settings.map.autoCenter,
         'toggle-headingup': settings.map.headingUp
@@ -110,15 +120,19 @@ export function collect(settings) {
     if (mapStyleSelect) settings.map.style = mapStyleSelect.value;
 
     const toggleOpenSeaMap = document.getElementById('toggle-openseamap');
+    const toggleIENC = document.getElementById('toggle-ienc');
     const toggleLocks = document.getElementById('toggle-locks');
     const togglePegel = document.getElementById('toggle-pegel');
+    const toggleHarbors = document.getElementById('toggle-harbors');
     const toggleTrack = document.getElementById('toggle-track');
     const toggleAutoCenter = document.getElementById('toggle-autocenter');
     const toggleHeadingUp = document.getElementById('toggle-headingup');
 
     if (toggleOpenSeaMap) settings.map.openSeaMap = toggleOpenSeaMap.classList.contains('active');
+    if (toggleIENC) settings.map.showIENC = toggleIENC.classList.contains('active');
     if (toggleLocks) settings.map.showLocks = toggleLocks.classList.contains('active');
     if (togglePegel) settings.map.showPegel = togglePegel.classList.contains('active');
+    if (toggleHarbors) settings.map.showHarbors = toggleHarbors.classList.contains('active');
     if (toggleTrack) settings.map.showTrack = toggleTrack.classList.contains('active');
     if (toggleAutoCenter) settings.map.autoCenter = toggleAutoCenter.classList.contains('active');
     if (toggleHeadingUp) settings.map.headingUp = toggleHeadingUp.classList.contains('active');

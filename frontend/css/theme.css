@@ -517,6 +517,80 @@ body {
     background: transparent;
 }
 
+/* MapLibre Popup Override for IENC-Features (amtliche Karten) — Muster wie gauge-popup */
+.maplibregl-popup.ienc-popup .maplibregl-popup-content {
+    background: var(--bg-panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    box-shadow: 0 4px 20px var(--shadow-strong);
+}
+
+.maplibregl-popup.ienc-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup.ienc-popup.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup.ienc-popup.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+    border-top-color: var(--bg-panel);
+}
+.maplibregl-popup.ienc-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup.ienc-popup.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup.ienc-popup.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+    border-bottom-color: var(--bg-panel);
+}
+.maplibregl-popup.ienc-popup.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+    border-right-color: var(--bg-panel);
+}
+.maplibregl-popup.ienc-popup.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+    border-left-color: var(--bg-panel);
+}
+
+.maplibregl-popup.ienc-popup .maplibregl-popup-close-button {
+    color: var(--text-dim);
+    font-size: 18px;
+    padding: 2px 8px;
+}
+.maplibregl-popup.ienc-popup .maplibregl-popup-close-button:hover {
+    color: var(--text);
+    background: transparent;
+}
+
+/* MapLibre Popup Override for Häfen/Ankerplätze (POI-Pins) — Muster wie gauge-popup */
+.maplibregl-popup.poi-popup .maplibregl-popup-content {
+    background: var(--bg-panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    box-shadow: 0 4px 20px var(--shadow-strong);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+}
+.maplibregl-popup.poi-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup.poi-popup.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup.poi-popup.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+    border-top-color: var(--bg-panel);
+}
+.maplibregl-popup.poi-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup.poi-popup.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup.poi-popup.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+    border-bottom-color: var(--bg-panel);
+}
+.maplibregl-popup.poi-popup.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+    border-right-color: var(--bg-panel);
+}
+.maplibregl-popup.poi-popup.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+    border-left-color: var(--bg-panel);
+}
+.maplibregl-popup.poi-popup .maplibregl-popup-close-button {
+    color: var(--text-dim);
+    font-size: 18px;
+    padding: 2px 8px;
+}
+.maplibregl-popup.poi-popup .maplibregl-popup-close-button:hover {
+    color: var(--text);
+    background: transparent;
+}
+
 .lock-popup-content {
     padding: var(--space-xl);
     color: var(--text);

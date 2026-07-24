@@ -869,6 +869,18 @@ class _HorizonDisplay extends StatelessWidget {
   Widget build(BuildContext context) {
     final rs = roll  >= 0 ? '+' : '';
     final ps = pitch >= 0 ? '+' : '';
+
+    Widget graphic() => LayoutBuilder(builder: (_, bc) {
+          final dim = math.min(bc.maxWidth, bc.maxHeight);
+          return Center(
+            child: SizedBox.square(
+              dimension: dim,
+              child: CustomPaint(
+                  painter: _HorizonPainter(roll: roll, pitch: pitch)),
+            ),
+          );
+        });
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
@@ -879,35 +891,61 @@ class _HorizonDisplay extends StatelessWidget {
         ),
       ),
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-      child: Column(
-        children: [
-          const Text('Lage',
-              style: TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
-          const SizedBox(height: 4),
-          Expanded(
-            child: LayoutBuilder(builder: (_, bc) {
-              final dim = math.min(bc.maxWidth, bc.maxHeight);
-              return Center(
-                child: SizedBox.square(
-                  dimension: dim,
-                  child: CustomPaint(
-                      painter: _HorizonPainter(roll: roll, pitch: pitch)),
-                ),
-              );
-            }),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+      child: LayoutBuilder(builder: (_, box) {
+        // Breite, flache Kacheln (häufig im Dashboard): Grafik links über die
+        // VOLLE Höhe, Titel + Roll/Pitch rechts daneben statt darunter. Sonst ist
+        // der Horizont-Kreis auf die kleine Kachelhöhe beschränkt (quadratisch)
+        // und schrumpft zu einem unlesbaren Fleck, während die Breite leer bleibt.
+        final wide = box.maxWidth > box.maxHeight * 1.25;
+        if (wide) {
+          return Row(
             children: [
-              _val('$rs${roll.toStringAsFixed(1)}°', 'Roll'),
-              const SizedBox(width: 20),
-              _val('$ps${pitch.toStringAsFixed(1)}°', 'Pitch'),
+              Expanded(flex: 3, child: graphic()),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Lage',
+                        style:
+                            TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
+                    const SizedBox(height: 10),
+                    _val('$rs${roll.toStringAsFixed(1)}°', 'Roll'),
+                    const SizedBox(height: 8),
+                    _val('$ps${pitch.toStringAsFixed(1)}°', 'Pitch'),
+                  ],
+                ),
+              ),
             ],
-          ),
-          const SizedBox(height: 2),
-        ],
-      ),
+          );
+        }
+
+        // Hohe/quadratische Kachel: Grafik oben, Werte darunter. In sehr flachen
+        // schmalen Kacheln die Zahlen weglassen, damit der Kreis nicht schrumpft.
+        final showVals = box.maxHeight > 150;
+        return Column(
+          children: [
+            const Text('Lage',
+                style: TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
+            const SizedBox(height: 4),
+            Expanded(child: graphic()),
+            if (showVals) ...[
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _val('$rs${roll.toStringAsFixed(1)}°', 'Roll'),
+                  const SizedBox(width: 20),
+                  _val('$ps${pitch.toStringAsFixed(1)}°', 'Pitch'),
+                ],
+              ),
+              const SizedBox(height: 2),
+            ],
+          ],
+        );
+      }),
     );
   }
 
@@ -941,6 +979,11 @@ class _HorizonPainter extends CustomPainter {
     final r  = math.min(cx, cy) - 14.0;
     if (r < 10) return;
 
+    // Kleine Dashboard-Kacheln: die volle Flug-Attitude-Detailfülle (Pitch-
+    // Gradzahlen, Boots-Silhouette, alle Roll-Striche) wird zu unlesbarem
+    // Gewusel. Ab hier vereinfachen.
+    final compact = r < 66;
+
     final rollRad = roll  * math.pi / 180;
     final pitchPx = pitch * r / _kDegPerR;
     final bigR    = r * 2.4;
@@ -972,7 +1015,7 @@ class _HorizonPainter extends CustomPainter {
       ).createShader(seaRect));
 
     // Pitch scale lines
-    _drawPitchLines(canvas, r);
+    _drawPitchLines(canvas, r, compact);
 
     // Horizon glow
     canvas.drawLine(Offset(-bigR, 0), Offset(bigR, 0), Paint()
@@ -1001,7 +1044,7 @@ class _HorizonPainter extends CustomPainter {
     canvas.restore(); // end clip
 
     // ── Roll scale (outside clip, around rim) ─────────────────────────────────
-    _drawRollScale(canvas, c, r);
+    _drawRollScale(canvas, c, r, compact);
 
     // ── Bezel ring ────────────────────────────────────────────────────────────
     canvas.drawCircle(c, r, Paint()
@@ -1012,24 +1055,26 @@ class _HorizonPainter extends CustomPainter {
     canvas.save();
     canvas.clipPath(
         Path()..addOval(Rect.fromCircle(center: c, radius: r - 1)));
-    _drawFixedReticle(canvas, c, r);
+    _drawFixedReticle(canvas, c, r, compact);
     canvas.restore();
   }
 
-  void _drawPitchLines(Canvas canvas, double r) {
+  void _drawPitchLines(Canvas canvas, double r, bool compact) {
     final pxPerDeg = r / _kDegPerR;
     final major = Paint()
       ..color = Colors.white.withOpacity(0.55)..strokeWidth = 1.5;
     final minor = Paint()
       ..color = Colors.white.withOpacity(0.28)..strokeWidth = 1.0;
 
-    for (int deg = -60; deg <= 60; deg += 5) {
+    // Kleine Kachel: nur die 10°-Striche, keine Zwischenstriche, keine Zahlen
+    final step = compact ? 10 : 5;
+    for (int deg = -60; deg <= 60; deg += step) {
       if (deg == 0) continue;
       final y  = -deg * pxPerDeg;
       final isMajor = deg % 10 == 0;
       final hl = isMajor ? r * 0.28 : r * 0.14;
       canvas.drawLine(Offset(-hl, y), Offset(hl, y), isMajor ? major : minor);
-      if (isMajor) {
+      if (isMajor && !compact) {
         final tp = TextPainter(
           text: TextSpan(
               text: deg.abs().toString(),
@@ -1042,8 +1087,12 @@ class _HorizonPainter extends CustomPainter {
     }
   }
 
-  void _drawRollScale(Canvas canvas, Offset c, double r) {
-    const kAngles = [-60, -45, -30, -20, -10, 0, 10, 20, 30, 45, 60];
+  void _drawRollScale(Canvas canvas, Offset c, double r, bool compact) {
+    // Kleine Kachel: nur die Hauptmarken (0/±30/±60), sonst wirkt der Rand
+    // wie ein Sonnen-Burst.
+    const kAll     = [-60, -45, -30, -20, -10, 0, 10, 20, 30, 45, 60];
+    const kMajors  = [-60, -30, 0, 30, 60];
+    final kAngles  = compact ? kMajors : kAll;
     for (final deg in kAngles) {
       final rad     = (deg - 90.0) * math.pi / 180;
       final isMajor = deg % 30 == 0 || deg == 0;
@@ -1068,7 +1117,28 @@ class _HorizonPainter extends CustomPainter {
     canvas.drawPath(fixPath, Paint()..color = Colors.white.withOpacity(0.80));
   }
 
-  void _drawFixedReticle(Canvas canvas, Offset c, double r) {
+  void _drawFixedReticle(Canvas canvas, Offset c, double r, bool compact) {
+    // Kleine Kachel: schlichtes Zentrum statt der detaillierten Boots-Silhouette
+    // (die wird bei der Größe nur ein Blob). Kurze Flügel + Mittelpunkt.
+    if (compact) {
+      final wing = r * 0.42;
+      final gap  = r * 0.12;
+      final sh = Paint()
+        ..color = Colors.black.withOpacity(0.4)
+        ..strokeWidth = 3.5
+        ..strokeCap = StrokeCap.round;
+      final wh = Paint()
+        ..color = Colors.white.withOpacity(0.9)
+        ..strokeWidth = 2.0
+        ..strokeCap = StrokeCap.round;
+      for (final p in [sh, wh]) {
+        canvas.drawLine(Offset(c.dx - wing, c.dy), Offset(c.dx - gap, c.dy), p);
+        canvas.drawLine(Offset(c.dx + gap, c.dy), Offset(c.dx + wing, c.dy), p);
+      }
+      canvas.drawCircle(c, 2.6, Paint()..color = Colors.white.withOpacity(0.95));
+      return;
+    }
+
     final shadow = Paint()
       ..color = Colors.black.withOpacity(0.35)
       ..strokeWidth = 3.0

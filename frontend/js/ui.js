@@ -782,18 +782,33 @@ export function showSection(sectionId, tabElement) {
         section.classList.remove('section-hidden');
     }
 
-    // Tab-Styling aktualisieren
-    document.querySelectorAll('.sheet-tab').forEach(tab => {
+    // Aktiv-Styling: Rondell-Panel-Einträge (.qa-section) — plus Legacy-Reiter
+    document.querySelectorAll('.qa-section, .sheet-tab').forEach(tab => {
         tab.classList.remove('active');
     });
     if (tabElement) {
         tabElement.classList.add('active');
     }
 
-    // Sheet auf "full" erweitern wenn nicht schon
-    if (sheetState === 'peek') {
-        cycleSheet();
+    // Schwebendes Info-Panel über dem Rondell einblenden
+    const sheet = document.getElementById('bottomSheet');
+    if (sheet) {
+        sheet.classList.add('panel-open');
     }
+}
+
+/**
+ * Schließt das schwebende Info-Panel (X-Icon) — das Rondell schwebt danach
+ * wieder frei über der Karte.
+ */
+export function closePanel() {
+    const sheet = document.getElementById('bottomSheet');
+    if (sheet) {
+        sheet.classList.remove('panel-open');
+    }
+    document.querySelectorAll('.qa-section, .sheet-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
 }
 
 // ===========================================
@@ -844,7 +859,7 @@ export function toggleMode() {
             setTimeout(() => map.resize(), 50);
         }
         if (bottomSheet) {
-            bottomSheet.style.display = 'block';
+            bottomSheet.style.display = 'flex';   // Rondell = Flex-Column (Panel über Arc)
             // Sheet auf peek-Status zurücksetzen
             bottomSheet.classList.remove('full', 'hidden');
             bottomSheet.classList.add('peek');
@@ -1921,6 +1936,16 @@ export function toggleSettingToggle(toggleElement, settingKey) {
     if (settingKey === 'showPegel') {
         setPegelVisible(isActive);
     }
+
+    // Häfen & Ankerplätze umschalten
+    if (settingKey === 'showHarbors') {
+        setHarborsVisible(isActive);
+    }
+
+    // Amtliche IENC-Karten umschalten
+    if (settingKey === 'showIENC') {
+        window.BoatOS?.map?.toggleIENCLayer?.(isActive);
+    }
 }
 
 /**
@@ -2009,16 +2034,35 @@ function setPegelVisible(visible) {
 }
 
 /**
+ * Setzt die Sichtbarkeit der Häfen & Ankerplätze (Infrastruktur-Layer, auf
+ * harbor+anchorage beschränkt — Schleusen laufen über ihr eigenes System).
+ * @param {boolean} visible - Sichtbar ja/nein
+ */
+function setHarborsVisible(visible) {
+    if (window.BoatOS?.ais?.updateInfrastructureSettings) {
+        window.BoatOS.ais.updateInfrastructureSettings({
+            enabled: visible,
+            types: ['harbor', 'anchorage']
+        });
+    }
+    console.log(`Häfen & Ankerplätze ${visible ? 'aktiviert' : 'deaktiviert'}`);
+}
+
+/**
  * Toggle-Funktion für Schleusen Quick-Action Button
  */
 export function toggleLocks() {
     locksVisible = !locksVisible;
     setLocksVisible(locksVisible);
 
-    // Settings-Toggle synchronisieren
+    // Settings-Toggle + Panel-Layer-Button synchronisieren
     const settingsToggle = document.getElementById('toggle-locks');
     if (settingsToggle) {
         settingsToggle.classList.toggle('active', locksVisible);
+    }
+    const layerBtn = document.getElementById('btn-locks');
+    if (layerBtn) {
+        layerBtn.classList.toggle('active', locksVisible);
     }
 
     showToast(locksVisible ? t('layerLocksOn') : t('layerLocksOff'), 'info');
@@ -2031,10 +2075,14 @@ export function togglePegel() {
     pegelVisible = !pegelVisible;
     setPegelVisible(pegelVisible);
 
-    // Settings-Toggle synchronisieren
+    // Settings-Toggle + Rondell-Button synchronisieren
     const settingsToggle = document.getElementById('toggle-pegel');
     if (settingsToggle) {
         settingsToggle.classList.toggle('active', pegelVisible);
+    }
+    const rondellBtn = document.getElementById('btn-pegel');
+    if (rondellBtn) {
+        rondellBtn.classList.toggle('active', pegelVisible);
     }
 
     showToast(pegelVisible ? t('layerGaugesOn') : t('layerGaugesOff'), 'info');
@@ -2057,6 +2105,18 @@ export function initLayerVisibility() {
     const pegelEnabled = (settings.map?.showPegel ?? settings.waterLevel?.enabled) === true;
     pegelVisible = pegelEnabled;
 
+    // Häfen & Ankerplätze standardmäßig inaktiv — Settings-Key ist map.showHarbors.
+    // Hier NUR den Button-Zustand setzen; die eigentliche Aktivierung (moveend-
+    // Listener → Map-Zugriff) passiert in main.js NACH initAISModule, wie bei Pegel.
+    const harborsEnabled = settings.map?.showHarbors === true;
+    const harborsToggle = document.getElementById('toggle-harbors');
+    if (harborsToggle) harborsToggle.classList.toggle('active', harborsEnabled);
+
+    // Amtliche IENC-Karten standardmäßig aktiv (Layer erscheinen ohnehin nur,
+    // wenn Gewässer installiert sind) — Settings-Key ist map.showIENC
+    const iencEnabled = settings.map?.showIENC !== false;
+    window.BoatOS?.map?.toggleIENCLayer?.(iencEnabled);
+
     // UI synchronisieren
     const locksToggle = document.getElementById('toggle-locks');
     if (locksToggle) {
@@ -2066,6 +2126,11 @@ export function initLayerVisibility() {
     const pegelToggle = document.getElementById('toggle-pegel');
     if (pegelToggle) {
         pegelToggle.classList.toggle('active', pegelEnabled);
+    }
+
+    const iencToggle = document.getElementById('toggle-ienc');
+    if (iencToggle) {
+        iencToggle.classList.toggle('active', iencEnabled);
     }
 
     const locksBtn = document.getElementById('btn-locks');

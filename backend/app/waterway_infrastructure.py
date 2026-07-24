@@ -69,6 +69,13 @@ class WaterwayInfrastructure:
             query_parts.append(f'way["harbour"="yes"]({bbox});')
             query_parts.append(f'way["amenity"="marina"]({bbox});')
 
+        # Anchorages (Ankerplätze) — Seamark-Tags (OpenSeaMap)
+        if 'anchorage' in types:
+            query_parts.append(f'node["seamark:type"="anchorage"]({bbox});')
+            query_parts.append(f'node["seamark:type"="anchor_berth"]({bbox});')
+            query_parts.append(f'way["seamark:type"="anchorage"]({bbox});')
+            query_parts.append(f'way["seamark:type"="anchor_berth"]({bbox});')
+
         # Weirs (Wehre)
         if 'weir' in types:
             query_parts.append(f'node["waterway"="weir"]({bbox});')
@@ -89,7 +96,15 @@ class WaterwayInfrastructure:
         """
 
         try:
-            response = requests.post(self.overpass_url, data={'data': query}, timeout=30)
+            # Overpass weist den Default-UA von python-requests inzwischen mit
+            # HTTP 406 ab → eigener User-Agent, sonst kommt NIE etwas zurueck
+            # (betraf auch die bestehenden Haefen, nicht nur die Ankerplaetze).
+            response = requests.post(
+                self.overpass_url,
+                data={'data': query},
+                headers={'User-Agent': 'BoatOS/1.0 (marine navigation; +https://github.com/bigbrainlabs/BoatOS)'},
+                timeout=30,
+            )
             response.raise_for_status()
             data = response.json()
 
@@ -110,11 +125,15 @@ class WaterwayInfrastructure:
             return pois
 
         except requests.exceptions.RequestException as e:
+            # NICHT [] zurueckgeben: ein leeres Ergebnis ist im Frontend nicht von
+            # "hier gibt es nichts" zu unterscheiden und wischt die aktuellen
+            # Marker weg. Weiterreichen → der Endpoint meldet einen Fehler, das
+            # Frontend behaelt die Marker.
             print(f"⚠️ Error fetching infrastructure from OSM: {e}")
-            return []
+            raise
         except Exception as e:
             print(f"⚠️ Error parsing infrastructure data: {e}")
-            return []
+            raise
 
     def _parse_element(self, element: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Parse OSM element to POI format"""
@@ -167,6 +186,7 @@ class WaterwayInfrastructure:
                 'lock': 'Schleuse',
                 'bridge': 'Brücke',
                 'harbor': 'Hafen',
+                'anchorage': 'Ankerplatz',
                 'weir': 'Wehr',
                 'dam': 'Damm'
             }
@@ -178,6 +198,7 @@ class WaterwayInfrastructure:
                 'lock': 'Schleuse',
                 'bridge': 'Brücke',
                 'harbor': 'Hafen',
+                'anchorage': 'Ankerplatz',
                 'weir': 'Wehr',
                 'dam': 'Damm'
             }
@@ -191,6 +212,7 @@ class WaterwayInfrastructure:
             'lock': 'Schleuse',
             'bridge': 'Brücke',
             'harbor': 'Hafen',
+            'anchorage': 'Ankerplatz',
             'weir': 'Wehr',
             'dam': 'Damm'
         }
@@ -202,6 +224,8 @@ class WaterwayInfrastructure:
             return 'lock'
         elif tags.get('bridge') == 'yes' or tags.get('man_made') == 'bridge':
             return 'bridge'
+        elif tags.get('seamark:type') in ('anchorage', 'anchor_berth'):
+            return 'anchorage'
         elif tags.get('harbour') == 'yes' or tags.get('amenity') == 'marina':
             return 'harbor'
         elif tags.get('waterway') == 'weir':
@@ -264,6 +288,23 @@ class WaterwayInfrastructure:
                 props['toilets'] = tags['toilets']
             if 'shower' in tags:
                 props['shower'] = tags['shower']
+            if tags.get('drinking_water') == 'yes' or tags.get('water_point') == 'yes':
+                props['water'] = 'yes'
+
+        # Anchorage-specific
+        elif poi_type == 'anchorage':
+            # Tiefe: OpenSeaMap fuehrt sie unter mehreren Schluesseln
+            depth = (tags.get('seamark:anchorage:depth')
+                     or tags.get('depth')
+                     or tags.get('seamark:depth'))
+            if depth:
+                props['depth'] = depth
+            # Meeresgrund / Ankergrund (sand, mud, …)
+            seabed = tags.get('seamark:anchorage:quality') or tags.get('seamark:bottom:nature')
+            if seabed:
+                props['seabed'] = seabed
+            if 'seamark:anchorage:category' in tags:
+                props['category'] = tags['seamark:anchorage:category']
 
         # Weir-specific
         elif poi_type == 'weir':

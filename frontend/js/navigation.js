@@ -24,6 +24,17 @@ import { t } from './i18n.js';
 // Route-Koordinaten für XTE-Berechnung
 let currentRouteCoordinates = null;
 
+// Aktive Route ans Backend melden → Broadcast an alle Clients (Deck ↔ Helm-Sync).
+function _publishActiveRoute() {
+    const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
+    const coords = (currentRouteCoordinates || []).map(c => [c.lat, c.lon]);
+    fetch(`${apiUrl}/api/nav/route`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coords }),
+    }).catch(() => {});
+}
+
 // Routen-Farbe für Segment-Hervorhebung
 let currentRouteColor = '#3498db';
 
@@ -59,6 +70,11 @@ let routeLabelMarkers = [];
 let locksOnRoute = [];
 let lockWarnings = [];
 let locksTimelinePanel = null;
+
+// IENC-Hindernisse auf der Route (Brücken/Tiefen/Wehre)
+let routeHazards = [];
+let hazardMarkers = [];
+let hazardsPanel = null;
 
 // Segment-Hervorhebung Status
 let currentSegmentActive = false;
@@ -823,6 +839,8 @@ export async function calculateRoute(context, _isRetry = false) {
 
                 // Wasserweg-Route zeichnen
                 drawWaterwayRoute(routeData, context);
+                // Route gegen IENC-Daten prüfen (Brückenhöhen, Tiefen, Wehre)
+                checkRouteHazards(routeData.geometry.coordinates, context);
                 if (hideRoutingLoader) hideRoutingLoader();
                 return;
             }
@@ -893,6 +911,7 @@ function drawWaterwayRoute(routeData, context) {
 
     // Route-Koordinaten für XTE-Berechnung speichern
     currentRouteCoordinates = routeCoords.map(c => ({ lat: c[1], lon: c[0] }));
+    _publishActiveRoute();
     currentRouteColor = routeColor;
 
     // Distanz und ETA berechnen
@@ -1006,6 +1025,7 @@ export function drawDirectRoute(context) {
 
     // Route-Koordinaten für XTE-Berechnung speichern
     currentRouteCoordinates = points.map(p => ({ lat: p[0], lon: p[1] }));
+    _publishActiveRoute();
     currentRoutePolyline = { options: { originalColor: '#3498db' } };
 
     let totalDistance = 0;
@@ -1109,8 +1129,12 @@ export function clearRouteDisplay(context) {
     // Route-Label Marker entfernen
     removeRouteLabels(context);
 
+    // IENC-Hindernis-Marker und -Panel entfernen
+    clearRouteHazards();
+
     // Route-Pfeile entfernen
     currentRouteCoordinates = null;
+    _publishActiveRoute();
 
     const currentBadge = document.getElementById('route-current-badge');
     if (currentBadge) currentBadge.style.display = 'none';
@@ -1123,6 +1147,180 @@ export function clearRouteDisplay(context) {
 export function removeRouteLabels(context) {
     routeLabelMarkers.forEach(marker => marker.remove());
     routeLabelMarkers = [];
+}
+
+// ==================== IENC-HINDERNIS-CHECK ====================
+// Prüft die berechnete Route serverseitig gegen die amtlichen IENC-Daten
+// (Brückenhöhen/Freileitungen vs. Bootshöhe, Tiefen vs. Tiefgang, Wehre)
+// und zeigt Warnungen als Karten-Marker + Panel. Reine Warnung — die
+// Route selbst wird nicht verändert.
+
+const HAZARD_ICONS = { bridge: '🌉', cable: '⚡', depth: '🌊', weir: '🚧' };
+
+function hazardTitle(w) {
+    if (w.name) return w.name;
+    const key = { bridge: 'navHazardBridge', cable: 'navHazardCable',
+                  depth: 'navHazardDepth', weir: 'navHazardWeir' }[w.type];
+    return key ? t(key) : w.type;
+}
+
+function hazardDetail(w) {
+    if (w.type === 'depth') {
+        let s = `${t('navHazardDepthVal')}: ${w.depth} m — ${t('navHazardRequired')}: ${w.required} m`;
+        if (w.current_depth !== undefined) {
+            // Pegel-korrigiert: Kartentiefe + (W − MNW) des nächsten Pegels am selben Gewässer
+            const sign = w.level_offset_m >= 0 ? '+' : '';
+            s += ` · ${t('navHazardCurrentDepth')} ${w.current_depth} m (${w.gauge} ${sign}${w.level_offset_m} m)`;
+        }
+        return s;
+    }
+    if (w.clearance !== undefined) {
+        return `${t('navHazardClearance')}: ${w.clearance} m — ${t('navHazardRequired')}: ${w.required} m`;
+    }
+    return '';
+}
+
+async function checkRouteHazards(coordinates, context) {
+    const { map, API_URL, showNotification } = context;
+    clearRouteHazards();
+
+    try {
+        const resp = await fetch(`${API_URL}/api/enc/route-check`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ coordinates })
+        });
+        if (!resp.ok) return;
+        const result = await resp.json();
+        if (!result.checked) return; // keine IENC-Gewässer installiert
+
+        routeHazards = result.warnings || [];
+        if (routeHazards.length === 0) {
+            // Bestätigen, dass geprüft wurde — sonst ist "keine Meldung"
+            // nicht von "Check lief nicht" unterscheidbar
+            if (showNotification) showNotification(t('navHazardsNone'), 'success');
+            return;
+        }
+
+        // Marker auf der Karte (DOM-Marker überleben Style-Wechsel)
+        routeHazards.forEach(w => {
+            const el = document.createElement('div');
+            const color = w.severity === 'danger' ? '#e74c3c' : '#f39c12';
+            el.style.cssText = `
+                width: 26px; height: 26px; border-radius: 50%;
+                background: rgba(10, 14, 39, 0.9);
+                border: 2.5px solid ${color};
+                display: flex; align-items: center; justify-content: center;
+                font-size: 14px; cursor: pointer;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            `;
+            el.textContent = HAZARD_ICONS[w.type] || '⚠';
+            el.title = hazardTitle(w);
+
+            const marker = new maplibregl.Marker({ element: el })
+                .setLngLat([w.lon, w.lat])
+                .setPopup(new maplibregl.Popup({ maxWidth: '260px', className: 'ienc-popup' })
+                    .setHTML(`
+                        <div style="font-size:13px;line-height:1.5;">
+                            <div style="font-weight:600;">${HAZARD_ICONS[w.type] || '⚠'} ${escapeHazard(hazardTitle(w))}</div>
+                            <div>${escapeHazard(hazardDetail(w))}</div>
+                            <div style="opacity:0.7;">km ${w.km}${w.length_km ? ` · ${w.length_km} km` : ''}</div>
+                        </div>`))
+                .addTo(map);
+            hazardMarkers.push(marker);
+        });
+
+        displayHazardsPanel(context);
+
+        const dangers = routeHazards.filter(w => w.severity === 'danger').length;
+        if (showNotification) {
+            if (dangers > 0) {
+                showNotification(t('navHazardsFound', { count: dangers }), 'warning');
+            } else {
+                showNotification(t('navHazardsFoundInfo', { count: routeHazards.length }), 'info');
+            }
+        }
+    } catch (e) {
+        console.warn('IENC-Route-Check fehlgeschlagen:', e);
+    }
+}
+
+function escapeHazard(s) {
+    return String(s).replace(/[&<>"']/g,
+        c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function displayHazardsPanel(context) {
+    const { map } = context;
+    if (hazardsPanel) { hazardsPanel.remove(); hazardsPanel = null; }
+    if (routeHazards.length === 0) return;
+
+    hazardsPanel = document.createElement('div');
+    hazardsPanel.id = 'route-hazards-panel';
+    hazardsPanel.style.cssText = `
+        position: absolute;
+        top: 70px;
+        right: 20px;
+        max-width: 320px;
+        max-height: 45%;
+        overflow-y: auto;
+        background: rgba(10, 14, 39, 0.95);
+        backdrop-filter: blur(10px);
+        border: 3px solid #f39c12;
+        border-radius: 12px;
+        padding: 14px;
+        z-index: 1002;
+        color: white;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    `;
+
+    let html = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div style="font-size:13px;color:#f39c12;text-transform:uppercase;letter-spacing:1px;font-weight:700;">
+                ⚠ ${t('navHazardsOnRoute')} (${routeHazards.length})
+            </div>
+            <button onclick="this.closest('#route-hazards-panel').remove()"
+                    style="background:none;border:none;color:#8892b0;font-size:18px;cursor:pointer;padding:0 4px;">×</button>
+        </div>
+    `;
+
+    routeHazards.forEach((w, i) => {
+        const color = w.severity === 'danger' ? '#e74c3c' : '#f39c12';
+        html += `
+            <div class="hazard-entry" data-idx="${i}" style="
+                    display:flex;gap:10px;align-items:flex-start;cursor:pointer;
+                    padding:8px;border-radius:8px;margin-bottom:6px;
+                    background:rgba(255,255,255,0.05);border-left:3px solid ${color};">
+                <div style="font-size:16px;">${HAZARD_ICONS[w.type] || '⚠'}</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:13px;font-weight:600;">${escapeHazard(hazardTitle(w))}</div>
+                    <div style="font-size:11px;color:#ccd6f6;">${escapeHazard(hazardDetail(w))}</div>
+                    <div style="font-size:11px;color:#8892b0;">km ${w.km}${w.length_km ? ` · ${w.length_km} km` : ''}</div>
+                </div>
+            </div>
+        `;
+    });
+
+    hazardsPanel.innerHTML = html;
+
+    // Klick auf Eintrag → Karte dorthin
+    hazardsPanel.querySelectorAll('.hazard-entry').forEach(el => {
+        el.addEventListener('click', () => {
+            const w = routeHazards[parseInt(el.dataset.idx, 10)];
+            if (w && map) map.flyTo({ center: [w.lon, w.lat], zoom: 15 });
+        });
+    });
+
+    const mapContainer = document.getElementById('mapContainer');
+    if (mapContainer) mapContainer.appendChild(hazardsPanel);
+}
+
+function clearRouteHazards() {
+    hazardMarkers.forEach(m => m.remove());
+    hazardMarkers = [];
+    routeHazards = [];
+    if (hazardsPanel) { hazardsPanel.remove(); hazardsPanel = null; }
 }
 
 /**
@@ -1173,6 +1371,7 @@ export function clearRoute(context) {
 
     // Route-Daten zurücksetzen
     currentRouteCoordinates = null;
+    _publishActiveRoute();
     currentRoutePolyline = null;
     currentRouteData = {
         totalDistanceNM: 0,
@@ -1490,6 +1689,7 @@ export function updateLiveETA(context) {
     if (!hasRoute || !currentPosition || !currentPosition.lat || !currentPosition.lon) {
         const liveEtaDisplay = document.getElementById('live-eta-display');
         if (liveEtaDisplay) liveEtaDisplay.style.display = 'none';
+        if (window.BoatOS && window.BoatOS.context) window.BoatOS.context.nav = null;
         return;
     }
 
@@ -1522,6 +1722,20 @@ export function updateLiveETA(context) {
     // Live: Basis immer "jetzt" — bereits gefahrene Zeit ist schon aus dem Tageslimit verbraucht
     const eta = calculateETA(remainingDistanceNM, currentSpeed, new Date());
     const arrivalTimeStr = formatArrivalTime(eta.arrivalTime);
+
+    // Restweg + Peilung (zum Ziel) + ETA für Widgets (Navi-Instrument) bereitstellen
+    if (window.BoatOS && window.BoatOS.context) {
+        const dest = waypoints[waypoints.length - 1];
+        // Wegpunkte tragen .lon (nicht .lng) — sonst NaN
+        const destLon = dest ? (dest.lon != null ? dest.lon : dest.lng) : null;
+        const brg = (dest && destLon != null)
+            ? Math.round(calculateBearing(currentLat, currentLon, dest.lat, destLon)) : null;
+        window.BoatOS.context.nav = {
+            remainingM,
+            etaText: arrivalTimeStr,
+            bearing: (typeof brg === 'number' && !isNaN(brg)) ? brg : null,
+        };
+    }
 
     // --- Header: ETA als Ankunftszeit ---
     const etaEl = document.getElementById('eta-value');

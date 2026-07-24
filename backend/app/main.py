@@ -25,7 +25,9 @@ import fuel_tracking
 import statistics
 import weather_alerts
 import locks_storage
+import harbor_storage
 import dashboard_dsl
+import ienc
 
 # Load environment variables from .env file (one level up from backend/)
 dotenv_path = Path(__file__).resolve().parent.parent.parent / ".env"
@@ -42,6 +44,10 @@ CHARTS_DIR = MBTILES_DIR / "charts"
 CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 ROUTING_DIR = MBTILES_DIR / "routing"
 ROUTING_DIR.mkdir(parents=True, exist_ok=True)
+# Kombinierte IENC-Vektor-Tiles (aus allen aktivierten ENC-Gewässern gebaut).
+# Bewusst NICHT direkt in data/ — dort würde der *.mbtiles-Glob sie als
+# Basemap-Region auflisten.
+IENC_MBTILES = CHARTS_DIR / "ienc.mbtiles"
 
 # Mount charts directory for static serving
 app.mount("/charts", StaticFiles(directory=str(CHARTS_DIR)), name="charts")
@@ -69,9 +75,7 @@ chart_layers: List[Dict[str, Any]] = []
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
 OPENWEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5"
 
-# ELWIS ENC Download Configuration
-ELWIS_BASE_URL = "https://www.elwis.de"
-IENC_URL = "https://www.elwis.de/DE/dynamisch/IENC/"
+# ELWIS ENC Download: Konfiguration und Pipeline liegen in ienc.py
 
 # ==================== WEBSOCKET ====================
 @app.websocket("/ws")
@@ -631,6 +635,22 @@ async def disable_external_gps():
     return {"status": "ok"}
 
 
+@app.post("/api/nav/route")
+async def set_nav_route(data: dict):
+    """Aktive Route setzen + an alle Clients broadcasten (Deck ↔ Helm-Sync).
+    Body: {"coords": [[lat, lon], ...]} — leer = Route gelöscht."""
+    coords = data.get("coords") or []
+    gps_service.set_route(coords)
+    await gps_service.broadcast_route()
+    return {"status": "ok", "count": len(coords)}
+
+
+@app.get("/api/nav/route")
+async def get_nav_route():
+    """Aktuelle aktive Route (für Initial-Load neuer Clients)."""
+    return {"coords": gps_service.current_route}
+
+
 @app.get("/api/settings")
 async def get_settings():
     """Get user settings"""
@@ -1097,10 +1117,37 @@ async def get_infrastructure(lat_min: float, lon_min: float, lat_max: float, lon
 
     Returns:
     - List of infrastructure POIs with details
+
+    Häfen/Marinas/Ankerplätze kommen jetzt OFFLINE aus dem Vorab-Import
+    (harbor_storage, alle paar Tage per Scheduler aktualisiert) — kein
+    Live-Overpass mehr pro Kartenbewegung. Schleusen/Brücken/Wehre werden
+    weiterhin live geholt (falls angefragt), sind aber selten genutzt.
     """
     type_list = [t.strip() for t in types.split(',') if t.strip()]
-    pois = waterway_infrastructure.fetch_infrastructure(lat_min, lon_min, lat_max, lon_max, type_list)
-    return {"pois": pois, "count": len(pois)}
+
+    # Häfen + Ankerplätze offline aus dem Storage bbox-filtern (schnell, kein Netz)
+    harbor_types = {'harbor', 'anchorage'}
+    pois = []
+    if harbor_types & set(type_list):
+        stored = harbor_storage.get_in_bounds(lat_min, lon_min, lat_max, lon_max)
+        pois.extend(p for p in stored if p.get('type') in type_list)
+
+    # Übrige Typen (lock/bridge/weir/dam) weiterhin live — im Thread, damit ein
+    # blockierender Overpass-Aufruf nicht den Event-Loop einfriert.
+    live_types = [t for t in type_list if t not in harbor_types]
+    if live_types:
+        try:
+            live = await asyncio.to_thread(
+                waterway_infrastructure.fetch_infrastructure,
+                lat_min, lon_min, lat_max, lon_max, live_types
+            )
+            pois.extend(live)
+        except Exception as e:
+            # Nur die Live-Typen fehlen dann; die Offline-Häfen bleiben.
+            return {"pois": pois, "count": len(pois), "error": str(e)}
+
+    return {"pois": pois, "count": len(pois),
+            "harbors_fetched_at": harbor_storage.fetched_at()}
 
 # ==================== WATER LEVEL GAUGES (PEGELONLINE) ====================
 @app.get("/api/gauges")
@@ -1114,8 +1161,22 @@ async def get_water_level_gauges(lat_min: float, lon_min: float, lat_max: float,
     Returns:
     - List of gauge stations with current water levels
     """
-    gauges = pegelonline.fetch_gauges(lat_min, lon_min, lat_max, lon_max)
+    # Ebenfalls blockierendes requests → in Thread, sonst friert der Event-Loop
+    # ein, solange PEGELONLINE antwortet (gleiche Falle wie /api/infrastructure).
+    gauges = await asyncio.to_thread(pegelonline.fetch_gauges, lat_min, lon_min, lat_max, lon_max)
     return {"gauges": gauges, "count": len(gauges)}
+
+@app.get("/api/tides")
+async def get_tides(lat: float, lon: float):
+    """
+    Gezeiten (MVP): gemessene Tidenkurve der nächsten Pegelstation.
+    An der Küste (Elbe/Weser/Ems/Nordsee) zeigt der Wasserstand die Tide direkt.
+    Blockierendes requests → in einen Thread auslagern.
+    """
+    try:
+        return await asyncio.to_thread(pegelonline.get_tide, lat, lon)
+    except Exception as e:
+        return {"available": False, "reason": str(e)}
 
 # ==================== LOCKS (SCHLEUSEN) ====================
 @app.get("/api/locks")
@@ -1557,6 +1618,168 @@ def _verify_positions_sync():
         "issues": issues,
     }
 
+# ==================== HÄFEN & ANKERPLÄTZE — VORAB-IMPORT ====================
+# Statt bei jeder Kartenbewegung live Overpass zu fragen (wird rate-limitiert/
+# geblockt), einmal alle paar Tage importieren und offline vorhalten.
+
+_HARBOR_REFRESH_HOURS = 48      # Standard-Intervall des Scheduler-Refresh
+_harbor_import_state = {"running": False, "progress": "", "result": None}
+
+
+async def _run_harbor_import():
+    """
+    Häfen, Marinas und Ankerplätze für die aktiven Karten-Regionen von Overpass
+    holen (async, pro Region) und in harbor_storage persistieren. Länderneutral:
+    die bbox je Region kommt aus den MBTiles-Metadaten.
+    """
+    if _harbor_import_state["running"]:
+        return {"success": False, "error": "Import läuft bereits", "running": True}
+    _harbor_import_state.update({"running": True, "progress": "Starte…", "result": None})
+    try:
+        regions = _get_active_regions()
+        bboxes = []
+        for r in regions:
+            p = MBTILES_DIR / f"{r}.mbtiles"
+            if p.exists():
+                b = _mbtiles_bounds(p)
+                if b:
+                    bboxes.append((r, b))
+        if not bboxes:
+            result = {"success": False, "error": "Keine aktiven Karten-Regionen mit MBTiles"}
+            _harbor_import_state.update({"running": False, "progress": "Abgebrochen", "result": result})
+            return result
+
+        # Ganze Länder-bbox in einer Abfrage läuft in den Overpass-Timeout (504).
+        # Darum in Kacheln (max ~2°) zerlegen und pro Kachel abfragen.
+        TILE_DEG = 2.0
+
+        def _tiles(lon_min, lat_min, lon_max, lat_max):
+            lat = lat_min
+            while lat < lat_max:
+                lat2 = min(lat + TILE_DEG, lat_max)
+                lon = lon_min
+                while lon < lon_max:
+                    lon2 = min(lon + TILE_DEG, lon_max)
+                    yield (lon, lat, lon2, lat2)
+                    lon = lon2
+                lat = lat2
+
+        def _parse(elements):
+            n = 0
+            for el in elements:
+                poi = waterway_infrastructure._parse_element(el)
+                if poi and poi.get("type") in ("harbor", "anchorage"):
+                    by_id[poi["id"]] = poi
+                    n += 1
+            return n
+
+        by_id = {}          # OSM-id → POI (dedupliziert über Kacheln/Regionen)
+        per_region = {}
+        errors = 0
+        async with aiohttp.ClientSession() as session:
+            for region, bounds in bboxes:
+                tiles = list(_tiles(*bounds))
+                region_cnt = 0
+                for ti, (lo1, la1, lo2, la2) in enumerate(tiles, 1):
+                    _harbor_import_state["progress"] = f"{region}: Kachel {ti}/{len(tiles)}…"
+                    bbox = f"{la1},{lo1},{la2},{lo2}"
+                    query = f"""
+                    [out:json][timeout:120];
+                    (
+                      node["amenity"="marina"]({bbox});
+                      way["amenity"="marina"]({bbox});
+                      node["harbour"="yes"]({bbox});
+                      way["harbour"="yes"]({bbox});
+                      node["seamark:type"="anchorage"]({bbox});
+                      way["seamark:type"="anchorage"]({bbox});
+                      node["seamark:type"="anchor_berth"]({bbox});
+                      way["seamark:type"="anchor_berth"]({bbox});
+                    );
+                    out body center qt;
+                    """
+                    try:
+                        async with session.post(
+                            "https://overpass-api.de/api/interpreter",
+                            data={"data": query},
+                            headers={"User-Agent": "BoatOS/1.0 (marine navigation)"},
+                            timeout=aiohttp.ClientTimeout(total=140),
+                        ) as resp:
+                            if resp.status != 200:
+                                errors += 1
+                                continue
+                            data = await resp.json(content_type=None)
+                    except Exception:
+                        errors += 1
+                        continue
+                    region_cnt += await asyncio.to_thread(_parse, data.get("elements", []))
+                    # Overpass fair behandeln: kurze Pause zwischen den Kacheln
+                    await asyncio.sleep(1.0)
+                per_region[region] = f"{len(tiles)} Kacheln"
+                _harbor_import_state["progress"] = f"{region}: {region_cnt} Häfen/Ankerplätze"
+
+        # Nur speichern, wenn wirklich etwas kam — sonst alten Bestand behalten
+        if by_id:
+            pois = list(by_id.values())
+            await asyncio.to_thread(harbor_storage.save, pois)
+            result = {"success": True, "count": len(pois), "per_region": per_region, "tile_errors": errors}
+            print(f"⚓ Hafen-Import: {len(pois)} POIs gespeichert ({per_region}, {errors} Kachel-Fehler)")
+        else:
+            result = {"success": False, "error": "Keine Daten von Overpass — Bestand behalten",
+                      "per_region": per_region, "tile_errors": errors}
+            print(f"⚠️ Hafen-Import: nichts erhalten, alter Bestand bleibt ({per_region})")
+        _harbor_import_state.update({"running": False, "progress": "Fertig", "result": result})
+        return result
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        _harbor_import_state.update({"running": False, "progress": "Fehler", "result": result})
+        print(f"⚠️ Hafen-Import fehlgeschlagen: {e}")
+        return result
+
+
+async def harbor_import_scheduler():
+    """
+    Beim Start (nach kurzer Verzögerung) importieren, wenn der Bestand fehlt oder
+    älter als _HARBOR_REFRESH_HOURS ist; danach im festen Intervall auffrischen.
+    Overpass-Ausfälle sind unkritisch — der alte Bestand bleibt, nächster Lauf
+    versucht es erneut.
+    """
+    await asyncio.sleep(90)   # Boot nicht mit der Overpass-Abfrage belasten
+    while True:
+        try:
+            if harbor_storage.is_stale(_HARBOR_REFRESH_HOURS):
+                print(f"⚓ Hafen-Import: Bestand fehlt/veraltet (Alter "
+                      f"{harbor_storage.age_hours()}h) → importiere")
+                await _run_harbor_import()
+            else:
+                print(f"⚓ Hafen-Import: Bestand frisch ({harbor_storage.count()} POIs, "
+                      f"{harbor_storage.age_hours():.1f}h alt) → übersprungen")
+        except Exception as e:
+            print(f"⚠️ Hafen-Scheduler-Fehler: {e}")
+        # Stündlich prüfen; importiert wird nur, wenn wirklich veraltet
+        await asyncio.sleep(3600)
+
+
+@app.get("/api/infrastructure/status")
+async def infrastructure_import_status():
+    """Zustand des Hafen-/Ankerplatz-Vorabimports (für UI + Debugging)."""
+    return {
+        "count": harbor_storage.count(),
+        "fetched_at": harbor_storage.fetched_at(),
+        "age_hours": harbor_storage.age_hours(),
+        "refresh_hours": _HARBOR_REFRESH_HOURS,
+        "import": _harbor_import_state,
+    }
+
+
+@app.post("/api/infrastructure/import")
+async def trigger_infrastructure_import():
+    """Manuell einen Neuimport anstoßen (Einstellungen / Test)."""
+    if _harbor_import_state["running"]:
+        return {"success": False, "error": "Import läuft bereits", "running": True}
+    asyncio.create_task(_run_harbor_import())
+    return {"success": True, "started": True}
+
+
 @app.get("/api/locks/{lock_id}")
 async def get_lock_details(lock_id: int):
     """
@@ -1786,55 +2009,17 @@ async def upload_chart(files: List[UploadFile] = File(...), name: str = "", laye
 
             layer_type = 'tiles'  # Change type to tiles after conversion
 
-        # Process Inland ENC files if present
+        # Process Inland ENC files if present — S-57 → GeoJSON pro Objektklasse
+        # (Attribute bleiben erhalten; Darstellung folgt in späterer Phase)
+        enc_manifest = None
         if enc_files and layer_type == 'enc':
-            print(f"📊 Converting {len(enc_files)} Inland ENC file(s) to tiles...")
-            tiles_path = chart_path / "tiles"
-            tiles_path.mkdir(exist_ok=True)
-
-            for enc_file in enc_files:
-                try:
-                    import subprocess
-                    # Convert S-57 ENC to GeoTIFF
-                    geotiff_file = enc_file.with_suffix('.tif')
-
-                    # Use ogr2ogr to convert S-57 to shapefile first, then rasterize
-                    # Or use direct GDAL rendering of S-57
-                    subprocess.run([
-                        '/usr/bin/gdal_rasterize',
-                        '-of', 'GTiff',
-                        '-tr', '0.0001', '0.0001',  # Resolution
-                        '-a_srs', 'EPSG:4326',
-                        str(enc_file),
-                        str(geotiff_file)
-                    ], check=True)
-
-                    # Convert GeoTIFF to tiles
-                    subprocess.run([
-                        '/usr/bin/gdal2tiles.py',
-                        '-z', '0-18',
-                        '--processes=4',
-                        str(geotiff_file),
-                        str(tiles_path)
-                    ], check=True)
-
-                    print(f"✅ Converted {enc_file.name} to tiles")
-                except Exception as e:
-                    print(f"⚠️ ENC conversion failed for {enc_file.name}: {e}")
-                    # Try alternative: serve as vector tiles via ogr2ogr
-                    try:
-                        geojson_file = enc_file.with_suffix('.geojson')
-                        subprocess.run([
-                            '/usr/bin/ogr2ogr',
-                            '-f', 'GeoJSON',
-                            str(geojson_file),
-                            str(enc_file)
-                        ], check=True)
-                        print(f"✅ Converted {enc_file.name} to GeoJSON (alternative)")
-                    except Exception as e2:
-                        print(f"⚠️ GeoJSON conversion also failed: {e2}")
-
-            layer_type = 'tiles'  # Change type to tiles after conversion
+            print(f"📊 Extracting {len(enc_files)} Inland ENC file(s) to GeoJSON...")
+            try:
+                enc_manifest = await asyncio.to_thread(ienc.extract_geojson, chart_path)
+                print(f"✅ ENC extracted: {enc_manifest['features_total']} features "
+                      f"in {len(enc_manifest['classes'])} classes")
+            except Exception as e:
+                print(f"⚠️ ENC extraction failed: {e}")
 
         # Handle ZIP extraction
         zip_files = list(chart_path.glob('*.zip'))
@@ -1855,6 +2040,13 @@ async def upload_chart(files: List[UploadFile] = File(...), name: str = "", laye
             "enabled": True,
             "uploaded": datetime.now().isoformat()
         }
+        if layer_type == 'enc':
+            # ENC bleibt aus, bis der Vektor-Viewer (Phase 2/3) da ist
+            layer["enabled"] = False
+            layer["converted"] = enc_manifest is not None
+            layer["enc_files"] = len(enc_files)
+            if enc_manifest:
+                layer["features"] = enc_manifest["features_total"]
 
         chart_layers.append(layer)
         save_chart_metadata()
@@ -1884,6 +2076,10 @@ async def delete_chart(chart_id: str):
         chart_layers = [c for c in chart_layers if c["id"] != chart_id]
         save_chart_metadata()
 
+        # Gelöschtes ENC-Gewässer aus den kombinierten Vektor-Tiles entfernen
+        if chart.get("type") == "enc" and chart.get("enabled"):
+            _start_enc_job("tiles", _enc_job_guard("tiles", _run_enc_tiles_rebuild))
+
         return {"status": "deleted"}
 
     return {"error": "Chart not found"}
@@ -1900,13 +2096,22 @@ async def toggle_chart(chart_id: str, enabled: bool):
     if enabled and chart["type"] == "enc" and not chart.get("converted", False):
         return {"status": "needs_conversion", "chart": chart}
 
+    changed = chart.get("enabled") != enabled
     chart["enabled"] = enabled
     save_chart_metadata()
+
+    # ENC an/aus verändert den Inhalt der kombinierten Vektor-Tiles.
+    # Läuft gerade ein ENC-Job, baut der am Ende ohnehin neu (Start schlägt
+    # dann einfach fehl — bewusst ignoriert).
+    if changed and chart["type"] == "enc":
+        _start_enc_job("tiles", _enc_job_guard("tiles", _run_enc_tiles_rebuild))
+
     return chart
 
 @app.post("/api/charts/{chart_id}/convert")
-async def convert_enc_chart(chart_id: str, background_tasks: BackgroundTasks):
-    """Convert ENC chart to tiles"""
+async def convert_enc_chart(chart_id: str):
+    """ENC-Konvertierung (S-57 → GeoJSON) als Hintergrund-Job starten.
+    Status via GET /api/enc/job/status."""
     chart = next((c for c in chart_layers if c["id"] == chart_id), None)
 
     if not chart:
@@ -1915,283 +2120,7 @@ async def convert_enc_chart(chart_id: str, background_tasks: BackgroundTasks):
     if chart["type"] != "enc":
         return {"error": "Only ENC charts need conversion"}
 
-    # Start conversion in background
-    background_tasks.add_task(convert_enc_to_tiles, chart)
-
-    return {"status": "conversion_started", "chart": chart}
-
-def convert_enc_to_tiles(chart: dict):
-    """Convert ENC .000 files to rendered PNG tiles using Python"""
-    try:
-        from osgeo import ogr, osr
-        from PIL import Image, ImageDraw, ImageFont
-        import math
-
-        chart_path = Path(chart["path"])
-        enc_files = list(chart_path.rglob("*.000"))
-
-        if not enc_files:
-            print(f"❌ No ENC files found in {chart_path}")
-            return
-
-        print(f"🔄 Rendering {len(enc_files)} ENC file(s) to tiles...")
-        tiles_dir = chart_path / "tiles"
-        tiles_dir.mkdir(exist_ok=True)
-
-        # Helper functions for tile math
-        def deg2num(lat_deg, lon_deg, zoom):
-            lat_rad = math.radians(lat_deg)
-            n = 2.0 ** zoom
-            xtile = int((lon_deg + 180.0) / 360.0 * n)
-            ytile = int((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n)
-            return (xtile, ytile)
-
-        def num2deg(xtile, ytile, zoom):
-            n = 2.0 ** zoom
-            lon_deg = xtile / n * 360.0 - 180.0
-            lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
-            lat_deg = math.degrees(lat_rad)
-            return (lat_deg, lon_deg)
-
-        # ENC S-57 layer styling (maritime colors)
-        def get_layer_style(layer_name):
-            """Return (fill_color, outline_color, width) for each layer type"""
-            styles = {
-                # Water areas
-                'DEPARE': ((170, 211, 223, 150), (120, 180, 200, 200), 1),  # Depth areas - light blue
-                'DRGARE': ((180, 220, 255, 120), (100, 150, 255, 200), 2),  # Dredged areas - blue
-                'RIVERS': ((170, 211, 223, 180), (120, 180, 200, 220), 1),  # Rivers - light blue
-
-                # Land areas
-                'LNDARE': ((242, 230, 191, 200), (210, 180, 140, 255), 1),  # Land - beige
-                'BUAARE': ((230, 220, 210, 180), (200, 180, 160, 255), 1),  # Built-up areas - gray-beige
-
-                # Navigation aids
-                'BOYLAT': (None, (255, 0, 255, 255), 3),     # Lateral buoys - magenta
-                'BOYCAR': (None, (255, 255, 0, 255), 3),     # Cardinal buoys - yellow
-                'BOYISD': (None, (255, 165, 0, 255), 3),     # Isolated danger - orange
-                'BOYSAW': (None, (255, 0, 0, 255), 3),       # Safe water - red
-                'BOYSPP': (None, (0, 255, 0, 255), 3),       # Special purpose - green
-                'BCNLAT': (None, (255, 0, 255, 255), 2),     # Beacon lateral - magenta
-                'BCNCAR': (None, (255, 255, 0, 255), 2),     # Beacon cardinal - yellow
-                'LIGHTS': (None, (255, 255, 0, 255), 4),     # Lights - yellow
-
-                # Depth contours
-                'DEPCNT': (None, (120, 180, 200, 180), 1),   # Depth contour - blue lines
-
-                # Obstructions
-                'OBSTRN': (None, (255, 100, 100, 200), 2),   # Obstructions - red
-                'UWTROC': (None, (255, 50, 50, 200), 2),     # Underwater rocks - dark red
-                'WRECKS': ((139, 69, 19, 150), (100, 50, 10, 255), 2),  # Wrecks - brown
-
-                # Fairways and channels
-                'FAIRWY': ((200, 255, 200, 100), (100, 200, 100, 180), 2),  # Fairways - light green
-                'NAVLNE': (None, (255, 0, 255, 200), 2),     # Navigation lines - magenta
-                'CTNARE': ((255, 240, 200, 120), (200, 150, 100, 200), 2),  # Caution areas - yellow
-
-                # Bridges and cables
-                'BRIDGE': (None, (100, 100, 100, 255), 3),   # Bridges - gray
-                'CBLARE': (None, (150, 150, 0, 200), 1),     # Cable areas - dark yellow
-
-                # Default for unknown layers
-                'DEFAULT': (None, (150, 150, 150, 180), 1),
-            }
-            return styles.get(layer_name, styles['DEFAULT'])
-
-        # Step 1: Read all ENC features and get bounds
-        all_features = []
-        min_lat, min_lon, max_lat, max_lon = 90, 180, -90, -180
-
-        for i, enc_file in enumerate(enc_files):
-            print(f"  [{i+1}/{len(enc_files)}] Reading {enc_file.name}...")
-            try:
-                ds = ogr.Open(str(enc_file))
-                if not ds:
-                    continue
-
-                for layer_idx in range(ds.GetLayerCount()):
-                    try:
-                        layer = ds.GetLayerByIndex(layer_idx)
-                        if not layer:
-                            continue
-                        layer_name = layer.GetName()
-
-                        # Skip metadata layers
-                        if layer_name in ['DSID', 'DSPM']:
-                            continue
-
-                        # Reset reading to start
-                        layer.ResetReading()
-
-                        while True:
-                            try:
-                                feature = layer.GetNextFeature()
-                                if not feature:
-                                    break
-
-                                geom = feature.GetGeometryRef()
-                                if not geom:
-                                    continue
-
-                                # Get feature type and properties
-                                feat_data = {
-                                    'layer': layer_name,
-                                    'geom': geom.Clone(),
-                                    'type': geom.GetGeometryName(),
-                                    'style': get_layer_style(layer_name)
-                                }
-                                all_features.append(feat_data)
-
-                                # Update bounds
-                                env = geom.GetEnvelope()
-                                min_lon = min(min_lon, env[0])
-                                max_lon = max(max_lon, env[1])
-                                min_lat = min(min_lat, env[2])
-                                max_lat = max(max_lat, env[3])
-                            except Exception as feat_err:
-                                # Skip features that can't be read (GDAL S-57 issues)
-                                continue
-                    except Exception as layer_err:
-                        print(f"    ⚠️ Error reading layer {layer_idx}: {layer_err}")
-                        continue
-
-                ds = None
-            except Exception as e:
-                print(f"    ⚠️ Error reading {enc_file.name}: {e}")
-
-        if not all_features:
-            print(f"❌ No features found in ENC files")
-            chart["converted"] = False
-            save_chart_metadata()
-            return
-
-        print(f"📊 Found {len(all_features)} features, bounds: ({min_lat:.4f},{min_lon:.4f}) to ({max_lat:.4f},{max_lon:.4f})")
-
-        # Sort features by rendering order (polygons first, then lines, then points)
-        feature_order = {'POLYGON': 0, 'MULTIPOLYGON': 0, 'LINESTRING': 1, 'MULTILINESTRING': 1, 'POINT': 2, 'MULTIPOINT': 2}
-        all_features.sort(key=lambda f: feature_order.get(f['type'], 3))
-
-        # Step 2: Generate tiles for zoom levels 10-14
-        tile_count = 0
-        for zoom in range(10, 15):
-            min_x, min_y = deg2num(max_lat, min_lon, zoom)
-            max_x, max_y = deg2num(min_lat, max_lon, zoom)
-
-            print(f"  Zoom {zoom}: tiles ({min_x},{min_y}) to ({max_x},{max_y})")
-
-            for x in range(min_x, max_x + 1):
-                for y in range(min_y, max_y + 1):
-                    # Create tile image
-                    tile_img = Image.new('RGBA', (256, 256), (0, 0, 0, 0))
-                    draw = ImageDraw.Draw(tile_img)
-
-                    # Get tile bounds
-                    north, west = num2deg(x, y, zoom)
-                    south, east = num2deg(x + 1, y + 1, zoom)
-
-                    def geo_to_pixel(lon, lat):
-                        """Convert geographic coordinates to pixel coordinates"""
-                        px = int((lon - west) / (east - west) * 256)
-                        py = int((north - lat) / (north - south) * 256)
-                        return (px, py)
-
-                    # Draw features that intersect tile
-                    for feat in all_features:
-                        geom = feat['geom']
-                        env = geom.GetEnvelope()
-
-                        # Check if geometry intersects tile
-                        if env[0] > east or env[1] < west or env[2] > north or env[3] < south:
-                            continue
-
-                        fill_color, outline_color, width = feat['style']
-                        geom_type = geom.GetGeometryName()
-
-                        try:
-                            # POLYGONS - Fill and outline
-                            if geom_type in ['POLYGON', 'MULTIPOLYGON']:
-                                if geom_type == 'MULTIPOLYGON':
-                                    geom_list = [geom.GetGeometryRef(i) for i in range(geom.GetGeometryCount())]
-                                else:
-                                    geom_list = [geom]
-
-                                for poly in geom_list:
-                                    if poly.GetGeometryName() != 'POLYGON':
-                                        continue
-                                    # Get exterior ring
-                                    ring = poly.GetGeometryRef(0)
-                                    if ring:
-                                        coords = [geo_to_pixel(ring.GetPoint(i)[0], ring.GetPoint(i)[1])
-                                                 for i in range(ring.GetPointCount())]
-                                        if len(coords) > 2:
-                                            if fill_color:
-                                                draw.polygon(coords, fill=fill_color, outline=outline_color, width=width)
-                                            else:
-                                                draw.polygon(coords, outline=outline_color, width=width)
-
-                            # LINES - Draw lines
-                            elif geom_type in ['LINESTRING', 'MULTILINESTRING']:
-                                if geom_type == 'MULTILINESTRING':
-                                    geom_list = [geom.GetGeometryRef(i) for i in range(geom.GetGeometryCount())]
-                                else:
-                                    geom_list = [geom]
-
-                                for line in geom_list:
-                                    if line.GetGeometryName() != 'LINESTRING':
-                                        continue
-                                    coords = [geo_to_pixel(line.GetPoint(i)[0], line.GetPoint(i)[1])
-                                             for i in range(line.GetPointCount())]
-                                    if len(coords) > 1:
-                                        draw.line(coords, fill=outline_color, width=width)
-
-                            # POINTS - Draw circles/markers
-                            elif geom_type in ['POINT', 'MULTIPOINT']:
-                                if geom_type == 'MULTIPOINT':
-                                    geom_list = [geom.GetGeometryRef(i) for i in range(geom.GetGeometryCount())]
-                                else:
-                                    geom_list = [geom]
-
-                                for point in geom_list:
-                                    if point.GetGeometryName() != 'POINT':
-                                        continue
-                                    lon, lat, _ = point.GetPoint(0)
-                                    px, py = geo_to_pixel(lon, lat)
-                                    radius = width + 2
-                                    draw.ellipse([px-radius, py-radius, px+radius, py+radius],
-                                               fill=outline_color, outline=(0, 0, 0, 255))
-
-                        except Exception as e:
-                            # Skip features that can't be drawn
-                            pass
-
-                    # Save tile if not empty
-                    if tile_img.getbbox():
-                        tile_dir = tiles_dir / str(zoom) / str(x)
-                        tile_dir.mkdir(parents=True, exist_ok=True)
-                        tile_path = tile_dir / f"{y}.png"
-                        tile_img.save(tile_path, 'PNG')
-                        tile_count += 1
-
-        print(f"✅ Generated {tile_count} tiles!")
-
-        # Update metadata - find the actual chart in chart_layers
-        for i, c in enumerate(chart_layers):
-            if c.get("id") == chart["id"]:
-                chart_layers[i]["converted"] = True
-                chart_layers[i]["enabled"] = True
-                break
-        save_chart_metadata()
-
-    except Exception as e:
-        print(f"❌ ENC tile rendering error: {e}")
-        import traceback
-        traceback.print_exc()
-        # Update metadata - find the actual chart in chart_layers
-        for i, c in enumerate(chart_layers):
-            if c.get("id") == chart["id"]:
-                chart_layers[i]["converted"] = False
-                break
-        save_chart_metadata()
+    return _start_enc_job("convert", _enc_job_guard("convert", lambda: _run_enc_convert(chart)))
 
 def load_chart_layers():
     """Load chart metadata from disk"""
@@ -2204,15 +2133,13 @@ def load_chart_layers():
     else:
         chart_layers = []
 
-    # Auto-detect converted status for ENC charts based on tiles directory
+    # Auto-detect converted status for ENC charts (GeoJSON-Manifest vorhanden?)
+    # Alt-Bestände mit PNG-Tiles aus dem früheren PIL-Renderer gelten als
+    # unkonvertiert und laufen beim Aktivieren durch die neue Pipeline.
     for chart in chart_layers:
         if chart.get("type") == "enc":
-            chart_path = Path(chart.get("path", ""))
-            tiles_dir = chart_path / "tiles"
-            # If tiles directory exists with actual tiles, mark as converted
-            if tiles_dir.exists() and any(tiles_dir.rglob("*.png")):
-                chart["converted"] = True
-                print(f"✅ Auto-detected tiles for {chart.get('name', chart.get('id'))}")
+            manifest_file = Path(chart.get("path", "")) / "geojson" / "manifest.json"
+            chart["converted"] = manifest_file.exists()
 
 def save_chart_metadata():
     """Save chart metadata to disk"""
@@ -2221,188 +2148,395 @@ def save_chart_metadata():
         json.dump(chart_layers, f, indent=2)
 
 # ==================== ENC DOWNLOAD (ELWIS) ====================
+# Download und Konvertierung (S-57 → GeoJSON, Pipeline in ienc.py) laufen als
+# Hintergrund-Job mit Fortschritts-Status — Muster wie bei den Schleusen-Jobs:
+# ein einzelner HTTP-Request wäre länger als jedes Proxy-Timeout (nginx: 60s),
+# und requests/GDAL sind blocking, deshalb konsequent asyncio.to_thread().
+_enc_job_state = {"running": False, "job": None, "progress": "", "percent": 0, "result": None}
+
+
+def _start_enc_job(job_name: str, coro_fn) -> dict:
+    """Job starten wenn keiner läuft; gibt Start-Antwort fürs Frontend zurück."""
+    if _enc_job_state["running"]:
+        return {"success": False, "error": f"Es läuft bereits ein Job ({_enc_job_state['job']})", "running": True}
+    _enc_job_state.update({"running": True, "job": job_name, "progress": "Starte…", "percent": 0, "result": None})
+    asyncio.create_task(coro_fn)
+    return {"success": True, "started": True, "job": job_name}
+
+
+async def _enc_job_guard(job_name: str, inner):
+    """Wrapper: Fehler landen im Status statt den Job ewig auf running zu lassen."""
+    try:
+        await inner()
+    except Exception as e:
+        print(f"❌ ENC-Job '{job_name}' fehlgeschlagen: {e}")
+        import traceback
+        traceback.print_exc()
+        _enc_job_state.update({
+            "running": False, "progress": "Fehler", "percent": 100,
+            "result": {"success": False, "error": str(e)}
+        })
+
+
+@app.get("/api/enc/job/status")
+async def enc_job_status():
+    return _enc_job_state
+
+
+async def _rebuild_ienc_tiles() -> dict:
+    """Kombinierte IENC-Vektor-Tiles aus allen aktivierten, konvertierten
+    ENC-Charts (neu) bauen. Läuft innerhalb eines ENC-Jobs."""
+    charts = [(c["name"], Path(c["path"])) for c in chart_layers
+              if c.get("type") == "enc" and c.get("enabled") and c.get("converted")]
+
+    def _cb(msg):
+        _enc_job_state["progress"] = f"Vektor-Tiles: {msg}"
+
+    stats = await asyncio.to_thread(ienc.build_mbtiles, charts, IENC_MBTILES, _cb)
+    print(f"🧱 IENC-Tiles gebaut: {stats}")
+    return stats
+
+
+async def _run_enc_tiles_rebuild():
+    """Eigenständiger Rebuild-Job (nach Toggle/Delete eines ENC-Charts)."""
+    stats = await _rebuild_ienc_tiles()
+    _enc_job_state.update({
+        "running": False, "percent": 100, "progress": "Fertig",
+        "result": {"success": True, **stats},
+    })
+
+
+@app.post("/api/enc/route-check")
+async def enc_route_check(request: Request):
+    """
+    Berechnete Route gegen die IENC-Daten prüfen: zu niedrige Brücken/
+    Freileitungen (VERCLR vs. Bootshöhe), flache Bereiche (DRVAL1 vs.
+    Tiefgang), Wehre nahe der Route. Bootsmaße kommen aus den Settings
+    (boat.height/boat.draft), Request-Body kann sie überschreiben.
+    Body: {"coordinates": [[lon, lat], ...], "height"?: m, "draft"?: m}
+    """
+    body = await request.json()
+    coords = body.get("coordinates") or []
+    if len(coords) < 2:
+        return {"warnings": [], "checked": False, "reason": "Keine Route übergeben"}
+
+    height = body.get("height")
+    draft = body.get("draft")
+    if height is None or draft is None:
+        try:
+            with open("data/settings.json", "r") as f:
+                boat = json.load(f).get("boat", {})
+            if height is None:
+                height = boat.get("height")
+            if draft is None:
+                draft = boat.get("draft")
+        except Exception:
+            pass
+    height = float(height) if height else None  # 0/None = Check überspringen
+    draft = float(draft) if draft else None
+
+    charts = [(c["name"], Path(c["path"])) for c in chart_layers
+              if c.get("type") == "enc" and c.get("enabled") and c.get("converted")]
+    if not charts:
+        return {"warnings": [], "checked": False, "reason": "Keine IENC-Gewässer installiert"}
+
+    warnings = await asyncio.to_thread(ienc.check_route, coords, charts,
+                                       draft, height)
+
+    # Tiefen-Warnungen um den aktuellen Wasserstand korrigieren. Der Pegel-
+    # stand ist keine Fahrwassertiefe — verwendet wird nur die Differenz
+    # W−MNW als konservativer Aufschlag auf die Kartentiefe, und nur von
+    # Pegeln am selben Gewässer (Details in ienc.apply_level_offsets).
+    if draft is not None and any(w.get("type") == "depth" for w in warnings):
+        try:
+            lons = [c[0] for c in coords]
+            lats = [c[1] for c in coords]
+            gauges = await asyncio.to_thread(
+                pegelonline.get_reference_levels,
+                min(lats) - 0.3, min(lons) - 0.3, max(lats) + 0.3, max(lons) + 0.3)
+            warnings = ienc.apply_level_offsets(warnings, gauges, draft)
+        except Exception as e:
+            print(f"⚠️ Pegel-Korrektur für Tiefen-Warnungen fehlgeschlagen: {e}")
+
+    return {
+        "warnings": warnings,
+        "checked": True,
+        "boat": {"height": height, "draft": draft},
+        "waterways": [name for name, _ in charts],
+    }
+
+
+@app.get("/api/enc/depth-at")
+async def enc_depth_at(lat: float, lon: float):
+    """
+    Berechnete Fahrrinnentiefe an einem Punkt (aktuelle Position) — dieselbe
+    IENC-Datenbasis wie die Routen-Tiefenwarnung, inkl. Pegel-Korrektur
+    (current_depth = Kartentiefe + W−MNW am selben Gewässer).
+    Für das Navi-Instrument. Query: ?lat=&lon=
+    """
+    charts = [(c["name"], Path(c["path"])) for c in chart_layers
+              if c.get("type") == "enc" and c.get("enabled") and c.get("converted")]
+    if not charts:
+        return {"available": False, "reason": "Keine IENC-Gewässer installiert"}
+
+    info = await asyncio.to_thread(ienc.depth_at_point, lat, lon, charts)
+    if not info:
+        return {"available": False, "reason": "Außerhalb erfasster Fahrrinnen"}
+
+    result = {
+        "available": True,
+        "depth": info["depth"],            # Kartentiefe (DRVAL2)
+        "current_depth": info["depth"],    # ggf. pegel-korrigiert (s.u.)
+        "waterway": info["waterway"],
+    }
+    # Pegel-Korrektur (nur Differenz W−MNW, wie bei der Routen-Warnung)
+    try:
+        gauges = await asyncio.to_thread(
+            pegelonline.get_reference_levels,
+            lat - 0.3, lon - 0.3, lat + 0.3, lon + 0.3)
+        off = ienc.nearest_gauge_delta(lat, lon, info["waterway"], gauges)
+        if off:
+            result["current_depth"] = round(info["depth"] + off["delta_m"], 2)
+            result["level_offset_m"] = off["delta_m"]
+            result["gauge"] = off["gauge"]
+    except Exception as e:
+        print(f"⚠️ Pegel-Korrektur depth-at fehlgeschlagen: {e}")
+
+    return result
+
+
+@app.get("/api/nav/point")
+async def nav_point(lat: float, lon: float, cog: float = None):
+    """
+    Kombinierte Navi-Instrument-Daten für einen Punkt (aktuelle Position) in
+    EINEM Aufruf: Fahrrinnentiefe (pegel-korrigiert), nächster Pegelstand,
+    Strömung — und (mit cog) die flachste Fahrrinnentiefe 300–1000 m VORAUS
+    als Früh-Warnung. Vom Navi-Instrument throttled gefetcht.
+    Query: ?lat=&lon=&cog=
+    """
+    out = {"lat": lat, "lon": lon}
+
+    # 1) Fahrrinnentiefe: aktuelle Position + (mit cog) Vorausschau 300/600/1000 m
+    # in EINER Flächen-Iteration (depth_scan) — sonst 4× so teuer.
+    charts = [(c["name"], Path(c["path"])) for c in chart_layers
+              if c.get("type") == "enc" and c.get("enabled") and c.get("converted")]
+    ahead_dists = [300, 600, 1000]
+    points = [(lat, lon)]
+    if cog is not None:
+        points += [ienc.offset_point(lat, lon, cog, dm) for dm in ahead_dists]
+    scan = await asyncio.to_thread(ienc.depth_scan, points, charts) if charts else []
+    info = scan[0] if scan else None
+    waterway = info["waterway"] if info else None
+
+    # 2) Pegel-Referenzwerte (gecachte DE-Vollliste, nur clientseitig gefiltert)
+    gauges = []
+    try:
+        gauges = await asyncio.to_thread(
+            pegelonline.get_reference_levels,
+            lat - 0.3, lon - 0.3, lat + 0.3, lon + 0.3)
+    except Exception as e:
+        print(f"⚠️ Pegel-Abruf nav/point fehlgeschlagen: {e}")
+
+    if info:
+        depth = {"depth": info["depth"], "current_depth": info["depth"], "waterway": waterway}
+        off = ienc.nearest_gauge_delta(lat, lon, waterway, gauges)
+        if off:
+            depth["current_depth"] = round(info["depth"] + off["delta_m"], 2)
+            depth["gauge"] = off["gauge"]
+        out["depth"] = depth
+
+    # Nächster Pegel (für Anzeige) — kleinster Abstand im Umkreis
+    if gauges:
+        ng = min(gauges, key=lambda g: (g["lat"] - lat) ** 2 + (g["lon"] - lon) ** 2)
+        out["gauge"] = {"name": ng.get("name"), "water": ng.get("water", ""),
+                        "w_cm": ng.get("w_cm")}
+
+    # Vorausschau: flachster Treffer 300–1000 m voraus (aus demselben Scan),
+    # damit zu geringe Tiefe FRÜH (vor Erreichen) gewarnt werden kann.
+    if cog is not None and len(scan) > 1:
+        best = None  # (dist_m, (plat, plon), scan-entry)
+        for idx, dm in enumerate(ahead_dists, start=1):
+            s = scan[idx]
+            if s and (best is None or s["depth"] < best[2]["depth"]):
+                best = (dm, points[idx], s)
+        if best:
+            dm, (plat, plon), s = best
+            a_cur = s["depth"]
+            off_a = ienc.nearest_gauge_delta(plat, plon, s["waterway"], gauges)
+            if off_a:
+                a_cur = round(s["depth"] + off_a["delta_m"], 2)
+            entry = {"depth": s["depth"], "current_depth": a_cur,
+                     "distance_m": dm, "waterway": s["waterway"]}
+            try:
+                with open("data/settings.json", "r") as f:
+                    draft = json.load(f).get("boat", {}).get("draft")
+                if draft:
+                    entry["draft"] = float(draft)
+                    entry["shallow"] = a_cur < float(draft) + 0.3
+            except Exception:
+                pass
+            out["ahead"] = entry
+
+    # 3) Strömung (km/h) am Punkt — gleiche Quelle wie die Routen-Zeitkorrektur
+    try:
+        cur = await asyncio.to_thread(
+            water_current_service.get_current_at_point, lat, lon, waterway)
+        if cur is not None:
+            out["current_kmh"] = round(cur, 1)
+    except Exception as e:
+        print(f"⚠️ Strömung nav/point fehlgeschlagen: {e}")
+
+    return out
+
+
+@app.get("/api/enc/tiles/status")
+async def enc_tiles_status():
+    """Sind kombinierte IENC-Vektor-Tiles vorhanden? (Frontend-Check, Phase 3)"""
+    meta = ienc.read_tiles_meta(IENC_MBTILES)
+    if meta is None:
+        return {"available": False}
+    return {"available": True, **meta}
+
+
+@app.get("/api/enc/tiles/{z}/{x}/{y}.pbf")
+async def get_enc_tile(z: int, x: int, y: int):
+    """IENC-Vektor-Tiles ausliefern (Muster wie /api/map/seamarks)."""
+    if not IENC_MBTILES.exists():
+        return Response(status_code=204)
+    loop = asyncio.get_event_loop()
+    tile = await loop.run_in_executor(None, _read_mbtiles_tile, IENC_MBTILES, z, x, y)
+    if not tile:
+        return Response(status_code=204)
+    return Response(
+        content=tile,
+        media_type="application/x-protobuf",
+        headers={"Cache-Control": "public, max-age=3600", "Content-Encoding": "gzip"},
+    )
+
+
 @app.get("/api/enc/catalog")
 async def get_enc_catalog():
-    """Get list of available ENC waterways from ELWIS"""
+    """Verfügbare IENC-Gewässer von ELWIS auflisten (mit installiert-Status)."""
     try:
-        response = requests.get(IENC_URL, timeout=10)
-        soup = BeautifulSoup(response.text, "html.parser")
-
-        waterways = []
-        for link in soup.find_all("a", href=True):
-            if "Download?file=" in link["href"]:
-                name = link.text.strip()
-                if name:
-                    # Check if already downloaded
-                    safe_name = name.replace("/", "_").replace(" ", "_").replace("(", "").replace(")", "")
-                    chart_id = f"enc_{safe_name}"
-                    downloaded = any(c.get("id") == chart_id for c in chart_layers)
-
-                    waterways.append({
-                        "id": safe_name,
-                        "name": name,
-                        "filename": safe_name + ".000",
-                        "url": ELWIS_BASE_URL + link["href"] if not link["href"].startswith("http") else link["href"],
-                        "downloaded": downloaded
-                    })
-
+        waterways = await asyncio.to_thread(ienc.scrape_catalog)
+        for w in waterways:
+            chart_id = f"enc_{w['id']}"
+            chart = next((c for c in chart_layers if c.get("id") == chart_id), None)
+            w["filename"] = w["id"] + ".000"  # Frontend nutzt filename als Auswahl-Key
+            w["downloaded"] = chart is not None
+            w["converted"] = bool(chart and chart.get("converted"))
         print(f"📊 ENC Catalog: {len(waterways)} waterways")
         return waterways
     except Exception as e:
         print(f"❌ ENC Catalog error: {e}")
-        import traceback
-        traceback.print_exc()
         return []
+
 
 @app.post("/api/enc/download")
 async def download_enc(request: Request):
     """
-    Download ENC charts from ELWIS using 3-step process:
-    1. Fetch download page HTML from Download?file= URL
-    2. Extract File: link from HTML
-    3. Download ZIP, extract .000 files, convert to GeoJSON
+    ENC-Download von ELWIS als Hintergrund-Job starten.
+    Body: [{name, url}, ...] — Fortschritt via GET /api/enc/job/status.
     """
     waterways = await request.json()
+    if not waterways:
+        return {"success": False, "error": "Keine Gewässer ausgewählt"}
+    return _start_enc_job("download", _enc_job_guard("download", lambda: _run_enc_download(waterways)))
+
+
+async def _run_enc_download(waterways):
+    global chart_layers
     results = {"success": 0, "failed": 0, "total": len(waterways), "details": []}
+    total = len(waterways)
 
-    for waterway in waterways:
+    for i, waterway in enumerate(waterways):
+        name = waterway.get("name", "Unknown")
+        _enc_job_state["percent"] = int(i / total * 100)
         try:
-            waterway_name = waterway.get("name", "Unknown")
-            download_page_url = waterway.get("url", "")
+            url = waterway.get("url", "")
+            if not url:
+                raise ValueError("Keine Download-URL übergeben")
 
-            if not download_page_url:
-                results["failed"] += 1
-                results["details"].append({"name": waterway_name, "status": "failed", "error": "No URL provided"})
-                continue
-
-            print(f"📥 Processing {waterway_name}...")
-
-            # Step 1: Fetch the download page HTML
-            print(f"  Step 1: Fetching download page from {download_page_url}")
-            page_response = requests.get(download_page_url, timeout=30)
-            page_response.raise_for_status()
-
-            # Step 2: Parse HTML to extract File: link
-            print(f"  Step 2: Parsing HTML to find File: link")
-            soup = BeautifulSoup(page_response.content, 'html.parser')
-
-            # Find link containing "File:"
-            file_link = None
-            for link in soup.find_all('a', href=True):
-                if 'File:' in link['href'] or '/Inland/IENC/' in link['href']:
-                    file_link = link['href']
-                    break
-
-            if not file_link:
-                results["failed"] += 1
-                results["details"].append({"name": waterway_name, "status": "failed", "error": "File link not found in HTML"})
-                print(f"  ❌ No File: link found")
-                continue
-
-            # Build full ZIP URL
-            if not file_link.startswith('http'):
-                zip_url = ELWIS_BASE_URL + file_link
-            else:
-                zip_url = file_link
-
-            print(f"  Step 3: Downloading ZIP from {zip_url}")
-
-            # Step 3: Download the ZIP file
-            zip_response = requests.get(zip_url, timeout=60, stream=True)
-            zip_response.raise_for_status()
-
-            # Create chart directory
-            chart_id = f"enc_{len(chart_layers) + 1}"
+            chart_id = f"enc_{ienc.safe_id(name)}"
             chart_path = CHARTS_DIR / chart_id
-            chart_path.mkdir(parents=True, exist_ok=True)
 
-            # Save ZIP file
-            zip_file_path = chart_path / f"{waterway_name}.zip"
-            with open(zip_file_path, 'wb') as f:
-                for chunk in zip_response.iter_content(chunk_size=8192):
-                    f.write(chunk)
+            _enc_job_state["progress"] = f"{name} ({i + 1}/{total}): Download…"
+            await asyncio.to_thread(ienc.download_waterway, url, chart_path)
 
-            print(f"  Step 4: Extracting ZIP file")
+            def _cb(msg, _n=name, _i=i):
+                _enc_job_state["progress"] = f"{_n} ({_i + 1}/{total}): {msg}"
 
-            # Step 4: Extract ZIP file
-            with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
-                zip_ref.extractall(chart_path)
+            _enc_job_state["progress"] = f"{name} ({i + 1}/{total}): Konvertiere…"
+            manifest = await asyncio.to_thread(ienc.extract_geojson, chart_path, _cb)
 
-            # Remove ZIP after extraction
-            os.remove(zip_file_path)
-
-            # Step 5: Find all .000 files (ENC catalog files)
-            enc_files = list(chart_path.rglob("*.000"))
-
-            if not enc_files:
-                results["failed"] += 1
-                results["details"].append({"name": waterway_name, "status": "failed", "error": "No .000 files found in ZIP"})
-                print(f"  ❌ No .000 files found")
-                # Clean up
-                shutil.rmtree(chart_path)
-                continue
-
-            print(f"  Step 5: Converting {len(enc_files)} .000 file(s) to GeoJSON")
-
-            # Step 6: Convert first .000 file to GeoJSON
-            geojson_files = []
-            for enc_file in enc_files:
-                try:
-                    geojson_file = enc_file.with_suffix('.geojson')
-
-                    # Use ogr2ogr to convert S-57 ENC to GeoJSON
-                    result = subprocess.run([
-                        'ogr2ogr',
-                        '-f', 'GeoJSON',
-                        str(geojson_file),
-                        str(enc_file)
-                    ], capture_output=True, text=True, timeout=60)
-
-                    if result.returncode == 0:
-                        geojson_files.append(geojson_file)
-                        print(f"  ✅ Converted {enc_file.name} to GeoJSON")
-                    else:
-                        print(f"  ⚠️ Failed to convert {enc_file.name}: {result.stderr}")
-
-                except Exception as e:
-                    print(f"  ⚠️ Conversion error for {enc_file.name}: {e}")
-
-            # Step 7: Create chart layer metadata
-            # Note: GeoJSON conversion may fail due to S-57 multi-layer format
-            # We store the .000 files anyway for future ENC viewer support
-            layer = {
+            # Chart-Eintrag anlegen/ersetzen — stabile ID, Re-Download = Update
+            chart_layers = [c for c in chart_layers if c.get("id") != chart_id]
+            first_cell = next((c for c in manifest["cells"] if c.get("edition")), {})
+            chart_layers.append({
                 "id": chart_id,
-                "name": waterway_name,
+                "name": name,
                 "type": "enc",
                 "path": str(chart_path),
                 "url": f"/charts/{chart_id}",
-                "enabled": False,  # Disabled by default until ENC viewer is implemented
+                "enabled": True,  # fließt damit direkt in die Vektor-Tiles ein
                 "uploaded": datetime.now().isoformat(),
-                "enc_files": len(enc_files),
-                "geojson_files": len(geojson_files),
-                "converted": len(geojson_files) > 0
-            }
-
-            chart_layers.append(layer)
+                "enc_files": manifest["cell_count"],
+                "features": manifest["features_total"],
+                "edition": first_cell.get("edition"),
+                "issued": first_cell.get("issued"),
+                "converted": manifest["features_total"] > 0,
+            })
             save_chart_metadata()
 
             results["success"] += 1
-            results["details"].append({"name": waterway_name, "status": "success", "files": len(enc_files)})
-            print(f"  ✅ Successfully imported {waterway_name}")
-
-        except requests.exceptions.RequestException as e:
-            results["failed"] += 1
-            results["details"].append({"name": waterway.get("name", "Unknown"), "status": "failed", "error": f"Network error: {str(e)}"})
-            print(f"  ❌ Network error: {e}")
+            results["details"].append({"name": name, "status": "success",
+                                       "files": manifest["cell_count"],
+                                       "features": manifest["features_total"]})
+            print(f"✅ ENC importiert: {name} ({manifest['features_total']} Features)")
 
         except Exception as e:
             results["failed"] += 1
-            results["details"].append({"name": waterway.get("name", "Unknown"), "status": "failed", "error": str(e)})
-            print(f"  ❌ Error: {e}")
-            import traceback
-            traceback.print_exc()
+            results["details"].append({"name": name, "status": "failed", "error": str(e)})
+            print(f"❌ ENC-Download fehlgeschlagen für {name}: {e}")
 
-    return results
+    if results["success"] > 0:
+        await _rebuild_ienc_tiles()
+
+    _enc_job_state.update({
+        "running": False, "percent": 100,
+        "progress": f"Fertig: {results['success']}/{results['total']} Gewässer",
+        # "success" ist hier der Zähler erfolgreicher Gewässer, "ok" das Gesamtergebnis
+        "result": {"ok": results["failed"] == 0, **results},
+    })
+
+
+async def _run_enc_convert(chart: dict):
+    """Bereits heruntergeladene ENC-Zellen (erneut) nach GeoJSON extrahieren."""
+    name = chart.get("name", chart.get("id"))
+
+    def _cb(msg):
+        _enc_job_state["progress"] = f"{name}: {msg}"
+
+    manifest = await asyncio.to_thread(ienc.extract_geojson, Path(chart["path"]), _cb)
+
+    converted = manifest["features_total"] > 0
+    for i, c in enumerate(chart_layers):
+        if c.get("id") == chart["id"]:
+            chart_layers[i]["converted"] = converted
+            chart_layers[i]["enabled"] = converted
+            chart_layers[i]["features"] = manifest["features_total"]
+            chart_layers[i]["enc_files"] = manifest["cell_count"]
+            break
+    save_chart_metadata()
+
+    if converted:
+        await _rebuild_ienc_tiles()
+
+    _enc_job_state.update({
+        "running": False, "percent": 100, "progress": "Fertig",
+        "result": {"success": True, "features": manifest["features_total"],
+                   "classes": manifest["classes"]},
+    })
 
 # ==================== WEATHER ====================
 @app.get("/api/weather")
@@ -4917,6 +5051,7 @@ async def startup_event():
     asyncio.create_task(pegel_tracker_loop())
     asyncio.create_task(fetch_weather())
     asyncio.create_task(fetch_weather_alerts_periodic())  # Start periodic weather alerts
+    asyncio.create_task(harbor_import_scheduler())  # Häfen/Ankerplätze vorab importieren + auffrischen
     asyncio.create_task(gps_service.read_gps_from_signalk())  # Start GPS service from SignalK
     load_known_topics()  # Load persistent topic history
     mqtt_client_init()

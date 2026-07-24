@@ -1,7 +1,11 @@
 [Unit]
 Description=BoatOS Backend API
-After=network.target signalk.service
-Requires=signalk.service
+# NICHT an signalk koppeln: signalk wartet auf network-online (kann ~76s dauern),
+# sonst startet das Backend lange nach dem Display (flutter-pi) und der Helm lädt
+# Dashboard/Logbuch ins Leere (Boot-Race). boatos serviert lokale Daten sofort;
+# der GPS-Reader (gps_service.py) verbindet signalk per Retry-Schleife nach.
+After=network.target
+Wants=signalk.service
 
 [Service]
 Type=simple

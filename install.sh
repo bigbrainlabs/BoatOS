@@ -131,7 +131,12 @@ info "Erstelle BoatOS Backend Service..."
 sudo tee /etc/systemd/system/boatos.service > /dev/null << BOATOS
 [Unit]
 Description=BoatOS Backend API
-After=network.target signalk.service mosquitto.service
+# NICHT auf signalk warten: signalk wartet auf network-online (kann ~76s dauern),
+# sonst startet das Backend lange nach dem Display (flutter-pi) und der Helm lädt
+# Dashboard/Logbuch ins Leere (Boot-Race). boatos serviert lokale Daten sofort;
+# der GPS-Reader verbindet signalk per Retry-Schleife nach.
+After=network.target mosquitto.service
+Wants=signalk.service
 
 [Service]
 Type=simple

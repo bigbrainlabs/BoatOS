@@ -9,8 +9,10 @@
 import * as core from './core.js';
 import * as theme from './theme.js';
 import * as mapModule from './map.js';
+import { initQuickActionsCarousel } from './quick-actions.js';
 import * as navigation from './navigation.js';
 import * as weather from './weather.js';
+import * as tides from './tides.js';
 import * as sensors from './sensors.js';
 import * as ui from './ui.js';
 import * as ais from './ais.js';
@@ -60,6 +62,9 @@ window.formatSpeed = function(knots, decimals = 1) {
     const converted = convertSpeedFromKn(knots);
     return `${converted.toFixed(decimals)} ${getSpeedLabel()}`;
 };
+// Einzelteile für Widgets (z.B. Navi-Instrument: großer Wert + kleine Einheit getrennt)
+window.convertSpeedFromKn = convertSpeedFromKn;
+window.getSpeedLabel = getSpeedLabel;
 
 window.formatDistance = function(nm, decimals = 1) {
     const converted = convertDistanceFromNM(nm);
@@ -233,6 +238,7 @@ let simInterval = null;
 let simDistanceTraveled = 0;
 let simMultiplier = 25; // ×25 = ~13 m/tick
 let simSavedPosition = null; // Boot-Position vor Simulation sichern
+let simLastGpsPost = 0;      // Throttle für Sim-GPS-Broadcast ans Backend
 
 function simHaversine(lat1, lon1, lat2, lon2) {
     const R = 6371000;
@@ -285,6 +291,36 @@ function simTick() {
 
     mapModule.updateBoatPosition({ lat: pos.lat, lon: pos.lon, course: pos.bearing });
     window.currentPosition = { lat: pos.lat, lon: pos.lon };
+
+    // Sim-Werte auch für Widgets/Navigation bereitstellen — der echte GPS-Callback
+    // ist während der Simulation pausiert (sonst bleiben SOG/COG/Position im
+    // Navi-Instrument, Restweg/Peilung und die Tiefen-Vorausschau leer).
+    if (window.BoatOS && window.BoatOS.context) {
+        const ctx = window.BoatOS.context;
+        ctx.currentPosition = { lat: pos.lat, lon: pos.lon };
+        ctx.cog = pos.bearing;
+        // Realistische Reise-SOG (kn) fürs Instrument; der Sim-Multiplikator ist
+        // nur Zeitraffer (schnelleres Abfahren), keine echte Bootsgeschwindigkeit.
+        ctx.sog = 10;
+        if (navigation.isNavigationActive && navigation.isNavigationActive()) {
+            navigation.updateNavigation(pos.lat, pos.lon, ctx);
+        } else if (ctx.waypoints?.length >= 2) {
+            navigation.updateLiveETA(ctx);
+        }
+    }
+
+    // Sim-Position ans Backend broadcasten (throttled) → Helm/Kiosk & andere
+    // Clients sehen die Fahrt (echtes GPS ist im Sim ohnehin nicht relevant).
+    const nowMs = Date.now();
+    if (nowMs - simLastGpsPost > 500) {
+        simLastGpsPost = nowMs;
+        const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
+        fetch(`${apiUrl}/api/gps/external`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat: pos.lat, lon: pos.lon, speed: 10, heading: pos.bearing }),
+        }).catch(() => {});
+    }
 }
 
 function startSimulation() {
@@ -307,6 +343,9 @@ function startSimulation() {
 function stopSimulation() {
     if (simInterval) { clearInterval(simInterval); simInterval = null; }
     setSimButtonState(false);
+    // Sim-GPS-Override im Backend aufheben → zurück zu echtem GPS (SignalK)
+    const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
+    fetch(`${apiUrl}/api/gps/external/disable`, { method: 'POST' }).catch(() => {});
     // Boot-Marker zurück auf echte Position
     if (simSavedPosition) {
         mapModule.updateBoatPosition(simSavedPosition);
@@ -377,6 +416,7 @@ window.BoatOS = {
     map: mapModule,
     navigation,
     weather,
+    tides,
     sensors,
     ui,
     ais,
@@ -698,6 +738,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Theme initialisieren
     theme.initTheme();
 
+    // Quick-Action-Karussell (Coverflow-Arc) initialisieren
+    initQuickActionsCarousel();
+
     // Version im Hintergrund prüfen (Badge + alle 6h)
     system.autoCheck();
 
@@ -877,6 +920,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             window.BoatOS.context.currentPosition = { lat: gpsData.lat, lon: gpsData.lon };
+            // SOG (kn) + COG (°) für Dashboard-Widgets (Navi-Instrument) bereitstellen
+            if (typeof gpsData.speed === 'number') window.BoatOS.context.sog = gpsData.speed;
+            const cogVal = (gpsData.heading ?? gpsData.course);
+            if (typeof cogVal === 'number') window.BoatOS.context.cog = cogVal;
 
             if (navigation.isNavigationActive && navigation.isNavigationActive()) {
                 navigation.updateNavigation(gpsData.lat, gpsData.lon, window.BoatOS.context);
@@ -929,6 +976,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Backend-merged Settings-Stand.
         if (mapInstance && merged?.map?.showPegel === true && ais.updateWaterLevelSettings) {
             ais.updateWaterLevelSettings({ enabled: true });
+        }
+
+        // Häfen & Ankerplätze ebenso erst hier aktivieren — updateInfrastructureSettings
+        // registriert einen moveend-Listener und braucht die gesetzte Map-Referenz.
+        if (mapInstance && merged?.map?.showHarbors === true && ais.updateInfrastructureSettings) {
+            ais.updateInfrastructureSettings({ enabled: true, types: ['harbor', 'anchorage'] });
         }
     });
 

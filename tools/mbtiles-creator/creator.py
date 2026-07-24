@@ -1086,7 +1086,38 @@ class App(tk.Tk):
         import osmium
         import math as _m
 
-        WATERWAY_TYPES = {'river', 'canal', 'stream', 'fairway', 'dock'}
+        # stream bewusst NICHT enthalten — zu klein für Motorboote
+        WATERWAY_TYPES = {'river', 'canal', 'fairway', 'dock'}
+        # Altarme & Hochwasser-Entlastungsgewässer (Umflutkanäle) sind ohne
+        # explizite Freigabe nicht schiffbar
+        FLOOD_NAME_PARTS = ('alte ', 'altarm', 'nebenarm', 'seitenarm',
+                            'umflut', 'flutkanal', 'flutmulde', 'flutgraben',
+                            'hochwasser')
+
+        def _navigable(tags: dict) -> bool:
+            """Zugangs-Regeln wie im OSRM-Profil waterway_balanced.lua:
+            explizite Freigabe (motorboat/boat=yes, CEMT>0) gewinnt,
+            explizites Verbot sperrt, Umflut-/Altarm-Namen ohne Freigabe raus."""
+            if tags.get('waterway') not in WATERWAY_TYPES:
+                return False
+            mb = tags.get('motorboat') or tags.get('motor_boat')
+            if mb == 'no':
+                return False
+            allowed = (mb == 'yes')
+            if not allowed:
+                if tags.get('boat') == 'no':
+                    return False
+                allowed = (tags.get('boat') == 'yes')
+            if not allowed:
+                if tags.get('access') in ('no', 'private'):
+                    return False
+                cemt = tags.get('CEMT')
+                allowed = bool(cemt) and cemt != '0'
+            if not allowed:
+                name = (tags.get('name') or '').lower()
+                if any(p in name for p in FLOOD_NAME_PARTS):
+                    return False
+            return True
 
         class _WE(osmium.SimpleHandler):
             def __init__(self):
@@ -1096,7 +1127,7 @@ class App(tk.Tk):
 
             def way(self, w):
                 tags = {t.k: t.v for t in w.tags}
-                if tags.get('waterway') not in WATERWAY_TYPES:
+                if not _navigable(tags):
                     return
                 locs = [(n.ref, float(n.location.lat), float(n.location.lon))
                         for n in w.nodes if n.location.valid()]

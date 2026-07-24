@@ -58,9 +58,14 @@ function loadChartOverlays() {
         try {
             let tilesUrl;
 
-            if (chart.type === 'tiles' || chart.type === 'kap' || chart.type === 'enc') {
-                // KAP and ENC charts are converted to tiles
-                tilesUrl = (chart.type === 'kap' || chart.type === 'enc')
+            if (chart.type === 'enc') {
+                // ENC liegt seit der neuen Pipeline als GeoJSON vor —
+                // Vektor-Darstellung folgt in Phase 2/3
+                console.log(`📊 ENC chart ${chart.name}: Vektor-Anzeige noch nicht implementiert`);
+                return;
+            } else if (chart.type === 'tiles' || chart.type === 'kap') {
+                // KAP charts are converted to tiles
+                tilesUrl = (chart.type === 'kap')
                     ? `${CHARTS_API_URL}${chart.url}/tiles/{z}/{x}/{y}.png`
                     : `${CHARTS_API_URL}${chart.url}/{z}/{x}/{y}.png`;
             } else if (chart.type === 'mbtiles') {
@@ -147,16 +152,17 @@ async function toggleChart(chartId, enabled) {
                 showMsg('📊 Konvertiere Karte...');
                 showProgressModal('📊 Konvertiere ENC-Karte...');
 
-                // Start conversion
+                // Konvertierung als Backend-Hintergrund-Job starten
                 const convertResponse = await fetch(`${CHARTS_API_URL}/api/charts/${chartId}/convert`, {
                     method: 'POST'
                 });
+                const start = convertResponse.ok ? await convertResponse.json() : null;
 
-                if (convertResponse.ok) {
-                    // Poll for conversion status
+                if (start && start.started) {
                     await pollConversionStatus(chartId);
                 } else {
                     showMsg('❌ Konvertierung fehlgeschlagen');
+                    console.warn('ENC convert start failed:', start);
                     closeProgressModal();
                 }
             } else {
@@ -179,45 +185,32 @@ async function toggleChart(chartId, enabled) {
 }
 
 async function pollConversionStatus(chartId) {
-    let progress = 0;
-    const interval = setInterval(async () => {
-        progress += 5;
-        updateProgress(Math.min(progress, 95), 'Konvertiere...', null);
+    // Echten Job-Status vom Backend pollen (kein Fake-Progress mehr)
+    const result = await pollENCJob(status => {
+        updateProgress(status.percent ?? 50, status.progress || 'Konvertiere…');
+    });
 
-        // Check if conversion is complete by reloading charts
-        const response = await fetch(`${CHARTS_API_URL}/api/charts`);
-        if (response.ok) {
-            const charts = await response.json();
-            const chart = charts.find(c => c.id === chartId);
+    if (result && result.success) {
+        completeProgress('✅ Konvertierung abgeschlossen!');
 
-            if (chart && chart.converted) {
-                clearInterval(interval);
-                completeProgress('✅ Konvertierung abgeschlossen!');
+        // Enable the chart after conversion
+        const enableResponse = await fetch(`${CHARTS_API_URL}/api/charts/${chartId}?enabled=true`, {
+            method: 'PATCH'
+        });
 
-                // Enable the chart after conversion
-                const enableResponse = await fetch(`${CHARTS_API_URL}/api/charts/${chartId}?enabled=true`, {
-                    method: 'PATCH'
-                });
-
-                if (enableResponse.ok) {
-                    await loadCharts();
-                    loadChartOverlays();
-                    showMsg('✅ Karte aktiviert');
-                }
-
-                setTimeout(() => {
-                    closeProgressModal();
-                }, 2000);
-            }
+        if (enableResponse.ok) {
+            await loadCharts();
+            loadChartOverlays();
+            showMsg('✅ Karte aktiviert');
         }
 
-        // Timeout after 5 minutes
-        if (progress >= 300) {
-            clearInterval(interval);
-            updateProgress(100, '⚠️ Konvertierung dauert länger als erwartet');
-            document.getElementById('progress-close-btn').style.display = 'block';
-        }
-    }, 1000);
+        setTimeout(() => {
+            closeProgressModal();
+        }, 2000);
+    } else {
+        updateProgress(100, `❌ Konvertierung fehlgeschlagen: ${result?.error || 'unbekannter Fehler'}`);
+        document.getElementById('progress-close-btn').style.display = 'block';
+    }
 }
 
 async function deleteChart(chartId) {
@@ -300,9 +293,14 @@ async function uploadChart() {
                 chartLayers.push(chart);
 
                 if (needsConversion) {
-                    updateProgress(50, 'Konvertiere zu Tiles...');
-                    // Poll for conversion completion
-                    await waitForConversion(chart.id, chartName);
+                    // Konvertierung läuft im Upload-Request mit — wenn die
+                    // Antwort da ist, ist sie auch fertig
+                    completeProgress(`✅ ${chartName} fertig!`);
+                    await loadCharts();
+                    setTimeout(() => {
+                        closeProgressModal();
+                        showMsg(`✅ ${chartName} bereit`);
+                    }, 1500);
                 } else {
                     showMsg(`✅ ${chartName} hochgeladen`);
                 }
@@ -325,53 +323,6 @@ async function uploadChart() {
     folderInput.value = '';
     nameInput.value = '';
     updateFileInfo();
-}
-
-// Wait for chart conversion to complete
-async function waitForConversion(chartId, chartName) {
-    let progress = 50;
-    let attempts = 0;
-    const maxAttempts = 120; // 2 minutes max
-
-    const checkInterval = setInterval(async () => {
-        attempts++;
-        progress = Math.min(50 + (attempts * 0.4), 95);
-        updateProgress(progress, 'Konvertiere zu Tiles... (kann 1-3 Min. dauern)');
-
-        try {
-            // Check if tiles directory has files
-            const response = await fetch(`${CHARTS_API_URL}/api/charts`);
-            if (response.ok) {
-                const charts = await response.json();
-                const chart = charts.find(c => c.id === chartId);
-
-                if (chart) {
-                    // Check if chart has tiles by trying to load the chart
-                    const tilesExist = chart.type === 'tiles' || chart.type === 'kap' || chart.type === 'enc';
-
-                    // Simple heuristic: if it's been 5+ seconds since upload, assume conversion is done
-                    if (attempts > 5) {
-                        clearInterval(checkInterval);
-                        completeProgress(`✅ ${chartName} fertig!`);
-                        await loadCharts();
-                        setTimeout(() => {
-                            closeProgressModal();
-                            showMsg(`✅ ${chartName} bereit`);
-                        }, 2000);
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Error checking conversion status:', error);
-        }
-
-        // Timeout after max attempts
-        if (attempts >= maxAttempts) {
-            clearInterval(checkInterval);
-            updateProgress(100, '⏰ Konvertierung läuft im Hintergrund weiter');
-            document.getElementById('progress-close-btn').style.display = 'block';
-        }
-    }, 1000);
 }
 
 // Update file selection info
@@ -520,42 +471,73 @@ async function downloadSelectedENC() {
     const statusDiv = document.getElementById('enc-download-status');
     const downloadBtn = document.getElementById('download-enc-btn');
 
-    statusDiv.textContent = `Downloading ${selectedENC.length} waterways...`;
-    downloadBtn.disabled = true;
-
     // Convert filenames to full waterway objects from catalog
     const waterways = selectedENC.map(filename => {
         const enc = encCatalog.find(e => e.filename === filename);
-        return enc ? { name: enc.name, url: enc.url, filename: enc.filename } : null;
+        return enc ? { name: enc.name, url: enc.url } : null;
     }).filter(w => w !== null);
 
+    downloadBtn.disabled = true;
+
     try {
+        // Download + Konvertierung laufen als Backend-Hintergrund-Job —
+        // hier nur starten und den Status pollen
         const response = await fetch(`${CHARTS_API_URL}/api/enc/download`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(waterways)
         });
+        const start = response.ok ? await response.json() : null;
 
-        if (response.ok) {
-            const result = await response.json();
-            statusDiv.textContent = `Downloaded ${result.success}/${result.total} successfully`;
-
-            await loadENCCatalog();
-            await loadCharts();
-            selectedENC = [];
-
-            setTimeout(() => {
-                statusDiv.textContent = '';
-            }, 5000);
-        } else {
-            statusDiv.textContent = 'Download failed';
+        if (!start || !start.started) {
+            statusDiv.textContent = start?.error || 'Download konnte nicht gestartet werden';
+            downloadBtn.disabled = false;
+            return;
         }
+
+        const result = await pollENCJob(status => {
+            statusDiv.textContent = status.progress || 'Läuft…';
+        });
+
+        if (result && result.ok) {
+            statusDiv.textContent = `✅ ${result.success}/${result.total} Gewässer installiert`;
+        } else if (result) {
+            statusDiv.textContent = `⚠️ ${result.success || 0}/${result.total || '?'} erfolgreich — Details in der Konsole`;
+            console.warn('ENC download details:', result.details || result.error);
+        } else {
+            statusDiv.textContent = 'Download fehlgeschlagen';
+        }
+
+        await loadENCCatalog();
+        await loadCharts();
+        selectedENC = [];
+
+        setTimeout(() => { statusDiv.textContent = ''; }, 8000);
     } catch (error) {
         console.error('ENC download error:', error);
-        statusDiv.textContent = 'Download failed';
+        statusDiv.textContent = 'Download fehlgeschlagen';
     } finally {
         downloadBtn.disabled = false;
     }
+}
+
+// Pollt den ENC-Job-Status bis der Job beendet ist; ruft onProgress pro Tick.
+// Gibt das result-Objekt des Jobs zurück (oder null bei Timeout/Fehler).
+async function pollENCJob(onProgress, intervalMs = 2000, timeoutMs = 30 * 60 * 1000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, intervalMs));
+        try {
+            const resp = await fetch(`${CHARTS_API_URL}/api/enc/job/status`);
+            if (!resp.ok) continue;
+            const status = await resp.json();
+            if (onProgress) onProgress(status);
+            if (!status.running) return status.result;
+        } catch (e) {
+            // Netzwerk-Hänger überbrücken, weiter pollen
+        }
+    }
+    return null;
 }
 
 // ==================== PROGRESS MODAL ====================

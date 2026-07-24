@@ -10,9 +10,10 @@
     <link rel="preload" as="script" href="/lib/maplibre-gl.js">
 
     <!-- BoatOS Styles -->
-    <link rel="stylesheet" href="css/theme.css?v=12">
-    <link rel="stylesheet" href="css/layout.css?v=11">
-    <link rel="stylesheet" href="css/components.css?v=12">
+    <link rel="stylesheet" href="css/theme.css?v=13">
+    <link rel="stylesheet" href="css/layout.css?v=15">
+    <link rel="stylesheet" href="css/components.css?v=14">
+    <link rel="stylesheet" href="css/rondell.css?v=3">
 </head>
 <body>
     <!-- ============================================
@@ -220,6 +221,32 @@
 
         <div class="quick-actions-wrap">
         <div class="quick-actions">
+            <!-- Panel-Öffner (öffnen den jeweiligen Sheet-Bereich) -->
+            <div class="quick-action qa-section" onclick="BoatOS.ui.showSection('route', this)">
+                <span class="icon">🧭</span>
+                <span class="label" data-i18n="sheet_tab_route">Route</span>
+            </div>
+            <div class="quick-action qa-section" onclick="BoatOS.ui.showSection('weather', this)">
+                <span class="icon">🌦️</span>
+                <span class="label" data-i18n="sheet_tab_weather">Wetter</span>
+            </div>
+            <div class="quick-action qa-section" onclick="BoatOS.tides.open(this)">
+                <span class="icon">🌊</span>
+                <span class="label" data-i18n="sheet_tab_tides">Gezeiten</span>
+            </div>
+            <div class="quick-action qa-section" onclick="BoatOS.ui.showSection('logbook', this)">
+                <span class="icon">📖</span>
+                <span class="label" data-i18n="sheet_tab_logbook">Logbuch</span>
+            </div>
+            <div class="quick-action qa-section" id="qa-ais" onclick="BoatOS.ui.showSection('ais', this)">
+                <span class="icon">🚢</span>
+                <span class="label">AIS</span>
+            </div>
+            <div class="quick-action qa-section" id="qa-locks" onclick="BoatOS.ui.showSection('locks', this)">
+                <span class="icon">🚧</span>
+                <span class="label" data-i18n="map_qa_locks">Schleusen</span>
+            </div>
+            <!-- Aktionen/Layer -->
             <div class="quick-action" data-mode="poi" onclick="BoatOS.navigation.startPoiPlacement()">
                 <span class="icon">📍</span>
                 <span class="label">POI</span>
@@ -231,18 +258,6 @@
             <div class="quick-action" onclick="BoatOS.ui.showFavorites()">
                 <span class="icon">⭐</span>
                 <span class="label" data-i18n="map_qa_favorites">Favoriten</span>
-            </div>
-            <div class="quick-action" onclick="BoatOS.showSavedRoutesPanel()">
-                <span class="icon">📂</span>
-                <span class="label" data-i18n="map_qa_routes">Routen</span>
-            </div>
-            <div class="quick-action" id="btn-ais" onclick="BoatOS.ais.toggleAIS()">
-                <span class="icon">🚢</span>
-                <span class="label">AIS</span>
-            </div>
-            <div class="quick-action" id="btn-locks" onclick="BoatOS.ui.toggleLocks()">
-                <span class="icon">🚧</span>
-                <span class="label" data-i18n="map_qa_locks">Schleusen</span>
             </div>
             <div class="quick-action" id="btn-pegel" onclick="BoatOS.ui.togglePegel()">
                 <span class="icon">📊</span>
@@ -259,21 +274,15 @@
         </div>
         </div><!-- /.quick-actions-wrap -->
 
-        <div class="sheet-tabs">
-            <div class="sheet-tab active" onclick="BoatOS.ui.showSection('route', this)">Route</div>
-            <div class="sheet-tab" data-i18n="sheet_tab_weather" onclick="BoatOS.ui.showSection('weather', this)">Wetter</div>
-            <div class="sheet-tab" data-i18n="sheet_tab_logbook" onclick="BoatOS.ui.showSection('logbook', this)">Logbuch</div>
-            <div class="sheet-tab" onclick="BoatOS.ui.showSection('ais', this)">AIS</div>
-            <div class="sheet-tab" data-i18n="sheet_tab_locks" onclick="BoatOS.ui.showSection('locks', this)">Schleusen</div>
-        </div>
-
         <div class="sheet-content">
+            <button class="sheet-close" type="button" aria-label="Schließen" onclick="BoatOS.ui.closePanel()">✕</button>
             <!-- ROUTE SECTION -->
             <div id="section-route">
                 <div class="route-header">
                     <span style="font-size: var(--fs-xl); font-weight: 600;" data-i18n="route_header">Aktuelle Route</span>
                     <div style="display: flex; gap: var(--space-sm);">
                         <button class="icon-btn icon-btn-nav" id="btn-start-nav" style="background: var(--success); color: white;" onclick="BoatOS.toggleNavigation()" title="Navigation starten">▶️</button>
+                        <button class="icon-btn icon-btn-sm" onclick="BoatOS.showSavedRoutesPanel()" title="Gespeicherte Routen">📂</button>
                         <button class="icon-btn icon-btn-sm" onclick="BoatOS.saveCurrentRouteWithName()" title="Route speichern">💾</button>
                         <button class="icon-btn icon-btn-sm" onclick="BoatOS.editRoute()" title="Route bearbeiten">✏️</button>
                         <button class="icon-btn icon-btn-sm" onclick="BoatOS.clearRoute()" title="Route löschen">🗑️</button>
@@ -342,6 +351,11 @@
                         <span data-i18n="route_area_offline_btn">Bereich offline</span>
                     </button>
                 </div>
+            </div>
+
+            <!-- TIDES SECTION (Gezeiten, MVP) -->
+            <div id="section-tides" class="section-hidden">
+                <div id="tides-body"></div>
             </div>
 
             <!-- WEATHER SECTION -->
@@ -485,6 +499,9 @@
 
             <!-- AIS SECTION -->
             <div id="section-ais" class="section-hidden">
+                <button id="btn-ais" class="layer-toggle-btn" onclick="BoatOS.ais.toggleAIS()">
+                    🚢 <span data-i18n="ais_layer_toggle">AIS auf Karte</span>
+                </button>
                 <div class="ais-list" id="aisList">
                     <div style="text-align: center; padding: var(--space-2xl); color: var(--text-dim);" data-i18n="ais_none_in_range">
                         Keine AIS-Ziele in Reichweite.
@@ -494,6 +511,9 @@
 
             <!-- LOCKS SECTION -->
             <div id="section-locks" class="section-hidden">
+                <button id="btn-locks" class="layer-toggle-btn" onclick="BoatOS.ui.toggleLocks()">
+                    🚧 <span data-i18n="locks_layer_toggle">Schleusen auf Karte</span>
+                </button>
                 <div class="lock-list" id="lockList">
                     <div style="text-align: center; padding: var(--space-2xl); color: var(--text-dim);" data-i18n="locks_loading">
                         Schleusen werden geladen...
@@ -659,6 +679,7 @@
                 <button class="settings-nav-item" data-tab="routing" data-i18n="settings_tab_routing" onclick="BoatOS.settings.showTab('routing')">Routing</button>
                 <button class="settings-nav-item" data-tab="wifi"    data-i18n="settings_tab_wifi"    onclick="BoatOS.settings.showTab('wifi')">WLAN</button>
                 <button class="settings-nav-item" data-tab="system"  data-i18n="settings_tab_system"  onclick="BoatOS.settings.showTab('system')">System</button>
+                <button class="settings-nav-item" data-tab="about"   data-i18n="settings_tab_about"   onclick="BoatOS.settings.showTab('about')">Über</button>
             </nav>
             <div class="settings-content" id="settingsContent">
                 <div class="settings-content-inner" id="settingsContentInner">
@@ -731,6 +752,16 @@
          JAVASCRIPT MODULES
          ============================================ -->
     <script src="i18n.js"></script>
+    <!-- Dashboard-Widget-Registry (muss vor dashboard_renderer.js laden) + Widget-Module -->
+    <script src="js/dashboard/registry.js"></script>
+    <script src="js/dashboard/widgets/spacer.js"></script>
+    <script src="js/dashboard/widgets/text.js"></script>
+    <script src="js/dashboard/widgets/clock.js"></script>
+    <script src="js/dashboard/widgets/sensor.js"></script>
+    <script src="js/dashboard/widgets/gauge.js"></script>
+    <script src="js/dashboard/widgets/chart.js"></script>
+    <script src="js/dashboard/widgets/horizon.js"></script>
+    <script src="js/dashboard/widgets/compass.js"></script>
     <script src="dashboard_renderer.js"></script>
     <script src="js/dashboard-editor.js"></script>
     <script src="locks.js"></script>

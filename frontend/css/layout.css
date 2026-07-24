@@ -371,6 +371,8 @@
 .quick-action .icon { font-size: var(--fs-3xl); }
 .quick-action .label { font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; }
 
+/* Rondell-/Karussell- + Floating-Panel-Styles ausgelagert → css/rondell.css */
+
 .quick-action.recording {
     background: rgba(255, 107, 107, 0.2);
     border-color: var(--danger);
