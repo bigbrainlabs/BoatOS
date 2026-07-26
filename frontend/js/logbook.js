@@ -549,6 +549,7 @@ export function renderTripCard(trip) {
             </div>
             <div style="display: flex; gap: 0; border-top: 1px solid var(--border);">
                 <button onclick="event.stopPropagation(); BoatOS.exportTrip(${trip.id})" style="flex: 1; padding: 9px 4px; border: none; border-right: 1px solid var(--border); border-radius: 0; background: var(--bg-panel); color: var(--text); font-size: 12px; cursor: pointer;">${t('logGpxExport')}</button>
+                <button onclick="event.stopPropagation(); BoatOS.exportTripPdf(${trip.id})" style="flex: 1; padding: 9px 4px; border: none; border-right: 1px solid var(--border); border-radius: 0; background: var(--bg-panel); color: var(--text); font-size: 12px; cursor: pointer;">${t('logPdfExport')}</button>
                 <button id="btn-view-map-${trip.id}" onclick="event.stopPropagation(); BoatOS.viewTripOnMap(${trip.id})" style="flex: 1; padding: 9px 4px; border: none; border-right: 1px solid var(--border); border-radius: 0; background: var(--bg-panel); color: var(--text); font-size: 12px; cursor: pointer;">${t('logMapView')}</button>
                 <button onclick="event.stopPropagation(); BoatOS.deleteTrip(${trip.id})" style="padding: 9px 14px; border: none; border-radius: 0; background: var(--bg-panel); color: var(--danger); font-size: 12px; cursor: pointer;">🗑️</button>
             </div>
@@ -871,6 +872,7 @@ export async function openTripDetail(tripId) {
             <!-- Action buttons -->
             <div style="display: flex; gap: var(--space-md);">
                 <button onclick="BoatOS.exportTrip(${trip.id})" style="flex:1; padding: var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-panel); color: var(--text); font-size: var(--fs-base); cursor: pointer;">${t('logGpxExport')}</button>
+                <button onclick="BoatOS.exportTripPdf(${trip.id})" style="flex:1; padding: var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-panel); color: var(--text); font-size: var(--fs-base); cursor: pointer;">${t('logPdfExport')}</button>
                 <button onclick="BoatOS.closeTripDetailModal(); BoatOS.viewTripOnMap(${trip.id})" style="flex:1; padding: var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-panel); color: var(--text); font-size: var(--fs-base); cursor: pointer;">${t('logMapView')}</button>
                 <button onclick="BoatOS.closeTripDetailModal(); if(confirm(${JSON.stringify(t('logDeleteTripConfirm'))})) BoatOS.deleteTrip(${trip.id})" style="padding: var(--space-md) var(--space-lg); border: 1px solid var(--danger); border-radius: var(--radius-lg); background: transparent; color: var(--danger); font-size: var(--fs-base); cursor: pointer;">${t('btnDelete')}</button>
             </div>
@@ -895,6 +897,18 @@ export function exportTrip(tripId) {
     window.open(`${getApiUrl()}/api/track/export/${tripId}`, '_blank');
     if (ui.showNotification) {
         ui.showNotification('💾 GPX-Download gestartet', 'info');
+    }
+}
+
+/**
+ * Törnbericht als PDF herunterladen.
+ * Das Backend (pdf_export.py) konnte das schon lange — es gab nur keinen Weg,
+ * es aus der App heraus aufzurufen.
+ */
+export function exportTripPdf(tripId) {
+    window.open(`${getApiUrl()}/api/trip/pdf/${tripId}`, '_blank');
+    if (ui.showNotification) {
+        ui.showNotification('📄 PDF-Download gestartet', 'info');
     }
 }
 

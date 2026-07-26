@@ -28,6 +28,21 @@ export { toggleIENCLayer, isIENCVisible };
 let map = null;
 let boatMarker = null;
 let boatMarkerElement = null;
+
+/**
+ * Haelt den Boot-Marker an seiner Stelle fest, obwohl GPS weiterlaeuft.
+ *
+ * Gesetzt beim Stoppen der Simulation: das Boot soll dort stehen bleiben, wo
+ * die Fahrt endete, damit man von dort weitersimulieren kann. Ohne die Sperre
+ * zieht ihn die naechste echte GPS-Nachricht zurueck, und der Marker springt
+ * zwischen Simulations- und Echtposition hin und her.
+ */
+let _positionHold = false;
+
+/** true = Marker bleibt stehen, bis centerOnBoat() oder ein Sim-Start ihn loest. */
+export function setPositionHold(on) { _positionHold = !!on; }
+export function isPositionHold() { return _positionHold; }
+
 let currentBoatHeading = 0;
 let autoFollow = false;
 
@@ -42,8 +57,107 @@ let _animStart = null;
 let _animRafId = null;
 let _lastMapFollow = 0;
 
+/**
+ * Laufende Kamerafahrt (3D-Wechsel, Nord-oben-Rueckkehr) — bis zu diesem
+ * Zeitpunkt (performance.now()) darf die Follow-Animation NICHT dazwischenfunken.
+ *
+ * Grund: map.jumpTo() bricht ein laufendes map.easeTo() sofort ab. Die
+ * Follow-Animation feuert alle 30 ms ein jumpTo — der 600-ms-easeTo des
+ * 3D-Wechsels war damit nach spaetestens 30 ms tot. Sichtbar war genau das:
+ * die Karte "zuckt" kurz und bleibt 2D. Waehrend der Kamerafahrt bewegt sich
+ * nur noch der Marker; danach uebernimmt Follow wieder.
+ */
+let _camTransitionUntil = 0;
+function _beginCameraTransition(durationMs) {
+    _camTransitionUntil = performance.now() + durationMs + 80;   // + Puffer
+}
+
 // ---- Course Up mode ----
 let courseUpMode = false;
+let perspective3D = false;          // 3D-/Look-ahead-Kartenmodus (gekippt + head-up)
+let _courseUpBefore3D = false;
+let _zoomBefore3D = null;
+const PITCH_3D = 65;                // Standard-Neigung im 3D-Modus (Grad) — braucht maxPitch > 60 (siehe initMap)
+const PITCH_MIN = 20, PITCH_MAX = 75, PITCH_STEP = 5;
+
+// Vom Nutzer per Pitch-Buttons gewaehlte Neigung (bleibt ueber Sitzungen erhalten)
+let _pitch3D = (() => {
+    const v = parseFloat(localStorage.getItem('pitch3D'));
+    return (Number.isFinite(v) && v >= PITCH_MIN && v <= PITCH_MAX) ? v : PITCH_3D;
+})();
+
+/** Neigung setzen — wirkt sofort, wenn 3D aktiv ist; sonst beim naechsten Wechsel. */
+function _setPitch3D(deg) {
+    _pitch3D = Math.max(PITCH_MIN, Math.min(PITCH_MAX, Math.round(deg)));
+    try { localStorage.setItem('pitch3D', String(_pitch3D)); } catch (_) {}
+    if (map && perspective3D) {
+        // Kamerafahrt anmelden, sonst killt das naechste Follow-jumpTo sie sofort
+        _beginCameraTransition(250);
+        map.easeTo({ pitch: _pitch3D, duration: 250 });
+    }
+    _updatePitchIndicator();
+}
+
+export function pitchUp()   { _setPitch3D(_pitch3D + PITCH_STEP); }   // flacher (mehr Vorausschau)
+export function pitchDown() { _setPitch3D(_pitch3D - PITCH_STEP); }   // steiler (mehr Draufsicht)
+export function getPitch3D() { return _pitch3D; }
+
+/**
+ * Zwei Neigungs-Tasten als eigene MapLibre-Control-Gruppe — sie landen damit
+ * direkt bei den Zoom-Tasten (NavigationControl, bottom-left) und sehen aus wie
+ * deren Zwillinge, statt in einem separaten UI-Element zu leben.
+ */
+class PitchControl {
+    onAdd() {
+        const c = document.createElement('div');
+        c.className = 'maplibregl-ctrl maplibregl-ctrl-group pitch-ctrl';
+
+        // SVG statt Text-Glyphe: Die Control-Buttons sind IMMER weiss (MapLibre-
+        // Style), eine per var(--text) eingefaerbte Glyphe war im Dark-Theme also
+        // weiss auf weiss — schlicht unsichtbar. Fester dunkler Strich, wie die
+        // Zoom-Icons von MapLibre selbst.
+        const icon = (up) => `
+            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 18 h18" stroke="#333" stroke-width="2" stroke-linecap="round" fill="none"/>
+              <path d="${up ? 'M12 4 l5 7 h-10 z' : 'M12 14 l5 -7 h-10 z'}" fill="#333"/>
+            </svg>`;
+        const mk = (up, title, fn) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.title = title;
+            b.setAttribute('aria-label', title);
+            b.innerHTML = icon(up);
+            b.addEventListener('click', (e) => { e.preventDefault(); fn(); });
+            c.appendChild(b);
+        };
+        mk(true,  'Neigung flacher (mehr Vorausschau)', pitchUp);
+        mk(false, 'Neigung steiler (mehr Draufsicht)', pitchDown);
+        this._c = c;
+        return c;
+    }
+    onRemove() { this._c?.remove(); this._c = null; }
+}
+
+/**
+ * Ziel-Zoom der 3D-Ansicht — abhaengig von der Bildschirmbreite.
+ *
+ * Ein fester Wert kann nicht fuer alle stimmen: Zoom bestimmt den Massstab, die
+ * Bildschirmbreite aber, WIE VIEL Fluss davon ins Bild passt. 17.5 gibt auf einem
+ * breiten Display schoenes Fahrgefuehl; auf dem Handy klebt man damit auf dem Bug.
+ * Darum je schmaler der Screen, desto weiter raus.
+ */
+const ZOOM_3D_PHONE = 16.0;         // < 768 px  — schmales Handy-Display
+const ZOOM_3D_TABLET = 17.0;        // < 1200 px — Tablet / Pi-Touchscreen
+const ZOOM_3D_WIDE = 17.5;          // ab 1200 px — Desktop / grosses Kartenplotter-Display
+
+function _zoom3dTarget() {
+    // Breite des Karten-Containers, nicht window: das Deck laeuft auch eingebettet.
+    const w = (map && map.getContainer() && map.getContainer().clientWidth) ||
+              window.innerWidth || 1200;
+    if (w < 768) return ZOOM_3D_PHONE;
+    if (w < 1200) return ZOOM_3D_TABLET;
+    return ZOOM_3D_WIDE;
+}
 let _smoothHeading = null;
 const HEADING_EMA_ALPHA = 0.15; // low = very smooth bearing rotation
 
@@ -65,16 +179,27 @@ function _animateBoatMarker(ts) {
     _dispLat = _fromLat + (_targetLat - _fromLat) * e;
     _dispLon = _fromLon + (_targetLon - _fromLon) * e;
 
-    boatMarker.setLngLat([_dispLon, _dispLat]);
-
-    // Update map follow at max 10 fps to spare Pi GPU
-    if (autoFollow && ts - _lastMapFollow > 100) {
-        const easeOpts = { center: [_dispLon, _dispLat], duration: 120 };
-        if (courseUpMode && currentBoatHeading !== 0) {
-            easeOpts.bearing = -_updateSmoothedHeading(currentBoatHeading);
+    if (autoFollow && ts >= _camTransitionUntil) {
+        // Marker UND Karte synchron im selben Tick per jumpTo bewegen (jumpTo
+        // rendert nur 1×, easeTo würde die ganze Dauer mit 60fps rendern → Pi-Last).
+        // Gedrosselt auf ~33 fps: gleichmäßiges Scrollen, Boot bleibt exakt
+        // zentriert (kein Wackeln relativ zur Karte), Pi bleibt bedienbar.
+        // Waehrend einer Kamerafahrt (3D-Wechsel) ausgesetzt — jumpTo wuerde sie killen.
+        if (ts - _lastMapFollow > 30) {
+            const jt = { center: [_dispLon, _dispLat] };
+            if (courseUpMode && currentBoatHeading !== 0) {
+                // Head-up: Fahrtrichtung nach oben → bearing = +heading (geglättet)
+                jt.bearing = _updateSmoothedHeading(currentBoatHeading);
+            }
+            map.jumpTo(jt);
+            boatMarker.setLngLat([_dispLon, _dispLat]);
+            _lastMapFollow = ts;
+            if (courseUpMode && currentBoatHeading !== 0 && boatMarkerElement) {
+                boatMarkerElement.style.transform = `rotate(${currentBoatHeading - map.getBearing()}deg)`;
+            }
         }
-        map.easeTo(easeOpts);
-        _lastMapFollow = ts;
+    } else {
+        boatMarker.setLngLat([_dispLon, _dispLat]);   // ohne Follow: Marker frei, voll flüssig
     }
 
     if (t < 1) {
@@ -223,6 +348,9 @@ function _snapshotDynamicSources() {
 function _restoreAfterStyleChange(snap) {
     if (!map) return;
 
+    // sky ist eine STYLE-Eigenschaft — setStyle() wirft sie mit weg.
+    _applySky();
+
     // Route, Segmente und Track aus dem Snapshot zurückspielen
     if (snap && snap.sources) {
         for (const [id, data] of Object.entries(snap.sources)) {
@@ -257,6 +385,11 @@ function _restoreAfterStyleChange(snap) {
     if (localStorage.getItem('satelliteMode') === 'true') {
         toggleSatellite(true);
     }
+
+    // Wind-Overlay neu zeichnen: Source, Layer UND die addImage-Pfeilbilder sind
+    // mit dem alten Style verschwunden. Ueber den Namespace statt per Import —
+    // weather-map.js importiert map.js, ein Rueckimport waere ein Zyklus.
+    try { window.BoatOS?.weatherMap?.redrawWindOverlay?.(); } catch (_) {}
 }
 
 function _showTileserverBanner() {
@@ -273,6 +406,32 @@ function _showTileserverBanner() {
     ].join(';');
     banner.textContent = '⚠ Offline-Karten nicht verfügbar · Online-Fallback (OpenStreetMap)';
     document.getElementById('map')?.appendChild(banner);
+}
+
+/**
+ * Zoom-/Neigungs-Anzeige als eigenes MapLibre-Control.
+ *
+ * Bewusst NICHT frei positioniert: als Control flieszt die Anzeige mit den
+ * Zoom-/Pitch-Tasten im selben Container. Frei platziert (left/bottom in Pixeln)
+ * lag sie zwangslaeufig irgendwann UNTER den Buttons — der Stapel waechst ja,
+ * sobald die Pitch-Tasten dazukommen. Genau das ist passiert.
+ */
+class ReadoutControl {
+    onAdd(m) {
+        const c = document.createElement('div');
+        c.className = 'maplibregl-ctrl map-readout';
+        c.innerHTML = '<span id="zoom-indicator"></span><span id="pitch-indicator"></span>';
+        const upd = () => {
+            const z = c.querySelector('#zoom-indicator');
+            if (z) z.textContent = 'Z ' + m.getZoom().toFixed(1);
+        };
+        upd();
+        m.on('zoom', upd);
+        this._c = c;
+        setTimeout(_updatePitchIndicator, 0);
+        return c;
+    }
+    onRemove() { this._c?.remove(); this._c = null; }
 }
 
 function _vectorStyle(regions) {
@@ -397,6 +556,10 @@ export async function initMap(options = {}) {
         style: tileserverOk ? _vectorStyle(regions) : _rasterFallbackStyle(),
         center: [defaultPosition.lon, defaultPosition.lat],
         zoom: options.zoom || 13,
+        // MapLibre deckelt den Pitch per Default bei 60° und kappt hoehere Werte
+        // STILL — ein pitch:70 waere wirkungslos "angekommen". Fuer die flache
+        // Look-ahead-Perspektive das Limit anheben.
+        maxPitch: 75,
         attributionControl: false
     });
 
@@ -413,12 +576,22 @@ export async function initMap(options = {}) {
         if (needle) needle.style.transform = `rotate(${-map.getBearing()}deg)`;
     });
 
-    // Navigations-Controls hinzufuegen
+    // Reihenfolge = Anordnung im bottom-left-Stapel: Anzeige, Zoom, Neigung
+    map.addControl(new ReadoutControl(), 'bottom-left');
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-left');
+    map.addControl(new PitchControl(), 'bottom-left');   // nur in der 3D-Ansicht sichtbar
+
+    // Himmel/Wolken an jede Kamerabewegung koppeln (Horizontlinie wandert mit
+    // Neigung und Zoom). 'move' feuert auch waehrend easeTo — also auch
+    // waehrend der 3D-Kamerafahrt.
+    map.on('move', _updateSkyOverlay);
+    map.on('resize', _updateSkyOverlay);
 
     // Nach vollstaendigem Laden weitere Layer hinzufuegen
     map.on('load', () => {
         console.log('Karte geladen');
+        _applySky();
+        _ensureSkyOverlay();
         if (tileserverOk) {
             addLabelsLayer();
         } else {
@@ -445,6 +618,10 @@ export async function initMap(options = {}) {
         // Gespeicherte Satelliteneinstellung wiederherstellen
         if (localStorage.getItem('satelliteMode') === 'true') {
             toggleSatellite(true);
+        }
+        // Gespeicherten 3D-/Look-ahead-Modus wiederherstellen
+        if (localStorage.getItem('perspective3D') === 'true') {
+            setTimeout(() => toggleMap3D(true), 600);
         }
 
         initMapMarkers();
@@ -803,6 +980,44 @@ export function createBoatMarker(iconType = 'motorboat') {
  * Aktualisiert die Boot-Position auf der Karte
  * @param {Object} gps - GPS-Daten {lat, lon, course, heading}
  */
+/**
+ * Setzt das Boot SOFORT auf eine Position — ohne Glättung, ohne Animation und
+ * ohne Track-Eintrag. Für echte Sprünge (Simulation Start/Ende).
+ *
+ * Über updateBoatPosition() wäre das falsch: die EMA-/Ease-Glättung lässt den
+ * Marker sichtbar per LUFTLINIE zum Ziel gleiten, und addToTrackHistory()
+ * zeichnet die Sprungstrecke zusätzlich als Track-Linie mit ein.
+ */
+export function setBoatPositionImmediate(lat, lon, heading) {
+    if (!map || !boatMarker) return;
+
+    // Laufende Marker-Animation abbrechen (sonst gleitet sie weiter zum alten Ziel)
+    if (_animRafId) { cancelAnimationFrame(_animRafId); _animRafId = null; }
+
+    // Kompletten Glättungs-Zustand auf die neue Position setzen — kein Nachziehen
+    _emaLat = lat; _emaLon = lon;
+    _fromLat = lat; _fromLon = lon;
+    _targetLat = lat; _targetLon = lon;
+    _dispLat = lat; _dispLon = lon;
+
+    window.currentPosition = { lat, lon };   // bewusst OHNE addToTrackHistory()
+    boatMarker.setLngLat([lon, lat]);
+
+    if (typeof heading === 'number') {
+        currentBoatHeading = heading;
+        _smoothHeading = heading;            // Bearing nicht über die alte Richtung einschwenken lassen
+        if (boatMarkerElement) {
+            boatMarkerElement.style.transform = `rotate(${heading - map.getBearing()}deg)`;
+        }
+    }
+
+    if (autoFollow && performance.now() >= _camTransitionUntil) {
+        const opts = { center: [lon, lat] };
+        if (courseUpMode && currentBoatHeading) opts.bearing = currentBoatHeading;
+        map.jumpTo(opts);
+    }
+}
+
 export function updateBoatPosition(gps) {
     if (!gps || !gps.lat || !gps.lon) return;
     if (!map || !boatMarker) return;
@@ -818,6 +1033,13 @@ export function updateBoatPosition(gps) {
     window.currentPosition = { lat: rawLat, lon: rawLon };
     addToTrackHistory(rawLat, rawLon);
 
+    // Position festgehalten (z. B. nach einem Simulations-Stopp): Daten laufen
+    // weiter, nur der Marker bleibt stehen. Sonst zoege ihn die naechste
+    // GPS-Nachricht sofort zur echten Position zurueck — das staendige
+    // Hin- und Herspringen. Aufgehoben wird die Sperre bewusst nur durch
+    // centerOnBoat() (Ziel-Knopf) oder durch einen Simulationsstart.
+    if (_positionHold) return;
+
     // EMA filter: blend new measurement into smoothed target
     if (_emaLat === null) {
         _emaLat = rawLat; _emaLon = rawLon;
@@ -826,12 +1048,13 @@ export function updateBoatPosition(gps) {
         _emaLon = GPS_EMA_ALPHA * rawLon + (1 - GPS_EMA_ALPHA) * _emaLon;
     }
 
-    // Heading (rotate marker)
+    // Heading (rotate marker) — Karten-Drehung abziehen, damit das Boot in
+    // Kurs-oben nach oben zeigt (in Nord-oben zeigt es Richtung heading).
     const heading = gps.course || gps.heading || 0;
     if (heading !== 0) {
         currentBoatHeading = heading;
         if (boatMarkerElement) {
-            boatMarkerElement.style.transform = `rotate(${heading}deg)`;
+            boatMarkerElement.style.transform = `rotate(${heading - map.getBearing()}deg)`;
         }
     }
 
@@ -903,6 +1126,15 @@ export function updateTrackLine() {
         type: 'LineString',
         coordinates: coordinates
     });
+}
+
+/**
+ * Setzt die Track-Historie (z.B. um den echten Track nach einer Simulation
+ * wiederherzustellen) und zeichnet die Linie neu.
+ */
+export function setTrackHistory(points) {
+    trackHistory = Array.isArray(points) ? points.slice(-maxTrackPoints) : [];
+    updateTrackLine();
 }
 
 /**
@@ -1163,6 +1395,15 @@ export function centerOnBoat() {
     autoFollow = true;
     updateFollowButton(true);
 
+    // Der Ziel-Knopf ist die EINZIGE Stelle, die eine festgehaltene Position
+    // wieder loest — genau das ist die bewusste Geste des Nutzers, „zeig mir,
+    // wo ich wirklich bin". Der Marker springt dabei hin, statt per Luftlinie
+    // hinzugleiten (das zoege quer ueber die Karte).
+    if (_positionHold) {
+        _positionHold = false;
+        setBoatPositionImmediate(currentPos.lat, currentPos.lon);
+    }
+
     if (map) {
         const flyOpts = {
             center: [currentPos.lon, currentPos.lat],
@@ -1170,7 +1411,7 @@ export function centerOnBoat() {
             duration: 1000
         };
         if (courseUpMode && currentBoatHeading !== 0) {
-            flyOpts.bearing = -currentBoatHeading;
+            flyOpts.bearing = currentBoatHeading;   // Head-up: Fahrtrichtung nach oben
         }
         map.flyTo(flyOpts);
     }
@@ -1179,8 +1420,9 @@ export function centerOnBoat() {
 export function toggleCourseUp() {
     courseUpMode = !courseUpMode;
     if (!courseUpMode) {
-        // Zurück zu Norden
-        if (map) map.easeTo({ bearing: 0, duration: 600 });
+        // Zurück zu Norden — Follow waehrend der Drehung pausieren, sonst killt
+        // das erste jumpTo die Kamerafahrt und die Karte bleibt schief stehen.
+        if (map) { _beginCameraTransition(600); map.easeTo({ bearing: 0, duration: 600 }); }
         _smoothHeading = null;
     }
     _updateCourseUpButton();
@@ -1190,6 +1432,138 @@ function _updateCourseUpButton() {
     const ring = document.getElementById('compass-active-ring');
     if (ring) ring.setAttribute('opacity', courseUpMode ? '1' : '0');
 }
+
+/* ── Himmel in der 3D-Ansicht ────────────────────────────────────────────────
+ *
+ * Zwei Ebenen, bewusst getrennt:
+ *  1. Der VERLAUF kommt von MapLibre selbst (map.setSky, seit 4.x im Style-Spec):
+ *     kraeftiges Blau im Zenit, heller Dunst zum Horizont, plus Fog, der die
+ *     Karte in der Ferne ausblendet. Das rendert die GPU im Karten-Shader —
+ *     also korrekt hinter allem und ohne eigenes Zutun bei jeder Neigung.
+ *  2. Die WOLKEN sind ein DOM-Overlay ueber dem Canvas. MapLibre kann keine
+ *     Wolken; ein three.js-Skydome waere fuer den Pi zu teuer. Zwei driftende
+ *     Schichten aus CSS-Radial-Gradienten geben Parallaxe. Bewusst KEIN
+ *     filter: blur() — das erzeugt auf der Pi-GPU Artefakte (siehe Seezeichen).
+ *
+ * Der Nachtmodus braucht keine Sonderbehandlung: der Rotfilter aus theme.css
+ * liegt auf #map und damit auf Canvas UND Overlay.
+ */
+function _applySky() {
+    if (!map || typeof map.setSky !== 'function') return;
+    try {
+        map.setSky({
+            'sky-color': '#4b8fd6',          // Zenit
+            'horizon-color': '#cfe4f5',      // Dunst kurz ueber dem Horizont
+            'fog-color': '#e3edf5',          // Ferne der Karte
+            'sky-horizon-blend': 0.7,        // wie weit das Blau nach unten reicht
+            'horizon-fog-blend': 0.55,
+            'fog-ground-blend': 0.35,
+        });
+    } catch (_) { /* aeltere MapLibre ohne sky-Spec: dann eben ohne */ }
+}
+
+let _skyEl = null;
+
+function _ensureSkyOverlay() {
+    if (_skyEl || !map) return;
+    const host = map.getCanvasContainer && map.getCanvasContainer();
+    const canvas = map.getCanvas && map.getCanvas();
+    if (!host || !canvas) return;
+    const el = document.createElement('div');
+    el.className = 'map-sky';
+    el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = '<div class="map-sky-clouds far"></div><div class="map-sky-clouds near"></div>';
+    // Direkt hinter den Canvas: Marker haengen im selben Container und werden
+    // spaeter angehaengt — sie bleiben damit ueber den Wolken.
+    canvas.insertAdjacentElement('afterend', el);
+    _skyEl = el;
+    _updateSkyOverlay();
+}
+
+/**
+ * Setzt die Hoehe des Wolkenbands auf die Horizontlinie.
+ *
+ * transform.getHorizon() liefert den Abstand der Horizontlinie von der
+ * Bildmitte — dieselbe Rechnung nutzt MapLibre intern fuer den Sky-Shader und
+ * fuer getBounds(). Interne API: faellt sie weg, bleibt das Band einfach leer
+ * (der Verlauf aus setSky ist davon unabhaengig und bleibt sichtbar).
+ */
+function _updateSkyOverlay() {
+    if (!map || !_skyEl) return;
+    let y = 0;
+    try {
+        const t = map.transform;
+        const h = (map.getContainer() && map.getContainer().clientHeight) || 0;
+        if (t && typeof t.getHorizon === 'function') {
+            // 1.3× : bis zur Horizontlinie reicht der sky-Verlauf, darunter
+            // folgt noch der Dunststreifen bis zum Kartenrand (Far-Plane). Die
+            // Wolken duerfen leicht hineinlaufen — die Maske blendet sie dort
+            // ohnehin aus, und ein harter Schnitt genau auf der Linie faellt
+            // staerker auf als ein paar ferne Wolken im Dunst.
+            const horizonY = h / 2 - t.getHorizon();
+            y = Math.max(0, Math.min(h, horizonY * 1.3));
+        }
+    } catch (_) { y = 0; }
+    _skyEl.style.height = Math.round(y) + 'px';
+}
+
+// 3D-/Look-ahead-Perspektive: Karte gekippt + head-up + Boot in die untere
+// Bildhälfte (mehr Fahrrinne voraus sichtbar), auf den bestehenden IENC-Daten.
+export function toggleMap3D(active) {
+    if (typeof active !== 'boolean') active = !perspective3D;
+    perspective3D = active;
+    if (window.BoatOS3D) window.BoatOS3D.setActive(active);  // echte 3D-Seezeichen ein/aus
+
+    if (map) {
+        if (active) {
+            _courseUpBefore3D = courseUpMode;
+            courseUpMode = true;            // Look-ahead braucht Kurs oben
+            _updateCourseUpButton();
+            autoFollow = true;
+            updateFollowButton(true);
+            const h = (map.getContainer() && map.getContainer().clientHeight) || 600;
+            _zoomBefore3D = map.getZoom();
+            const opts = {
+                pitch: _pitch3D,
+                zoom: Math.min(20, Math.max(_zoomBefore3D, _zoom3dTarget())),
+                padding: { top: Math.round(h * 0.45), bottom: 0, left: 0, right: 0 },
+                duration: 600,
+            };
+            if (currentBoatHeading) opts.bearing = _updateSmoothedHeading(currentBoatHeading);
+            // Boot mitnehmen: waehrend der Kamerafahrt pausiert Follow (siehe
+            // _beginCameraTransition), sonst wuerde die Fahrt sofort abgebrochen.
+            if (_dispLat != null && _dispLon != null) opts.center = [_dispLon, _dispLat];
+            _beginCameraTransition(opts.duration);
+            map.easeTo(opts);
+        } else {
+            courseUpMode = _courseUpBefore3D;
+            _updateCourseUpButton();
+            const opts = { pitch: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 600 };
+            if (_zoomBefore3D != null) opts.zoom = _zoomBefore3D;
+            if (!courseUpMode) { opts.bearing = 0; _smoothHeading = null; }
+            if (_dispLat != null && _dispLon != null) opts.center = [_dispLon, _dispLat];
+            _beginCameraTransition(opts.duration);
+            map.easeTo(opts);
+        }
+    }
+    try { localStorage.setItem('perspective3D', active ? 'true' : 'false'); } catch (_) {}
+    const btn = document.getElementById('btn-map3d');
+    if (btn) btn.classList.toggle('active', active);
+
+    // Pitch-Buttons gibt es nur in 3D — in der Draufsicht waeren sie sinnlos.
+    document.body.classList.toggle('map3d-active', active);
+    _updatePitchIndicator();
+}
+
+/** Zeigt die aktuelle Neigung neben der Zoomstufe an (nur im 3D-Modus). */
+function _updatePitchIndicator() {
+    const el = document.getElementById('pitch-indicator');
+    if (!el) return;
+    el.textContent = `${Math.round(_pitch3D)}°`;
+    el.style.display = perspective3D ? 'inline-block' : 'none';
+}
+
+export function isPerspective3D() { return perspective3D; }
 
 function updateFollowButton(following) {
     const btn = document.getElementById('btn-follow-resume');

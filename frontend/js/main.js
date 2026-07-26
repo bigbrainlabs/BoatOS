@@ -13,6 +13,7 @@ import { initQuickActionsCarousel } from './quick-actions.js';
 import * as navigation from './navigation.js';
 import * as weather from './weather.js';
 import * as tides from './tides.js';
+import * as weatherMap from './weather-map.js';
 import * as sensors from './sensors.js';
 import * as ui from './ui.js';
 import * as ais from './ais.js';
@@ -236,9 +237,20 @@ function updateWaypointList(context) {
 // ==================== SIMULATION ====================
 let simInterval = null;
 let simDistanceTraveled = 0;
-let simMultiplier = 25; // ×25 = ~13 m/tick
+let simMultiplier = 10; // ×10 = 100 kn Zeitraffer (max 20 über Slider)
 let simSavedPosition = null; // Boot-Position vor Simulation sichern
 let simLastGpsPost = 0;      // Throttle für Sim-GPS-Broadcast ans Backend
+let simLastTick = 0;         // Zeitstempel des letzten Ticks (für zeitbasierte Strecke)
+let simSavedTrack = null;    // echter GPS-Track, während der Simulation weggesichert
+let simCooldownUntil = 0;    // nach dem Stop kurz keine GPS-Updates annehmen (siehe stopSimulation)
+let simRouteKey = null;      // erkennt einen Routenwechsel (siehe startSimulation)
+
+/** Kennung einer Route: Anfang, Ende und Punktzahl reichen zur Unterscheidung. */
+function _simRouteKey(coords) {
+    if (!coords || !coords.length) return null;
+    const a = coords[0], b = coords[coords.length - 1];
+    return `${coords.length}|${a.lat.toFixed(5)},${a.lon.toFixed(5)}|${b.lat.toFixed(5)},${b.lon.toFixed(5)}`;
+}
 
 function simHaversine(lat1, lon1, lat2, lon2) {
     const R = 6371000;
@@ -279,11 +291,24 @@ function simTick() {
         : null;
     if (!routeCoords || routeCoords.length < 2) { stopSimulation(); return; }
 
-    // Meter pro Tick (100ms): Basis 10 kn × Multiplikator
-    simDistanceTraveled += simMultiplier * 10 * 1852 / 36000;
+    // ZEITBASIERT statt pro Tick: setInterval feuert unter Last NICHT zuverlässig
+    // alle 100 ms (im 3D-Modus bauen die 3D-Tonnen periodisch hunderte Meshes neu
+    // und blockieren den Main-Thread). Eine feste Strecke pro Tick würde das Boot
+    // dann real langsamer fahren lassen, als die SOG-Anzeige behauptet.
+    // Mit der echten Delta-Zeit stimmt die gefahrene Geschwindigkeit immer.
+    const nowT = performance.now();
+    const dt = simLastTick ? Math.min((nowT - simLastTick) / 1000, 0.5) : 0.1;  // s, gegen Ausreißer gedeckelt
+    simLastTick = nowT;
+
+    const speedKn = 10 * simMultiplier;          // Basis 10 kn × Multiplikator
+    simDistanceTraveled += speedKn * 1852 / 3600 * dt;   // kn → m/s → Meter
 
     const pos = interpolateAlongRoute(routeCoords, simDistanceTraveled);
     if (!pos) {
+        // Route zu Ende: anhalten und die Strecke zuruecksetzen, damit der
+        // naechste Start wieder am Anfang beginnt statt hinter dem Ziel — dort
+        // gaebe es keine Position mehr und die Fahrt endete sofort wieder.
+        simDistanceTraveled = 0;
         stopSimulation();
         if (ui.showNotification) ui.showNotification(t('simEnded'), 'info');
         return;
@@ -299,9 +324,9 @@ function simTick() {
         const ctx = window.BoatOS.context;
         ctx.currentPosition = { lat: pos.lat, lon: pos.lon };
         ctx.cog = pos.bearing;
-        // Realistische Reise-SOG (kn) fürs Instrument; der Sim-Multiplikator ist
-        // nur Zeitraffer (schnelleres Abfahren), keine echte Bootsgeschwindigkeit.
-        ctx.sog = 10;
+        // Tatsächliche Zeitraffer-Geschwindigkeit: Basis 10 kn × Multiplikator
+        // (bei ×20 also 200 kn). Wird auch im Header angezeigt.
+        ctx.sog = 10 * simMultiplier;
         if (navigation.isNavigationActive && navigation.isNavigationActive()) {
             navigation.updateNavigation(pos.lat, pos.lon, ctx);
         } else if (ctx.waypoints?.length >= 2) {
@@ -318,7 +343,7 @@ function simTick() {
         fetch(`${apiUrl}/api/gps/external`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lat: pos.lat, lon: pos.lon, speed: 10, heading: pos.bearing }),
+            body: JSON.stringify({ lat: pos.lat, lon: pos.lon, speed: 10 * simMultiplier, heading: pos.bearing }),
         }).catch(() => {});
     }
 }
@@ -332,7 +357,34 @@ function startSimulation() {
         return;
     }
     simSavedPosition = window.currentPosition ? { ...window.currentPosition } : null;
-    simDistanceTraveled = 0;
+
+    // Weiterfahren statt von vorn: nach einem Stopp steht das Boot dort, wo die
+    // Fahrt endete, und der naechste Start setzt sie an derselben Stelle fort.
+    // Nur bei einer ANDEREN Route faengt die Strecke wieder bei null an —
+    // sonst landete das Boot irgendwo mitten in der neuen Route.
+    const key = _simRouteKey(routeCoords);
+    if (key !== simRouteKey) { simDistanceTraveled = 0; simRouteKey = key; }
+    simLastTick = 0;   // erster Tick nimmt den Default-dt, nicht einen alten Zeitstempel
+
+    // Marker folgt wieder der Simulation
+    if (mapModule.setPositionHold) mapModule.setPositionHold(false);
+
+    // Echten Track wegsichern und die Linie leeren. Sonst verbindet die Track-Linie
+    // den letzten ECHTEN GPS-Punkt mit dem ersten Sim-Punkt auf der Route — genau
+    // die verwirrende Luftlinie. Der echte Track kommt beim Stoppen zurück.
+    simSavedTrack = mapModule.getTrackHistory ? [...mapModule.getTrackHistory()] : null;
+    if (mapModule.clearTrack) mapModule.clearTrack();
+
+    // Boot SOFORT an die Startstelle setzen (Sprung, kein Gleiten): über
+    // updateBoatPosition() würde der Marker wegen der GPS-Glättung sichtbar per
+    // Luftlinie von der echten Position zum Startpunkt ziehen. Startstelle ist
+    // der Routenanfang oder — beim Fortsetzen — die zuletzt erreichte Stelle.
+    const start = interpolateAlongRoute(routeCoords, simDistanceTraveled);
+    if (start && mapModule.setBoatPositionImmediate) {
+        mapModule.setBoatPositionImmediate(start.lat, start.lon, start.bearing);
+        window.currentPosition = { lat: start.lat, lon: start.lon };
+    }
+
     simInterval = setInterval(simTick, 100);
     setSimButtonState(true);
     mapModule.setAutoFollow(true);
@@ -343,13 +395,38 @@ function startSimulation() {
 function stopSimulation() {
     if (simInterval) { clearInterval(simInterval); simInterval = null; }
     setSimButtonState(false);
-    // Sim-GPS-Override im Backend aufheben → zurück zu echtem GPS (SignalK)
+
+    // Der letzte Sim-Broadcast ans Backend liegt bis zu 500 ms zurueck und kann als
+    // WebSocket-Nachricht NACH dem Stop eintreffen. Ohne Sperre wuerde er Boot und
+    // SOG wieder auf die letzte Sim-Position/-Geschwindigkeit setzen.
+    simCooldownUntil = Date.now() + 2000;
+    // Sim-GPS-Override im Backend aufheben → zurück zu echtem GPS (SignalK).
+    // ZWEIMAL, mit Abstand: der letzte Sim-POST (/api/gps/external) ist bis zu
+    // 500 ms alt und kann das disable UEBERHOLEN. Dann steht der Override wieder,
+    // das Backend broadcastet ewig die letzte Sim-Position — und das Boot kroch
+    // nach Ablauf der Nachlaufsperre per Luftlinie dorthin zurueck.
     const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
-    fetch(`${apiUrl}/api/gps/external/disable`, { method: 'POST' }).catch(() => {});
-    // Boot-Marker zurück auf echte Position
-    if (simSavedPosition) {
-        mapModule.updateBoatPosition(simSavedPosition);
-        window.currentPosition = simSavedPosition;
+    const disableSimGps = () =>
+        fetch(`${apiUrl}/api/gps/external/disable`, { method: 'POST' }).catch(() => {});
+    disableSimGps();
+    setTimeout(disableSimGps, 900);
+    // Boot bleibt STEHEN, wo die Fahrt endete — Voraussetzung dafuer, dass ein
+    // erneuter Start dort weitermacht. Ohne diese Sperre zoege ihn die naechste
+    // echte GPS-Nachricht sofort zurueck, und der Marker sprang zwischen
+    // Simulations- und Echtposition hin und her. Auf die echte Position kommt
+    // er nur noch, wenn der Nutzer den Ziel-Knopf drueckt (centerOnBoat).
+    if (mapModule.setPositionHold) mapModule.setPositionHold(true);
+
+    // Sim-Track verwerfen, echten Track wiederherstellen
+    if (mapModule.setTrackHistory) mapModule.setTrackHistory(simSavedTrack || []);
+    simSavedTrack = null;
+    // Header-SOG/COG sofort leeren (nicht erst, wenn die naechste GPS-Nachricht kommt)
+    if (sensors.clearNavigationHeader) sensors.clearNavigationHeader();
+    // Navi-Instrument + Dashboard-Widgets lesen aus dem Context — hier ebenfalls
+    // zuruecksetzen, sonst zeigen sie weiter die letzte Sim-Geschwindigkeit an.
+    if (window.BoatOS?.context) {
+        window.BoatOS.context.sog = 0;
+        window.BoatOS.context.cog = null;
     }
 }
 
@@ -416,6 +493,7 @@ window.BoatOS = {
     map: mapModule,
     navigation,
     weather,
+    weatherMap,
     tides,
     sensors,
     ui,
@@ -572,6 +650,7 @@ window.BoatOS = {
     showLogbookTab: (tab, element) => logbook.showLogbookTab(tab, element),
     loadArchivedTrips: () => logbook.loadArchivedTrips(),
     exportTrip: (tripId) => logbook.exportTrip(tripId),
+    exportTripPdf: (tripId) => logbook.exportTripPdf(tripId),
     viewTripOnMap: (tripId) => logbook.viewTripOnMap(tripId),
     deleteTrip: (tripId) => logbook.deleteTrip(tripId),
     openTripDetail: (tripId) => logbook.openTripDetail(tripId),
@@ -706,7 +785,7 @@ window.BoatOS = {
     // === SIMULATION ===
     toggleSimulation: () => simInterval ? stopSimulation() : startSimulation(),
     setSimSpeed: (val) => {
-        simMultiplier = Math.max(1, Math.min(1000, val));
+        simMultiplier = Math.max(1, Math.min(20, val));
         const lbl = document.getElementById('sim-speed-label');
         if (lbl) lbl.textContent = '×' + simMultiplier;
     },
@@ -896,6 +975,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Wetter starten
     if (weather.startWeatherUpdates) weather.startWeatherUpdates();
 
+    // Wind-Overlay: Button-Zustand setzen und — falls zuletzt aktiv — zeichnen
+    weatherMap.initWindOverlay();
+    if (weatherMap.isWindOverlayVisible()) weather.refreshWindOverlay();
+
     // AIS initialisieren
     if (ais.initAISModule) {
         ais.initAISModule(mapInstance, context.currentPosition);
@@ -907,16 +990,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     // GPS-Updates weiterleiten
     if (core.onGpsUpdate && sensors.handleGPSUpdate) {
         core.onGpsUpdate((gpsData) => {
+            // Nachlauf nach dem Sim-Stop: verspaetete Sim-Broadcasts komplett ignorieren.
+            // Muss VOR handleGPSUpdate greifen, sonst friert die SOG-Anzeige auf dem
+            // letzten Sim-Wert ein.
+            if (Date.now() < simCooldownUntil) return;
+
             sensors.handleGPSUpdate(gpsData); // Sensor-Anzeige immer aktualisieren
 
             if (simInterval !== null) return; // Position während Simulation einfrieren
 
+            // updateBoatPosition() traegt den Punkt bereits selbst in die
+            // Track-Historie ein — ein zusaetzlicher addToTrackHistory()-Aufruf
+            // hier hat jeden Punkt DOPPELT gespeichert und das 500-Punkte-Fenster
+            // damit halbiert (der Track war nur halb so lang wie eingestellt).
             if (mapModule.updateBoatPosition && gpsData.lat && gpsData.lon) {
                 mapModule.updateBoatPosition(gpsData);
-            }
-
-            if (mapModule.addToTrackHistory && gpsData.lat && gpsData.lon) {
-                mapModule.addToTrackHistory(gpsData.lat, gpsData.lon);
             }
 
             window.BoatOS.context.currentPosition = { lat: gpsData.lat, lon: gpsData.lon };
@@ -938,6 +1026,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (sensors.startBrowserGpsFallback) {
         sensors.startBrowserGpsFallback((pos) => {
             if (simInterval !== null) return; // Position während Simulation einfrieren
+            if (Date.now() < simCooldownUntil) return;  // Nachlaufsperre gilt auch hier
             if (mapModule.updateBoatPosition) mapModule.updateBoatPosition(pos);
             window.BoatOS.context.currentPosition = { lat: pos.lat, lon: pos.lon };
             if (navigation.isNavigationActive && navigation.isNavigationActive()) {

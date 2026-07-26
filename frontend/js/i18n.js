@@ -269,6 +269,7 @@ const _DE = {
   logTripDeleted:           '🗑️ Fahrt gelöscht',
   logTripsLoadError:        'Fehler beim Laden der Fahrten:',
   logGpxExport:             '💾 GPX',
+  logPdfExport:             '📄 PDF',
   logMapView:               '🗺️ Karte',
 
   // Settings
@@ -595,6 +596,7 @@ const _EN = {
   logTripDeleted:           '🗑️ Trip deleted',
   logTripsLoadError:        'Error loading trips:',
   logGpxExport:             '💾 GPX',
+  logPdfExport:             '📄 PDF',
   logMapView:               '🗺️ Map',
 
   // Settings

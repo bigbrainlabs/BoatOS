@@ -203,9 +203,12 @@ select option {
 .weather-desc { color: var(--text-dim); font-size: var(--fs-lg); text-transform: capitalize; }
 .weather-location { font-size: var(--fs-base); color: var(--text-dim); margin-top: 3px; }
 
+/* Flexibles Raster statt starrer 4 Spalten: die Kachelzahl darf wachsen
+   (Niederschlag kam dazu) und auf breiten Panels passen mehr nebeneinander,
+   ohne dass eine Kachel allein in der naechsten Zeile haengt. */
 .weather-details {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
     gap: var(--space-md);
     margin-bottom: var(--space-lg);
 }
@@ -243,6 +246,13 @@ select option {
 .forecast-item .time { font-size: var(--fs-sm); color: var(--text-dim); }
 .forecast-item .icon { font-size: var(--fs-4xl); margin: var(--space-xs) 0; }
 .forecast-item .temp { font-size: var(--fs-lg); font-weight: 600; color: var(--accent); }
+.forecast-item .fc-wind,
+.forecast-item .fc-rain {
+    font-size: var(--fs-2xs);
+    color: var(--text-dim);
+    white-space: nowrap;
+    margin-top: 2px;
+}
 
 /* ============================================
    LOGBOOK SECTION
@@ -530,6 +540,15 @@ select option {
 /* ============================================
    MAP MARKER STYLES
    ============================================ */
+/* Boot-Marker nur in der Draufsicht.
+   In der 3D-/Look-ahead-Ansicht sitzt die Kamera am Boot — das flache Symbol
+   laege mitten im Bild und verdeckte die Fahrrinne voraus.
+   Bewusst als CSS-Regel an der Klasse, die toggleMap3D() ohnehin auf <body>
+   setzt: der Marker wird an mehreren Stellen neu erzeugt (initMapMarkers,
+   createBoatMarker beim Wechsel des Boots-Icons), und ein per JavaScript
+   gesetztes style.display ging dabei jedes Mal verloren. */
+body.map3d-active .boat-marker { display: none; }
+
 .boat-marker {
     width: 40px;
     height: 40px;
@@ -1040,6 +1059,23 @@ select option {
     text-align: center; color: var(--text-dim); font-size: var(--fs-sm);
     margin-top: var(--space-2xl); padding-top: var(--space-lg); border-top: 1px solid var(--border);
 }
+
+/* Datenquellen auf der About-Seite — Nennung, wo die Lizenz sie verlangt.
+   Bewusst kompakter als die Links darüber: es ist eine Nachweisliste, kein
+   Angebot zum Anklicken, und sie wird mit der Zeit länger. */
+.about-sources { display: flex; flex-direction: column; gap: var(--space-sm); }
+.about-source {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+.about-source a {
+    color: var(--text); text-decoration: none;
+    font-size: var(--fs-base); font-weight: 600;
+}
+.about-source a:hover { color: var(--accent); }
+.about-source-what { color: var(--text-dim); font-size: var(--fs-sm); line-height: 1.45; }
 
 /* Haftungsausschluss auf der About-Seite — dezent, gut lesbar */
 .about-disclaimer {

@@ -11,9 +11,9 @@
 
     <!-- BoatOS Styles -->
     <link rel="stylesheet" href="css/theme.css?v=13">
-    <link rel="stylesheet" href="css/layout.css?v=15">
-    <link rel="stylesheet" href="css/components.css?v=14">
-    <link rel="stylesheet" href="css/rondell.css?v=3">
+    <link rel="stylesheet" href="css/layout.css?v=27">
+    <link rel="stylesheet" href="css/components.css?v=19">
+    <link rel="stylesheet" href="css/rondell.css?v=6">
 </head>
 <body>
     <!-- ============================================
@@ -47,6 +47,13 @@
         </div>
 
         <div class="top-bar-right">
+            <div id="weather-alert-badge"
+                onclick="BoatOS.weather.openWeatherAlerts()"
+                title="Wetterwarnung"
+                style="display:none; align-items:center; gap:5px; background:#FF8C00; color:#fff;
+                       padding:4px 10px; border-radius:6px; font-size:12px; font-weight:700;
+                       cursor:pointer; white-space:nowrap;">
+            </div>
             <div id="update-badge"
                 onclick="BoatOS.settings.open('system')"
                 title="Update verfügbar — klicken für Details"
@@ -140,10 +147,10 @@
                    backdrop-filter: blur(10px);
                    font-size: var(--fs-lg); white-space: nowrap;">
             🚢
-            <input type="range" id="sim-speed-slider" min="1" max="1000" value="25" step="5"
+            <input type="range" id="sim-speed-slider" min="1" max="20" value="10" step="1"
                 oninput="BoatOS.setSimSpeed(+this.value)"
                 style="width: 130px; accent-color: var(--accent);">
-            <span id="sim-speed-label" style="min-width: 3.5em; text-align: right; font-weight: 600;">×25</span>
+            <span id="sim-speed-label" style="min-width: 3.5em; text-align: right; font-weight: 600;">×10</span>
         </div>
 
         <!-- Compass widget (top-right of map, toggles Course Up) -->
@@ -199,15 +206,10 @@
          FLOATING ACTION BUTTONS
          ============================================ -->
     <div class="fab-container" id="fabContainer">
-        <div class="fab-speed-dial" id="fabSpeedDial">
-            <div class="fab-speed-dial-items">
-                <button class="fab fab-sub" onclick="BoatOS.map.centerOnBoat()" title="Zentrieren">🎯</button>
-                <button class="fab fab-sub" onclick="BoatOS.map.zoomIn()" title="Zoom +">+</button>
-                <button class="fab fab-sub" onclick="BoatOS.map.zoomOut()" title="Zoom -">−</button>
-                <button class="fab fab-sub" onclick="BoatOS.ui.toggleLayers()" title="Layer">🗂️</button>
-            </div>
-            <button class="fab fab-trigger" id="fabTrigger" onclick="BoatOS.ui.toggleFabDial()" title="Werkzeuge">🗺️</button>
-        </div>
+        <!-- Das Speed-Dial ist entfallen: Zoom doppelte die MapLibre-Tasten links
+             unten, "Layer" oeffnete nur die Einstellungen (auch ueber das Zahnrad
+             erreichbar). Geblieben ist das Einzige ohne Zweitweg — Zentrieren. -->
+        <button class="fab" id="btn-center-boat" onclick="BoatOS.map.centerOnBoat()" title="Auf Boot zentrieren">🎯</button>
         <button class="fab danger" onclick="BoatOS.core.manOverBoard()" title="Mann über Bord — Notruf">🆘</button>
     </div>
 
@@ -255,7 +257,7 @@
                 <span class="icon">🔍</span>
                 <span class="label" data-i18n="map_qa_search">Suche</span>
             </div>
-            <div class="quick-action" onclick="BoatOS.ui.showFavorites()">
+            <div class="quick-action qa-section" id="qa-favorites" onclick="BoatOS.ui.showFavorites(this)">
                 <span class="icon">⭐</span>
                 <span class="label" data-i18n="map_qa_favorites">Favoriten</span>
             </div>
@@ -266,6 +268,10 @@
             <div class="quick-action" id="btn-satellite" onclick="BoatOS.map.toggleSatellite()">
                 <span class="icon">🛰️</span>
                 <span class="label" data-i18n="map_qa_satellite">Satellit</span>
+            </div>
+            <div class="quick-action" id="btn-map3d" onclick="BoatOS.map.toggleMap3D()">
+                <span class="icon">📐</span>
+                <span class="label" data-i18n="map_qa_3d">3D</span>
             </div>
             <div class="quick-action" id="btn-phone-gps" onclick="BoatOS.sensors.togglePhoneGps()">
                 <span class="icon">📱</span>
@@ -350,6 +356,10 @@
                         </svg>
                         <span data-i18n="route_area_offline_btn">Bereich offline</span>
                     </button>
+                    <button class="cache-btn" id="btn-route-weather" onclick="BoatOS.weather.showRouteWeather()" title="Wetter-Forecast entlang der Route (offline nutzbar)">
+                        <span style="font-size:14px;">🌦</span>
+                        <span data-i18n="route_weather_btn">Route-Wetter</span>
+                    </button>
                 </div>
             </div>
 
@@ -360,6 +370,18 @@
 
             <!-- WEATHER SECTION -->
             <div id="section-weather" class="section-hidden">
+                <!-- Problem-Hinweis (z.B. fehlender API-Key) -->
+                <div id="weather-problem" style="display:none;"></div>
+
+                <!-- Aktive Warnungen (DWD/OpenWeather + eigener Wind-Schwellwert) -->
+                <div id="weather-alerts"></div>
+
+                <!-- Wind-Pfeile auf der Karte: Route (zur ETA) + aktueller Wind am Boot -->
+                <button id="btn-wind-overlay" class="layer-toggle-btn" onclick="BoatOS.weatherMap.toggleWindOverlay()">
+                    <span>💨</span>
+                    <span data-i18n="wind_overlay_btn">Wind auf Karte</span>
+                </button>
+
                 <div class="weather-current">
                     <div class="weather-icon" id="weather-icon">🌤️</div>
                     <div class="weather-main">
@@ -389,6 +411,11 @@
                         <div class="icon">📊</div>
                         <div class="value" id="weather-pressure">--</div>
                         <div class="label">hPa</div>
+                    </div>
+                    <div class="weather-detail">
+                        <div class="icon">🌧️</div>
+                        <div class="value" id="weather-precip">0.0 mm</div>
+                        <div class="label" data-i18n="weather_precip_label">Niederschlag</div>
                     </div>
                 </div>
 
@@ -518,6 +545,17 @@
                     <div style="text-align: center; padding: var(--space-2xl); color: var(--text-dim);" data-i18n="locks_loading">
                         Schleusen werden geladen...
                     </div>
+                </div>
+            </div>
+
+            <!-- FAVORITES SECTION -->
+            <div id="section-favorites" class="section-hidden">
+                <div style="font-size: var(--fs-xl); font-weight: 600; margin-bottom: var(--space-md);">
+                    <span data-i18n="favorites_header">⭐ Favoriten</span>
+                    <span id="favorites-count" style="color: var(--text-dim); font-weight: 400;"></span>
+                </div>
+                <div id="favorites-list">
+                    <div style="text-align: center; padding: var(--space-2xl); color: var(--text-dim);">…</div>
                 </div>
             </div>
         </div>
@@ -672,6 +710,7 @@
                 <button class="settings-nav-item" data-tab="boat"    data-i18n="settings_boat"        onclick="BoatOS.settings.showTab('boat')">Boot</button>
                 <button class="settings-nav-item" data-tab="map"     data-i18n="settings_tab_map"     onclick="BoatOS.settings.showTab('map')">Karte</button>
                 <button class="settings-nav-item" data-tab="nav"     data-i18n="settings_tab_nav"     onclick="BoatOS.settings.showTab('nav')">Navigation</button>
+                <button class="settings-nav-item" data-tab="weather" data-i18n="settings_weather"     onclick="BoatOS.settings.showTab('weather')">Wetter</button>
                 <button class="settings-nav-item" data-tab="ais"     data-i18n="settings_tab_ais"     onclick="BoatOS.settings.showTab('ais')">AIS</button>
                 <button class="settings-nav-item" data-tab="charts"  data-i18n="settings_tab_charts"  onclick="BoatOS.settings.showTab('charts')">Seekarten</button>
                 <button class="settings-nav-item" data-tab="gps"     data-i18n="settings_tab_gps"     onclick="BoatOS.settings.showTab('gps')">GPS</button>
@@ -767,6 +806,10 @@
     <script src="locks.js"></script>
     <script src="charts.js"></script>
     <script type="module" src="js/main.js"></script>
+
+    <!-- Echte 3D-Seezeichen (three.js + MapLibre Custom-Layer), nur im 3D-Modus aktiv -->
+    <script src="lib/three.min.js"></script>
+    <script src="js/buoy3d.js"></script>
 
     <!-- LEGACY SUPPORT: Old inline code removed, now in js/main.js, js/logbook.js, js/settings.js
          TODO: Remove this comment block after testing
