@@ -1018,6 +1018,21 @@ select option {
     padding: 4px 12px; font-size: var(--fs-base); color: var(--text);
 }
 
+/* Partner (Hardware-Sponsor) — Logo + kurze Nennung, wo die Zusammenarbeit
+   liegt. Bewusst eine eigene Sektion, nicht in die persoenlichen Sponsoren
+   gemischt: eine Firma mit Logo und Link ist etwas anderes als ein Name. */
+.about-partner {
+    display: flex; gap: var(--space-md); align-items: center;
+    padding: var(--space-md); background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+}
+.about-partner-logo { width: 120px; max-width: 40%; height: auto; flex-shrink: 0; }
+.about-partner-text { display: flex; flex-direction: column; gap: var(--space-xs); }
+.about-partner-what { color: var(--text-dim); font-size: var(--fs-sm); line-height: 1.45; }
+.about-partner-links { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.about-partner-links a { color: var(--accent); text-decoration: none; font-size: var(--fs-sm); }
+.about-partner-links a:hover { text-decoration: underline; }
+
 .about-links { display: flex; flex-direction: column; gap: var(--space-sm); }
 .about-link {
     display: flex; align-items: center; gap: var(--space-md);

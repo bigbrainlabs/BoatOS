@@ -40,6 +40,20 @@ export const html = `
                     </div>
 
                     <div class="setting-group">
+                        <h4 data-i18n="about_partners">Partner</h4>
+                        <div class="about-partner">
+                            <img class="about-partner-logo" src="icons/pcbway.png" alt="PCBWay" onerror="this.style.display='none'">
+                            <div class="about-partner-text">
+                                <span class="about-partner-what" data-i18n="about_pcbway_what">Sponsert die Platinenfertigung für BoatOpenIO.</span>
+                                <div class="about-partner-links">
+                                    <a href="https://www.pcbway.com" target="_blank" rel="noopener">pcbway.com ↗</a>
+                                    <a href="https://www.pcbway.com/project/member/?bmbno=0EDF2E80-7ABD-44" target="_blank" rel="noopener"><span data-i18n="about_pcbway_order">Platinen direkt bestellen</span> ↗</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="setting-group">
                         <h4 data-i18n="about_links">Links</h4>
                         <div class="about-links">
                             ${LINKS.map(l => `<a class="about-link" href="${l.url}" target="_blank" rel="noopener"><span>${l.icon}</span>${l.label} ↗</a>`).join('')}

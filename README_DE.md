@@ -73,7 +73,21 @@ Der **BoatOS MBTiles Creator** ist eine eigenständige Windows-App, die Offline-
 
 ---
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+## 🙌 Sponsoren
+
+<div align="center">
+
+<a href="https://www.pcbway.com" target="_blank"><img src="frontend/icons/pcbway.png" alt="PCBWay" width="220"></a>
+
+</div>
+
+**[PCBWay](https://www.pcbway.com)** sponsert die Platinenfertigung für **BoatOpenIO**, das Sensor-Gateway dieses Ökosystems — danke!
+
+👉 **Platinen direkt bestellen:** [PCBWay-Projektseite](https://www.pcbway.com/project/member/?bmbno=0EDF2E80-7ABD-44)
+
+---
+
+![License](https://img.shields.io/badge/license-GPL%20v3-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Raspberry%20Pi-red.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![Flutter](https://img.shields.io/badge/flutter-3.x-blue.svg)
@@ -522,7 +536,9 @@ Mehr: [INSTALL.md](INSTALL.md)
 
 ## 📜 Lizenz
 
-**MIT License** — frei nutzbar, modifizierbar, verteilbar. Copyright-Notice behalten.
+BoatOS ist Open Source und steht unter der **[GNU General Public License v3.0](LICENSE)**.
+
+Das bedeutet: du kannst den Code frei nutzen, studieren und modifizieren. Ableitungen müssen ebenfalls unter der GPL v3 veröffentlicht werden.
 
 ---
 
@@ -549,18 +565,9 @@ Mehr: [INSTALL.md](INSTALL.md)
 
 - 🌐 **Open Boat Projects**: [open-boat-projects.org/de/boatos](https://open-boat-projects.org/de/boatos/)
 - 📦 **GitHub**: [github.com/bigbrainlabs/BoatOS](https://github.com/bigbrainlabs/BoatOS)
+- 🛒 **BoatOpenIO-Platinen bestellen (PCBWay)**: [Projektseite](https://www.pcbway.com/project/member/?bmbno=0EDF2E80-7ABD-44)
 - 📖 **Buch (🇩🇪)**: [Logbuch ohne Pose — Deutsch](https://www.amazon.de/dp/B0GLXGD8LB?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
 - 📖 **Buch (🇬🇧)**: [Logbuch ohne Pose — English](https://www.amazon.de/dp/B0GMD5JH28?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
-
----
-
----
-
-## Lizenz
-
-BoatOS ist Open Source und steht unter der **[GNU General Public License v3.0](LICENSE)**.
-
-Das bedeutet: du kannst den Code frei nutzen, studieren und modifizieren. Ableitungen müssen ebenfalls unter der GPL v3 veröffentlicht werden.
 
 ---
 
