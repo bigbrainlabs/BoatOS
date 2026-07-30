@@ -1436,6 +1436,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ])
           : const Text('Noch keine Einträge — oder offline.',
               style: TextStyle(fontSize: 13, color: dim))),
+      // Partner (Hardware-Sponsor) — eigene Sektion, nicht in die persönlichen
+      // Sponsoren gemischt. Gegenstück im Deck: about.js (about-partner).
+      _header('Partner'),
+      card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('PCBWay',
+            style: TextStyle(fontSize: 15, color: text, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 2),
+        const Text('Sponsert die Platinenfertigung für BoatOpenIO.',
+            style: TextStyle(fontSize: 12, height: 1.4, color: dim)),
+        const SizedBox(height: 8),
+        linkRow('🌐', 'pcbway.com', 'pcbway.com'),
+        linkRow('🛒', 'Platinen direkt bestellen',
+            'pcbway.com/project/member/?bmbno=0EDF2E80-7ABD-44'),
+      ])),
       _header('Links'),
       card(Column(children: [
         linkRow('🐙', 'GitHub', 'github.com/bigbrainlabs/BoatOS'),

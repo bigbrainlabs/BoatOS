@@ -73,6 +73,20 @@ The **BoatOS MBTiles Creator** is a standalone Windows app that downloads, conve
 
 ---
 
+## 🙌 Sponsors
+
+<div align="center">
+
+<a href="https://www.pcbway.com" target="_blank"><img src="frontend/icons/pcbway.png" alt="PCBWay" width="220"></a>
+
+</div>
+
+**[PCBWay](https://www.pcbway.com)** sponsors the PCB manufacturing for **BoatOpenIO**, the sensor gateway of this ecosystem — thank you!
+
+👉 **Order the boards directly:** [PCBWay shared project](https://www.pcbway.com/project/member/?bmbno=0EDF2E80-7ABD-44)
+
+---
+
 ![License](https://img.shields.io/badge/license-GPL%20v3-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Raspberry%20Pi-red.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
@@ -550,6 +564,7 @@ This means: you can freely use, study, and modify the code. Derivatives must als
 
 - 🌐 **Open Boat Projects**: [open-boat-projects.org/de/boatos](https://open-boat-projects.org/de/boatos/)
 - 📦 **GitHub**: [github.com/bigbrainlabs/BoatOS](https://github.com/bigbrainlabs/BoatOS)
+- 🛒 **Order BoatOpenIO boards (PCBWay)**: [shared project](https://www.pcbway.com/project/member/?bmbno=0EDF2E80-7ABD-44)
 - 📖 **Book (🇩🇪)**: [Logbuch ohne Pose — Deutsch](https://www.amazon.de/dp/B0GLXGD8LB?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
 - 📖 **Book (🇬🇧)**: [Logbuch ohne Pose — English](https://www.amazon.de/dp/B0GMD5JH28?binding=kindle_edition&ref_=saga_dp_ss_dsk_sdp)
 
