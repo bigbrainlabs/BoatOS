@@ -52,6 +52,11 @@ def save(buoys: List[Dict[str, Any]]) -> None:
         _cache = payload
 
 
+def all_buoys() -> List[Dict[str, Any]]:
+    """Kompletter Bestand (für den merge-basierten Reimport)."""
+    return list(_read().get("buoys", []))
+
+
 def get_in_bounds(lat_min: float, lon_min: float,
                   lat_max: float, lon_max: float) -> List[Dict[str, Any]]:
     """Alle vorab importierten Tonnen innerhalb der Bounding-Box."""

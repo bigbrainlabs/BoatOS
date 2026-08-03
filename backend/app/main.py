@@ -1889,60 +1889,108 @@ async def _run_buoy_import():
                     lon = lon2
                 lat = lat2
 
-        def _parse(elements):
-            n = 0
+        def _fresh(elements):
+            out = []
             for el in elements:
                 b = seamark_buoys.parse_element(el)
                 if b:
-                    by_id[b["id"]] = b
-                    n += 1
-            return n
+                    out.append(b)
+            return out
 
-        by_id = {}          # OSM-id → Tonne (dedupliziert über Kacheln/Regionen)
+        def _apply_tile(lo1, la1, lo2, la2, fresh):
+            # Erfolgreiche Kachel: alte Tonnen in DIESER bbox verwerfen und durch
+            # die frischen ersetzen — so werden auch Entfernungen übernommen,
+            # ohne dass eine gescheiterte Nachbarkachel Lücken reißt.
+            drop = [k for k, v in by_id.items()
+                    if v.get("lat") is not None
+                    and la1 <= v["lat"] <= la2 and lo1 <= v["lon"] <= lo2]
+            for k in drop:
+                del by_id[k]
+            for b in fresh:
+                by_id[b["id"]] = b
+
+        async def _fetch_tile(session, la1, lo1, la2, lo2):
+            # Robuster Abruf: Rate-Limit/Timeout (429/504) sind bei Overpass normal.
+            # Bis zu 3 Versuche mit Backoff, dabei zwischen den erreichbaren
+            # overpass-api.de-Backends wechseln. None = alle Versuche gescheitert.
+            query = seamark_buoys.overpass_query(f"{la1},{lo1},{la2},{lo2}", timeout=120)
+            for attempt in range(3):
+                ep = _OVERPASS_ENDPOINTS[attempt % len(_OVERPASS_ENDPOINTS)]
+                try:
+                    async with session.post(
+                        ep, data={"data": query},
+                        headers={"User-Agent": "BoatOS/1.0 (marine navigation)"},
+                        timeout=aiohttp.ClientTimeout(total=140),
+                    ) as resp:
+                        if resp.status == 200:
+                            return await resp.json(content_type=None)
+                except Exception:
+                    pass
+                await asyncio.sleep(5 * (attempt + 1))   # 5s, 10s Backoff
+            return None
+
+        def _in_any_bbox(lat, lon):
+            for _, (blo1, bla1, blo2, bla2) in bboxes:
+                if bla1 <= lat <= bla2 and blo1 <= lon <= blo2:
+                    return True
+            return False
+
+        # Merge-Basis: mit dem bestehenden Bestand starten (auf die aktiven
+        # Regionen beschränkt → entfernte Regionen fallen raus). So führt eine
+        # gescheiterte Kachel NICHT zu einer Lücke: ihr alter Stand bleibt, ein
+        # partieller Lauf überschreibt den vollständigeren Vorbestand nicht mehr.
+        by_id = {b["id"]: b for b in seamark_storage.all_buoys()
+                 if b.get("id") and b.get("lat") is not None
+                 and _in_any_bbox(b["lat"], b["lon"])}
+        had_previous = len(by_id)
         per_region = {}
-        errors = 0
+        failed = []          # (lo1,la1,lo2,la2) der gescheiterten Kacheln → 2. Durchgang
         async with aiohttp.ClientSession() as session:
             for region, bounds in bboxes:
                 tiles = list(_tiles(*bounds))
-                region_cnt = 0
+                ok = 0
                 for ti, (lo1, la1, lo2, la2) in enumerate(tiles, 1):
                     _buoy_import_state["progress"] = f"{region}: Kachel {ti}/{len(tiles)}…"
-                    bbox = f"{la1},{lo1},{la2},{lo2}"
-                    query = seamark_buoys.overpass_query(bbox, timeout=120)
-                    # Robuster Abruf: Rate-Limit/Timeout (429/504) sind bei Overpass
-                    # normal und trafen sonst ganze Reviere leer. Darum bis zu 3
-                    # Versuche mit Backoff, dabei zwischen den Spiegelservern
-                    # wechseln — erst wenn ALLE scheitern, gilt die Kachel als Fehler.
-                    data = None
-                    for attempt in range(3):
-                        ep = _OVERPASS_ENDPOINTS[attempt % len(_OVERPASS_ENDPOINTS)]
-                        try:
-                            async with session.post(
-                                ep,
-                                data={"data": query},
-                                headers={"User-Agent": "BoatOS/1.0 (marine navigation)"},
-                                timeout=aiohttp.ClientTimeout(total=140),
-                            ) as resp:
-                                if resp.status == 200:
-                                    data = await resp.json(content_type=None)
-                                    break
-                        except Exception:
-                            pass
-                        await asyncio.sleep(5 * (attempt + 1))   # 5s, 10s Backoff
+                    data = await _fetch_tile(session, la1, lo1, la2, lo2)
                     if data is None:
-                        errors += 1
+                        failed.append((lo1, la1, lo2, la2))
                         continue
-                    region_cnt += await asyncio.to_thread(_parse, data.get("elements", []))
+                    fresh = await asyncio.to_thread(_fresh, data.get("elements", []))
+                    _apply_tile(lo1, la1, lo2, la2, fresh)
+                    ok += 1
                     await asyncio.sleep(1.0)   # Overpass fair behandeln
-                per_region[region] = f"{len(tiles)} Kacheln"
-                _buoy_import_state["progress"] = f"{region}: {region_cnt} Tonnen"
+                per_region[region] = f"{ok}/{len(tiles)} Kacheln"
 
-        # Nur speichern, wenn wirklich etwas kam — sonst alten Bestand behalten
-        if by_id:
-            buoys = list(by_id.values())
+            # Zweiter Durchgang NUR für die gescheiterten Kacheln, nach einer
+            # Abkühlpause — Overpass-Rate-Limits haben sich dann meist erholt.
+            retried = 0
+            if failed:
+                _buoy_import_state["progress"] = f"Nachzügler: warte 30s ({len(failed)} Kacheln)…"
+                await asyncio.sleep(30)
+                still = []
+                for i, (lo1, la1, lo2, la2) in enumerate(failed, 1):
+                    _buoy_import_state["progress"] = f"Nachzügler {i}/{len(failed)}…"
+                    data = await _fetch_tile(session, la1, lo1, la2, lo2)
+                    if data is None:
+                        still.append((lo1, la1, lo2, la2))
+                        continue
+                    fresh = await asyncio.to_thread(_fresh, data.get("elements", []))
+                    _apply_tile(lo1, la1, lo2, la2, fresh)
+                    retried += 1
+                    await asyncio.sleep(1.0)
+                failed = still
+
+        errors = len(failed)
+        buoys = list(by_id.values())
+        # Speichern, sobald irgendwas da ist (Vorbestand zählt). Nur wenn WIRKLICH
+        # nichts vorhanden ist (Erststart komplett gescheitert), alten Zustand lassen.
+        if buoys:
             await asyncio.to_thread(seamark_storage.save, buoys)
-            result = {"success": True, "count": len(buoys), "per_region": per_region, "tile_errors": errors}
-            print(f"🛟 Tonnen-Import: {len(buoys)} Tonnen gespeichert ({per_region}, {errors} Kachel-Fehler)")
+            result = {"success": True, "count": len(buoys), "per_region": per_region,
+                      "tile_errors": errors, "retried": retried, "merged_base": had_previous}
+            print(f"🛟 Tonnen-Import: {len(buoys)} Tonnen gespeichert ({per_region}, "
+                  f"{errors} Rest-Fehler, {retried} im 2. Durchgang nachgeholt, "
+                  f"Merge-Basis {had_previous})")
         else:
             result = {"success": False, "error": "Keine Daten von Overpass — Bestand behalten",
                       "per_region": per_region, "tile_errors": errors}
