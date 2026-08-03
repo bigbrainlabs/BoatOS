@@ -26,6 +26,8 @@ import statistics
 import weather_alerts
 import locks_storage
 import harbor_storage
+import seamark_storage
+import seamark_buoys
 import dashboard_dsl
 import ienc
 import display_power
@@ -1812,6 +1814,183 @@ async def trigger_infrastructure_import():
     if _harbor_import_state["running"]:
         return {"success": False, "error": "Import läuft bereits", "running": True}
     asyncio.create_task(_run_harbor_import())
+    return {"success": True, "started": True}
+
+
+# ==================== TONNEN / SEEZEICHEN — VORAB-IMPORT ====================
+# Die ELWIS-IENC-Daten enthalten fast keine Lateral-/Fahrwasser-Tonnen; die
+# sichtbare Betonnung kommt aus dem OpenSeaMap-RASTER (keine Geometrie fuer 3D).
+# Darum die Tonnen als echte Punkte aus OSM holen — wie Haefen: einmal vorab,
+# offline vorgehalten, bbox-gefiltert serviert. Siehe seamark_buoys.py.
+
+_SEAMARK_REFRESH_HOURS = 168     # woechentlich — Tonnen aendern sich selten
+_buoy_import_state = {"running": False, "progress": "", "result": None}
+
+# Overpass-Spiegelserver, zwischen denen der Import bei Rate-Limit/Timeout
+# rotiert (429/504 sind bei overpass-api.de unter Last normal und liessen sonst
+# ganze Reviere leer). Reihenfolge = Vorzug.
+_OVERPASS_ENDPOINTS = [
+    # Direkte overpass-api.de-Backends zuerst — der Haupt-Load-Balancer 504t
+    # unter Last, die Einzel-Backends antworten dann noch. Die bekannten
+    # Fremdspiegel (kumi.systems, private.coffee) sind vom Pi aus nur per IPv6
+    # erreichbar und fielen darum aus.
+    "https://lz4.overpass-api.de/api/interpreter",
+    "https://z.overpass-api.de/api/interpreter",
+    "https://overpass-api.de/api/interpreter",
+]
+
+
+@app.get("/api/seamarks/buoys")
+async def get_seamark_buoys(lat_min: float, lon_min: float,
+                            lat_max: float, lon_max: float):
+    """Vorab importierte OSM-Tonnen/Baken innerhalb der bbox (offline, schnell).
+
+    Speist die 3D-Szene (buoy3d.js) und den 2D-Vektor-Layer. Jede Tonne traegt
+    die S-57-Vokabel (_cls/COLOUR/TOPSHP/CATCAM), die die Darstellung versteht.
+    """
+    buoys = seamark_storage.get_in_bounds(lat_min, lon_min, lat_max, lon_max)
+    return {"buoys": buoys, "count": len(buoys),
+            "fetched_at": seamark_storage.fetched_at()}
+
+
+async def _run_buoy_import():
+    """OSM-Tonnen/Baken der aktiven Regionen holen und in seamark_storage ablegen.
+
+    Gleiche Mechanik wie der Hafen-Import: bbox je Region aus den MBTiles, in
+    ~2°-Kacheln zerlegt (sonst Overpass-Timeout), pro Kachel abgefragt.
+    """
+    if _buoy_import_state["running"]:
+        return {"success": False, "error": "Import läuft bereits", "running": True}
+    _buoy_import_state.update({"running": True, "progress": "Starte…", "result": None})
+    try:
+        regions = _get_active_regions()
+        bboxes = []
+        for r in regions:
+            p = MBTILES_DIR / f"{r}.mbtiles"
+            if p.exists():
+                b = _mbtiles_bounds(p)
+                if b:
+                    bboxes.append((r, b))
+        if not bboxes:
+            result = {"success": False, "error": "Keine aktiven Karten-Regionen mit MBTiles"}
+            _buoy_import_state.update({"running": False, "progress": "Abgebrochen", "result": result})
+            return result
+
+        TILE_DEG = 2.0
+
+        def _tiles(lon_min, lat_min, lon_max, lat_max):
+            lat = lat_min
+            while lat < lat_max:
+                lat2 = min(lat + TILE_DEG, lat_max)
+                lon = lon_min
+                while lon < lon_max:
+                    lon2 = min(lon + TILE_DEG, lon_max)
+                    yield (lon, lat, lon2, lat2)
+                    lon = lon2
+                lat = lat2
+
+        def _parse(elements):
+            n = 0
+            for el in elements:
+                b = seamark_buoys.parse_element(el)
+                if b:
+                    by_id[b["id"]] = b
+                    n += 1
+            return n
+
+        by_id = {}          # OSM-id → Tonne (dedupliziert über Kacheln/Regionen)
+        per_region = {}
+        errors = 0
+        async with aiohttp.ClientSession() as session:
+            for region, bounds in bboxes:
+                tiles = list(_tiles(*bounds))
+                region_cnt = 0
+                for ti, (lo1, la1, lo2, la2) in enumerate(tiles, 1):
+                    _buoy_import_state["progress"] = f"{region}: Kachel {ti}/{len(tiles)}…"
+                    bbox = f"{la1},{lo1},{la2},{lo2}"
+                    query = seamark_buoys.overpass_query(bbox, timeout=120)
+                    # Robuster Abruf: Rate-Limit/Timeout (429/504) sind bei Overpass
+                    # normal und trafen sonst ganze Reviere leer. Darum bis zu 3
+                    # Versuche mit Backoff, dabei zwischen den Spiegelservern
+                    # wechseln — erst wenn ALLE scheitern, gilt die Kachel als Fehler.
+                    data = None
+                    for attempt in range(3):
+                        ep = _OVERPASS_ENDPOINTS[attempt % len(_OVERPASS_ENDPOINTS)]
+                        try:
+                            async with session.post(
+                                ep,
+                                data={"data": query},
+                                headers={"User-Agent": "BoatOS/1.0 (marine navigation)"},
+                                timeout=aiohttp.ClientTimeout(total=140),
+                            ) as resp:
+                                if resp.status == 200:
+                                    data = await resp.json(content_type=None)
+                                    break
+                        except Exception:
+                            pass
+                        await asyncio.sleep(5 * (attempt + 1))   # 5s, 10s Backoff
+                    if data is None:
+                        errors += 1
+                        continue
+                    region_cnt += await asyncio.to_thread(_parse, data.get("elements", []))
+                    await asyncio.sleep(1.0)   # Overpass fair behandeln
+                per_region[region] = f"{len(tiles)} Kacheln"
+                _buoy_import_state["progress"] = f"{region}: {region_cnt} Tonnen"
+
+        # Nur speichern, wenn wirklich etwas kam — sonst alten Bestand behalten
+        if by_id:
+            buoys = list(by_id.values())
+            await asyncio.to_thread(seamark_storage.save, buoys)
+            result = {"success": True, "count": len(buoys), "per_region": per_region, "tile_errors": errors}
+            print(f"🛟 Tonnen-Import: {len(buoys)} Tonnen gespeichert ({per_region}, {errors} Kachel-Fehler)")
+        else:
+            result = {"success": False, "error": "Keine Daten von Overpass — Bestand behalten",
+                      "per_region": per_region, "tile_errors": errors}
+            print(f"⚠️ Tonnen-Import: nichts erhalten, alter Bestand bleibt ({per_region})")
+        _buoy_import_state.update({"running": False, "progress": "Fertig", "result": result})
+        return result
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        _buoy_import_state.update({"running": False, "progress": "Fehler", "result": result})
+        print(f"⚠️ Tonnen-Import fehlgeschlagen: {e}")
+        return result
+
+
+async def buoy_import_scheduler():
+    """Beim Start (verzögert) importieren, wenn Bestand fehlt/veraltet; dann
+    stündlich prüfen. Overpass-Ausfälle unkritisch — alter Bestand bleibt."""
+    await asyncio.sleep(120)   # nach dem Hafen-Import, Boot nicht doppelt belasten
+    while True:
+        try:
+            if seamark_storage.is_stale(_SEAMARK_REFRESH_HOURS):
+                print(f"🛟 Tonnen-Import: Bestand fehlt/veraltet → importiere")
+                await _run_buoy_import()
+            else:
+                print(f"🛟 Tonnen-Import: Bestand frisch ({seamark_storage.count()} Tonnen, "
+                      f"{seamark_storage.age_hours():.1f}h alt) → übersprungen")
+        except Exception as e:
+            print(f"⚠️ Tonnen-Scheduler-Fehler: {e}")
+        await asyncio.sleep(3600)
+
+
+@app.get("/api/seamarks/buoys/status")
+async def seamark_buoys_status():
+    """Zustand des Tonnen-Vorabimports (für UI + Debugging)."""
+    return {
+        "count": seamark_storage.count(),
+        "fetched_at": seamark_storage.fetched_at(),
+        "age_hours": seamark_storage.age_hours(),
+        "refresh_hours": _SEAMARK_REFRESH_HOURS,
+        "import": _buoy_import_state,
+    }
+
+
+@app.post("/api/seamarks/buoys/import")
+async def trigger_seamark_buoys_import():
+    """Manuell einen Tonnen-Neuimport anstoßen (Einstellungen / Test)."""
+    if _buoy_import_state["running"]:
+        return {"success": False, "error": "Import läuft bereits", "running": True}
+    asyncio.create_task(_run_buoy_import())
     return {"success": True, "started": True}
 
 
@@ -5307,6 +5486,7 @@ async def startup_event():
     asyncio.create_task(fetch_weather())
     asyncio.create_task(fetch_weather_alerts_periodic())  # Start periodic weather alerts
     asyncio.create_task(harbor_import_scheduler())  # Häfen/Ankerplätze vorab importieren + auffrischen
+    asyncio.create_task(buoy_import_scheduler())    # Tonnen/Seezeichen (OSM) vorab importieren + auffrischen
     asyncio.create_task(gps_service.read_gps_from_signalk())  # Start GPS service from SignalK
     load_known_topics()  # Load persistent topic history
     mqtt_client_init()
@@ -5739,6 +5919,7 @@ async def set_active_regions(body: dict):
             s = json.load(f)
     except Exception:
         s = {}
+    prev = set(s.get("map", {}).get("activeRegions") or [])
     s.setdefault("map", {})["activeRegions"] = valid
     with open("data/settings.json", "w") as f:
         json.dump(s, f, indent=2)
@@ -5752,6 +5933,16 @@ async def set_active_regions(body: dict):
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
+    # Fahrgebiete geändert (Region hinzugefügt/entfernt) → Tonnen im Hintergrund
+    # neu importieren, damit die neue Region sofort berücksichtigt wird, statt
+    # erst beim wöchentlichen Refresh. Nur wenn gerade kein Import läuft; die
+    # Antwort wartet nicht darauf.
+    try:
+        if set(valid) != prev and not _buoy_import_state["running"]:
+            asyncio.create_task(_run_buoy_import())
+            print(f"🛟 Fahrgebiete geändert {sorted(prev)} → {sorted(valid)}: Tonnen-Neuimport gestartet")
+    except Exception as _e:
+        print(f"⚠️ Tonnen-Neuimport nach Regionswechsel nicht gestartet: {_e}")
     return {"ok": True, "active": valid}
 
 def _sanitize_mbtiles_name(raw_name: str) -> tuple:

@@ -48,10 +48,13 @@
     // mit (echtes 3D-Objekt). Über BoatOS3D.setSize(m) einstellbar.
     const SIZE = { m: 15 };
 
-    const COL = { red: 0xd10000, green: 0x009a3c, yellow: 0xf2c200, black: 0x1c1c1c, white: 0xf0f0f0, grey: 0x8a8a8a };
+    const COL = { red: 0xd10000, green: 0x009a3c, yellow: 0xf2c200, black: 0x1c1c1c,
+                  white: 0xf0f0f0, grey: 0x8a8a8a, blue: 0x1b4f9c, amber: 0xf0a000, orange: 0xe57000 };
 
-    // S-57 COLOUR-Codes → Farbe
-    const S57 = { '1': COL.white, '2': COL.black, '3': COL.red, '4': COL.green, '5': COL.blue, '6': COL.yellow };
+    // S-57 COLOUR-Codes → Farbe. 7/9/11 (grau/amber/orange) kommen bei den
+    // OSM-Sondertonnen vor — ohne Eintrag fielen sie sonst auf Grau zurueck.
+    const S57 = { '1': COL.white, '2': COL.black, '3': COL.red, '4': COL.green,
+                  '5': COL.blue, '6': COL.yellow, '7': COL.grey, '9': COL.amber, '11': COL.orange };
 
     // COLOUR (z.B. "4,1") → Farbbänder oben→unten
     function colourBands(colVal) {
@@ -161,7 +164,20 @@
         if (!hasBody) {
             /* kein Tonnenkoerper */
         } else if (K.shape === 'cone') {
-            add(_geom(`cone:${rB}:${bh}`, () => new THREE.ConeGeometry(rB, bh, 18)), K.bands[0], bh / 2);
+            // Kegel (spitze Tonne, Steuerbord) als gestapelte Kegelstumpf-Segmente
+            // je Farbband — sonst gingen bei gestreiften gruenen Marken (4,1 /
+            // 4,3, Fahrwasserteilung) die Baender verloren (nur bands[0] sichtbar).
+            // Ein einfarbiger Kegel bleibt ein Segment rB→Spitze, sieht also
+            // unveraendert aus.
+            const n = K.bands.length, seg = bh / n;
+            for (let i = 0; i < n; i++) {                    // i: 0=unten .. n-1=Spitze
+                const yb = i * seg, yt = (i + 1) * seg;
+                const rb = rB * (1 - yb / bh);
+                const rt = rB * (1 - yt / bh);
+                const g = _geom(`conef:${rt.toFixed(4)}:${rb.toFixed(4)}:${seg.toFixed(4)}`,
+                                () => new THREE.CylinderGeometry(Math.max(rt, 0.0001), rb, seg + 0.001, 18));
+                add(g, K.bands[n - 1 - i], (yb + yt) / 2);
+            }
         } else {
             const n = K.bands.length, seg = bh / n;
             for (let i = 0; i < n; i++) {                    // i: 0=unten .. n-1=oben
@@ -176,8 +192,26 @@
 
         // Mast + Toppzeichen (aus S-57 TOPSHP)
         const tc = K.topColor || COL.black;
-        const mast = (toY) => add(_geom(`mast:${(toY - bh).toFixed(4)}`,
-            () => new THREE.CylinderGeometry(S * 0.03, S * 0.03, toY - bh, 8)), COL.black, (bh + toY) / 2);
+        // Pfahlfarbe der Ufer-/Pfahlzeichen (daymar): die Kennfarbe der Marke
+        // (erste nicht-weisse Farbe), gestreift mit Weiss — wie die roten/gruenen
+        // Stangen in der Wirklichkeit und auf der 2D-Karte. Schwimmende Tonnen
+        // behalten den schlanken schwarzen Mast (nur Traeger des Toppzeichens).
+        const poleC = (K.bands || []).find((c) => c !== COL.white) || (K.bands && K.bands[0]) || COL.black;
+        const mast = (toY) => {
+            const r = S * 0.03, h = toY - bh;
+            if (hasBody) {                       // schwimmende Tonne → schwarzer Mast
+                add(_geom(`mast:${h.toFixed(4)}`, () => new THREE.CylinderGeometry(r, r, h, 8)),
+                    COL.black, (bh + toY) / 2);
+                return;
+            }
+            const n = Math.max(3, Math.round(h / (S * 0.32)));   // ~3–5 Ringe
+            const seg = h / n;
+            for (let i = 0; i < n; i++) {                        // gestreift <Farbe>/Weiss
+                add(_geom(`poleseg:${seg.toFixed(4)}`,
+                        () => new THREE.CylinderGeometry(r, r, seg + 0.001, 8)),
+                    (i % 2 === 0) ? poleC : COL.white, bh + (i + 0.5) * seg);
+            }
+        };
         const cone = (up, y) => add(_geom('tcone', () => new THREE.ConeGeometry(S * 0.2, S * 0.36, 16)),
             tc, y, up ? 0 : Math.PI);
         const ball = (y) => add(_geom('tball', () => new THREE.SphereGeometry(S * 0.2, 16, 12)), tc, y);
@@ -660,6 +694,15 @@
         const mLat = 111320, mLon = 111320 * Math.cos(c.lat * Math.PI / 180);
         const seen = new Set();
         const bySig = new Map();     // signature → { K, pos: [x,y,z, x,y,z, …] }
+        // Grobes Ortsraster (~25 m) der ELWIS-TONNEN — damit die OSM-Tonnen unten
+        // eine bereits amtlich erfasste Tonne am selben Ort nicht verdoppeln.
+        // NUR echte Tonnen (boy*, davon gibt es in ELWIS ~4), NICHT die vielen
+        // daymar/Uferzeichen: sonst wuerden Wassertonnen nahe am Ufer weg-
+        // dedupliziert, und weil querySourceFeatures je nach geladenen Tiles mal
+        // mehr, mal weniger daymar liefert, flackerten die OSM-Tonnen.
+        const DEDUP_G = 0.00025;
+        const elwisCells = new Set();
+        const _cell = (lng, lat) => Math.round(lng / DEDUP_G) + ':' + Math.round(lat / DEDUP_G);
         let count = 0;
         for (const f of feats) {
             const geo = f.geometry;
@@ -668,6 +711,8 @@
             const key = lng.toFixed(5) + ',' + lat.toFixed(5);   // ~1 m: Tile-Grenzen-Duplikate zusammenfassen
             if (seen.has(key)) continue;
             seen.add(key);
+            const _c = f.properties && f.properties._cls;
+            if (_c && String(_c).slice(0, 3) === 'boy') elwisCells.add(_cell(lng, lat));
             const K = describe(f.properties || {});
             const sig = buoySignature(K);
             let e = bySig.get(sig);
@@ -683,6 +728,38 @@
                 ry: K.flat ? -bearing : null,
             });
             if (++count >= MAX_BUOYS) break;
+        }
+
+        // 1a. OSM-Tonnen (seamark_buoys.js): dieselbe describe()/Signatur-Mechanik.
+        //     ELWIS hat fuer die Binnenreviere kaum Laterals — die farbige
+        //     Betonnung (rot/gruen/gestreift, Kardinal, Sonder) kommt aus OSM und
+        //     wird hier in dieselbe Szene eingehaengt. Positionen kommen als
+        //     lng/lat, die Umrechnung ist identisch zu oben.
+        const osm = (window.BoatOS && window.BoatOS.osmBuoys) || null;
+        if (osm && osm.length) {
+            for (const b of osm) {
+                if (count >= MAX_BUOYS) break;
+                const lng = b.lng, lat = b.lat;
+                if (typeof lng !== 'number' || typeof lat !== 'number') continue;
+                const key = lng.toFixed(5) + ',' + lat.toFixed(5);
+                if (seen.has(key)) continue;   // exakte Duplikate nicht doppelt
+                // Naeherungs-Entdopplung gegen ELWIS: liegt ±1 Rasterzelle (~25 m)
+                // schon eine amtliche Marke, gewinnt die — OSM-Tonne ueberspringen.
+                const cx = Math.round(lng / DEDUP_G), cy = Math.round(lat / DEDUP_G);
+                let dup = false;
+                for (let dx = -1; dx <= 1 && !dup; dx++)
+                    for (let dy = -1; dy <= 1 && !dup; dy++)
+                        if (elwisCells.has((cx + dx) + ':' + (cy + dy))) dup = true;
+                if (dup) continue;
+                seen.add(key);
+                const K = describe(b.props || {});
+                const sig = buoySignature(K);
+                let e = bySig.get(sig);
+                if (!e) { e = { make: () => buoyParts(THREE, K, S), items: [] }; bySig.set(sig, e); }
+                e.items.push({ x: (lng - c.lng) * mLon, y: 0, z: -(lat - c.lat) * mLat,
+                               ry: K.flat ? -bearing : null });
+                count++;
+            }
         }
 
         // 1b. Schilder — eigene S-57-Klasse, eigenes Budget, aber dieselbe

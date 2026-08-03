@@ -18,6 +18,7 @@
 // Hinweis: core.js muss zuerst geladen werden und stellt globale Variablen bereit
 // wie API_URL, currentPosition, etc.
 import { addIENCLayers, toggleIENCLayer, isIENCVisible } from './ienc.js';
+import { addSeamarkBuoys } from './seamark_buoys.js';
 
 // Re-Export: macht die IENC-Funktionen unter BoatOS.map.* verfügbar (ui.js)
 export { toggleIENCLayer, isIENCVisible };
@@ -70,6 +71,57 @@ let _lastMapFollow = 0;
 let _camTransitionUntil = 0;
 function _beginCameraTransition(durationMs) {
     _camTransitionUntil = performance.now() + durationMs + 80;   // + Puffer
+}
+
+/**
+ * Registry aller DOM-Marker (Wegpunkte, Hinweise, Labels) — um sie im 3D-Modus
+ * HINTER der Kamera auszublenden. MapLibre fuehrt im Dist keine oeffentliche
+ * Marker-Liste, darum registrieren wir per Wrapper um addTo/remove; so muss
+ * kein einzelner Erzeugungsort angefasst werden.
+ */
+const _worldMarkers = new Set();
+function _patchMarkerRegistry() {
+    if (!window.maplibregl || !maplibregl.Marker || maplibregl.Marker.__cullPatched) return;
+    const proto = maplibregl.Marker.prototype;
+    const _addTo = proto.addTo, _remove = proto.remove;
+    proto.addTo = function (m) { _worldMarkers.add(this); return _addTo.call(this, m); };
+    proto.remove = function () { _worldMarkers.delete(this); return _remove.call(this); };
+    maplibregl.Marker.__cullPatched = true;
+}
+
+/**
+ * DOM-Marker hinter der Kamera ausblenden.
+ *
+ * Bei hoher Neigung (3D-/Look-ahead) projiziert MapLibre einen Punkt HINTER der
+ * Kamera faelschlich an den oberen Bildrand — ein Wegpunkt, der eigentlich
+ * hinter dem Boot liegt, klebte so am Horizont. Wir pruefen pro Marker per
+ * Skalarprodukt (Blickrichtung · Kamera→Marker), ob er vor oder hinter der
+ * Kamera liegt, und blenden die hinteren aus. In der Draufsicht (kaum Neigung)
+ * gibt es das Problem nicht → alles wieder sichtbar.
+ */
+function _cullMarkersBehindCamera() {
+    if (!map || !window.maplibregl || !_worldMarkers.size) return;
+    const pitched = map.getPitch() > 25;
+    let cp = null, fx = 0, fy = 0;
+    if (pitched) {
+        try {
+            cp = map.getFreeCameraOptions().position;
+            const ctr = maplibregl.MercatorCoordinate.fromLngLat(map.getCenter(), 0);
+            fx = ctr.x - cp.x; fy = ctr.y - cp.y;
+        } catch (_) { cp = null; }
+    }
+    _worldMarkers.forEach((mk) => {
+        if (mk === boatMarker) return;                     // Boot nie ausblenden
+        const el = mk.getElement && mk.getElement();
+        if (!el) return;
+        let behind = false;
+        if (pitched && cp) {
+            const m = maplibregl.MercatorCoordinate.fromLngLat(mk.getLngLat(), 0);
+            behind = (fx * (m.x - cp.x) + fy * (m.y - cp.y)) < 0;
+        }
+        if (behind && el._behindCam !== true) { el.style.visibility = 'hidden'; el._behindCam = true; }
+        else if (!behind && el._behindCam) { el.style.visibility = ''; el._behindCam = false; }
+    });
 }
 
 // ---- Course Up mode ----
@@ -293,6 +345,7 @@ export async function recheckOfflineTiles() {
                 toggleInlandLayer(inlandLayerVisible);
             }).catch(() => {});
             addIENCLayers(map);   // amtliche IENC-Vektor-Tiles neu anlegen
+            addSeamarkBuoys(map); // OSM-Tonnen (Vektor) neu anlegen
             _restoreAfterStyleChange(snap);
         });
     } else {
@@ -300,6 +353,7 @@ export async function recheckOfflineTiles() {
         map.once('style.load', () => {
             _showTileserverBanner();
             addIENCLayers(map);
+            addSeamarkBuoys(map);
             _restoreAfterStyleChange(snap);
         });
     }
@@ -530,6 +584,7 @@ export async function initMap(options = {}) {
             document.head.appendChild(s);
         });
     }
+    _patchMarkerRegistry();   // Marker-Registry aktivieren (fuer 3D-Kulling)
 
     // Container pruefen
     const mapContainer = document.getElementById('map');
@@ -599,6 +654,7 @@ export async function initMap(options = {}) {
         }
         addOpenSeaMapOverlays(); // async — intentionally not awaited here
         addIENCLayers(map);      // amtliche IENC-Vektor-Tiles (falls installiert)
+        addSeamarkBuoys(map);    // OSM-Tonnen (Vektor) + Speisung der 3D-Szene
 
         // Satelliten-Source und -Layer vorinitialisieren (standardmaessig versteckt)
         map.addSource('satellite', {
@@ -718,6 +774,10 @@ export async function initMap(options = {}) {
             e.stopPropagation();
         });
     }
+
+    // DOM-Marker hinter der Kamera ausblenden (3D). 'move' feuert auch waehrend
+    // Follow/Sim und bei Pitch-Aenderung → hier ist die Sichtbarkeit immer aktuell.
+    map.on('move', _cullMarkersBehindCamera);
 
     // Auto-Follow deaktivieren bei manueller Interaktion
     map.on('dragstart', () => {
@@ -1515,33 +1575,48 @@ export function toggleMap3D(active) {
     if (window.BoatOS3D) window.BoatOS3D.setActive(active);  // echte 3D-Seezeichen ein/aus
 
     if (map) {
+        // Dem Boot folgt die Kamera beim Moduswechsel NUR, wenn der Nutzer es
+        // ohnehin verfolgt (Ziel-Knopf/Sim → autoFollow). Hat er die Karte von
+        // Hand bewegt oder gezoomt (autoFollow=false), bleibt die betrachtete
+        // Stelle stehen — es kippt nur die Perspektive. So springt der 2D/3D-
+        // Wechsel nicht mehr aufs Boot zurueck.
+        const following = autoFollow;
         if (active) {
-            _courseUpBefore3D = courseUpMode;
-            courseUpMode = true;            // Look-ahead braucht Kurs oben
-            _updateCourseUpButton();
-            autoFollow = true;
-            updateFollowButton(true);
-            const h = (map.getContainer() && map.getContainer().clientHeight) || 600;
             _zoomBefore3D = map.getZoom();
-            const opts = {
-                pitch: _pitch3D,
-                zoom: Math.min(20, Math.max(_zoomBefore3D, _zoom3dTarget())),
-                padding: { top: Math.round(h * 0.45), bottom: 0, left: 0, right: 0 },
-                duration: 600,
-            };
-            if (currentBoatHeading) opts.bearing = _updateSmoothedHeading(currentBoatHeading);
-            // Boot mitnehmen: waehrend der Kamerafahrt pausiert Follow (siehe
-            // _beginCameraTransition), sonst wuerde die Fahrt sofort abgebrochen.
-            if (_dispLat != null && _dispLon != null) opts.center = [_dispLon, _dispLat];
+            const opts = { pitch: _pitch3D, duration: 600 };
+            if (following) {
+                _courseUpBefore3D = courseUpMode;
+                courseUpMode = true;            // Look-ahead braucht Kurs oben
+                _updateCourseUpButton();
+                updateFollowButton(true);
+                const h = (map.getContainer() && map.getContainer().clientHeight) || 600;
+                opts.zoom = Math.min(20, Math.max(_zoomBefore3D, _zoom3dTarget()));
+                opts.padding = { top: Math.round(h * 0.45), bottom: 0, left: 0, right: 0 };
+                if (currentBoatHeading) opts.bearing = _updateSmoothedHeading(currentBoatHeading);
+                // Boot mitnehmen: waehrend der Kamerafahrt pausiert Follow (siehe
+                // _beginCameraTransition), sonst wuerde die Fahrt sofort abgebrochen.
+                if (_dispLat != null && _dispLon != null) opts.center = [_dispLon, _dispLat];
+            } else {
+                // Stelle halten: aktuelle Mitte + Ausrichtung bleiben, Padding
+                // neutral (kein Boot, das in die untere Bildhaelfte gehoert).
+                opts.center = map.getCenter();
+                opts.padding = { top: 0, bottom: 0, left: 0, right: 0 };
+            }
             _beginCameraTransition(opts.duration);
             map.easeTo(opts);
         } else {
-            courseUpMode = _courseUpBefore3D;
-            _updateCourseUpButton();
             const opts = { pitch: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 600 };
-            if (_zoomBefore3D != null) opts.zoom = _zoomBefore3D;
-            if (!courseUpMode) { opts.bearing = 0; _smoothHeading = null; }
-            if (_dispLat != null && _dispLon != null) opts.center = [_dispLon, _dispLat];
+            if (following) {
+                courseUpMode = _courseUpBefore3D;
+                _updateCourseUpButton();
+                if (_zoomBefore3D != null) opts.zoom = _zoomBefore3D;
+                if (!courseUpMode) { opts.bearing = 0; _smoothHeading = null; }
+                if (_dispLat != null && _dispLon != null) opts.center = [_dispLon, _dispLat];
+            } else {
+                // Stelle halten — nur die Neigung zurueck auf Draufsicht, Mitte,
+                // Zoom und Ausrichtung bleiben, wie der Nutzer sie gelassen hat.
+                opts.center = map.getCenter();
+            }
             _beginCameraTransition(opts.duration);
             map.easeTo(opts);
         }
