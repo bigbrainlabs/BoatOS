@@ -40,7 +40,7 @@
     // Obergrenze sichtbarer Marken. Seit dem Instancing kostet eine zusaetzliche
     // Tonne nur noch eine Matrix statt eines eigenen Draw-Calls — die Grenze
     // darf deshalb deutlich hoeher liegen als die frueheren 500.
-    const MAX_BUOYS = 2000;
+    const MAX_BUOYS = 3000;
     // Eigenes Budget fuer Schilder: sie sind zahlreicher als alles andere
     // zusammen und wuerden sich sonst das Marken-Limit unter den Nagel reissen.
     const MAX_SIGNS = 800;
@@ -378,9 +378,26 @@
      * keinen CEVNI-Code in den Daten oder nur eine Diagramm-Skizze statt einer
      * Tafel — dort bleibt die geometrische Tafel aus signParts().
      */
-    let _signIndex = null;              // catnmk → { img, ar }
+    let _signIndex = null;              // catnmk → { img, ar, cevni }
+    let _cevniByCode = null;            // CEVNI-Code (z.B. "A.6") → { img, ar }
     const _signTex = new Map();         // Bilddatei → THREE.Texture  (Eigentuemer)
     const _signMats = new Map();        // Bilddatei → THREE.Material (Eigentuemer)
+
+    // OSM-notice-Kategorie → CEVNI-Code. So bekommen die OSM-Schilder dieselben
+    // amtlichen Bilder (icons/cevni/) wie die ELWIS-notmrk. Nur Kategorien, fuer
+    // die ein Bild existiert. (no_entry bleibt bewusst geometrisch, s. BANDED;
+    // no_passage_* laufen ueber DIAMOND als halb-rot-weisse A.10-Raute.)
+    const OSM_CEVNI = {
+        no_overtaking: 'A.2',          // Ueberholverbot
+        no_berthing: 'A.5',            // Stillliegeverbot
+        no_anchoring: 'A.6',           // Ankerverbot
+        no_mooring: 'A.7',             // Festmachen am Ufer verboten
+        no_turning: 'A.8',             // Wendeverbot
+        speed_limit: 'B.6',            // zulaessige Hoechstgeschwindigkeit
+        berthing_permitted: 'E.5',     // Liegestelle erlaubt
+        mooring_permitted: 'E.5',
+        waterskiing_permitted: 'E.17', // Wasserski erlaubt
+    };
 
     function _loadSignIndex() {
         if (_signIndex !== null) return;
@@ -389,6 +406,12 @@
             .then((r) => (r.ok ? r.json() : {}))
             .then((j) => {
                 _signIndex = j;
+                // CEVNI-Code → Bild aufbauen (fuer die OSM-Kategorie-Zuordnung)
+                _cevniByCode = {};
+                for (const k in j) {
+                    const v = j[k];
+                    if (v && v.cevni && !_cevniByCode[v.cevni]) _cevniByCode[v.cevni] = { img: v.img, ar: v.ar };
+                }
                 // Vorlagen neu aufbauen, damit die Schilder ihr Bild bekommen
                 const m = getMap();
                 if (CTX.active && m) { _clearBuoys(); rebuild(m, window.THREE, window.maplibregl); }
@@ -429,7 +452,10 @@
         const fn = parseInt(p.fnctnm, 10);
         const o = parseFloat(p.ORIENT);
         const cat = p.catnmk != null ? String(p.catnmk) : null;
-        const ix = (_signIndex && cat) ? _signIndex[cat] : null;
+        // ELWIS: catnmk (numerisch) direkt im Index. OSM: Kategorie-String erst
+        // ueber OSM_CEVNI auf den CEVNI-Code und damit auf dasselbe Bild bringen.
+        let ix = (_signIndex && cat) ? _signIndex[cat] : null;
+        if (!ix && cat && _cevniByCode && OSM_CEVNI[cat]) ix = _cevniByCode[OSM_CEVNI[cat]] || null;
         return {
             fn: SIGN[fn] ? fn : 5,
             cat,
@@ -465,7 +491,20 @@
      *               13 links. (Die amtliche Abbildung zeigt beide Tafeln
      *               nebeneinander und war deshalb als Textur unbrauchbar.)
      */
-    const DIAMOND = { 44: 'gelb', 12: 'weiss-rechts', 13: 'weiss-links' };
+    const DIAMOND = { 44: 'gelb', 12: 'weiss-rechts', 13: 'weiss-links',
+                      // OSM A.10: Durchfahrt links/rechts verboten — weisse (erlaubte)
+                      // Haelfte zeigt zur freien Seite.
+                      no_passage_left: 'weiss-rechts', no_passage_right: 'weiss-links' };
+
+    // Schilder mit FESTEN waagerechten Farbbaendern (kein Schraegbalken):
+    //   A.1 „Durchfahrt gesperrt/verboten für die Schifffahrt" = ROT-WEISS-ROT,
+    //   drei gleich hohe Balken. Ohne diese Ausnahme fiele es in die generische
+    //   Verbotstafel (heller Grund + roter Schraegbalken), was falsch ist.
+    //   Schluessel = OSM-notice-Kategorie (catnmk-String).
+    const BANDED = {
+        no_entry: [COL.red, COL.white, COL.red],
+        entry_prohibited: [COL.red, COL.white, COL.red],
+    };
 
     function diamondParts(THREE, kind, S, cy) {
         const a = S * 0.42;                       // halbe Diagonale
@@ -529,6 +568,18 @@
         const add = (geometry, color, y, z, rz) => parts.push({
             geometry, material: _mat(THREE, color), local: _localAt(THREE, 0, y, z || 0, 0, rz || 0),
         });
+
+        // Feste waagerechte Balken (z. B. A.1 rot-weiss-rot) — drei gleich hohe
+        // Kästen, von beiden Seiten sichtbar (Box). Kein Schraegbalken.
+        const band = BANDED[K.cat];
+        if (band) {
+            const n = band.length, bh = h / n;
+            for (let i = 0; i < n; i++) {            // i=0 oben
+                add(_geom(`sband:${bh.toFixed(4)}`, () => new THREE.BoxGeometry(w, bh + 0.001, S * 0.07)),
+                    band[i], cy + h / 2 - (i + 0.5) * bh);
+            }
+            return parts;
+        }
         // Alle Platten sind ZENTRIERT und werden nach hinten hin dicker, damit
         // die Tafel von BEIDEN Seiten gleich aussieht. Stand die Frontplatte
         // nur nach vorne ueber, sah man von hinten die nackte Randplatte —
@@ -564,6 +615,7 @@
         // Abbildung teilen sich weiterhin die geometrische Tafel je Funktion.
         // Ausnahme: die Rautenzeichen haben ihre eigene Form je catnmk.
         if (DIAMOND[K.cat]) return `sign|raute|${K.cat}`;
+        if (BANDED[K.cat]) return `sign|band|${K.cat}`;
         return K.img ? `sign|img|${K.img}` : `sign|${K.fn}`;
     }
 
@@ -825,7 +877,13 @@
         // 1. OSM-Marken zuerst (Primaerquelle): Tonnen + Lateralbaken (als Pfahl-
         //    Schild), Kardinal, Sonder. Positionen kommen als lng/lat.
         if (osm && osm.length) {
-            for (const b of osm) {
+            // Nach Distanz zum Kartenmittelpunkt sortieren: falls MAX_BUOYS doch
+            // ueberschritten wird, rendern die NAHEN Tonnen (nicht willkuerliche).
+            const osmSorted = osm.length > 1
+                ? osm.slice().sort((p, q) =>
+                    ((p.lng - c.lng) ** 2 + (p.lat - c.lat) ** 2) - ((q.lng - c.lng) ** 2 + (q.lat - c.lat) ** 2))
+                : osm;
+            for (const b of osmSorted) {
                 if (count >= MAX_BUOYS) break;
                 const lng = b.lng, lat = b.lat;
                 if (typeof lng !== 'number' || typeof lat !== 'number') continue;

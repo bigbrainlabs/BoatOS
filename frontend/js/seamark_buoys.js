@@ -114,14 +114,23 @@ export async function fetchNow(force) {
     try {
         // Vorlauf-Rand: die bbox um MARGIN je Seite vergroessern, damit Tonnen
         // schon geladen sind, bevor das Boot sie erreicht — sonst „poppen" sie
-        // bei schneller Fahrt/×10-Simulation erst am Bildrand auf. Der Abruf ist
-        // billig (In-Memory-bbox-Filter im Backend).
+        // bei schneller Fahrt/×10-Simulation erst am Bildrand auf.
         const MARGIN = 0.6;
         const mLat = (b.getNorth() - b.getSouth()) * MARGIN;
         const mLon = (b.getEast() - b.getWest()) * MARGIN;
+        let latMin = b.getSouth() - mLat, latMax = b.getNorth() + mLat;
+        let lonMin = b.getWest() - mLon, lonMax = b.getEast() + mLon;
+        // WICHTIG: in der 3D-Look-ahead-Ansicht reicht getBounds bis zum Horizont
+        // → die Antwort kann >3000 Marken haben. Die 3D-Szene deckelt aber bei
+        // MAX_BUOYS und verwirft dann (in Array-Reihenfolge) teils genau die
+        // lokalen Fahrwassertonnen → sie „fehlen" in 3D. Darum die Spanne um den
+        // Kartenmittelpunkt auf MAX_SPAN deckeln (mehr sieht man eh nicht sinnvoll)
+        // — haelt die Anzahl unter dem Limit UND entlastet den Pi (kleinere Antwort).
+        const MAX_SPAN = 0.32;   // ~35 km
+        if (latMax - latMin > MAX_SPAN) { latMin = c.lat - MAX_SPAN / 2; latMax = c.lat + MAX_SPAN / 2; }
+        if (lonMax - lonMin > MAX_SPAN) { lonMin = c.lng - MAX_SPAN / 2; lonMax = c.lng + MAX_SPAN / 2; }
         const p = new URLSearchParams({
-            lat_min: b.getSouth() - mLat, lon_min: b.getWest() - mLon,
-            lat_max: b.getNorth() + mLat, lon_max: b.getEast() + mLon,
+            lat_min: latMin, lon_min: lonMin, lat_max: latMax, lon_max: lonMax,
         });
         const r = await fetch(`${_api()}/api/seamarks/buoys?${p}`);
         if (!r.ok) return;
