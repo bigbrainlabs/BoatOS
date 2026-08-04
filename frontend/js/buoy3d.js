@@ -98,7 +98,7 @@
             // flat = flache Tafel ohne Ausrichtung in den Daten. Der Abgleich
             // dreht sie zur Kamera, sonst waere sie von der Seite unsichtbar.
             return { shape: 'can', bands, topShp, topColor: primColor, body: false,
-                     flat: topShp === 12 || topShp === 19 };
+                     flat: topShp === 1 || topShp === 2 || topShp === 12 || topShp === 19 };
         }
 
         // Lateraltonnen/-baken: Körper farbgetrieben, Toppzeichen aus TOPSHP
@@ -249,6 +249,31 @@
             add(edge, edgeC, y, 0, rot);
             add(face, faceC, y, 0, rot);
         }
+        // Dreiecks-SCHILD (Spitze oben/unten) fuer Ufer-Tagesmarken: die
+        // "Kegel"-Toppzeichen (TOPSHP 1/2) sind an Land keine 3D-Kegel, sondern
+        // flache gruene/rote Dreieckstafeln mit schwarzem Rahmen. Die farbige
+        // Flaeche liegt als etwas dickere, kleinere Tafel VOR dem groesseren
+        // schwarzen Rahmen (beide zentriert → schwarzer Rand ringsum, von beiden
+        // Seiten gleich). Der Abgleich dreht sie zur Kamera (K.flat).
+        const triBoard = (y, up) => {
+            const faceC = (K.bands || []).find((c) => c !== COL.white) || tc;
+            const dir = up ? 1 : -1;
+            const tri = (r, depth) => {
+                const s = new THREE.Shape();          // gleichseitig, Schwerpunkt im Ursprung
+                s.moveTo(0, dir * r);
+                s.lineTo(-r * 0.866, -dir * r * 0.5);
+                s.lineTo(r * 0.866, -dir * r * 0.5);
+                s.closePath();
+                const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false });
+                g.translate(0, 0, -depth / 2);        // in der Dicke zentrieren
+                return g;
+            };
+            const R = S * 0.34;
+            const frame = _geom(`triframe:${up ? 'u' : 'd'}`, () => tri(R, S * 0.05));
+            const face  = _geom(`triface:${up ? 'u' : 'd'}`, () => tri(R * 0.7, S * 0.09));
+            add(frame, COL.black, y);
+            add(face,  faceC,     y);
+        };
 
         // Oberkante Koerper — bei Tagesmarken stattdessen Pfahlhoehe, sonst
         // saesse die Form am Boden.
@@ -258,8 +283,10 @@
             mast(T + S * 0.32);
             const y1 = T + S * 0.5, lo = T + S * 0.42, hi = T + S * 0.74;
             switch (shp) {
-                case 1:  cone(true, y1); break;                              // Kegel Spitze oben
-                case 2:  cone(false, y1); break;                            // Kegel Spitze unten
+                // An Land (Tagesmarke) ein flaches Dreiecksschild, auf dem
+                // Wasser (Tonne) ein echter 3D-Kegel.
+                case 1:  hasBody ? cone(true, y1)  : triBoard(y1, true);  break;   // Spitze oben
+                case 2:  hasBody ? cone(false, y1) : triBoard(y1, false); break;   // Spitze unten
                 case 3:  ball(y1); break;                                    // Kugel
                 case 4:  ball(lo); ball(hi); break;                          // 2 Kugeln
                 case 5:  can(y1); break;                                     // Zylinder
