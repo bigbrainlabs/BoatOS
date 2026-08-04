@@ -47,6 +47,10 @@
     // Feste reale Größe (Meter): die Tonnen skalieren dann beim Zoomen von selbst
     // mit (echtes 3D-Objekt). Über BoatOS3D.setSize(m) einstellbar.
     const SIZE = { m: 15 };
+    // Schwimmende Fahrwassertonnen (Koerper) etwas kleiner als die Ufer-/Pfahl-
+    // zeichen zeichnen — die wirkten sonst zu wuchtig. Ufer-Schilder (body:false)
+    // bleiben bei voller Groesse.
+    const BUOY_SCALE = 0.55;
 
     const COL = { red: 0xd10000, green: 0x009a3c, yellow: 0xf2c200, black: 0x1c1c1c,
                   white: 0xf0f0f0, grey: 0x8a8a8a, blue: 0x1b4f9c, amber: 0xf0a000, orange: 0xe57000 };
@@ -76,34 +80,60 @@
         const prim = (p.COLOUR != null ? String(p.COLOUR) : '')[0] || '';
         const primColor = S57[prim] || COL.black;
         let topShp = (p.TOPSHP != null && p.TOPSHP !== '') ? parseInt(p.TOPSHP, 10) : null;
+        const isBcn = cls.slice(0, 3) === 'bcn';
+        // Flache Tafel-/Dreieck-Toppzeichen muessen zur Kamera zeigen.
+        const isFlatTop = (t) => t === 1 || t === 2 || t === 12 || t === 19;
 
+        let res;
         if (cls === 'boycar' || cls === 'bcncar') {
             const q = (p.CATCAM != null ? String(p.CATCAM) : '')[0] || '';
             if (topShp == null) topShp = { '1': 13, '2': 11, '3': 14, '4': 10 }[q] || 13;
             const cb = bands.length > 1 ? bands
                 : ({ '1': [COL.black, COL.yellow], '2': [COL.black, COL.yellow, COL.black],
                      '3': [COL.yellow, COL.black], '4': [COL.yellow, COL.black, COL.yellow] }[q] || [COL.black, COL.yellow]);
-            return { shape: 'can', bands: cb, topShp, topColor: COL.black };
+            res = { shape: 'can', bands: cb, topShp, topColor: COL.black };
+        } else if (cls === 'boyisd' || cls === 'bcnisd') {
+            res = { shape: 'can', bands: bands.length > 1 ? bands : [COL.black, COL.red, COL.black], topShp: topShp == null ? 4 : topShp, topColor: COL.black };
+        } else if (cls === 'boysaw' || cls === 'bcnsaw') {
+            res = { shape: 'can', bands: bands.length > 1 ? bands : [COL.red, COL.white], topShp: topShp == null ? 3 : topShp, topColor: COL.red };
+        } else if (cls === 'boyspp' || cls === 'bcnspp') {
+            // Sondertonne: gelbes X NUR wenn TOPSHP es wirklich sagt (nicht erfinden)
+            res = { shape: 'can', bands, topShp, topColor: prim === '6' ? COL.yellow : primColor };
+        } else if (cls === 'daymar') {
+            // Tagesmarken sind KEINE Tonnen: Pfahl + Form, kein schwimmender
+            // Koerper. flat = der Abgleich dreht das flache Zeichen zur Kamera.
+            res = { shape: 'can', bands, topShp, topColor: primColor, body: false,
+                    flat: isFlatTop(topShp) };
+        } else {
+            // Lateral: Steuerbord (gruen) = Spitztonne (cone), Backbord (rot) =
+            // Stumpftonne (can). Die Fahrwasserteilung/Vorzugsrichtung (gruen UND
+            // rot gestreift, z. B. 4,3,4) ist wie die rote ein STUMPFER Kegel,
+            // nicht spitz zulaufend.
+            const cv = String(p.COLOUR == null ? '' : p.COLOUR);
+            const striped = cv.includes('3') && cv.includes('4');
+            res = { shape: (prim === '4' && !striped) ? 'cone' : 'can', bands, topShp, topColor: primColor };
         }
-        if (cls === 'boyisd' || cls === 'bcnisd') return { shape: 'can', bands: bands.length > 1 ? bands : [COL.black, COL.red, COL.black], topShp: topShp == null ? 4 : topShp, topColor: COL.black };
-        if (cls === 'boysaw' || cls === 'bcnsaw') return { shape: 'can', bands: bands.length > 1 ? bands : [COL.red, COL.white], topShp: topShp == null ? 3 : topShp, topColor: COL.red };
-        // Sondertonne: gelbes X NUR wenn TOPSHP es wirklich sagt (nicht erfinden)
-        if (cls === 'boyspp' || cls === 'bcnspp') return { shape: 'can', bands, topShp, topColor: prim === '6' ? COL.yellow : primColor };
 
-        // Tagesmarken (daymar) sind KEINE Tonnen: sie schwimmen nicht, sondern
-        // sind Formen (Kegel, Raute, Kreuz) auf einem Pfahl an Land oder auf
-        // einem Bauwerk. Mit Tonnenkoerper sahen sie im Bild wie rot-weisse
-        // Tonnen am Ufer aus. Deshalb ohne Koerper — nur Pfahl + Form.
-        if (cls === 'daymar') {
-            // flat = flache Tafel ohne Ausrichtung in den Daten. Der Abgleich
-            // dreht sie zur Kamera, sonst waere sie von der Seite unsichtbar.
-            return { shape: 'can', bands, topShp, topColor: primColor, body: false,
-                     flat: topShp === 1 || topShp === 2 || topShp === 12 || topShp === 19 };
+        // Baken (bcn*) sind ufer-/pfahlmontiert: KEIN schwimmender Koerper,
+        // sondern Pfahl + Zeichen wie die daymar. Lateralbaken ohne Toppzeichen
+        // bekommen ein Dreieck je Kennfarbe (gruen = Spitze oben, rot = unten).
+        // OSM ist die Primaerquelle; ELWIS-daymar sind Fallback und werden bei
+        // OSM-Deckung im Abgleich unterdrueckt.
+        if (isBcn) {
+            res.body = false;
+            if (cls === 'bcnlat' && res.topShp == null) res.topShp = (prim === '4') ? 1 : 2;
+            res.flat = isFlatTop(res.topShp);
         }
-
-        // Lateraltonnen/-baken: Körper farbgetrieben, Toppzeichen aus TOPSHP
-        const shape = (prim === '4') ? 'cone' : 'can';
-        return { shape, bands, topShp, topColor: primColor };
+        // Ohne Farbe im Datensatz (OSM taggt viele Ufer-/Pfahlzeichen nicht) —
+        // Typ-Defaults nach deutscher Binnenkonvention, falls die ELWIS-
+        // Anreicherung (national) diesen Punkt nicht abdeckt:
+        //   X-/stehendes Kreuz (7/8) → gelb (Andreaskreuz),
+        //   Tafel/Quadrat (6/19)     → rot mit weissem Rand (Verbots-/Fahrwassertafel).
+        if (prim === '') {
+            if (res.topShp === 7 || res.topShp === 8) res.topColor = COL.yellow;
+            else if (res.topShp === 6 || res.topShp === 19) res.bands = [COL.red, COL.white];
+        }
+        return res;
     }
 
     // ---- Geometrie ----
@@ -290,7 +320,7 @@
                 case 3:  ball(y1); break;                                    // Kugel
                 case 4:  ball(lo); ball(hi); break;                          // 2 Kugeln
                 case 5:  can(y1); break;                                     // Zylinder
-                case 6:  board(T + S * 0.55); break;                         // Tafel
+                case 6:  square(T + S * 0.55); break;                        // Tafel (gerahmt, wie Quadrat)
                 case 7:  bar(y1, Math.PI / 4, S * 0.6); bar(y1, -Math.PI / 4, S * 0.6); break;   // Andreaskreuz X
                 case 8:  bar(y1, 0, S * 0.6); bar(y1, Math.PI / 2, S * 0.6); break;              // stehendes Kreuz +
                 case 9:  cube(y1); break;                                    // Würfel/Raute
@@ -654,6 +684,31 @@
      * 168) — ohne Deckel wuerden die Schilder allein das Limit aufbrauchen und
      * die Betonnung verdraengen.
      */
+    // Auffaecherung co-lokaler Marken: an einer Position koennen mehrere
+    // VERSCHIEDENE Zeichen stehen (Schild + Toppzeichen, zwei Tafeln …). Die
+    // Positions-Entdopplung fasst nur echte Duplikate (gleiche Signatur) zusammen;
+    // verschiedene Marken am selben Punkt werden hier seitlich aufgefaechert,
+    // sonst laege eine exakt auf der anderen. _posFan wird je Rebuild geleert.
+    let _posFan = null;
+    let _fanDir = [1, 0];               // Bildschirm-rechts in Szenenkoordinaten (x=Ost, z=-Nord)
+    const FAN_STEP = SIZE.m * 0.85;     // Abstand nebeneinander (~Schildbreite)
+    function _fanReset(bearing) {
+        _posFan = new Map();
+        const b = bearing || 0;
+        _fanDir = [Math.cos(b), Math.sin(b)];   // quer zur Blickrichtung
+    }
+    function _fanOffset(lng, lat) {
+        const pk = lng.toFixed(5) + ',' + lat.toFixed(5);
+        const n = _posFan.get(pk) || 0;
+        _posFan.set(pk, n + 1);
+        if (n === 0) return [0, 0];     // erste Marke bleibt am Punkt
+        // 2., 3., … abwechselnd nach rechts/links vom Punkt, in EINER Reihe quer
+        // zur Blickrichtung → klar nebeneinander statt uebereinander verklumpt.
+        const k = Math.ceil(n / 2) * (n % 2 ? 1 : -1);   // +1, -1, +2, -2, …
+        const d = k * FAN_STEP;
+        return [d * _fanDir[0], d * _fanDir[1]];
+    }
+
     function _collectSigns(map, THREE, c, mLon, mLat, bySig, S) {
         _loadSignIndex();
         let feats = [];
@@ -665,23 +720,46 @@
         } catch (_) { feats = []; }
 
         const seen = new Set();
+        const notmrkCells = new Set();   // ELWIS-notmrk-Raster (~25 m)
+        const cellK = (lng, lat) => Math.round(lng / 0.00025) + ':' + Math.round(lat / 0.00025);
         let n = 0;
+        const add = (lng, lat, K) => {
+            const sig = signSignature(K);
+            const skey = lng.toFixed(5) + ',' + lat.toFixed(5) + '|' + sig;
+            if (seen.has(skey)) return false;   // echtes Duplikat
+            seen.add(skey);
+            const [fx, fz] = _fanOffset(lng, lat);
+            let e = bySig.get(sig);
+            if (!e) { e = { make: () => signParts(THREE, K, S), items: [] }; bySig.set(sig, e); }
+            e.items.push({ x: (lng - c.lng) * mLon + fx, y: 0, z: -(lat - c.lat) * mLat + fz, ry: K.ry });
+            return true;
+        };
+
+        // ELWIS-notmrk zuerst (haben die amtlichen CEVNI-Bilder).
         for (const f of feats) {
             const geo = f.geometry;
             if (!geo || geo.type !== 'Point') continue;
             const [lng, lat] = geo.coordinates;
-            const key = lng.toFixed(5) + ',' + lat.toFixed(5);
-            if (seen.has(key)) continue;
-            seen.add(key);
-            const K = describeSign(f.properties || {});
-            const sig = signSignature(K);
-            let e = bySig.get(sig);
-            if (!e) { e = { make: () => signParts(THREE, K, S), items: [] }; bySig.set(sig, e); }
-            e.items.push({
-                x: (lng - c.lng) * mLon, y: 0, z: -(lat - c.lat) * mLat,
-                ry: K.ry,   // null → keine Ausrichtung bekannt, Tafel bleibt ungedreht
-            });
-            if (++n >= MAX_SIGNS) break;
+            notmrkCells.add(cellK(lng, lat));
+            if (add(lng, lat, describeSign(f.properties || {}))) n++;
+            if (n >= MAX_SIGNS) break;
+        }
+
+        // OSM-CEVNI-Schilder (seamark_buoys.js) — als geometrische Tafel je
+        // Funktion. Nur wo ELWIS-notmrk fehlt (ELWIS ist national besser, OSM
+        // fuellt weltweit die Luecken). ORIENT/catnmk in die describeSign-Struktur.
+        const osmSigns = (window.BoatOS && window.BoatOS.osmSigns) || null;
+        if (osmSigns) for (const s of osmSigns) {
+            if (n >= MAX_SIGNS) break;
+            if (typeof s.lng !== 'number' || typeof s.lat !== 'number') continue;
+            const cx = Math.round(s.lng / 0.00025), cy = Math.round(s.lat / 0.00025);
+            let near = false;
+            for (let dx = -1; dx <= 1 && !near; dx++)
+                for (let dy = -1; dy <= 1 && !near; dy++)
+                    if (notmrkCells.has((cx + dx) + ':' + (cy + dy))) near = true;
+            if (near) continue;   // ELWIS deckt diesen Ort ab
+            const K = describeSign({ fnctnm: s.fnctnm, ORIENT: s.orient, catnmk: s.cat });
+            if (add(s.lng, s.lat, K)) n++;
         }
         return n;
     }
@@ -721,76 +799,75 @@
         const mLat = 111320, mLon = 111320 * Math.cos(c.lat * Math.PI / 180);
         const seen = new Set();
         const bySig = new Map();     // signature → { K, pos: [x,y,z, x,y,z, …] }
-        // Grobes Ortsraster (~25 m) der ELWIS-TONNEN — damit die OSM-Tonnen unten
-        // eine bereits amtlich erfasste Tonne am selben Ort nicht verdoppeln.
-        // NUR echte Tonnen (boy*, davon gibt es in ELWIS ~4), NICHT die vielen
-        // daymar/Uferzeichen: sonst wuerden Wassertonnen nahe am Ufer weg-
-        // dedupliziert, und weil querySourceFeatures je nach geladenen Tiles mal
-        // mehr, mal weniger daymar liefert, flackerten die OSM-Tonnen.
+        _fanReset(bearing);          // Auffaecherung co-lokaler Marken (quer zur Blickrichtung)
+        // OSM ist die PRIMAERQUELLE (weltweit), ELWIS nur nationaler Fallback.
+        // Darum ein grobes Ortsraster (~25 m) der OSM-Marken aufbauen und ELWIS
+        // unterdruecken, wo OSM schon eine Marke hat. Die OSM-Positionen kommen
+        // aus dem stabilen Array (NICHT tile-abhaengig) → kein Flackern (frueher
+        // gewann ELWIS, und weil daymar tile-abhaengig mal da/mal weg waren,
+        // flackerten die OSM-Tonnen).
         const DEDUP_G = 0.00025;
-        const elwisCells = new Set();
-        const _cell = (lng, lat) => Math.round(lng / DEDUP_G) + ':' + Math.round(lat / DEDUP_G);
-        let count = 0;
-        for (const f of feats) {
-            const geo = f.geometry;
-            if (!geo || geo.type !== 'Point') continue;
-            const [lng, lat] = geo.coordinates;
-            const key = lng.toFixed(5) + ',' + lat.toFixed(5);   // ~1 m: Tile-Grenzen-Duplikate zusammenfassen
-            if (seen.has(key)) continue;
-            seen.add(key);
-            const _c = f.properties && f.properties._cls;
-            if (_c && String(_c).slice(0, 3) === 'boy') elwisCells.add(_cell(lng, lat));
-            const K = describe(f.properties || {});
-            const sig = buoySignature(K);
-            let e = bySig.get(sig);
-            if (!e) { e = { make: () => buoyParts(THREE, K, S), items: [] }; bySig.set(sig, e); }
-            // Positionen sind relativ zum Kartenmittelpunkt (east, up, -north)
-            e.items.push({
-                x: (lng - c.lng) * mLon, y: 0, z: -(lat - c.lat) * mLat,
-                // Flache Tafeln der Kamera zuwenden. Die Tafel-Normale zeigt
-                // per Default nach +z; ry = -Kartenpeilung dreht sie der
-                // Blickrichtung entgegen. Das entspricht auch der Wirklichkeit:
-                // Tagesmarken stehen zum Fahrwasser, also dem entgegenkommenden
-                // Verkehr zugewandt.
-                ry: K.flat ? -bearing : null,
-            });
-            if (++count >= MAX_BUOYS) break;
-        }
-
-        // 1a. OSM-Tonnen (seamark_buoys.js): dieselbe describe()/Signatur-Mechanik.
-        //     ELWIS hat fuer die Binnenreviere kaum Laterals — die farbige
-        //     Betonnung (rot/gruen/gestreift, Kardinal, Sonder) kommt aus OSM und
-        //     wird hier in dieselbe Szene eingehaengt. Positionen kommen als
-        //     lng/lat, die Umrechnung ist identisch zu oben.
+        const _cellK = (lng, lat) => Math.round(lng / DEDUP_G) + ':' + Math.round(lat / DEDUP_G);
         const osm = (window.BoatOS && window.BoatOS.osmBuoys) || null;
+        const osmCells = new Set();
+        if (osm) for (const b of osm) {
+            if (typeof b.lng === 'number' && typeof b.lat === 'number') osmCells.add(_cellK(b.lng, b.lat));
+        }
+        const _nearOsm = (lng, lat) => {
+            const cx = Math.round(lng / DEDUP_G), cy = Math.round(lat / DEDUP_G);
+            for (let dx = -1; dx <= 1; dx++)
+                for (let dy = -1; dy <= 1; dy++)
+                    if (osmCells.has((cx + dx) + ':' + (cy + dy))) return true;
+            return false;
+        };
+        let count = 0;
+
+        // 1. OSM-Marken zuerst (Primaerquelle): Tonnen + Lateralbaken (als Pfahl-
+        //    Schild), Kardinal, Sonder. Positionen kommen als lng/lat.
         if (osm && osm.length) {
             for (const b of osm) {
                 if (count >= MAX_BUOYS) break;
                 const lng = b.lng, lat = b.lat;
                 if (typeof lng !== 'number' || typeof lat !== 'number') continue;
-                const key = lng.toFixed(5) + ',' + lat.toFixed(5);
-                if (seen.has(key)) continue;   // exakte Duplikate nicht doppelt
-                // Naeherungs-Entdopplung gegen ELWIS: liegt ±1 Rasterzelle (~25 m)
-                // schon eine amtliche Marke, gewinnt die — OSM-Tonne ueberspringen.
-                const cx = Math.round(lng / DEDUP_G), cy = Math.round(lat / DEDUP_G);
-                let dup = false;
-                for (let dx = -1; dx <= 1 && !dup; dx++)
-                    for (let dy = -1; dy <= 1 && !dup; dy++)
-                        if (elwisCells.has((cx + dx) + ':' + (cy + dy))) dup = true;
-                if (dup) continue;
-                seen.add(key);
                 const K = describe(b.props || {});
                 const sig = buoySignature(K);
+                const skey = lng.toFixed(5) + ',' + lat.toFixed(5) + '|' + sig;
+                if (seen.has(skey)) continue;   // echtes Duplikat (gleiche Marke)
+                seen.add(skey);
+                const [fx, fz] = _fanOffset(lng, lat);   // verschiedene Marken am Punkt auffaechern
                 let e = bySig.get(sig);
-                if (!e) { e = { make: () => buoyParts(THREE, K, S), items: [] }; bySig.set(sig, e); }
-                e.items.push({ x: (lng - c.lng) * mLon, y: 0, z: -(lat - c.lat) * mLat,
+                if (!e) { e = { make: () => buoyParts(THREE, K, K.body === false ? S : S * BUOY_SCALE), items: [] }; bySig.set(sig, e); }
+                e.items.push({ x: (lng - c.lng) * mLon + fx, y: 0, z: -(lat - c.lat) * mLat + fz,
                                ry: K.flat ? -bearing : null });
                 count++;
             }
         }
 
-        // 1b. Schilder — eigene S-57-Klasse, eigenes Budget, aber dieselbe
-        //     Vorlagen-Mechanik. Sie stehen an Land und sind ausgerichtet.
+        // 2. ELWIS-Marken als FALLBACK: nur zeichnen, wo OSM am selben Ort (~25 m)
+        //    KEINE Marke hat. So bleibt die weltweite OSM-Quelle fuehrend, und die
+        //    amtlichen ELWIS-Daten fuellen nur die Luecken (ausserhalb DE gibt es
+        //    sie ohnehin nicht).
+        for (const f of feats) {
+            if (count >= MAX_BUOYS) break;
+            const geo = f.geometry;
+            if (!geo || geo.type !== 'Point') continue;
+            const [lng, lat] = geo.coordinates;
+            if (osmCells.size && _nearOsm(lng, lat)) continue;   // OSM deckt ab → ELWIS weglassen
+            const K = describe(f.properties || {});
+            const sig = buoySignature(K);
+            const skey = lng.toFixed(5) + ',' + lat.toFixed(5) + '|' + sig;   // nur echte Duplikate
+            if (seen.has(skey)) continue;
+            seen.add(skey);
+            const [fx, fz] = _fanOffset(lng, lat);
+            let e = bySig.get(sig);
+            if (!e) { e = { make: () => buoyParts(THREE, K, K.body === false ? S : S * BUOY_SCALE), items: [] }; bySig.set(sig, e); }
+            e.items.push({ x: (lng - c.lng) * mLon + fx, y: 0, z: -(lat - c.lat) * mLat + fz,
+                           ry: K.flat ? -bearing : null });
+            count++;
+        }
+
+        // 3. Schilder — eigene S-57-Klasse, eigenes Budget, aber dieselbe
+        //    Vorlagen-Mechanik. Sie stehen an Land und sind ausgerichtet.
         _collectSigns(map, THREE, c, mLon, mLat, bySig, S);
 
         // 2. Je Erscheinungsbild die Instanz-Matrizen schreiben

@@ -1567,12 +1567,38 @@ function _updateSkyOverlay() {
     _skyEl.style.height = Math.round(y) + 'px';
 }
 
+// Flache 2D-Symbol-Overlays, die in der 3D-Ansicht durch die echten 3D-Marken
+// ersetzt sind: das OpenSeaMap-Raster (spart auch Netz/Tiles), unsere OSM-Kreise
+// und die redundanten IENC-Punkt-Symbole. NICHT ausblenden: Basiskarte + IENC-
+// Flaechen/Linien (Tiefe/Fahrrinne) — die sind der 3D-Boden UND halten die
+// ienc-Quelle am Laden (querySourceFeatures fuer die ELWIS-3D-Marken braucht sie).
+const _LAYERS_HIDE_IN_3D = ['seamark-overlay', 'inland-overlay',
+                            'osm-buoys-circle', 'ienc-buoys', 'ienc-notmrk'];
+const _hidden2dPrev = new Map();   // layerId → vorige visibility (zum Wiederherstellen)
+function _set2dOverlaysHidden(hidden) {
+    if (!map) return;
+    for (const id of _LAYERS_HIDE_IN_3D) {
+        if (!map.getLayer(id)) continue;
+        if (hidden) {
+            if (!_hidden2dPrev.has(id)) {
+                _hidden2dPrev.set(id, map.getLayoutProperty(id, 'visibility') || 'visible');
+            }
+            map.setLayoutProperty(id, 'visibility', 'none');
+        } else {
+            map.setLayoutProperty(id, 'visibility',
+                _hidden2dPrev.has(id) ? _hidden2dPrev.get(id) : 'visible');
+            _hidden2dPrev.delete(id);
+        }
+    }
+}
+
 // 3D-/Look-ahead-Perspektive: Karte gekippt + head-up + Boot in die untere
 // Bildhälfte (mehr Fahrrinne voraus sichtbar), auf den bestehenden IENC-Daten.
 export function toggleMap3D(active) {
     if (typeof active !== 'boolean') active = !perspective3D;
     perspective3D = active;
     if (window.BoatOS3D) window.BoatOS3D.setActive(active);  // echte 3D-Seezeichen ein/aus
+    _set2dOverlaysHidden(active);   // flache 2D-Overlays in 3D ausblenden, in 2D zurueck
 
     if (map) {
         // Dem Boot folgt die Kamera beim Moduswechsel NUR, wenn der Nutzer es

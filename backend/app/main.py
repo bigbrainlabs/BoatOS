@@ -1982,6 +1982,14 @@ async def _run_buoy_import():
 
         errors = len(failed)
         buoys = list(by_id.values())
+        # Farblose OSM-Marken (X-Kreuz, Raute, Tafel) aus co-lokalen ELWIS-Marken
+        # nachfaerben — OSM primaer, ELWIS national als Fallback fuer die Farbe.
+        try:
+            colored = await asyncio.to_thread(seamark_buoys.enrich_from_elwis, buoys)
+            if colored:
+                print(f"🛟 ELWIS-Anreicherung: {colored} farblose Marken gefaerbt")
+        except Exception as _e:
+            print(f"⚠️ ELWIS-Anreicherung uebersprungen: {_e}")
         # Speichern, sobald irgendwas da ist (Vorbestand zählt). Nur wenn WIRKLICH
         # nichts vorhanden ist (Erststart komplett gescheitert), alten Zustand lassen.
         if buoys:
@@ -4734,7 +4742,10 @@ async def upload_routing_raw(request: Request, overwrite: bool = False):
 
 @app.get("/api/routing/installed")
 async def get_installed_routing_graphs():
-    """List installed .routing files."""
+    """List installed .routing files (inkl. Lade-/RAM-Skip-Status)."""
+    loaded_set = set(waterway_graph_router._loaded) if waterway_graph_router else set()
+    skipped = {s["name"]: s for s in (waterway_graph_router.skipped
+                                      if waterway_graph_router else [])}
     graphs = []
     for rf in sorted(ROUTING_DIR.glob("*.routing")):
         err = None
@@ -4748,6 +4759,7 @@ async def get_installed_routing_graphs():
             meta = {}
             valid = False
             err = str(_e)
+        sk = skipped.get(rf.stem)
         graphs.append({
             "name": rf.stem,
             "filename": rf.name,
@@ -4757,6 +4769,11 @@ async def get_installed_routing_graphs():
             "created_at": meta.get("created_at", ""),
             "valid": valid,
             "error": err,
+            "loaded": rf.stem in loaded_set,
+            "skipped": bool(sk),
+            "skip_reason": (f"Zu groß für den Arbeitsspeicher (~{sk['need_mb']} MB nötig, "
+                            f"{sk['avail_mb']} MB frei) — Routing für dieses Revier über OSRM."
+                            if sk else None),
         })
     return {"graphs": graphs}
 

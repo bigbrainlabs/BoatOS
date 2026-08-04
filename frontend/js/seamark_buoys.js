@@ -136,10 +136,15 @@ export async function fetchNow(force) {
 }
 
 function _apply(buoys) {
-    const arr = [];      // schlanke 3D-Speisung: {lng, lat, props}
-    const feats = [];    // 2D-GeoJSON
+    const arr = [];      // schlanke 3D-Speisung Tonnen/Baken: {lng, lat, props}
+    const signs = [];    // 3D-Speisung CEVNI-Schilder: {lng, lat, fnctnm, orient, cat}
+    const feats = [];    // 2D-GeoJSON (nur Tonnen/Baken als Kreise)
     for (const b of buoys) {
         if (typeof b.lat !== 'number' || typeof b.lon !== 'number') continue;
+        if (b.kind === 'sign') {
+            signs.push({ lng: b.lon, lat: b.lat, fnctnm: b.fnctnm, orient: b.orient, cat: b.cat });
+            continue;
+        }
         // Dieselbe S-57-Vokabel, die describe() (buoy3d.js) versteht.
         const props = {
             _cls: b.cls,
@@ -156,6 +161,7 @@ function _apply(buoys) {
     }
     window.BoatOS = window.BoatOS || {};
     window.BoatOS.osmBuoys = arr;
+    window.BoatOS.osmSigns = signs;
 
     const src = _map && _map.getSource(SRC);
     if (src) src.setData({ type: 'FeatureCollection', features: feats });
@@ -175,7 +181,7 @@ export function setSeamarkBuoysEnabled(on) {
     if (on) {
         fetchNow(true);
     } else {
-        if (window.BoatOS) window.BoatOS.osmBuoys = [];
+        if (window.BoatOS) { window.BoatOS.osmBuoys = []; window.BoatOS.osmSigns = []; }
         if (window.BoatOS3D && window.BoatOS3D.isActive && window.BoatOS3D.isActive()) {
             window.BoatOS3D.refresh();
         }

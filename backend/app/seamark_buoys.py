@@ -22,6 +22,9 @@ seamark:buoy_lateral:colour=red. Deshalb lesen wir immer erst den typ-Schluessel
 und fallen dann auf den generischen zurueck.
 """
 
+import glob
+import json
+from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 # ---- seamark:type → S-57-Objektklasse (_cls, wie in ienc.py/buoy3d.js) ----
@@ -137,30 +140,74 @@ def _name(tags: Dict[str, str]) -> Optional[str]:
     return None
 
 
-def parse_element(element: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """OSM-Element (node/way) → normalisierte Tonne oder None.
+# OSM seamark:notice:function / :category → S-57 fnctnm (1=Verbot .. 5=Hinweis).
+_NOTICE_FN = {
+    "prohibition": 1, "prohibited": 1,
+    "obligation": 2, "mandatory": 2,
+    "restriction": 3, "restricted": 3,
+    "recommendation": 4, "recommended": 4,
+    "information": 5, "informative": 5, "info": 5,
+}
 
-    Rueckgabe traegt die S-57-Vokabel, die die Darstellung schon versteht:
-        {id, cls, colour, topshp, catcam, lat, lon, name}
+
+def _notice_fnctnm(tags: Dict[str, str]) -> int:
+    """Funktionsklasse (1..5) eines OSM-notice-Schildes bestimmen."""
+    fn = (tags.get("seamark:notice:function") or "").strip().lower()
+    if fn in _NOTICE_FN:
+        return _NOTICE_FN[fn]
+    cat = (tags.get("seamark:notice:category") or "").strip().lower()
+    if cat.startswith("no_") or "prohibit" in cat:
+        return 1
+    if "mandatory" in cat or "oblig" in cat:
+        return 2
+    if "limit" in cat or "restrict" in cat:
+        return 3
+    if "recommend" in cat:
+        return 4
+    return 5
+
+
+def _coords(element: Dict[str, Any]):
+    if element.get("type") == "node":
+        return element.get("lat"), element.get("lon")
+    if "center" in element:
+        return element["center"].get("lat"), element["center"].get("lon")
+    return None, None
+
+
+def parse_element(element: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """OSM-Element (node/way) → normalisierte Marke oder None.
+
+    Tonnen/Baken (kind='buoy') tragen die S-57-Vokabel _cls/COLOUR/TOPSHP/CATCAM;
+    CEVNI-Schilder (seamark:type=notice, kind='sign') tragen fnctnm/orient/cat.
     """
     tags = element.get("tags") or {}
     st = tags.get("seamark:type")
+    lat, lon = _coords(element)
+    if lat is None or lon is None:
+        return None
+    oid = f"{element.get('type', 'n')[0]}{element.get('id')}"
+
+    if st == "notice":
+        ori = tags.get("seamark:notice:orientation")
+        try:
+            orient = float(ori)
+        except (TypeError, ValueError):
+            orient = None
+        return {
+            "id": oid, "kind": "sign",
+            "fnctnm": _notice_fnctnm(tags),
+            "orient": orient,
+            "cat": tags.get("seamark:notice:category"),
+            "lat": lat, "lon": lon,
+            "name": _name(tags),
+        }
+
     cls = _TYPE_CLS.get(st)
     if not cls:
         return None
-
-    if element.get("type") == "node":
-        lat, lon = element.get("lat"), element.get("lon")
-    elif "center" in element:
-        lat = element["center"].get("lat")
-        lon = element["center"].get("lon")
-    else:
-        return None
-    if lat is None or lon is None:
-        return None
-
     return {
-        "id": f"{element.get('type', 'n')[0]}{element.get('id')}",
+        "id": oid, "kind": "buoy",
         "cls": cls,
         "colour": _colour_string(tags, st),
         "topshp": _topshp(tags),
@@ -171,20 +218,108 @@ def parse_element(element: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     }
 
 
-# Seamark-Typen fuer die Overpass-Abfrage: NUR schwimmende Tonnen (buoy_*).
+# Seamark-Typen fuer die Overpass-Abfrage: schwimmende Tonnen (buoy_*) UND
+# ufer-/pfahlmontierte Baken (beacon_*).
 #
-# Baken (beacon_*) sind ufer-/pfahlmontiert und decken sich mit den ELWIS-
-# Tagesmarken/Toppzeichen (daymar/topmar) — am selben Ort erfasst BEIDE Quellen
-# dieselbe Marke. Ausserdem rendert die 3D-Szene sie als schwimmenden
-# Tonnenkoerper statt als Pfahlzeichen. Beides zusammen gab am Ufer doppelte,
-# falsch dargestellte Zeichen. Die Ufer-/Pfahlzeichen kommen daher weiter aus
-# ELWIS; OSM steuert nur die schwimmende Betonnung bei, die ELWIS fehlt.
-# (Beacons liessen sich spaeter als echte Pfahlzeichen ergaenzen, falls in
-# Revieren ohne ELWIS-Abdeckung gebraucht.)
+# OSM ist die weltweite PRIMAERQUELLE; ELWIS (nur national) ist Fallback. Die
+# Baken werden in der 3D-Szene als PFAHL-Schilder gerendert (body-los, wie die
+# daymar — nicht als schwimmender Koerper), und ELWIS-Marken werden dort
+# unterdrueckt, wo OSM am selben Ort schon eine Marke hat. So gibt es weder
+# das fruehere Ufer-Doppelbild noch Luecken ausserhalb Deutschlands.
 _OVERPASS_TYPES = [
     "buoy_lateral", "buoy_cardinal", "buoy_isolated_danger", "buoy_safe_water",
-    "buoy_special_purpose",
+    "buoy_special_purpose", "beacon_lateral", "beacon_cardinal",
+    "beacon_isolated_danger", "beacon_safe_water", "beacon_special_purpose",
+    # CEVNI-Schilder (kind='sign') — weltweit, wo ELWIS-notmrk fehlt.
+    "notice",
 ]
+
+
+# ==================== ELWIS-ANREICHERUNG ====================
+# OSM taggt bei vielen Ufer-/Pfahlzeichen (X-Kreuz, Raute, Tafel) KEIN colour;
+# die amtlichen ELWIS-Tagesmarken tragen die Farbe an derselben Position aber
+# sehr wohl. Da OSM die Primaerquelle ist (weltweit) und ELWIS der nationale
+# Fallback, fuellen wir fehlende colour/topshp aus der co-lokalen ELWIS-Marke.
+# National (DE); anderswo bleibt colour leer (Typ-Defaults greifen im Render).
+
+_ELWIS_CHARTS = Path(__file__).resolve().parents[2] / "data" / "charts"
+_ELWIS_ENRICH_CLASSES = ["daymar", "topmar", "bcnlat", "bcncar", "bcnisd",
+                         "bcnsaw", "bcnspp", "boylat", "boycar", "boyisd",
+                         "boysaw", "boyspp"]
+_ENRICH_G = 0.00025   # ~25 m Ortsraster
+
+
+def _colour_from_elwis(val) -> str:
+    """ELWIS COLOUR (['6'] oder ['4','1']) → S-57-String '6' / '4,1'."""
+    if isinstance(val, list):
+        return ",".join(str(v).strip() for v in val if str(v).strip())
+    return str(val).strip() if val else ""
+
+
+def enrich_from_elwis(buoys: List[Dict[str, Any]]) -> int:
+    """Farblose OSM-Marken mit colour/topshp aus co-lokalen ELWIS-Marken fuellen.
+
+    Baut ein ~25-m-Raster der ELWIS-Marken (Farbe/Toppzeichen) und uebertraegt
+    es auf OSM-Marken ohne Farbe. Gibt die Zahl gefaerbter Marken zurueck.
+    """
+    if not _ELWIS_CHARTS.exists():
+        return 0
+    grid: Dict[str, tuple] = {}
+    for cls in _ELWIS_ENRICH_CLASSES:
+        for f in glob.glob(str(_ELWIS_CHARTS / "*" / "geojson" / f"{cls}.geojson")):
+            try:
+                with open(f, encoding="utf-8") as fh:
+                    d = json.load(fh)
+            except Exception:
+                continue
+            for ft in d.get("features", []):
+                g = ft.get("geometry")
+                if not g or g.get("type") != "Point":
+                    continue
+                lon, lat = g["coordinates"][:2]
+                p = ft.get("properties") or {}
+                col = _colour_from_elwis(p.get("COLOUR"))
+                top = p.get("TOPSHP")
+                if not col and top is None:
+                    continue
+                key = f"{round(lon / _ENRICH_G)}:{round(lat / _ENRICH_G)}"
+                # Erste (farbige) Marke je Zelle gewinnt; farbige bevorzugen.
+                if key not in grid or (col and not grid[key][0]):
+                    grid[key] = (col, top)
+    if not grid:
+        return 0
+
+    def _near(lon, lat):
+        cx, cy = round(lon / _ENRICH_G), round(lat / _ENRICH_G)
+        for dx in (0, -1, 1):
+            for dy in (0, -1, 1):
+                v = grid.get(f"{cx + dx}:{cy + dy}")
+                if v and v[0]:
+                    return v
+        return None
+
+    n = 0
+    for b in buoys:
+        if b.get("kind") == "sign":
+            continue   # CEVNI-Schilder haben keine colour
+        if b.get("colour"):
+            continue   # OSM hat schon eine Farbe → nichts tun
+        lat, lon = b.get("lat"), b.get("lon")
+        if lat is None or lon is None:
+            continue
+        v = _near(lon, lat)
+        if not v:
+            continue
+        col, top = v
+        if col:
+            b["colour"] = col
+            n += 1
+        if b.get("topshp") is None and top is not None:
+            try:
+                b["topshp"] = int(top)
+            except Exception:
+                pass
+    return n
 
 
 def overpass_query(bbox: str, timeout: int = 120) -> str:
