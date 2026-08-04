@@ -1629,16 +1629,27 @@ async function loadRoutingGraphs() {
         }
         el.innerHTML = data.graphs.map(g => {
             const invalid = g.valid === false || g.node_count === 0;
-            const nodeInfo = invalid
-                ? `<span style="color:var(--warning,#f59e0b)">⚠ Ungültige Datei</span>`
-                : `<span style="color:var(--text-dim)">${g.node_count.toLocaleString()} Knoten · ${g.size_mb} MB</span>`;
-            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--border,rgba(255,255,255,0.05));">
-                <span>${g.name}</span>
-                <span style="display:flex;align-items:center;gap:8px;">
-                    ${nodeInfo}
-                    <span style="cursor:pointer;opacity:0.6;font-size:14px;" title="Löschen"
-                          onclick="window._deleteRoutingGraph('${g.name}', this)">🗑</span>
-                </span>
+            let info, reasonLine = '';
+            if (g.skipped) {
+                // Wegen RAM-Grenze nicht geladen (z. B. Norwegen) — Grund inline
+                // zeigen, da Tooltips auf dem Touch-Display nichts bringen.
+                info = `<span style="color:var(--warning,#f59e0b)">⚠ Übersprungen · ${g.size_mb} MB</span>`;
+                reasonLine = `<div style="font-size:11px;color:var(--warning,#f59e0b);line-height:1.35;padding:2px 0 0 2px;">${escapeHTML(g.skip_reason || 'Zu groß für den Arbeitsspeicher')}</div>`;
+            } else if (invalid) {
+                info = `<span style="color:var(--warning,#f59e0b)">⚠ Ungültige Datei</span>`;
+            } else {
+                info = `<span style="color:var(--text-dim)">${g.node_count.toLocaleString()} Knoten · ${g.size_mb} MB</span>`;
+            }
+            return `<div style="padding:3px 0;border-bottom:1px solid var(--border,rgba(255,255,255,0.05));">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span>${escapeHTML(g.name)}</span>
+                    <span style="display:flex;align-items:center;gap:8px;">
+                        ${info}
+                        <span style="cursor:pointer;opacity:0.6;font-size:14px;" title="Löschen"
+                              onclick="window._deleteRoutingGraph('${g.name}', this)">🗑</span>
+                    </span>
+                </div>
+                ${reasonLine}
             </div>`;
         }).join('');
     } catch {

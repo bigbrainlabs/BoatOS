@@ -412,6 +412,28 @@ class BrouterRouter:
             return {"error": str(e)}
 
 
+# Sicherheitsgrenze fuer .routing-Graphen: sie werden KOMPLETT in RAM-Dicts
+# geladen (Python braucht ~2-3x der SQLite-Dateigroesse). Ein zu grosser Graph
+# (z. B. Norwegen mit 2,9 GB) sprengt den Pi-RAM → OOM-Killer → Crash-Schleife.
+# Darum vor dem Laden pruefen, ob genug frei ist; sonst ueberspringen. Karten-/
+# Seamark-Tiles sind davon unberuehrt (die werden pro Tile aus SQLite bedient,
+# nie komplett in den RAM geladen) → offline weiter verfuegbar.
+_ROUTING_RAM_OVERHEAD = 2.5                    # Python-Dicts ~2-3x der Datei
+_ROUTING_RAM_MARGIN = 600 * 1024 * 1024        # so viel RAM soll frei bleiben
+
+
+def _mem_available_bytes():
+    """Aktuell verfuegbarer RAM in Bytes (aus /proc/meminfo) oder None."""
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) * 1024
+    except Exception:
+        pass
+    return None
+
+
 class WaterwayGraphRouter:
     """A* routing on .routing SQLite graphs built by the MBTiles Creator."""
 
@@ -423,16 +445,43 @@ class WaterwayGraphRouter:
         self._coords: Dict[int, Tuple[float, float]] = {}
         self._spatial: Dict[Tuple[int, int], List[int]] = defaultdict(list)
         self._loaded: List[str] = []
+        self._skipped: List[Dict] = []   # zu grosse Graphen (RAM-Schutz)
 
     def load_all(self):
         self._adj.clear()
         self._coords.clear()
         self._spatial.clear()
         self._loaded.clear()
+        self._skipped.clear()
         if not self.routing_dir.exists():
             return
+        avail = _mem_available_bytes()
         for rf in sorted(self.routing_dir.glob("*.routing")):
+            try:
+                size = rf.stat().st_size
+            except OSError:
+                continue
+            # RAM-Schutz: wuerde das Laden (Datei x Overhead) weniger als den
+            # Sicherheitspuffer frei lassen, den Graphen UEBERSPRINGEN statt den
+            # Pi per OOM zu killen. Ohne /proc/meminfo (avail=None) wird geladen.
+            need = int(size * _ROUTING_RAM_OVERHEAD)
+            if avail is not None and need > max(0, avail - _ROUTING_RAM_MARGIN):
+                self._skipped.append({
+                    "name": rf.stem,
+                    "size_mb": round(size / 1048576),
+                    "need_mb": round(need / 1048576),
+                    "avail_mb": round(avail / 1048576),
+                })
+                print(f"⚠️ Routing-Graph '{rf.stem}' UEBERSPRUNGEN: {size/1048576:.0f} MB Datei, "
+                      f"~{need/1048576:.0f} MB RAM noetig, nur {avail/1048576:.0f} MB frei — "
+                      f"wuerde den Pi sprengen (OOM). Fuer dieses Revier OSRM nutzen.")
+                continue
             self._load_file(rf)
+
+    @property
+    def skipped(self) -> List[Dict]:
+        """Wegen RAM-Grenze uebersprungene Graphen (fuer die UI)."""
+        return list(self._skipped)
 
     def _load_file(self, path: Path):
         try:
