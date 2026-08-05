@@ -260,7 +260,7 @@ function addWaypointFromMapClick(lat, lng) {
         window.updateWaypointList(context);
     }
 
-    showNotificationSafe(`📍 Wegpunkt ${waypointNumber} hinzugefügt`);
+    showNotificationSafe(t('navWaypointAdded', { n: waypointNumber }));
 }
 
 /**
@@ -690,7 +690,7 @@ export function addWaypoint(waypoint, context) {
     // Klick zum Löschen
     el.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (confirm(`Wegpunkt ${waypoint.name} löschen?`)) {
+        if (confirm(t('navWaypointDeleteConfirm', { name: waypoint.name }))) {
             marker.remove();
             const index = waypoints.findIndex(w => w.name === waypoint.name);
             if (index > -1) {
@@ -1391,7 +1391,7 @@ export function clearRoute(context) {
     // Navigation stoppen
     stopNavigation(context);
 
-    if (showNotification) showNotification('Route gelöscht');
+    if (showNotification) showNotification(t('navRouteDeleted'));
 }
 
 /**
@@ -1418,7 +1418,7 @@ export function startNavigation(context) {
 
     if (navigationStartButton) {
         navigationStartButton.innerHTML = '&#x23F8;'; // Pause-Symbol
-        navigationStartButton.title = 'Navigation pausieren';
+        navigationStartButton.title = t('navPause');
         navigationStartButton.style.background = '#27ae60';
     }
 
@@ -1446,7 +1446,7 @@ export function stopNavigation(context) {
 
         if (navigationStartButton) {
             navigationStartButton.innerHTML = '&#x25B6;'; // Play-Symbol
-            navigationStartButton.title = 'Navigation starten';
+            navigationStartButton.title = t('navStart');
             navigationStartButton.style.background = 'white';
         }
 
@@ -1478,7 +1478,7 @@ export function toggleNavigation(context) {
         // Navigation starten
         if (navigationStartButton) {
             navigationStartButton.innerHTML = '&#x23F8;';
-            navigationStartButton.title = 'Navigation pausieren';
+            navigationStartButton.title = t('navPause');
             navigationStartButton.style.background = '#27ae60';
         }
         if (showNotification) showNotification(t('navStarted'), 'success');
@@ -1497,7 +1497,7 @@ export function toggleNavigation(context) {
         // Navigation pausieren
         if (navigationStartButton) {
             navigationStartButton.innerHTML = '&#x25B6;';
-            navigationStartButton.title = 'Navigation starten';
+            navigationStartButton.title = t('navStart');
             navigationStartButton.style.background = 'white';
         }
         if (showNotification) showNotification('Navigation pausiert', 'info');
@@ -2197,11 +2197,11 @@ export function updateNextWaypointDisplay(currentLat, currentLon, currentSpeed, 
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
             <div style="background: rgba(42, 82, 152, 0.2); padding: 12px; border-radius: 10px;">
-                <div style="font-size: 11px; color: #8892b0; margin-bottom: 4px;">DISTANZ</div>
+                <div style="font-size: 11px; color: #8892b0; margin-bottom: 4px;">${t('navLabelDistance')}</div>
                 <div style="font-size: 20px; font-weight: 600; color: white;">${distanceFormatted}</div>
             </div>
             <div style="background: rgba(42, 82, 152, 0.2); padding: 12px; border-radius: 10px;">
-                <div style="font-size: 11px; color: #8892b0; margin-bottom: 4px;">KURS</div>
+                <div style="font-size: 11px; color: #8892b0; margin-bottom: 4px;">${t('navLabelCourse')}</div>
                 <div style="font-size: 20px; font-weight: 600; color: white;">${Math.round(bearing)}°</div>
             </div>
         </div>
@@ -2383,11 +2383,11 @@ function updateRouteProgress(segmentIndex, closestPoint, context) {
     routeProgressDisplay.innerHTML = `
         <div style="display: flex; align-items: center; gap: 12px;">
             <div style="flex: 1;">
-                <div style="font-size: 11px; color: #8892b0; margin-bottom: 4px;">ROUTEN-FORTSCHRITT</div>
+                <div style="font-size: 11px; color: #8892b0; margin-bottom: 4px;">${t('navLabelRouteProgress')}</div>
                 <div style="font-size: 18px; font-weight: 700; color: #64ffda;">${progressPercent.toFixed(0)}%</div>
             </div>
             <div style="flex: 1; text-align: right;">
-                <div style="font-size: 11px; color: #8892b0; margin-bottom: 4px;">VERBLEIBEND</div>
+                <div style="font-size: 11px; color: #8892b0; margin-bottom: 4px;">${t('navLabelRemaining')}</div>
                 <div style="font-size: 16px; font-weight: 600; color: white;">${remainingDistFormatted}</div>
             </div>
         </div>
@@ -2633,7 +2633,7 @@ export function displayLocksTimeline(context) {
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
                     <div>
-                        <div style="color: #8892b0;">DISTANZ</div>
+                        <div style="color: #8892b0;">${t('navLabelDistance')}</div>
                         <div style="color: white; font-weight: 600;">${distanceFormatted}</div>
                     </div>
                     <div>
@@ -2733,7 +2733,7 @@ export function importGPXFile(file, context) {
 
             const parserError = gpxDoc.querySelector('parsererror');
             if (parserError) {
-                throw new Error('Ungültiges GPX-Format');
+                throw new Error(t('navInvalidGpx'));
             }
 
             let wptElements = gpxDoc.querySelectorAll('wpt');
@@ -2745,7 +2745,7 @@ export function importGPXFile(file, context) {
             }
 
             if (wptElements.length === 0) {
-                throw new Error('Keine Wegpunkte in GPX-Datei gefunden');
+                throw new Error(t('navNoWaypointsGpx'));
             }
 
             // Bestehende Route löschen
@@ -2775,7 +2775,7 @@ export function importGPXFile(file, context) {
                 });
 
                 el.addEventListener('click', function() {
-                    if (confirm(`Wegpunkt "${name}" löschen?`)) {
+                    if (confirm(t('navPoiDeleteConfirm', { name }))) {
                         marker.remove();
                         const wpIndex = waypoints.findIndex(w => w.marker === marker);
                         if (wpIndex > -1) {
@@ -3035,7 +3035,7 @@ export async function saveCurrentRoute(name, waypoints, distanceNM) {
     });
     const data = await resp.json();
     if (data.status === 'success') return data.route;
-    throw new Error(data.message || 'Fehler beim Speichern');
+    throw new Error(data.message || t('navSaveError'));
 }
 
 export async function loadSavedRoutesList() {

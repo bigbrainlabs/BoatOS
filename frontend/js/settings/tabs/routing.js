@@ -23,9 +23,9 @@ export const html = `
                 </div>
 
                 <div class="setting-group" id="osrm-settings">
-                    <h4>OSRM Server</h4>
+                    <h4 data-i18n="routing_osrm_server">OSRM Server</h4>
                     <div class="setting-item">
-                        <span>Server-URL</span>
+                        <span data-i18n="routing_server_url">Server-URL</span>
                         <input type="text" class="setting-input" id="setting-osrm-url" value="http://127.0.0.1:5000" placeholder="http://127.0.0.1:5000" style="width: 100%;">
                     </div>
                 </div>
@@ -33,49 +33,49 @@ export const html = `
                 <div class="setting-group" id="graphhopper-settings" style="display: none;">
                     <h4>GraphHopper</h4>
                     <div class="setting-item">
-                        <span>API-Key</span>
-                        <input type="text" class="setting-input" id="setting-graphhopper-api-key" placeholder="Kostenlos auf graphhopper.com" style="width: 100%;">
+                        <span data-i18n="routing_api_key">API-Key</span>
+                        <input type="text" class="setting-input" id="setting-graphhopper-api-key" data-i18n-placeholder="routing_gh_free_ph" placeholder="Kostenlos auf graphhopper.com" style="width: 100%;">
                     </div>
-                    <small style="color: var(--text-dim); font-size: 11px;">
+                    <small style="color: var(--text-dim); font-size: 11px;" data-i18n="routing_gh_register">
                         🔗 API-Key bei graphhopper.com registrieren (500 Anfragen/Tag kostenlos)
                     </small>
                 </div>
 
                 <div class="setting-group">
-                    <h4>Routing-Region</h4>
-                    <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">
+                    <h4 data-i18n="routing_region_h">Routing-Region</h4>
+                    <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;" data-i18n="routing_region_desc">
                         Welcher Routing-Graph im OSRM-Dienst geladen ist. Der Wechsel ist neustartfest.
                     </p>
                     <div style="font-size:12px;margin-bottom:8px;">
-                        Aktiv: <strong id="routing-region-active" style="color:var(--accent);">Wird geladen…</strong>
+                        <span data-i18n="routing_active_label">Aktiv:</span> <strong id="routing-region-active" style="color:var(--accent);" data-i18n="loading_ellipsis">Wird geladen…</strong>
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                         <select class="setting-select" id="setting-routing-region" style="flex:1;min-width:160px;"></select>
                         <button id="routing-region-btn" class="btn-primary" style="min-width:120px;"
-                                onclick="BoatOS.ui.switchRoutingRegion()">Wechseln</button>
+                                onclick="BoatOS.ui.switchRoutingRegion()" data-i18n="routing_switch">Wechseln</button>
                     </div>
                     <div id="routing-region-status" style="font-size:11px;margin-top:6px;display:none;"></div>
                 </div>
 
                 <div class="setting-group">
-                    <h4>Routing-Daten (grenzüberschreitend)</h4>
-                    <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">
+                    <h4 data-i18n="routing_data_h">Routing-Daten (grenzüberschreitend)</h4>
+                    <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;" data-i18n="routing_data_desc">
                         .routing-Dateien aus dem MBTiles Creator hochladen — ermöglicht Routen über Ländergrenzen.
                     </p>
-                    <div id="routing-graphs-list" style="margin-bottom:10px;font-size:12px;color:var(--text-dim);">Wird geladen…</div>
+                    <div id="routing-graphs-list" style="margin-bottom:10px;font-size:12px;color:var(--text-dim);" data-i18n="loading_ellipsis">Wird geladen…</div>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                         <label class="btn-secondary" style="cursor:pointer;flex:1;text-align:center;min-width:120px;">
-                            📂 .routing-Datei wählen
+                            <span data-i18n="routing_choose_file">📂 .routing-Datei wählen</span>
                             <input type="file" id="routing-upload-input" accept=".routing" style="display:none"
                                    onchange="BoatOS.ui.onRoutingFileSelected(this)">
                         </label>
                         <button id="routing-upload-btn" class="btn-primary" style="flex:1;min-width:120px;display:none;"
-                                onclick="BoatOS.ui.uploadRoutingFile()">⬆ Hochladen</button>
+                                onclick="BoatOS.ui.uploadRoutingFile()" data-i18n="upload_arrow">⬆ Hochladen</button>
                     </div>
                     <div id="routing-upload-filename" style="font-size:11px;color:var(--accent);margin-top:4px;display:none;"></div>
                     <div id="routing-upload-progress" style="display:none;margin-top:8px;">
                         <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-bottom:3px;">
-                            <span id="routing-upload-status">Hochladen…</span>
+                            <span id="routing-upload-status" data-i18n="uploading_ellipsis">Hochladen…</span>
                             <span id="routing-upload-pct">0%</span>
                         </div>
                         <div style="background:var(--surface-2,rgba(0,0,0,0.3));border-radius:4px;overflow:hidden;height:6px;">
@@ -90,49 +90,49 @@ export const html = `
                         <span data-i18n="settings_consider_current">Strömung berücksichtigen</span>
                         <div class="toggle" id="toggle-water-current" onclick="BoatOS.ui.toggleSettingToggle(this, 'waterCurrentEnabled')"></div>
                     </div>
-                    <small style="color: var(--text-dim); font-size: 11px; display: block; margin-bottom: 15px;">
+                    <small style="color: var(--text-dim); font-size: 11px; display: block; margin-bottom: 15px;" data-i18n="routing_current_desc">
                         Berücksichtigt Fließgeschwindigkeiten für genauere ETA-Berechnungen
                     </small>
 
                     <div id="water-current-settings">
                         <div style="background: var(--bg-card); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                                <h5 style="margin:0;color:var(--accent);">Gewässer</h5>
+                                <h5 style="margin:0;color:var(--accent);" data-i18n="routing_waterways_h">Gewässer</h5>
                                 <button class="btn-secondary" style="padding:4px 10px;font-size:12px;"
-                                        onclick="BoatOS.ui.addWaterway()">+ Gewässer</button>
+                                        onclick="BoatOS.ui.addWaterway()" data-i18n="routing_add_waterway">+ Gewässer</button>
                             </div>
-                            <small style="color:var(--text-dim);font-size:11px;display:block;margin-bottom:10px;">
+                            <small style="color:var(--text-dim);font-size:11px;display:block;margin-bottom:10px;" data-i18n-html="routing_geo_hint">
                                 Strömung in <strong>km/h</strong>. Über 🌍 auch die Geografie setzen:
                                 die <em>Bounding-Box</em> grenzt ein, wo das Gewässer liegen kann, die <em>Mündung</em>
                                 bestimmt die Fließrichtung (berg/tal). Leere Geo-Felder = eingebauter Standard.
                             </small>
-                            <div id="waterway-list" style="font-size:12px;">Wird geladen…</div>
+                            <div id="waterway-list" style="font-size:12px;" data-i18n="loading_ellipsis">Wird geladen…</div>
                         </div>
 
                         <div style="background: var(--bg-card); padding: 15px; border-radius: 8px;">
-                            <h5 style="margin: 0 0 10px 0; color: var(--accent);">Standard nach Typ (<span class="unit-speed">kn</span>)</h5>
+                            <h5 style="margin: 0 0 10px 0; color: var(--accent);"><span data-i18n="routing_default_by_type">Standard nach Typ</span> (<span class="unit-speed">kn</span>)</h5>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                                 <div class="setting-item" style="margin: 0;">
-                                    <span style="font-size: 12px;">Fluss</span>
+                                    <span style="font-size: 12px;" data-i18n="type_river">Fluss</span>
                                     <input type="number" class="setting-input" id="setting-current-type-river" value="1.1" step="0.1" min="0" style="width: 70px;">
                                 </div>
                                 <div class="setting-item" style="margin: 0;">
-                                    <span style="font-size: 12px;">Kanal</span>
+                                    <span style="font-size: 12px;" data-i18n="type_canal">Kanal</span>
                                     <input type="number" class="setting-input" id="setting-current-type-canal" value="0.0" step="0.1" min="0" style="width: 70px;">
                                 </div>
                                 <div class="setting-item" style="margin: 0;">
-                                    <span style="font-size: 12px;">Bach</span>
+                                    <span style="font-size: 12px;" data-i18n="type_stream">Bach</span>
                                     <input type="number" class="setting-input" id="setting-current-type-stream" value="0.5" step="0.1" min="0" style="width: 70px;">
                                 </div>
                                 <div class="setting-item" style="margin: 0;">
-                                    <span style="font-size: 12px;">See</span>
+                                    <span style="font-size: 12px;" data-i18n="type_lake">See</span>
                                     <input type="number" class="setting-input" id="setting-current-type-lake" value="0.0" step="0.1" min="0" style="width: 70px;">
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div style="margin-top: 15px; padding: 12px; background: rgba(100, 200, 100, 0.1); border-radius: 8px; font-size: 11px; color: var(--text-dim);">
+                    <div style="margin-top: 15px; padding: 12px; background: rgba(100, 200, 100, 0.1); border-radius: 8px; font-size: 11px; color: var(--text-dim);" data-i18n-html="routing_calc_info">
                         <strong>ℹ️ Berechnung:</strong><br>
                         • Stromabwärts: Geschwindigkeit + Strömung<br>
                         • Stromaufwärts: Geschwindigkeit - Strömung<br>

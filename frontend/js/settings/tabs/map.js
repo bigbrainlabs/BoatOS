@@ -74,7 +74,7 @@ export const html = `
                         <div id="map-upload-filename" style="font-size:11px;color:var(--accent);margin-top:4px;display:none;"></div>
                         <div id="map-upload-progress" style="display:none;margin-top:8px;">
                             <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-bottom:3px;">
-                                <span id="map-upload-status">Hochladen…</span>
+                                <span id="map-upload-status" data-i18n="uploading_ellipsis">Hochladen…</span>
                                 <span id="map-upload-pct">0%</span>
                             </div>
                             <div style="background:var(--surface-2,rgba(0,0,0,0.3));border-radius:4px;overflow:hidden;height:6px;">

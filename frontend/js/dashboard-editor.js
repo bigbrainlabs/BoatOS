@@ -327,21 +327,21 @@ ROW main
                     color: ${this.mode === 'visual' ? 'white' : 'var(--text)'};
                     border: 1px solid ${this.mode === 'visual' ? 'var(--accent)' : 'var(--border)'};
                     border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
-                ">🎨 Visuell</button>
+                ">${t('dash_tab_visual')}</button>
                 <button onclick="window.dashboardEditor.setMode('code')" style="
                     flex: 1; padding: 12px 20px;
                     background: ${this.mode === 'code' ? 'var(--accent)' : 'var(--bg-card)'};
                     color: ${this.mode === 'code' ? 'white' : 'var(--text)'};
                     border: 1px solid ${this.mode === 'code' ? 'var(--accent)' : 'var(--border)'};
                     border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
-                ">📝 Code</button>
+                ">${t('dash_tab_code')}</button>
                 <button onclick="window.dashboardEditor.setMode('sensors')" style="
                     flex: 1; padding: 12px 20px;
                     background: ${this.mode === 'sensors' ? 'var(--accent)' : 'var(--bg-card)'};
                     color: ${this.mode === 'sensors' ? 'white' : 'var(--text)'};
                     border: 1px solid ${this.mode === 'sensors' ? 'var(--accent)' : 'var(--border)'};
                     border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
-                ">📡 Sensoren</button>
+                ">${t('dash_tab_sensors')}</button>
             </div>
 
             ${this.mode === 'code' ? this.renderCodeEditor() : this.mode === 'sensors' ? this.renderSensorManager() : (this.screens.length > 0 ? this.renderScreenEditor() : this.renderVisualEditor())}
@@ -370,7 +370,7 @@ ROW main
             this._sensorGroupsData = data.groups;
 
             if (!data.groups?.length) {
-                container.innerHTML = '<div style="color:var(--text-dim);padding:16px">Keine Sensoren bekannt.</div>';
+                container.innerHTML = `<div style="color:var(--text-dim);padding:16px">${t('dash_no_sensors_known')}</div>`;
                 return;
             }
             container.innerHTML = data.groups.map((g, gIdx) => `
@@ -480,19 +480,19 @@ ROW main
         return `
             <div style="height:calc(100% - 60px);overflow-y:auto">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-                    <span style="font-size:13px;color:var(--text-dim)">Alle bekannten MQTT-Topics. Veraltete Einträge hier entfernen.</span>
+                    <span style="font-size:13px;color:var(--text-dim)">${t('dash_mqtt_hint')}</span>
                     <button onclick="window.dashboardEditor.loadSensorGroups()" style="
                         background:var(--bg-card);border:1px solid var(--border);border-radius:6px;
-                        padding:6px 12px;cursor:pointer;font-size:12px;color:var(--text)">🔄 Aktualisieren</button>
+                        padding:6px 12px;cursor:pointer;font-size:12px;color:var(--text)">${t('dash_refresh')}</button>
                 </div>
                 <div id="sensor-mgmt-list">
-                    <div style="color:var(--text-dim);padding:16px">Wird geladen…</div>
+                    <div style="color:var(--text-dim);padding:16px">${t('dash_loading')}</div>
                 </div>
             </div>`;
     }
 
     async deleteSensorTopic(topic, btn) {
-        if (!confirm(`Topic entfernen?\n${topic}`)) return;
+        if (!confirm(`${t('dash_topic_remove_confirm')}\n${topic}`)) return;
         try {
             const apiUrl = window.BoatOS?.getApiUrl ? window.BoatOS.getApiUrl() : '';
             const resp = await fetch(`${apiUrl}/api/sensors/topic?topic=${encodeURIComponent(topic)}`, { method: 'DELETE' });
@@ -501,7 +501,7 @@ ROW main
                 const row = btn.closest('div[style*="display:flex"]');
                 if (row) { row.style.opacity = '0'; row.style.transition = 'opacity 0.3s'; setTimeout(() => row.remove(), 300); }
             }
-        } catch(e) { alert(`Fehler: ${e.message}`); }
+        } catch(e) { alert(`${t('dash_error')}: ${e.message}`); }
     }
 
     showWidgetTypePicker(sensorPath, sensorName, unit, fromSensorsTab = false) {
@@ -514,7 +514,7 @@ ROW main
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;z-index:10000';
         overlay.innerHTML = `
             <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:24px;min-width:300px;max-width:380px;box-shadow:0 8px 32px rgba(0,0,0,0.5)">
-                <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">Widget-Typ wählen</div>
+                <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">${t('dash_choose_widget')}</div>
                 <div style="font-size:11px;color:var(--text-dim);margin-bottom:18px;word-break:break-all">${sensorName || sensorPath}</div>
                 <div style="display:flex;flex-direction:column;gap:8px">
                     <button onclick="window.dashboardEditor._addFromPicker('sensor','${esc(sensorPath)}','${esc(unit)}',${fromSensorsTab});document.getElementById('widget-type-picker').remove()" style="
@@ -522,19 +522,19 @@ ROW main
                         color:var(--text);font-size:13px;cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px;
                         transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
                         <span style="font-size:22px">📊</span>
-                        <span><strong>Sensor-Karte</strong><br><span style="font-size:11px;color:var(--text-dim)">Zeigt den aktuellen Wert als Karte</span></span>
+                        <span><strong>${t('dash_w_sensor')}</strong><br><span style="font-size:11px;color:var(--text-dim)">${t('dash_w_sensor_desc')}</span></span>
                     </button>
                     <button onclick="window.dashboardEditor._addFromPicker('gauge','${esc(sensorPath)}','${esc(unit)}',${fromSensorsTab});document.getElementById('widget-type-picker').remove()" style="
                         padding:12px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;
                         color:var(--text);font-size:13px;cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px;
                         transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
                         <span style="font-size:22px">🎯</span>
-                        <span><strong>Gauge</strong><br><span style="font-size:11px;color:var(--text-dim)">Zeiger- oder Bogenanzeige</span></span>
+                        <span><strong>Gauge</strong><br><span style="font-size:11px;color:var(--text-dim)">${t('dash_w_gauge_desc')}</span></span>
                     </button>
                 </div>
                 <button onclick="document.getElementById('widget-type-picker').remove()" style="
                     margin-top:14px;width:100%;padding:10px;background:none;border:1px solid var(--border);
-                    border-radius:8px;color:var(--text-dim);cursor:pointer;font-size:12px">Abbrechen</button>
+                    border-radius:8px;color:var(--text-dim);cursor:pointer;font-size:12px">${t('dash_cancel')}</button>
             </div>`;
         overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
         document.body.appendChild(overlay);
@@ -597,7 +597,7 @@ ROW main
                         font-size: 14px;
                         font-weight: 600;
                         cursor: pointer;
-                    ">✓ Übernehmen</button>
+                    ">${t('dash_apply')}</button>
                     <button onclick="window.dashboardEditor.resetCode()" style="
                         padding: 12px 24px;
                         background: var(--bg-panel);
@@ -606,7 +606,7 @@ ROW main
                         border-radius: 10px;
                         font-size: 14px;
                         cursor: pointer;
-                    ">↺ Zurücksetzen</button>
+                    ">${t('dash_reset')}</button>
                     </div>
                 </div>
 
@@ -624,7 +624,7 @@ ROW main
 
                     <div style="color: var(--text); font-size: 13px; line-height: 1.8;">
                         <div style="margin-bottom: 15px;">
-                            <strong style="color: var(--accent);">GRID &lt;spalten&gt;</strong><br>
+                            <strong style="color: var(--accent);">${t('dash_dsl_grid')}</strong><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">GRID 3</code>
                         </div>
 
@@ -634,17 +634,17 @@ ROW main
                         </div>
 
                         <div style="margin-bottom: 15px;">
-                            <strong style="color: var(--accent);">SENSOR &lt;pfad&gt;</strong><br>
+                            <strong style="color: var(--accent);">${t('dash_dsl_sensor')}</strong><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">SENSOR bilge/thermo/temperature</code>
                         </div>
 
                         <div style="margin-bottom: 15px;">
-                            <strong style="color: var(--accent);">GAUGE &lt;pfad&gt;</strong><br>
+                            <strong style="color: var(--accent);">${t('dash_dsl_gauge')}</strong><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px; font-size: 11px;">GAUGE sensor/temp MIN 0 MAX 50 UNIT "°C" STYLE arc180</code>
                         </div>
 
                         <div style="margin-bottom: 15px;">
-                            <strong style="color: var(--accent);">Sensor-Optionen:</strong><br>
+                            <strong style="color: var(--accent);">${t('dash_dsl_sensor_opts')}</strong><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">ALIAS "Name"</code><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">SIZE 2</code><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">STYLE hero|card|compact</code><br>
@@ -652,7 +652,7 @@ ROW main
                         </div>
 
                         <div style="margin-bottom: 15px;">
-                            <strong style="color: var(--accent);">Gauge-Optionen:</strong><br>
+                            <strong style="color: var(--accent);">${t('dash_dsl_gauge_opts')}</strong><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">MIN 0</code> <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">MAX 100</code><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">UNIT "°C"</code><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">LABEL "Temperatur"</code><br>
@@ -660,17 +660,17 @@ ROW main
                         </div>
 
                         <div style="margin-bottom: 15px;">
-                            <strong style="color: var(--accent);">Gauge-Styles:</strong><br>
+                            <strong style="color: var(--accent);">${t('dash_dsl_gauge_styles')}</strong><br>
                             arc180, arc270, arc360, bar
                         </div>
 
                         <div style="margin-bottom: 15px;">
-                            <strong style="color: var(--accent);">Farben:</strong><br>
+                            <strong style="color: var(--accent);">${t('dash_dsl_colors')}</strong><br>
                             cyan, blue, green, orange, purple, red
                         </div>
 
                         <div style="margin-bottom: 15px;">
-                            <strong style="color: var(--accent);">Spezial-Widgets:</strong><br>
+                            <strong style="color: var(--accent);">${t('dash_dsl_special')}</strong><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">SPACER</code><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">CLOCK</code><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">COMPASS</code><br>
@@ -688,7 +688,7 @@ ROW weather
   SENSOR wind_speed COLOR blue</div>
 
                         <div style="margin-top: 15px; margin-bottom: 8px;">
-                            <strong style="color: var(--accent);">SCREEN/LAYOUT Format (neu):</strong>
+                            <strong style="color: var(--accent);">${t('dash_dsl_screen_fmt')}</strong>
                         </div>
 
                         <div style="padding: 10px; background: var(--bg-card); border-radius: 8px; font-family: monospace; font-size: 11px; white-space: pre;">SCREEN Navigation LAYOUT hero-right
@@ -703,7 +703,7 @@ SCREEN Wetter LAYOUT grid-4
   D  CLOCK</div>
 
                         <div style="margin-top: 12px; margin-bottom: 8px;">
-                            <strong style="color: var(--accent);">Verfügbare Vorlagen:</strong><br>
+                            <strong style="color: var(--accent);">${t('dash_dsl_templates')}</strong><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px; font-size: 10px;">full, split-h, split-v, thirds-h</code><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px; font-size: 10px;">hero-right, hero-left, hero-top, hero-bottom</code><br>
                             <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px; font-size: 10px;">grid-4, mosaic-4, grid-6, mosaic-5</code>
@@ -747,7 +747,7 @@ SCREEN Wetter LAYOUT grid-4
                     <!-- Grouped Sensors -->
                     <div style="flex:1;overflow-y:auto;margin-bottom:12px">
                         ${this.sensorGroupsPalette.length === 0 ? `
-                            <div style="color:var(--text-dim);font-size:12px;padding:8px 0">Keine Sensoren — öffne den Sensoren-Tab zum Laden.</div>
+                            <div style="color:var(--text-dim);font-size:12px;padding:8px 0">${t('dash_no_sensors_load')}</div>
                         ` : this.sensorGroupsPalette.map(g => `
                             <details style="margin-bottom:6px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
                                 <summary style="padding:8px 12px;cursor:pointer;background:var(--bg-card);display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;list-style:none;user-select:none"
@@ -771,7 +771,7 @@ SCREEN Wetter LAYOUT grid-4
 
                     <!-- Special Widgets -->
                     <div style="border-top:1px solid var(--border);padding-top:12px">
-                        <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Spezial</div>
+                        <div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">${t('dash_special_label')}</div>
                         ${[
                             ['window.dashboardEditor.addWidget(\'spacer\')', '⬜', 'Spacer'],
                             ['window.dashboardEditor.addWidget(\'clock\')',  '🕐', 'Uhr'],
@@ -901,7 +901,7 @@ SCREEN Wetter LAYOUT grid-4
             }
 
             if (window.BoatOS?.ui?.showNotification) {
-                window.BoatOS.ui.showNotification('Code übernommen!', 'success');
+                window.BoatOS.ui.showNotification(t('dash_code_applied'), 'success');
             }
 
             // Switch to visual mode to see changes
@@ -938,7 +938,7 @@ SCREEN Wetter LAYOUT grid-4
             return `
                 <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-dim);">
                     Keine Widgets.<br>
-                    <small>Klicke links auf ein Widget um es hinzuzufügen.</small>
+                    <small>${t('dash_click_add_widget')}</small>
                 </div>
             `;
         }
@@ -980,7 +980,7 @@ SCREEN Wetter LAYOUT grid-4
                     <span style="color: var(--accent); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; flex: 1;">
                         ▸ ROW ${rowName}
                     </span>
-                    <span style="color: var(--text-dim); font-size: 11px;">Höhe:</span>
+                    <span style="color: var(--text-dim); font-size: 11px;">${t('dash_height')}</span>
                     ${[1,2,3,4].map(n => `
                         <button onclick="event.stopPropagation(); window.dashboardEditor.setRowHeight('${rowName}', ${n})" style="
                             width: 26px; height: 26px;
@@ -1013,7 +1013,7 @@ SCREEN Wetter LAYOUT grid-4
                         border: 1px dashed var(--border);
                         border-radius: 8px;
                         opacity: 0.6;
-                    ">Keine Widgets — ziehe oder klicke einen Sensor hinein</div>
+                    ">${t('dash_no_widgets')}</div>
                 `;
             }
 
@@ -1134,7 +1134,7 @@ SCREEN Wetter LAYOUT grid-4
         const grp = (this.sensorGroups || []).find(s => s.base_name === currentSensor);
         const availableFields = grp ? Object.keys(grp.values || {}) : [];
 
-        const sensorOptions = (optional ? `<option value="">— deaktiviert —</option>` : '') +
+        const sensorOptions = (optional ? `<option value="">${t('dash_opt_disabled')}</option>` : '') +
             (this.sensorGroups || []).map(s =>
                 `<option value="${s.base_name}" ${currentSensor === s.base_name ? 'selected' : ''}>${s.name}</option>`
             ).join('');
@@ -1186,7 +1186,7 @@ SCREEN Wetter LAYOUT grid-4
 
                 <!-- Row -->
                 <div>
-                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Reihe</label>
+                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">${t('dash_row')}</label>
                     <select onchange="window.dashboardEditor.updateWidget(${idx}, 'rowName', this.value)" style="
                         width: 100%; padding: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px;">
                         ${this.rows.map(r => `<option value="${r}" ${widget.rowName === r ? 'selected' : ''}>${r}</option>`).join('')}
@@ -1195,7 +1195,7 @@ SCREEN Wetter LAYOUT grid-4
 
                 <!-- Color -->
                 <div>
-                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">Farbe</label>
+                    <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px;">${t('dash_color')}</label>
                     <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                         ${['cyan', 'blue', 'green', 'orange', 'purple', 'red', 'yellow'].map(color => `
                             <div onclick="window.dashboardEditor.updateWidget(${idx}, 'color', '${color}')" style="
@@ -1347,7 +1347,7 @@ SCREEN Wetter LAYOUT grid-4
         const selectedFields = widget.fields || [];
         return `
             <div>
-                <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Angezeigte Werte</label>
+                <label style="display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">${t('dash_shown_values')}</label>
                 <div style="display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; overflow: hidden;">
                     ${fields.map((f, i) => `
                         <label style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; user-select: none;
@@ -1505,7 +1505,7 @@ SCREEN Wetter LAYOUT grid-4
      */
     renderScreenEditor() {
         const screen = this.screens[this.currentScreenIndex];
-        if (!screen) return '<div style="color:var(--text-dim);padding:20px">Kein Screen vorhanden</div>';
+        if (!screen) return `<div style="color:var(--text-dim);padding:20px">${t('dash_no_screen')}</div>`;
 
         const tmpl = this.templates.find(t => t.id === screen.layoutId) || this.templates[0] || {id:'full',slots:['A'],cols:'1fr',rows:'1fr',areas:'A'};
         const slots = tmpl.slots || Object.keys(screen.widgets || {});
@@ -1534,14 +1534,14 @@ SCREEN Wetter LAYOUT grid-4
                     <input type="text" value="${screen.name || ''}"
                         onchange="window.dashboardEditor.renameScreen(this.value)"
                         style="padding:5px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
-                               color:var(--text);font-size:12px;width:140px;" placeholder="Screen-Name">
+                               color:var(--text);font-size:12px;width:140px;" placeholder="${t('dash_screen_name_ph')}">
                 </div>
 
                 <!-- Two-column editor: template picker + slot assignment -->
                 <div style="flex:1; display:flex; gap:14px; min-height:0; overflow:hidden;">
                     <!-- Template picker -->
                     <div style="width:280px; flex-shrink:0; background:var(--bg-panel); border:1px solid var(--border); border-radius:12px; padding:14px; overflow-y:auto;">
-                        <div style="font-size:12px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Vorlage</div>
+                        <div style="font-size:12px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">${t('dash_template')}</div>
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
                             ${this.templates.map(t => `
                                 <div onclick="window.dashboardEditor.setScreenLayout('${t.id}')" style="
@@ -1587,7 +1587,7 @@ SCREEN Wetter LAYOUT grid-4
                                     <select onchange="window.dashboardEditor.setSlotProp('${slot}','sensor',this.value)" style="
                                         width:100%;padding:6px 8px;background:var(--bg-panel);border:1px solid var(--border);
                                         border-radius:6px;color:var(--text);font-size:12px;">
-                                        <option value="">— Sensor / Feld wählen —</option>
+                                        <option value="">${t('dash_opt_sensor_field')}</option>
                                         ${(this.sensors||[]).map(s => `<option value="${s.full_path}" ${w.sensor===s.full_path?'selected':''}>${s.name||s.full_path}</option>`).join('')}
                                     </select>
 ` : ''}
@@ -1595,7 +1595,7 @@ SCREEN Wetter LAYOUT grid-4
                                     <select onchange="window.dashboardEditor.setSlotSensor('${slot}',this.value)" style="
                                         width:100%;padding:6px 8px;background:var(--bg-panel);border:1px solid var(--border);
                                         border-radius:6px;color:var(--text);font-size:12px;">
-                                        <option value="">— Sensor-Gruppe wählen —</option>
+                                        <option value="">${t('dash_opt_sensor_group')}</option>
                                         ${(this.sensorGroups||[]).map(s => `<option value="${s.base_name}" ${w.sensor===s.base_name?'selected':''}>${s.name}</option>`).join('')}
                                     </select>
                                     ${this._renderSlotFieldCheckboxes(slot, w)}
@@ -1612,18 +1612,18 @@ SCREEN Wetter LAYOUT grid-4
                                     ` : ''}
                                     ${wtype === 'horizon' ? `
                                     <div style="display:flex;flex-direction:column;gap:5px;">
-                                        <label style="font-size:10px;color:var(--text-dim);margin:0;">Roll-Topic</label>
+                                        <label style="font-size:10px;color:var(--text-dim);margin:0;">${t('dash_roll_topic')}</label>
                                         <select onchange="window.dashboardEditor.setSlotHorizonPath('${slot}','roll',this.value)" style="
                                             width:100%;padding:5px 8px;background:var(--bg-panel);border:1px solid var(--border);
                                             border-radius:6px;color:var(--text);font-size:11px;">
-                                            <option value="">— Roll auswählen —</option>
+                                            <option value="">${t('dash_opt_roll')}</option>
                                             ${this.sensors.map(s => `<option value="${s.full_path||s.base_name+'/'+s.value_name}" ${(w.rollSensor&&w.rollField)&&(w.rollSensor+'/'+(w.rollField||''))===(s.full_path||s.base_name+'/'+s.value_name)?'selected':''}>${s.name||s.full_path}</option>`).join('')}
                                         </select>
-                                        <label style="font-size:10px;color:var(--text-dim);margin:0;">Pitch-Topic</label>
+                                        <label style="font-size:10px;color:var(--text-dim);margin:0;">${t('dash_pitch_topic')}</label>
                                         <select onchange="window.dashboardEditor.setSlotHorizonPath('${slot}','pitch',this.value)" style="
                                             width:100%;padding:5px 8px;background:var(--bg-panel);border:1px solid var(--border);
                                             border-radius:6px;color:var(--text);font-size:11px;">
-                                            <option value="">— Pitch auswählen —</option>
+                                            <option value="">${t('dash_opt_pitch')}</option>
                                             ${this.sensors.map(s => `<option value="${s.full_path||s.base_name+'/'+s.value_name}" ${(w.pitchSensor&&w.pitchField)&&(w.pitchSensor+'/'+(w.pitchField||''))===(s.full_path||s.base_name+'/'+s.value_name)?'selected':''}>${s.name||s.full_path}</option>`).join('')}
                                         </select>
                                         <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text);cursor:pointer;margin:2px 0;">
@@ -1635,7 +1635,7 @@ SCREEN Wetter LAYOUT grid-4
                                         <select onchange="window.dashboardEditor.setSlotHorizonPath('${slot}','impact',this.value)" style="
                                             width:100%;padding:5px 8px;background:var(--bg-panel);border:1px solid var(--border);
                                             border-radius:6px;color:var(--text);font-size:11px;">
-                                            <option value="">— Impact-Topic —</option>
+                                            <option value="">${t('dash_opt_impact')}</option>
                                             ${this.sensors.map(s => `<option value="${s.full_path||s.base_name+'/'+s.value_name}" ${(w.impactSensor&&w.impactField)&&(w.impactSensor+'/'+(w.impactField||''))===(s.full_path||s.base_name+'/'+s.value_name)?'selected':''}>${s.name||s.full_path}</option>`).join('')}
                                         </select>` : ''}
                                     </div>` : ''}
@@ -1968,7 +1968,7 @@ SCREEN Wetter LAYOUT grid-4
 
 
                 if (window.BoatOS?.ui?.showNotification) {
-                    window.BoatOS.ui.showNotification('Dashboard gespeichert!', 'success');
+                    window.BoatOS.ui.showNotification(t('dash_saved'), 'success');
                 } else {
                     alert('Dashboard gespeichert!');
                 }
@@ -1985,7 +1985,7 @@ SCREEN Wetter LAYOUT grid-4
         } catch (error) {
             console.error('Save error:', error);
             if (window.BoatOS?.ui?.showNotification) {
-                window.BoatOS.ui.showNotification('Fehler beim Speichern', 'error');
+                window.BoatOS.ui.showNotification(t('dash_save_error'), 'error');
             } else {
                 alert('Fehler beim Speichern: ' + error.message);
             }

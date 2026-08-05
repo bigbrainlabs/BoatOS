@@ -2,6 +2,8 @@
  * BoatOS System — Version check & OTA update
  */
 
+import { t } from './i18n.js';
+
 const API = '';
 let _pollTimer = null;
 let _autoCheckTimer = null;
@@ -72,19 +74,19 @@ async function _fetchVersion(updateUI) {
         if (data.up_to_date) {
             _setBadge(false);
             if (updateUI && elStatus) {
-                elStatus.textContent = '✅ System ist aktuell';
+                elStatus.textContent = t('sysUpToDate');
                 elStatus.style.color = 'var(--success, #4caf50)';
             }
         } else if (data.latest === 'unbekannt') {
             _setBadge(false);
             if (updateUI && elStatus) {
-                elStatus.textContent = '⚠️ Keine Verbindung zu GitHub';
+                elStatus.textContent = t('sysNoGitHub');
                 elStatus.style.color = 'var(--warning, #ff9800)';
             }
         } else {
             _setBadge(true);
             if (updateUI && elStatus) {
-                elStatus.textContent = `🆕 Update verfügbar${data.published_at ? ' · ' + _fmtDate(data.published_at) : ''}`;
+                elStatus.textContent = `${t('sysUpdateAvailable')}${data.published_at ? ' · ' + _fmtDate(data.published_at) : ''}`;
                 elStatus.style.color = 'var(--accent)';
                 if (btnUpdate) btnUpdate.style.display = 'block';
             }
@@ -93,7 +95,7 @@ async function _fetchVersion(updateUI) {
         // On error: never show badge (fail safe — don't claim update available)
         _setBadge(false);
         if (updateUI && elStatus) {
-            elStatus.textContent = '❌ Versionsabfrage fehlgeschlagen';
+            elStatus.textContent = t('sysVersionCheckFailed');
             elStatus.style.color = 'var(--danger)';
         }
     }
@@ -104,7 +106,7 @@ export async function startUpdate() {
     const progress  = document.getElementById('system-update-progress');
     const logEl     = document.getElementById('system-update-log');
 
-    if (!confirm('System jetzt aktualisieren?\nDer Pi startet nach dem Update automatisch neu.')) return;
+    if (!confirm(t('sysUpdateConfirm'))) return;
 
     if (btnUpdate) btnUpdate.style.display = 'none';
     if (progress)  progress.style.display  = 'block';
@@ -140,18 +142,18 @@ async function _pollStatus() {
             _setBadge(false);
         }
     } catch (_) {
-        if (logEl) logEl.textContent += '\n[System] Verbindung getrennt — Pi startet neu…';
+        if (logEl) logEl.textContent += '\n' + t('sysDisconnected');
         clearInterval(_pollTimer);
     }
 }
 
 export async function reboot() {
-    if (!confirm('Pi jetzt neu starten?')) return;
+    if (!confirm(t('sysRebootConfirm'))) return;
     try { await fetch('/api/system/reboot', { method: 'POST' }); } catch (_) {}
 }
 
 export async function shutdown() {
-    if (!confirm('Pi jetzt herunterfahren?')) return;
+    if (!confirm(t('sysShutdownConfirm'))) return;
     try { await fetch('/api/system/shutdown', { method: 'POST' }); } catch (_) {}
 }
 
@@ -162,8 +164,8 @@ export async function loadHelmStatus() {
         const elDetected = document.getElementById('helm-display-detected');
         const elRunning  = document.getElementById('helm-running');
         const toggle     = document.getElementById('helm-enabled-toggle');
-        if (elDetected) elDetected.textContent = d.detected ? '✅ Ja' : '❌ Nein';
-        if (elRunning)  elRunning.textContent  = d.running  ? '✅ Läuft' : '⏹ Gestoppt';
+        if (elDetected) elDetected.textContent = d.detected ? t('sysYes') : t('sysNo');
+        if (elRunning)  elRunning.textContent  = d.running  ? t('sysRunning') : t('sysStopped');
         if (toggle)     toggle.checked = d.enabled;
     } catch (_) {}
 }
@@ -191,7 +193,7 @@ export async function helmStart() {
 }
 
 export async function helmStop() {
-    if (!confirm('Helm (Touchscreen-App) jetzt stoppen?\nDeck bleibt über den Browser erreichbar.')) return;
+    if (!confirm(t('sysStopHelmConfirm'))) return;
     try {
         await fetch(`${API}/api/system/helm`, {
             method: 'POST',
@@ -204,6 +206,6 @@ export async function helmStop() {
 
 function _fmtDate(iso) {
     try {
-        return new Date(iso).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
+        return new Date(iso).toLocaleDateString(t('localeCode'), { day:'2-digit', month:'2-digit', year:'numeric' });
     } catch (_) { return ''; }
 }

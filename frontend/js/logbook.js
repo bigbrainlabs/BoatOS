@@ -204,7 +204,7 @@ export async function stopTrip() {
     } catch (error) {
         console.error('Fehler beim Beenden:', error);
         if (ui.showNotification) {
-            ui.showNotification('Fehler beim Beenden der Fahrt', 'error');
+            ui.showNotification(t('lbEndError'), 'error');
         }
     }
 }
@@ -236,7 +236,7 @@ export async function pauseTrip() {
     } catch (error) {
         console.error('Fehler beim Pausieren:', error);
         if (ui.showNotification) {
-            ui.showNotification('Fehler beim Pausieren', 'error');
+            ui.showNotification(t('lbPauseError'), 'error');
         }
     }
 }
@@ -270,7 +270,7 @@ export async function resumeTrip() {
     } catch (error) {
         console.error('Fehler beim Fortsetzen:', error);
         if (ui.showNotification) {
-            ui.showNotification('Fehler beim Fortsetzen', 'error');
+            ui.showNotification(t('lbResumeError'), 'error');
         }
     }
 }
@@ -363,14 +363,14 @@ export function updateTripUI(isRecording, isPaused) {
         if (startBtn) startBtn.style.display = 'none';
         if (stopBtn) stopBtn.style.display = 'flex';
         if (indicator) indicator.style.display = 'flex';
-        if (tripTitle) tripTitle.textContent = 'Aktive Fahrt';
+        if (tripTitle) tripTitle.textContent = t('lbActiveTrip');
 
         if (isPaused) {
             if (pauseBtn) pauseBtn.style.display = 'none';
             if (resumeBtn) resumeBtn.style.display = 'flex';
             if (pausedBadge) pausedBadge.style.display = 'block';
             if (tripStatus) {
-                tripStatus.textContent = 'Pausiert (Anker)';
+                tripStatus.textContent = t('lbPausedAnchor');
                 tripStatus.style.color = 'var(--warning)';
             }
         } else {
@@ -378,7 +378,7 @@ export function updateTripUI(isRecording, isPaused) {
             if (resumeBtn) resumeBtn.style.display = 'none';
             if (pausedBadge) pausedBadge.style.display = 'none';
             if (tripStatus) {
-                tripStatus.textContent = 'Aufzeichnung läuft';
+                tripStatus.textContent = t('lbRecording');
                 tripStatus.style.color = 'var(--success)';
             }
         }
@@ -390,10 +390,10 @@ export function updateTripUI(isRecording, isPaused) {
         if (indicator) indicator.style.display = 'none';
         if (pausedBadge) pausedBadge.style.display = 'none';
         if (tripStatus) {
-            tripStatus.textContent = 'Bereit zum Starten';
+            tripStatus.textContent = t('lbReadyToStart');
             tripStatus.style.color = 'var(--text-dim)';
         }
-        if (tripTitle) tripTitle.textContent = 'Keine aktive Fahrt';
+        if (tripTitle) tripTitle.textContent = t('lbNoActiveTrip');
     }
 }
 
@@ -433,7 +433,7 @@ export function renderLogEntry(entry) {
         'trip_resume': { icon: '▶️', label: t('logTypeResumed'), color: 'var(--success)' }
     };
     const type = types[entry.type] || types['manual'];
-    const time = new Date(entry.timestamp).toLocaleString('de-DE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+    const time = new Date(entry.timestamp).toLocaleString(t('localeCode'), { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
 
     let weatherHtml = '';
     if (entry.weather) {
@@ -524,8 +524,8 @@ export async function loadArchivedTrips() {
  */
 export function renderTripCard(trip) {
     const startDate = new Date(trip.trip_start);
-    const dateStr = startDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const timeStr = startDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = startDate.toLocaleDateString(t('localeCode'), { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const timeStr = startDate.toLocaleTimeString(t('localeCode'), { hour: '2-digit', minute: '2-digit' });
     const dist = window.formatDistance ? window.formatDistance(parseFloat(trip.distance || 0)) : (trip.distance || 0) + ' NM';
 
     return `
@@ -602,9 +602,9 @@ export async function openTripDetail(tripId) {
 
         const startDate = new Date(trip.trip_start);
         const endDate = trip.trip_end ? new Date(trip.trip_end) : null;
-        const dateStr = startDate.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
-        const timeStr = startDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-        const endTimeStr = endDate ? endDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '--';
+        const dateStr = startDate.toLocaleDateString(t('localeCode'), { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+        const timeStr = startDate.toLocaleTimeString(t('localeCode'), { hour: '2-digit', minute: '2-digit' });
+        const endTimeStr = endDate ? endDate.toLocaleTimeString(t('localeCode'), { hour: '2-digit', minute: '2-digit' }) : '--';
         const dist = window.formatDistance ? window.formatDistance(parseFloat(trip.distance || 0)) : (trip.distance || 0) + ' NM';
 
         // Avg speed
@@ -649,7 +649,7 @@ export async function openTripDetail(tripId) {
             if (crewMembers.length > 0) {
                 crewHtml = `
                     <div style="margin-bottom: var(--space-lg);">
-                        <div class="detail-section-label">Crew</div>
+                        <div class="detail-section-label">${t('lbSectionCrew')}</div>
                         <div style="display: flex; flex-wrap: wrap; gap: var(--space-sm);">
                             ${crewMembers.map(m => `
                                 <div style="display:flex; align-items:center; gap:var(--space-sm); background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:var(--space-xs) var(--space-md);">
@@ -672,7 +672,7 @@ export async function openTripDetail(tripId) {
         if (startWeather || endWeather) {
             weatherHtml = `
                 <div style="margin-bottom: var(--space-lg);">
-                    <div class="detail-section-label">Wetter</div>
+                    <div class="detail-section-label">${t('lbSectionWeather')}</div>
                     <div style="display: flex; gap: var(--space-sm);">
                         ${_weatherBlock(startWeather, '🚀 Abfahrt')}
                         ${endWeather ? _weatherBlock(endWeather, '⚓ Ankunft') : ''}
@@ -720,7 +720,7 @@ export async function openTripDetail(tripId) {
 
                 pegelHtml = `
                     <div style="margin-bottom: var(--space-lg);">
-                        <div class="detail-section-label">Pegelstände</div>
+                        <div class="detail-section-label">${t('lbSectionGauges')}</div>
                         <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden;">
                             <table style="width:100%; border-collapse:collapse;">
                                 <thead>
@@ -790,7 +790,7 @@ export async function openTripDetail(tripId) {
 
                 sensorHtml = `
                     <div style="margin-bottom: var(--space-lg);">
-                        <div class="detail-section-label">Sensordaten</div>
+                        <div class="detail-section-label">${t('lbSectionSensors')}</div>
                         <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden;">
                             <table style="width:100%; border-collapse:collapse;">
                                 <thead>
@@ -814,7 +814,7 @@ export async function openTripDetail(tripId) {
         if (logEntries.length > 0) {
             entriesHtml = `
                 <div style="margin-bottom: var(--space-lg);">
-                    <div class="detail-section-label">Einträge</div>
+                    <div class="detail-section-label">${t('lbSectionEntries')}</div>
                     ${logEntries.map(e => renderLogEntry(e)).join('')}
                 </div>`;
         }
@@ -830,7 +830,7 @@ export async function openTripDetail(tripId) {
             const endPosStr = fmtPos(endPos);
             posHtml = `
                 <div style="margin-bottom: var(--space-lg);">
-                    <div class="detail-section-label">Positionen</div>
+                    <div class="detail-section-label">${t('lbSectionPositions')}</div>
                     <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:var(--space-md); font-size:var(--fs-sm);">
                         ${startPosStr ? `<div style="margin-bottom:4px;">🚀 ${startPosStr}</div>` : ''}
                         ${endPosStr ? `<div>⚓ ${endPosStr}</div>` : ''}
@@ -916,7 +916,7 @@ export async function viewTripOnMap(tripId) {
         const entry = await response.json();
 
         if (!entry.track_data || entry.track_data.length === 0) {
-            if (ui.showNotification) ui.showNotification('Keine Track-Daten verfügbar', 'warning');
+            if (ui.showNotification) ui.showNotification(t('lbNoTrackData'), 'warning');
             return;
         }
 
@@ -980,18 +980,18 @@ export async function deleteTrip(tripId) {
 // ==================== CREW MANAGEMENT ====================
 
 const CREW_AVATARS = [
-    { emoji: '👨‍✈️', label: 'Skipper' },
-    { emoji: '👩‍✈️', label: 'Skipperin' },
-    { emoji: '🧔‍♂️', label: 'Co-Skipper' },
-    { emoji: '👱‍♀️', label: 'Co-Skipperin' },
-    { emoji: '👨‍🍳', label: 'Koch' },
-    { emoji: '👩‍🍳', label: 'Köchin' },
-    { emoji: '👨‍💻', label: 'Funker' },
-    { emoji: '👩‍💻', label: 'Funkerin' },
-    { emoji: '👨',   label: 'Crew' },
-    { emoji: '👩',   label: 'Crew' },
-    { emoji: '🧒',   label: 'Crew jung' },
-    { emoji: '👴',   label: 'Crew senior' },
+    { emoji: '👨‍✈️', labelKey: 'crewSkipperM' },
+    { emoji: '👩‍✈️', labelKey: 'crewSkipperF' },
+    { emoji: '🧔‍♂️', labelKey: 'crewCoSkipperM' },
+    { emoji: '👱‍♀️', labelKey: 'crewCoSkipperF' },
+    { emoji: '👨‍🍳', labelKey: 'crewCookM' },
+    { emoji: '👩‍🍳', labelKey: 'crewCookF' },
+    { emoji: '👨‍💻', labelKey: 'crewRadioM' },
+    { emoji: '👩‍💻', labelKey: 'crewRadioF' },
+    { emoji: '👨',   labelKey: 'crewCrew' },
+    { emoji: '👩',   labelKey: 'crewCrew' },
+    { emoji: '🧒',   labelKey: 'crewCrewYoung' },
+    { emoji: '👴',   labelKey: 'crewCrewSenior' },
 ];
 
 let crewManageList = [];
@@ -1060,7 +1060,7 @@ export function showCrewManageModal(member = null) {
         picker.innerHTML = CREW_AVATARS.map(a => `
             <button type="button" data-avatar="${a.emoji}"
                 onclick="BoatOS._selectCrewAvatar('${a.emoji}')"
-                title="${a.label}"
+                title="${t(a.labelKey)}"
                 style="width: 52px; height: 52px; font-size: 28px; border-radius: 12px; border: 2px solid ${selectedAvatar === a.emoji ? 'var(--accent)' : 'var(--border)'}; background: ${selectedAvatar === a.emoji ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'var(--bg-card)'}; cursor: pointer; display: flex; align-items: center; justify-content: center;">
                 ${a.emoji}
             </button>
