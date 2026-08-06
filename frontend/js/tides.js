@@ -7,6 +7,7 @@
  */
 
 import * as ui from './ui.js';
+import { t } from './i18n.js';
 
 // Fallback, wenn die Karte (noch) keine Mitte liefert: eine bekannte Tide-
 // Station (Cuxhaven), damit man die Funktion überhaupt sieht.
@@ -39,33 +40,33 @@ export function open(el) {
 export async function fetchAndRender() {
     const body = document.getElementById('tides-body');
     if (!body) return;
-    body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim);">Gezeiten werden geladen…</div>';
+    body.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-dim);">${t('tideLoading')}</div>`;
 
     const { lat, lon } = _pos();
     try {
         const res = await fetch(`${_apiUrl()}/api/tides?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`);
         const d = await res.json();
         if (!d || !d.available) {
-            body.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-dim);">${d?.reason || 'Keine Gezeitendaten'}${d?.station ? ' — ' + d.station : ''}</div>`;
+            body.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-dim);">${d?.reason || t('tideNoData')}${d?.station ? ' — ' + d.station : ''}</div>`;
             return;
         }
         body.innerHTML = _render(d);
     } catch (e) {
-        body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--danger);">Fehler beim Laden.</div>';
+        body.innerHTML = `<div style="padding:20px;text-align:center;color:var(--danger);">${t('tideLoadError')}</div>`;
     }
 }
 
 function _fmtTime(iso) {
     if (!iso) return '--:--';
-    try { return new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); }
+    try { return new Date(iso).toLocaleTimeString(t('localeCode'), { hour: '2-digit', minute: '2-digit' }); }
     catch (_) { return '--:--'; }
 }
 
 function _render(d) {
     const trend = {
-        rising:  { txt: 'steigend · Flut', arrow: '▲', color: '#3fb950' },
-        falling: { txt: 'fallend · Ebbe',  arrow: '▼', color: '#e3b341' },
-        slack:   { txt: 'Stillwasser',     arrow: '■', color: 'var(--text-dim)' },
+        rising:  { txt: t('tideRising'),  arrow: '▲', color: '#3fb950' },
+        falling: { txt: t('tideFalling'), arrow: '▼', color: '#e3b341' },
+        slack:   { txt: t('tideSlack'),   arrow: '■', color: 'var(--text-dim)' },
     }[d.trend] || { txt: d.trend, arrow: '', color: 'var(--text)' };
 
     const range = (d.last_high.m - d.last_low.m).toFixed(2);
@@ -73,28 +74,28 @@ function _render(d) {
     return `
         <div style="padding:4px 2px;">
             <div style="font-weight:700;font-size:1rem;color:var(--accent);">🌊 ${d.station}</div>
-            <div style="font-size:0.8rem;color:var(--text-dim);margin-bottom:12px;">${d.water || ''} · Pegel (gemessen)</div>
+            <div style="font-size:0.8rem;color:var(--text-dim);margin-bottom:12px;">${d.water || ''} · ${t('tideGaugeMeasured')}</div>
 
             <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:2px;">
                 <div style="font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums;">${d.current_m.toFixed(2)} m</div>
                 <div style="color:${trend.color};font-weight:600;">${trend.arrow} ${trend.txt}</div>
             </div>
-            <div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:12px;">Stand ${_fmtTime(d.current_t)} · Tidenhub ${range} m</div>
+            <div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:12px;">${t('tideAsOf')} ${_fmtTime(d.current_t)} · ${t('tideRange')} ${range} m</div>
 
             ${_sparkline(d)}
 
             <div style="display:flex;gap:14px;margin-top:12px;font-size:0.85rem;">
                 <div style="flex:1;background:var(--bg-card);border-radius:8px;padding:8px 10px;">
-                    <div style="color:var(--text-dim);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;">letztes Hochwasser</div>
+                    <div style="color:var(--text-dim);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;">${t('tideLastHigh')}</div>
                     <div style="font-weight:600;">${d.last_high.m.toFixed(2)} m · ${_fmtTime(d.last_high.t)}</div>
                 </div>
                 <div style="flex:1;background:var(--bg-card);border-radius:8px;padding:8px 10px;">
-                    <div style="color:var(--text-dim);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;">letztes Niedrigwasser</div>
+                    <div style="color:var(--text-dim);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;">${t('tideLastLow')}</div>
                     <div style="font-weight:600;">${d.last_low.m.toFixed(2)} m · ${_fmtTime(d.last_low.t)}</div>
                 </div>
             </div>
             <div style="font-size:0.7rem;color:var(--text-dim);margin-top:10px;">
-                MVP: gemessene Kurve der letzten ~30 h. Vorhersage von Hoch-/Niedrigwasser folgt.
+                ${t('tideMvpNote')}
             </div>
         </div>`;
 }

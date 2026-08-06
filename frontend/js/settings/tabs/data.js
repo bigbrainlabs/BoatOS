@@ -29,7 +29,7 @@ export const html = `
 
                 <div class="setting-group">
                     <h4 data-i18n="settings_lock_db_section">🗄️ Schleusen-Datenbank</h4>
-                    <small style="color: var(--text-dim); display: block; margin-bottom: 15px;">
+                    <small style="color: var(--text-dim); display: block; margin-bottom: 15px;" data-i18n="data_lock_db_desc">
                         Verwalte die Schleusen-Datenbank: OSM-Import, Datenanreicherung und Qualitätsprüfung.
                     </small>
 
@@ -37,7 +37,7 @@ export const html = `
                         <button id="btn-locks-import" class="btn-secondary" data-i18n="settings_import_osm" style="width: 100%;">
                             🌍 Schleusen von OSM importieren
                         </button>
-                        <small style="color: var(--text-dim); display: block; margin-top: 5px;">
+                        <small style="color: var(--text-dim); display: block; margin-top: 5px;" data-i18n="data_import_osm_desc">
                             Lädt Schleusen aus OpenStreetMap für alle aktiven Karten-Regionen
                         </small>
                     </div>
@@ -46,7 +46,7 @@ export const html = `
                         <button id="btn-locks-enrich" class="btn-secondary" data-i18n="settings_enrich_data" style="width: 100%;">
                             ✨ Daten anreichern
                         </button>
-                        <small style="color: var(--text-dim); display: block; margin-top: 5px;">
+                        <small style="color: var(--text-dim); display: block; margin-top: 5px;" data-i18n="data_enrich_desc">
                             Ergänzt VHF-Kanäle, Kontaktdaten und weitere Infos
                         </small>
                     </div>
@@ -55,7 +55,7 @@ export const html = `
                         <button id="btn-locks-quality" class="btn-secondary" data-i18n="settings_quality_report" style="width: 100%;">
                             📊 Qualitätsbericht anzeigen
                         </button>
-                        <small style="color: var(--text-dim); display: block; margin-top: 5px;">
+                        <small style="color: var(--text-dim); display: block; margin-top: 5px;" data-i18n="data_quality_desc">
                             Zeigt Statistiken zur Datenqualität (VHF-Abdeckung, Kontakte, etc.)
                         </small>
                     </div>
@@ -64,13 +64,13 @@ export const html = `
                         <button id="btn-locks-verify" class="btn-secondary" data-i18n="settings_verify_positions" style="width: 100%;">
                             📍 Positionen überprüfen & korrigieren
                         </button>
-                        <small style="color: var(--text-dim); display: block; margin-top: 5px;">
+                        <small style="color: var(--text-dim); display: block; margin-top: 5px;" data-i18n="data_verify_desc">
                             Prüft alle Schleusen-Positionen gegen OpenStreetMap und korrigiert Fehler (>500m Abweichung)
                         </small>
                     </div>
 
                     <div id="locks-quality-report" style="display: none; margin-top: 15px; padding: 15px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--accent);">
-                        <h4 style="margin: 0 0 10px 0; color: var(--accent);">📊 Datenqualität</h4>
+                        <h4 style="margin: 0 0 10px 0; color: var(--accent);" data-i18n="data_quality_report_h">📊 Datenqualität</h4>
                         <pre id="locks-quality-content" style="color: var(--text-dim); font-size: 11px; line-height: 1.6; overflow-x: auto; white-space: pre-wrap; margin: 0;"></pre>
                     </div>
                 </div>
@@ -166,11 +166,11 @@ export function importSettings() {
 
             const imp = result.imported || {};
             const parts = [];
-            if (imp.settings)          parts.push('Einstellungen');
-            if (imp.gps_device)        parts.push('GPS-Gerät');
-            if (imp.logbook_trips > 0) parts.push(`${imp.logbook_trips} Logbuch-Einträge`);
-            if (imp.crew_members > 0)  parts.push(`${imp.crew_members} Crewmitglieder`);
-            if (imp.fuel_entries > 0)  parts.push(`${imp.fuel_entries} Tankeinträge`);
+            if (imp.settings)          parts.push(_t('settingsImportSettings'));
+            if (imp.gps_device)        parts.push(_t('settingsImportGpsDevice'));
+            if (imp.logbook_trips > 0) parts.push(_t('settingsImportLogbookEntries', { n: imp.logbook_trips }));
+            if (imp.crew_members > 0)  parts.push(_t('settingsImportCrew', { n: imp.crew_members }));
+            if (imp.fuel_entries > 0)  parts.push(_t('settingsImportFuel', { n: imp.fuel_entries }));
 
             const items = parts.join(', ') || _t('settingsImportNothing');
             showMsg(_t('settingsImported', { items }));
@@ -243,7 +243,7 @@ export async function importLocksFromOSM() {
 }
 
 export async function enrichLocksData() {
-    if (!confirm('Möchten Sie die Schleusen-Daten anreichern?\n\nVHF-Kanäle, Kontaktdaten und weitere Infos werden ergänzt.')) return;
+    if (!confirm(_t('settingsLocksEnrichConfirm'))) return;
 
     showMsg(_t('settingsLocksEnrichStart'));
 
@@ -273,28 +273,20 @@ export async function checkLocksQuality() {
         const result = await response.json();
 
         if (result.success) {
-            const report = `
-Gesamtzahl Schleusen: ${result.total}
-
-═══ VHF-Kanäle ═══
-Mit VHF: ${result.vhf_count}/${result.total} (${result.vhf_percentage})
-
-═══ Kontaktdaten ═══
-Telefonnummern: ${result.phone_count}/${result.total} (${result.phone_percentage})
-E-Mail-Adressen: ${result.email_count}/${result.total} (${result.email_percentage})
-
-═══ Technische Daten ═══
-Abmessungen (L × B): ${result.dimensions_count}/${result.total} (${result.dimensions_percentage})
-Kilometer-Marken: ${result.km_count}/${result.total} (${result.km_percentage})
-
-═══ Zusatzinformationen ═══
-Notizen/Hinweise: ${result.notes_count}/${result.total} (${result.notes_percentage})
-
-═══ Top Wasserstraßen ═══
-${result.top_waterways?.map(w => `${w.waterway}: ${w.count} Schleusen`).join('\n') || 'Keine Daten'}
-
-Datenstand: ${new Date().toLocaleString('de-DE')}
-            `.trim();
+            const topWaterways = result.top_waterways
+                ?.map(w => _t('settingsQualityWaterwayLocks', { waterway: w.waterway, count: w.count }))
+                .join('\n') || _t('settingsQualityNoData');
+            const report = _t('settingsQualityReport', {
+                total: result.total,
+                vhf_count: result.vhf_count, vhf_pct: result.vhf_percentage,
+                phone_count: result.phone_count, phone_pct: result.phone_percentage,
+                email_count: result.email_count, email_pct: result.email_percentage,
+                dim_count: result.dimensions_count, dim_pct: result.dimensions_percentage,
+                km_count: result.km_count, km_pct: result.km_percentage,
+                notes_count: result.notes_count, notes_pct: result.notes_percentage,
+                top_waterways: topWaterways,
+                timestamp: new Date().toLocaleString(_t('localeCode'))
+            });
 
             const contentEl = document.getElementById('locks-quality-content');
             const reportEl = document.getElementById('locks-quality-report');
@@ -320,7 +312,7 @@ export async function verifyLocksPositions() {
         await runLocksJob(`${API_URL}/api/locks/verify-positions`, (result) => {
             if (result.success) {
                 showMsg(_t('settingsPosChecked', { checked: result.checked }) +
-                        ` (${result.fixed ?? 0} korrigiert, ${result.removed_duplicates ?? 0} Duplikate entfernt)`);
+                        _t('settingsPosFixedSuffix', { fixed: result.fixed ?? 0, duplicates: result.removed_duplicates ?? 0 }));
                 if (typeof window.updateLocksOnMap === 'function') {
                     setTimeout(() => window.updateLocksOnMap(), 1000);
                 }

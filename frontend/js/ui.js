@@ -924,11 +924,11 @@ export function handleSearch(query) {
     if (!resultsContainer) return;
 
     if (query.length < 2) {
-        resultsContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim);">Mindestens 2 Zeichen eingeben</div>';
+        resultsContainer.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-dim);">${t('uiSearchMin2')}</div>`;
         return;
     }
 
-    resultsContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim);">Suche…</div>';
+    resultsContainer.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-dim);">${t('uiSearching')}</div>`;
 
     clearTimeout(_searchTimer);
     _searchTimer = setTimeout(() => _doSearch(query, resultsContainer), 400);
@@ -949,7 +949,7 @@ async function _doSearch(query, resultsContainer) {
         const results = await resp.json();
 
         if (!results.length) {
-            resultsContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim);">Keine Ergebnisse gefunden</div>';
+            resultsContainer.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-dim);">${t('uiNoResults')}</div>`;
             return;
         }
         resultsContainer.innerHTML = results.map(r => {
@@ -969,7 +969,7 @@ async function _doSearch(query, resultsContainer) {
             </div>`;
         }).join('');
     } catch (_) {
-        resultsContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim);">Suche nicht verfügbar (offline?)</div>';
+        resultsContainer.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-dim);">${t('uiSearchOffline')}</div>`;
     }
 }
 
@@ -1134,15 +1134,15 @@ function showFavoritePopup(map, fav) {
                 <button onclick="window.navigateToFavorite('${fav.id}')" style="
                     padding: 6px 12px; background: #64ffda; color: #0a192f;
                     border: none; border-radius: 4px; cursor: pointer; font-size: 12px;
-                ">Als Ziel</button>
+                ">${t('uiAsDestination')}</button>
                 <button onclick="window.addFavoriteAsWaypoint('${fav.id}')" style="
                     padding: 6px 12px; background: #2a5298; color: white;
                     border: none; border-radius: 4px; cursor: pointer; font-size: 12px;
-                ">Wegpunkt</button>
+                ">${t('uiWaypoint')}</button>
                 <button onclick="window.confirmDeleteFavorite('${fav.id}')" style="
                     padding: 6px 12px; background: #e74c3c; color: white;
                     border: none; border-radius: 4px; cursor: pointer; font-size: 12px;
-                ">Löschen</button>
+                ">${t('uiDelete')}</button>
             </div>
         </div>
     `;
@@ -1230,7 +1230,7 @@ window.confirmDeleteFavorite = async function(favoriteId) {
     const fav = getFavoriteById(favoriteId);
     if (!fav) return;
 
-    if (confirm(`Favorit "${fav.name}" wirklich löschen?`)) {
+    if (confirm(t('uiFavDeleteConfirm', { name: fav.name }))) {
         const success = await deleteFavorite(favoriteId);
         if (success) {
             // Marker + Sektions-Liste aktualisieren
@@ -1348,7 +1348,7 @@ function _renderMapRegions(container) {
                      id="map-region-toggle-${r.id}"
                      onclick="BoatOS.ui.toggleMapRegion('${r.id}', this)"></div>
                 <span style="cursor:pointer;font-size:14px;color:var(--text-dim);padding:2px 4px;"
-                      title="Löschen"
+                      title="${t('uiDelete')}"
                       onclick="BoatOS.ui.deleteMapRegion('${r.id}', this)">🗑</span>
             </div>
         </div>`;
@@ -1479,7 +1479,7 @@ export async function uploadRoutingFile() {
     bar.style.width = '0%';
     bar.style.background = '';
     pct.textContent = '0%';
-    status.textContent = 'Hochladen…';
+    status.textContent = t('uiUploading');
 
     const CHUNK = 5 * 1024 * 1024;
     const total = file.size;
@@ -1509,7 +1509,7 @@ export async function uploadRoutingFile() {
         bar.style.width = '100%';
         pct.textContent = '100%';
         bar.style.background = 'var(--success, #4caf50)';
-        status.textContent = '✓ Hochgeladen';
+        status.textContent = t('uiUploaded');
         input.value = '';
         btn.style.display = 'none';
         document.getElementById('routing-upload-filename').style.display = 'none';
@@ -1529,7 +1529,7 @@ async function loadRoutingGraphs() {
         const r = await fetch('/api/routing/installed', { cache: 'no-store' });
         const data = await r.json();
         if (!data.graphs.length) {
-            el.textContent = 'Keine Routing-Graphen installiert';
+            el.textContent = t('uiNoRoutingGraphs');
             return;
         }
         el.innerHTML = data.graphs.map(g => {
@@ -1550,7 +1550,7 @@ async function loadRoutingGraphs() {
                     <span>${escapeHTML(g.name)}</span>
                     <span style="display:flex;align-items:center;gap:8px;">
                         ${info}
-                        <span style="cursor:pointer;opacity:0.6;font-size:14px;" title="Löschen"
+                        <span style="cursor:pointer;opacity:0.6;font-size:14px;" title="${t('uiDelete')}"
                               onclick="window._deleteRoutingGraph('${g.name}', this)">🗑</span>
                     </span>
                 </div>
@@ -1558,7 +1558,7 @@ async function loadRoutingGraphs() {
             </div>`;
         }).join('');
     } catch {
-        el.textContent = 'Fehler beim Laden';
+        el.textContent = t('uiLoadError');
     }
 }
 
@@ -1591,7 +1591,7 @@ function _waterwayRow(w) {
         <div style="display:flex;gap:6px;align-items:center;">
             ${nameField}
             <input type="number" class="setting-input ww-current" value="${_wwNum(w.current_kmh)}"
-                   step="0.1" min="0" placeholder="km/h" title="Strömung (km/h)" style="width:70px;">
+                   step="0.1" min="0" placeholder="km/h" title="${t('uiCurrentTitle')}" style="width:70px;">
             <select class="setting-select ww-type" style="width:80px;">${types}</select>
             <span title="Geografie" style="cursor:pointer;opacity:0.7;"
                   onclick="BoatOS.ui.toggleWaterwayGeo(this)">🌍</span>
@@ -1614,7 +1614,7 @@ function _waterwayRow(w) {
             <div style="display:flex;gap:4px;flex-wrap:wrap;">
                 <input type="number" class="setting-input ww-mouth" value="${_wwNum(mouth[0])}" step="0.001" placeholder="lat" style="width:82px;">
                 <input type="number" class="setting-input ww-mouth" value="${_wwNum(mouth[1])}" step="0.001" placeholder="lon" style="width:82px;">
-                <input type="number" class="setting-input ww-bearing" value="${_wwNum(w.flow_bearing)}" step="1" min="0" max="359" placeholder="Peilung°" style="width:82px;">
+                <input type="number" class="setting-input ww-bearing" value="${_wwNum(w.flow_bearing)}" step="1" min="0" max="359" placeholder="${t('uiBearingPh')}" style="width:82px;">
             </div>
         </div>
     </div>`;
@@ -1627,9 +1627,9 @@ async function loadWaterways() {
         const r = await fetch('/api/routing/waterways', { cache: 'no-store' });
         const data = await r.json();
         const ww = data.waterways || [];
-        el.innerHTML = ww.length ? ww.map(_waterwayRow).join('') : '<em>Keine Gewässer konfiguriert</em>';
+        el.innerHTML = ww.length ? ww.map(_waterwayRow).join('') : `<em>${t('uiNoWaterways')}</em>`;
     } catch {
-        el.textContent = 'Fehler beim Laden';
+        el.textContent = t('uiLoadError');
     }
 }
 export { loadWaterways };
@@ -1703,7 +1703,7 @@ async function loadRoutingRegions() {
         const data = await r.json();
         const regions = data.regions || [];
         if (!regions.length) {
-            activeEl.textContent = 'Kein Graph gefunden';
+            activeEl.textContent = t('uiNoGraphFound');
             sel.innerHTML = '';
             return;
         }
@@ -1711,9 +1711,9 @@ async function loadRoutingRegions() {
             .map(g => `<option value="${g.id}"${g.active ? ' selected' : ''}>${g.name} · ${g.size_mb} MB</option>`)
             .join('');
         const active = regions.find(g => g.active);
-        activeEl.textContent = active ? active.name : (data.active || 'unbekannt');
+        activeEl.textContent = active ? active.name : (data.active || t('uiUnknown'));
     } catch {
-        activeEl.textContent = 'Fehler beim Laden';
+        activeEl.textContent = t('uiLoadError');
     }
 }
 export { loadRoutingRegions };
@@ -1731,10 +1731,10 @@ export async function switchRoutingRegion() {
     const region = sel.value;
     btn.disabled = true;
     const oldLabel = btn.textContent;
-    btn.textContent = 'Wechselt…';
+    btn.textContent = t('uiSwitching');
     status.style.display = 'block';
     status.style.color = 'var(--text-dim)';
-    status.textContent = 'OSRM wird mit dem neuen Graphen neu gestartet…';
+    status.textContent = t('uiOsrmRestarting');
 
     try {
         const r = await fetch('/api/routing/switch-region', {
@@ -1745,12 +1745,12 @@ export async function switchRoutingRegion() {
         const data = await r.json();
         if (data.success) {
             status.style.color = 'var(--success, #10b981)';
-            status.textContent = '✓ Region gewechselt';
+            status.textContent = t('uiRegionSwitched');
             await loadRoutingRegions();
             showToast('Routing-Region gewechselt', 'success');
         } else {
             status.style.color = 'var(--danger, #ef4444)';
-            status.textContent = '✗ ' + (data.error || 'Fehler');
+            status.textContent = '✗ ' + (data.error || t('uiErrorGeneric'));
         }
     } catch (e) {
         status.style.color = 'var(--danger, #ef4444)';
@@ -1762,7 +1762,7 @@ export async function switchRoutingRegion() {
 }
 
 window._deleteRoutingGraph = async function(name, el) {
-    if (!confirm(`Routing-Graph "${name}" wirklich löschen?`)) return;
+    if (!confirm(t('uiGraphDeleteConfirm', { name }))) return;
     el.textContent = '…';
     try {
         const r = await fetch(`/api/routing/graphs/${encodeURIComponent(name)}`, { method: 'DELETE' });
@@ -1770,7 +1770,7 @@ window._deleteRoutingGraph = async function(name, el) {
             await loadRoutingGraphs();
         } else {
             const d = await r.json().catch(() => ({}));
-            alert(d.detail || 'Fehler beim Löschen');
+            alert(d.detail || t('uiDeleteError'));
             el.textContent = '🗑';
         }
     } catch (e) {
@@ -1780,7 +1780,7 @@ window._deleteRoutingGraph = async function(name, el) {
 };
 
 export async function deleteMapRegion(regionId, iconEl) {
-    if (!confirm(`"${regionId}" wirklich löschen?`)) return;
+    if (!confirm(t('uiRegionDeleteConfirm', { id: regionId }))) return;
     iconEl.textContent = '…';
     try {
         const r = await fetch(`/api/map/regions/${regionId}`, { method: 'DELETE' });
@@ -1788,7 +1788,7 @@ export async function deleteMapRegion(regionId, iconEl) {
             await loadMapRegions();
         } else {
             const d = await r.json().catch(() => ({}));
-            alert(d.detail || 'Fehler beim Löschen');
+            alert(d.detail || t('uiDeleteError'));
             iconEl.textContent = '🗑';
         }
     } catch (err) {
