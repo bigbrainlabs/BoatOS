@@ -86,7 +86,10 @@ jobs:
 
             ### Enthaltene Dateien
             - `app.so` — Helm-App (Flutter, arm64 generic)
-          files: flutter_app/build/flutter-pi/aarch64-generic/app.so
+            - `BoatOS-MBTiles-Creator.exe` — Karten-Tool für Windows (lädt Planetiler automatisch)
+          files: |
+            flutter_app/build/flutter-pi/aarch64-generic/app.so
+            tools/mbtiles-creator/BoatOS-MBTiles-Creator.exe
           draft: false
           # Vorab-Tags (v1.8.0-rc6 …) sind Prereleases und NICHT "Latest";
           # nur stabile Tags (v1.8.0) werden Latest. Erkennung am "-" im Tag.
