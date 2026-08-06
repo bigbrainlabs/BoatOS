@@ -16,6 +16,7 @@ import 'package:provider/provider.dart';
 
 import '../../services/settings_service.dart';
 import '../../services/websocket_service.dart';
+import '../../l10n/l10n_ext.dart';
 import 'dash_widget.dart';
 import 'registry.dart';
 
@@ -71,10 +72,11 @@ class CompassDashWidget {
 
   static Widget buildEditor(DashWidget w, StateSetter setState,
           List<Map<String, dynamic>> allSensors) =>
-      const Text(
-        'Navi-Instrument: SOG/COG, Fahrrinnen-Tiefe (+ Vorausschau-Warnung), '
-        'Pegel, Strömung. Keine weiteren Einstellungen nötig.',
-        style: TextStyle(fontSize: 13, color: Color(0xFF8B949E)),
+      Builder(
+        builder: (context) => Text(
+          context.l10n.compassDesc,
+          style: const TextStyle(fontSize: 13, color: Color(0xFF8B949E)),
+        ),
       );
 
   static String toDsl(DashWidget w) {
@@ -209,6 +211,7 @@ class _NavInstrumentState extends State<_NavInstrument> {
                 distanceKm: settings.isKm,
                 remainingM: remainingM,
                 wpBearing: wpBearing,
+                l: context.l10n,
               ),
             ),
           ),
@@ -228,6 +231,7 @@ class _NavPainter extends CustomPainter {
   final bool distanceKm;
   final double? remainingM;
   final double? wpBearing;
+  final AppLocalizations l;
 
   _NavPainter({
     required this.gps,
@@ -237,6 +241,7 @@ class _NavPainter extends CustomPainter {
     required this.distanceKm,
     required this.remainingM,
     required this.wpBearing,
+    required this.l,
   });
 
   double? _numAt(dynamic m, String key) {
@@ -369,7 +374,7 @@ class _NavPainter extends CustomPainter {
     }
 
     // Vorausschau-Warnung ersetzt die Rinnen-Tiefe
-    final rinneLabel = aheadShallow ? '⚠ flach in ${aheadDist?.round()} m' : 'Tiefe Rinne';
+    final rinneLabel = aheadShallow ? l.compassShallowAhead('${aheadDist?.round()}') : l.compassDeepChannel;
     final rinneVal = aheadShallow
         ? (aheadDepth != null ? fmtM(aheadDepth) : '–')
         : (depthM != null ? fmtM(depthM) : '–');
@@ -379,15 +384,15 @@ class _NavPainter extends CustomPainter {
     stat(s * 0.035, s * 0.05, s * 0.105, TextAlign.left, 'COG',
         cog != null ? '${cog.round()}°' : '–', const Color(0xFF7FE0A0));
     stat(s * 0.965, s * 0.05, s * 0.105, TextAlign.right,
-        pegelName != null ? 'Pegel ($pegelName)' : 'Pegel',
+        pegelName != null ? l.compassGauge(pegelName) : l.compassGaugeShort,
         pegelCm != null ? '${pegelCm.round()} cm' : '–', const Color(0xFF7FBFFF));
 
     // Unten 2×2-Grid
     final colL = s * 0.27, colR = s * 0.73;
     stat(colL, s * 0.755, s * 0.815, TextAlign.center, rinneLabel, rinneVal, rinneCol);
-    stat(colR, s * 0.755, s * 0.815, TextAlign.center, 'Echolot',
+    stat(colR, s * 0.755, s * 0.815, TextAlign.center, l.compassEcho,
         sounder != null ? fmtM(sounder!) : '–', const Color(0xFF9FD0FF));
-    stat(colL, s * 0.885, s * 0.945, TextAlign.center, 'Strömung',
+    stat(colL, s * 0.885, s * 0.945, TextAlign.center, l.compassCurrent,
         currentKmh != null ? '${currentKmh.toStringAsFixed(1)} km/h' : '–', const Color(0xFFFFD479));
     final restStr = remainingM != null
         ? (distanceKm

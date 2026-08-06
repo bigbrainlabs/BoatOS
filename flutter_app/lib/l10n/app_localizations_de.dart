@@ -126,8 +126,8 @@ class AppLocalizationsDe extends AppLocalizations {
   String get wifiDisconnect => 'Trennen';
 
   @override
-  String wifiSignal(int percent) {
-    return 'Signal: $percent%';
+  String wifiSignal(String signal) {
+    return 'Signal: $signal%';
   }
 
   @override
@@ -983,4 +983,517 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get dashWidgetLogHint => 'Wert wird pro Track-Punkt mitgespeichert';
+
+  @override
+  String get mapHazardBridge => 'Brücke';
+
+  @override
+  String get mapHazardCable => 'Freileitung';
+
+  @override
+  String get mapHazardDepth => 'Flachstelle';
+
+  @override
+  String get mapHazardWeir => 'Wehr / Sperrtor';
+
+  @override
+  String mapHazardDepthDetail(String depth, String required) {
+    return 'Kartentiefe bis $depth m — benötigt $required m';
+  }
+
+  @override
+  String mapHazardCurrentApprox(String current, String gauge, String offset) {
+    return 'aktuell ≈ $current m ($gauge $offset m)';
+  }
+
+  @override
+  String mapHazardClearanceDetail(String clearance, String required) {
+    return 'Durchfahrtshöhe $clearance m — benötigt $required m';
+  }
+
+  @override
+  String get mapHazardsNoneChecked =>
+      '✓ Route geprüft (IENC) — keine Hindernisse';
+
+  @override
+  String get mapPoiHarbor => 'Hafen';
+
+  @override
+  String get mapPoiWeir => 'Wehr';
+
+  @override
+  String get mapPoiPhone => 'Telefon';
+
+  @override
+  String mapPoiVhfChannel(String channel) {
+    return 'Kanal $channel';
+  }
+
+  @override
+  String get mapPoiAvgWait => 'Ø Wartezeit';
+
+  @override
+  String get mapLockStatusLoading => 'Status wird geladen…';
+
+  @override
+  String get mapLockOpen => 'OFFEN';
+
+  @override
+  String get mapLockClosed => 'GESCHLOSSEN';
+
+  @override
+  String mapLockOpensAt(String time) {
+    return 'öffnet $time';
+  }
+
+  @override
+  String mapLockClosesAt(String time) {
+    return 'schließt $time';
+  }
+
+  @override
+  String get settingsSectionAbout => 'Über';
+
+  @override
+  String get aboutThanks => 'Danke an';
+
+  @override
+  String get aboutNoSponsors => 'Noch keine Einträge — oder offline.';
+
+  @override
+  String get aboutPcbwayDesc =>
+      'Sponsert die Platinenfertigung für BoatOpenIO.';
+
+  @override
+  String get aboutOrderPcb => 'Platinen direkt bestellen';
+
+  @override
+  String get aboutBookDe => 'Buchreihe (DE)';
+
+  @override
+  String get aboutBookEn => 'Buchreihe (EN)';
+
+  @override
+  String get aboutSupport => 'Unterstützen';
+
+  @override
+  String get aboutDisclaimerHeader => 'Haftungsausschluss';
+
+  @override
+  String get aboutDisclaimer =>
+      'BoatOS wird ohne jede Gewähr bereitgestellt (\"as is\"), die Nutzung erfolgt auf eigenes Risiko. Für Schäden an Hard- oder Software, am Boot, an Personen oder für Folgeschäden wird keine Haftung übernommen. BoatOS ersetzt keine amtlichen Seekarten und keine sorgfältige Navigation — verlasse dich niemals allein auf diese Software.';
+
+  @override
+  String get aboutLicense => 'Lizenz: GPL-3.0 · 🐾';
+
+  @override
+  String get btnStart => 'Starten';
+
+  @override
+  String get btnReset => 'Zurücksetzen';
+
+  @override
+  String get btnCheck => 'Prüfen';
+
+  @override
+  String get settingsSaveFailed => 'Fehler beim Speichern';
+
+  @override
+  String get settingsConnError => 'Verbindungsfehler';
+
+  @override
+  String settingsConnErrorLabel(String label) {
+    return '$label: Verbindungsfehler';
+  }
+
+  @override
+  String settingsJobRunning(String label) {
+    return '$label läuft…';
+  }
+
+  @override
+  String settingsJobChecked(String checked, String fixed) {
+    return '$checked geprüft, $fixed korrigiert';
+  }
+
+  @override
+  String get settingsRunning => 'Läuft…';
+
+  @override
+  String settingsDeleteQ(String name) {
+    return '$name löschen?';
+  }
+
+  @override
+  String get encElwisUnreachable =>
+      'ELWIS aktuell nicht erreichbar — später erneut versuchen.';
+
+  @override
+  String encCatalogLoadError(String code) {
+    return 'Fehler $code beim Laden des Katalogs.';
+  }
+
+  @override
+  String get encCatalogTimeout =>
+      'ELWIS-Katalog konnte nicht geladen werden (Zeitüberschreitung).';
+
+  @override
+  String get encDownloadSelected => 'Ausgewählte herunterladen';
+
+  @override
+  String encDownloadSelectedN(String count) {
+    return 'Ausgewählte herunterladen ($count)';
+  }
+
+  @override
+  String get dashSensorDelete => 'Sensor löschen';
+
+  @override
+  String get dashDslValid => 'DSL gültig';
+
+  @override
+  String dashDslError(String body) {
+    return 'Fehler: $body';
+  }
+
+  @override
+  String get dashAddRow => 'Zeile hinzufügen';
+
+  @override
+  String get dashAddWidget => 'Widget hinzufügen';
+
+  @override
+  String get dashNoWidgetsHint =>
+      'Keine Widgets — tippe auf \"Widget +\" um eines hinzuzufügen';
+
+  @override
+  String get dashChooseRoll => 'Roll-Topic wählen…';
+
+  @override
+  String get dashChoosePitch => 'Pitch-Topic wählen…';
+
+  @override
+  String get dashChooseImpact => 'Impact-Topic wählen…';
+
+  @override
+  String get dashImpactHint => 'Horizont blinkt rot bei Erschütterung';
+
+  @override
+  String get settingsResetTitle => 'Auf Werkseinstellungen zurücksetzen?';
+
+  @override
+  String get settingsResetBody =>
+      'Alle Einstellungen werden auf die Standardwerte zurückgesetzt. Dieser Vorgang kann nicht rückgängig gemacht werden.';
+
+  @override
+  String get settingsResetDone => 'Einstellungen zurückgesetzt';
+
+  @override
+  String get settingsResetHeader => 'Zurücksetzen';
+
+  @override
+  String get settingsResetDesc =>
+      'Alle Einstellungen auf Standardwerte zurücksetzen.';
+
+  @override
+  String get settingsResetting => 'Setzt zurück…';
+
+  @override
+  String get settingsFactoryReset => 'Auf Werkseinstellungen zurücksetzen';
+
+  @override
+  String get mapDeletePermanent => 'Karte wird dauerhaft entfernt.';
+
+  @override
+  String errorWith(String msg) {
+    return 'Fehler: $msg';
+  }
+
+  @override
+  String settingsJobImported(String imported, String updated) {
+    return '$imported importiert, $updated aktualisiert';
+  }
+
+  @override
+  String settingsJobEnriched(String enriched, String coverage) {
+    return '$enriched angereichert — VHF: $coverage';
+  }
+
+  @override
+  String settingsJobQuality(
+    String total,
+    String vhf,
+    String pct,
+    String phone,
+    String dim,
+  ) {
+    return 'Gesamt: $total Schleusen\nVHF: $vhf/$total ($pct)\nTelefon: $phone/$total\nAbmessungen: $dim/$total';
+  }
+
+  @override
+  String get settingsJobSuccess => 'Erfolgreich';
+
+  @override
+  String get settingsError => 'Fehler';
+
+  @override
+  String settingsJobFailed(String label, String e) {
+    return '$label: Fehler — $e';
+  }
+
+  @override
+  String get commonAll => 'Alle';
+
+  @override
+  String get commonNone => 'Keine';
+
+  @override
+  String get commonManual => 'Manuell';
+
+  @override
+  String get commonRefresh => 'Aktualisieren';
+
+  @override
+  String get commonReload => 'Neu laden';
+
+  @override
+  String get commonHide => 'Ausblenden';
+
+  @override
+  String get unitKnots => 'Knoten';
+
+  @override
+  String get boatType => 'Typ';
+
+  @override
+  String get settingsShowIENC => 'Amtliche Karten (IENC)';
+
+  @override
+  String settingsSuccessLabel(String label) {
+    return '$label erfolgreich';
+  }
+
+  @override
+  String settingsFailedLabel(String label, String code) {
+    return '$label fehlgeschlagen ($code)';
+  }
+
+  @override
+  String get settingsUpdateChannel => 'Update-Kanal';
+
+  @override
+  String get settingsBetaDesc =>
+      'Beta liefert Vorabversionen (rc) zum Testen — kann instabil sein.';
+
+  @override
+  String get settingsUpdateStarting => '[System] Update wird gestartet…';
+
+  @override
+  String get settingsShutdown => 'Herunterfahren';
+
+  @override
+  String get settingsStartJobQ => 'Vorgang starten?';
+
+  @override
+  String get settingsStarting => 'Starte…';
+
+  @override
+  String get settingsDownloadNotStarted =>
+      'Download konnte nicht gestartet werden.';
+
+  @override
+  String settingsDownloadFailed(String e) {
+    return 'Download fehlgeschlagen: $e';
+  }
+
+  @override
+  String get settingsConverting => 'Konvertiere…';
+
+  @override
+  String settingsCells(String files) {
+    return '$files Zellen';
+  }
+
+  @override
+  String get settingsUsable => 'aktiv nutzbar';
+
+  @override
+  String get settingsNotConverted => 'nicht konvertiert';
+
+  @override
+  String settingsErrorCode(String code) {
+    return 'Fehler $code';
+  }
+
+  @override
+  String settingsErrorCodeP(String code) {
+    return 'Fehler ($code)';
+  }
+
+  @override
+  String settingsRemoveTopicQ(String topic) {
+    return 'Topic \"$topic\" wirklich entfernen?';
+  }
+
+  @override
+  String get settingsLayoutSaved => 'Layout gespeichert';
+
+  @override
+  String get settingsDashEditor => 'Dashboard-Editor';
+
+  @override
+  String get settingsVisual => 'Visuell';
+
+  @override
+  String get settingsDslCode => 'DSL-Code';
+
+  @override
+  String get settingsSensors => 'Sensoren';
+
+  @override
+  String settingsRowN(String n) {
+    return 'Zeile $n';
+  }
+
+  @override
+  String get settingsNoLayout => 'Kein Layout';
+
+  @override
+  String get settingsTemplateCaps => 'VORLAGE';
+
+  @override
+  String get layout3Cols => '3 Spalten';
+
+  @override
+  String get layoutHeroTop => 'Hero O';
+
+  @override
+  String get layoutHeroBottom => 'Hero U';
+
+  @override
+  String get layoutMosaic4 => 'Mosaik 4';
+
+  @override
+  String get layoutMosaic5 => 'Mosaik 5';
+
+  @override
+  String get settingsUntitled => '(ohne Titel)';
+
+  @override
+  String get settingsNoSensorsFound => 'Keine Sensoren gefunden.';
+
+  @override
+  String get settingsNoSensorsLoaded => 'Keine Sensoren geladen.';
+
+  @override
+  String get widgetCompass => 'Kompass';
+
+  @override
+  String get settingsUnit => 'Einheit';
+
+  @override
+  String get settingsDecimals => 'Dezimalstellen';
+
+  @override
+  String get settingsRollTopic => 'Roll-Topic';
+
+  @override
+  String get settingsPitchTopic => 'Pitch-Topic';
+
+  @override
+  String get settingsImpactTopic => 'Impact-Topic';
+
+  @override
+  String get settingsImpactAlarm => 'Impact-Alarm';
+
+  @override
+  String get settingsWidthCols => 'Breite (Spalten)';
+
+  @override
+  String get settingsExportError => 'Fehler beim Exportieren';
+
+  @override
+  String get settingsExportSettings => 'Einstellungen exportieren';
+
+  @override
+  String get settingsExportDesc => 'Aktuelle Konfiguration als JSON anzeigen.';
+
+  @override
+  String get settingsShowJson => 'JSON anzeigen';
+
+  @override
+  String get settingsStable => 'Stabil';
+
+  @override
+  String get layoutFull => 'Vollbild';
+
+  @override
+  String get commonLoad => 'Laden';
+
+  @override
+  String get commonSearch => 'Suchen…';
+
+  @override
+  String wifiForgetQ(String ssid) {
+    return '\"$ssid\" vergessen?';
+  }
+
+  @override
+  String get wifiRestartAdapter => 'Adapter neu starten';
+
+  @override
+  String get wifiStop => 'Stoppen';
+
+  @override
+  String get wifiEnterPassword => 'Passwort eingeben…';
+
+  @override
+  String get attitudeTitle => 'Lage';
+
+  @override
+  String get compassDesc =>
+      'Navi-Instrument: SOG/COG, Fahrrinnen-Tiefe (+ Vorausschau-Warnung), Pegel, Strömung. Keine weiteren Einstellungen nötig.';
+
+  @override
+  String get compassDeepChannel => 'Tiefe Rinne';
+
+  @override
+  String compassShallowAhead(String dist) {
+    return '⚠ flach in $dist m';
+  }
+
+  @override
+  String compassGauge(String name) {
+    return 'Pegel ($name)';
+  }
+
+  @override
+  String get compassGaugeShort => 'Pegel';
+
+  @override
+  String get compassEcho => 'Echolot';
+
+  @override
+  String get compassCurrent => 'Strömung';
+
+  @override
+  String get widgetStyle => 'Stil';
+
+  @override
+  String get widgetShownValues => 'Angezeigte Werte';
+
+  @override
+  String get widgetDisplayName => 'Anzeigename';
+
+  @override
+  String get widgetDisplayNameTitle => 'Anzeigename (Titel)';
+
+  @override
+  String get clockDesc => 'Zeigt Systemzeit und Datum an.';
+
+  @override
+  String get spacerDesc => 'Unsichtbarer Platzhalter. Nur Größe relevant.';
+
+  @override
+  String get favCategoryOther => 'Sonstiges';
 }

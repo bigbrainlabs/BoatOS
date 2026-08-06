@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'package:latlong2/latlong.dart';
@@ -20,11 +21,8 @@ const _kAvatars = [
   '👨‍💻', '👩‍💻', '👨', '👩', '🧒', '👴',
 ];
 
-const _kMonths = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
-
 String _fmtDate(DateTime dt) =>
-    '${dt.day}. ${_kMonths[dt.month - 1]} ${dt.year}, '
-    '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} Uhr';
+    '${DateFormat('d. MMM y').format(dt)}, ${DateFormat.Hm().format(dt)}';
 
 String _fmtTime(DateTime dt) =>
     '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
@@ -158,7 +156,7 @@ class _TripTabState extends State<_TripTab> {
       builder: (_) => _CrewSelectionSheet(
         onStart: (ids) async {
           final ok = await svc.startTrip(ids);
-          if (!ok && context.mounted) _showSnack(context, 'Start fehlgeschlagen');
+          if (!ok && context.mounted) _showSnack(context, context.l10n.logbookStartFailed);
         },
       ),
     );
@@ -257,11 +255,11 @@ class _TripTabState extends State<_TripTab> {
       speedStr: spd,
       onPause: () async {
         final ok = await svc.pauseTrip();
-        if (!ok && context.mounted) _showSnack(context, 'Pause fehlgeschlagen');
+        if (!ok && context.mounted) _showSnack(context, context.l10n.logbookPauseFailed);
       },
       onResume: () async {
         final ok = await svc.resumeTrip();
-        if (!ok && context.mounted) _showSnack(context, 'Fortsetzen fehlgeschlagen');
+        if (!ok && context.mounted) _showSnack(context, context.l10n.logbookResumeFailed);
       },
       onStop: () => _confirmStop(context, svc),
       onAddNote: () => _addNote(context, svc),

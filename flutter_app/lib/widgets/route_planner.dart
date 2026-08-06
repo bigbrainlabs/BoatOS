@@ -6,6 +6,7 @@
 // so no BuildContext lookups are needed here beyond basic layout.
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import '../l10n/l10n_ext.dart';
 import 'onscreen_keyboard.dart';
@@ -317,7 +318,7 @@ class _RoutePanelState extends State<RoutePanel> {
         eta.year == now.year;
     final etaStr = isToday
         ? '${l.mapToday} ${_twoDigit(eta.hour)}:${_twoDigit(eta.minute)}'
-        : '${_weekday(eta.weekday)}. ${_twoDigit(eta.hour)}:${_twoDigit(eta.minute)}';
+        : '${DateFormat.E().format(eta)}. ${_twoDigit(eta.hour)}:${_twoDigit(eta.minute)}';
 
     final isKm = widget.distanceUnit == 'km';
     final distDisplay = isKm
@@ -365,7 +366,7 @@ class _RoutePanelState extends State<RoutePanel> {
   Widget _buildDepartureRow(double s, AppLocalizations l) {
     final dep = widget.departure;
     final depStr =
-        '${_weekday(dep.weekday)}. ${_twoDigit(dep.day)}.${_twoDigit(dep.month)}  ${_twoDigit(dep.hour)}:${_twoDigit(dep.minute)}';
+        '${DateFormat.E().format(dep)}. ${_twoDigit(dep.day)}.${_twoDigit(dep.month)}  ${_twoDigit(dep.hour)}:${_twoDigit(dep.minute)}';
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -513,9 +514,6 @@ class _RoutePanelState extends State<RoutePanel> {
 
   String _twoDigit(int n) => n.toString().padLeft(2, '0');
 
-  String _weekday(int wd) => const [
-        '', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'
-      ][wd];
 }
 
 // ---------------------------------------------------------------------------
@@ -941,7 +939,7 @@ class _SavedRouteRow extends StatelessWidget {
                 border: Border.all(color: const Color(0x882ECC71)),
                 borderRadius: BorderRadius.circular(6 * s),
               ),
-              child: Text('Laden',
+              child: Text(context.l10n.commonLoad,
                   style: TextStyle(
                       fontSize: 11 * s,
                       color: const Color(0xFF2ECC71))),
@@ -1013,7 +1011,7 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
                     fontWeight: FontWeight.bold)),
             SizedBox(height: 10 * s),
             GestureDetector(
-              onTap: () => showKeyboard(context, _ctrl, label: 'Name').then((_) => setState(() {})),
+              onTap: () => showKeyboard(context, _ctrl, label: context.l10n.crewName).then((_) => setState(() {})),
               child: ValueListenableBuilder<TextEditingValue>(
                 valueListenable: _ctrl,
                 builder: (_, v, __) => Container(

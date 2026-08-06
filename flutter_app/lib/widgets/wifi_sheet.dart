@@ -120,15 +120,15 @@ class _WifiSheetState extends State<_WifiSheet> {
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text('"$ssid" vergessen?',
+        title: Text(context.l10n.wifiForgetQ(ssid),
             style: const TextStyle(fontSize: 15, color: Color(0xFFE6EDF3))),
-        content: const Text('Das gespeicherte Profil wird gelöscht.',
-            style: TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
+        content: Text(context.l10n.wifiForgetBody,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Abbrechen',
-                style: TextStyle(color: Color(0xFF8B949E))),
+            child: Text(context.l10n.btnCancel,
+                style: const TextStyle(color: Color(0xFF8B949E))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -136,7 +136,7 @@ class _WifiSheetState extends State<_WifiSheet> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Vergessen'),
+            child: Text(context.l10n.wifiForget),
           ),
         ],
       ),
@@ -252,7 +252,7 @@ class _WifiSheetState extends State<_WifiSheet> {
                       color: Color(0xFFE6EDF3))),
               const Spacer(),
               Tooltip(
-                message: 'Adapter neu starten',
+                message: context.l10n.wifiRestartAdapter,
                 child: IconButton(
                   icon: _reiniting
                       ? const SizedBox(
@@ -387,7 +387,7 @@ class _WifiSheetState extends State<_WifiSheet> {
             Expanded(
               child: connected
                   ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(ssid.isNotEmpty ? ssid : 'Verbunden',
+                      Text(ssid.isNotEmpty ? ssid : context.l10n.wifiConnected,
                           style: const TextStyle(
                               fontSize: 14, fontWeight: FontWeight.w600,
                               color: Color(0xFFE6EDF3))),
@@ -396,12 +396,12 @@ class _WifiSheetState extends State<_WifiSheet> {
                             style: const TextStyle(
                                 fontSize: 12, color: Color(0xFF8B949E))),
                       if (signal != null)
-                        Text('Signal: $signal%',
+                        Text(context.l10n.wifiSignal('$signal'),
                             style: TextStyle(
                                 fontSize: 12, color: _signalColor(signal))),
                     ])
-                  : const Text('Nicht verbunden',
-                      style: TextStyle(fontSize: 14, color: Color(0xFF8B949E))),
+                  : Text(context.l10n.wifiNotConnected,
+                      style: const TextStyle(fontSize: 14, color: Color(0xFF8B949E))),
             ),
             if (!connected && !hotspotActive)
               OutlinedButton(
@@ -417,7 +417,7 @@ class _WifiSheetState extends State<_WifiSheet> {
                 child: _hotspotBusy
                     ? const SizedBox(width: 14, height: 14,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF9800)))
-                    : const Text('Hotspot starten', style: TextStyle(fontSize: 12)),
+                    : Text(context.l10n.wifiStartHotspot, style: const TextStyle(fontSize: 12)),
               ),
             if (connected)
               OutlinedButton(
@@ -436,7 +436,7 @@ class _WifiSheetState extends State<_WifiSheet> {
                         width: 14, height: 14,
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: Color(0xFFEF5350)))
-                    : const Text('Trennen', style: TextStyle(fontSize: 12)),
+                    : Text(context.l10n.wifiDisconnect, style: const TextStyle(fontSize: 12)),
               ),
           ]),
         ),
@@ -454,9 +454,9 @@ class _WifiSheetState extends State<_WifiSheet> {
               Row(children: [
                 const Icon(Icons.wifi_tethering, size: 14, color: Color(0xFFFF9800)),
                 const SizedBox(width: 6),
-                const Expanded(
-                  child: Text('Hotspot aktiv',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Text(context.l10n.hotspotActive,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
                           color: Color(0xFFFF9800))),
                 ),
                 OutlinedButton(
@@ -469,7 +469,7 @@ class _WifiSheetState extends State<_WifiSheet> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                   ),
                   onPressed: _hotspotBusy ? null : () => _toggleHotspot(false),
-                  child: const Text('Stoppen', style: TextStyle(fontSize: 11)),
+                  child: Text(context.l10n.wifiStop, style: const TextStyle(fontSize: 11)),
                 ),
               ]),
               const SizedBox(height: 6),
@@ -526,7 +526,7 @@ class _WifiSheetState extends State<_WifiSheet> {
                       fontWeight: inUse ? FontWeight.w600 : FontWeight.normal,
                       color: const Color(0xFFE6EDF3))),
               if (saved)
-                Text(inUse ? 'Verbunden · Gespeichert' : 'Gespeichert',
+                Text(inUse ? context.l10n.wifiConnectedSaved : context.l10n.wifiSaved,
                     style: const TextStyle(fontSize: 10, color: Color(0xFF4FC3F7))),
             ]),
           ),
@@ -546,7 +546,7 @@ class _WifiSheetState extends State<_WifiSheet> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
               ),
               onPressed: () => _forgetNetwork(ssid, uuid),
-              child: const Text('Vergessen', style: TextStyle(fontSize: 11)),
+              child: Text(context.l10n.wifiForget, style: const TextStyle(fontSize: 11)),
             ),
             const SizedBox(width: 6),
           ],
@@ -583,12 +583,12 @@ class _PasswordDialogState extends State<_PasswordDialog> {
     return AlertDialog(
       backgroundColor: const Color(0xFF161B22),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      title: Text('Verbinden mit "${widget.ssid}"',
+      title: Text(context.l10n.wifiConnectTo(widget.ssid),
           style: const TextStyle(fontSize: 15, color: Color(0xFFE6EDF3))),
       content: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => showKeyboard(context, widget.ctrl,
-            obscure: _obscure, label: 'WLAN-Passwort'),
+            obscure: _obscure, label: context.l10n.wifiPasswordLabel),
         child: ValueListenableBuilder<TextEditingValue>(
           valueListenable: widget.ctrl,
           builder: (_, v, __) => Container(
@@ -602,7 +602,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
               Expanded(
                 child: Text(
                   v.text.isEmpty
-                      ? 'Passwort eingeben…'
+                      ? context.l10n.wifiEnterPassword
                       : _obscure ? '•' * v.text.length : v.text,
                   style: TextStyle(
                       fontSize: 14,
@@ -626,8 +626,8 @@ class _PasswordDialogState extends State<_PasswordDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Abbrechen',
-              style: TextStyle(color: Color(0xFF8B949E))),
+          child: Text(context.l10n.btnCancel,
+              style: const TextStyle(color: Color(0xFF8B949E))),
         ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
@@ -636,7 +636,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
                 borderRadius: BorderRadius.circular(8)),
           ),
           onPressed: () => Navigator.pop(context, widget.ctrl.text),
-          child: const Text('Verbinden'),
+          child: Text(context.l10n.btnConnect),
         ),
       ],
     );

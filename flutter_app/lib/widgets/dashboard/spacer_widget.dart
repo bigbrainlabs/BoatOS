@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'dash_widget.dart';
 import 'registry.dart';
+import '../../l10n/l10n_ext.dart';
 
 class SpacerDashWidget {
   static void registerSelf() {
@@ -24,10 +25,10 @@ class SpacerDashWidget {
 
   static Widget buildEditor(DashWidget w, StateSetter setState,
       List<Map<String, dynamic>> allSensors) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Unsichtbarer Platzhalter. Nur Größe relevant.',
-          style: TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
-    ]);
+    return Builder(builder: (context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(context.l10n.spacerDesc,
+          style: const TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
+    ]));
   }
 
   static String toDsl(DashWidget w) {

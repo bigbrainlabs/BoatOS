@@ -3,8 +3,10 @@
 // Dashboard Clock widget — shows current time and date.
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'dash_widget.dart';
 import 'registry.dart';
+import '../../l10n/l10n_ext.dart';
 
 class ClockDashWidget {
   static void registerSelf() {
@@ -23,7 +25,7 @@ class ClockDashWidget {
     final hm = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
     final sec = now.second.toString().padLeft(2, '0');
     final date =
-        '${_weekday(now.weekday)}, ${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}.${now.year}';
+        '${DateFormat.E().format(now)}, ${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}.${now.year}';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -62,10 +64,10 @@ class ClockDashWidget {
 
   static Widget buildEditor(DashWidget w, StateSetter setState,
       List<Map<String, dynamic>> allSensors) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Zeigt Systemzeit und Datum an.',
-          style: TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
-    ]);
+    return Builder(builder: (context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(context.l10n.clockDesc,
+          style: const TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
+    ]));
   }
 
   static String toDsl(DashWidget w) {
@@ -73,7 +75,4 @@ class ClockDashWidget {
     if (w.size != 1) buf.write(' SIZE ${w.size}');
     return buf.toString();
   }
-
-  static String _weekday(int d) =>
-      const ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][d - 1];
 }
