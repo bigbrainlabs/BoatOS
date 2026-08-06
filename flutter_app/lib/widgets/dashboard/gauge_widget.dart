@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 import '../gauge_widget.dart';
 import 'dash_widget.dart';
+import '../../l10n/l10n_ext.dart';
 import 'registry.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -167,12 +168,12 @@ class _GaugeEditorFieldsState extends State<_GaugeEditorFields> {
         Expanded(child: _numField('Max', _maxCtrl, (v) => widget.w.max = v)),
       ]),
       const SizedBox(height: 10),
-      _textField('Einheit', _unitCtrl, (v) => widget.w.unit = v.isEmpty ? null : v),
+      _textField(context.l10n.settingsUnit, _unitCtrl, (v) => widget.w.unit = v.isEmpty ? null : v),
       const SizedBox(height: 10),
       _textField('Label', _labelCtrl, (v) => widget.w.label = v.isEmpty ? null : v),
       const SizedBox(height: 10),
       // Style picker
-      _lbl('Stil'),
+      _lbl(context.l10n.widgetStyle),
       const SizedBox(height: 6),
       DashStyleChips(
         styles: _gaugeStyles,
@@ -181,7 +182,7 @@ class _GaugeEditorFieldsState extends State<_GaugeEditorFields> {
       ),
       const SizedBox(height: 10),
       // Decimals
-      _lbl('Dezimalstellen'),
+      _lbl(context.l10n.settingsDecimals),
       const SizedBox(height: 6),
       DashDecimalsPicker(
         value: widget.w.decimals,
@@ -267,10 +268,10 @@ class DashSensorListPickerState extends State<DashSensorListPicker> {
             child: TextField(
               style: const TextStyle(fontSize: 13, color: Color(0xFFE6EDF3)),
               onChanged: (v) => setState(() => _search = v),
-              decoration: const InputDecoration(
-                isDense: true, hintText: 'Suchen…',
-                hintStyle: TextStyle(color: Color(0xFF8B949E)),
-                prefixIcon: Icon(Icons.search, size: 16, color: Color(0xFF8B949E)),
+              decoration: InputDecoration(
+                isDense: true, hintText: context.l10n.commonSearch,
+                hintStyle: const TextStyle(color: Color(0xFF8B949E)),
+                prefixIcon: const Icon(Icons.search, size: 16, color: Color(0xFF8B949E)),
                 contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 filled: true, fillColor: Color(0xFF161B22),
                 border: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF30363D))),

@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
 import 'l10n/l10n_ext.dart';
@@ -17,7 +19,8 @@ import 'services/settings_service.dart';
 import 'services/websocket_service.dart';
 import 'widgets/dashboard/registry_init.dart';
 
-void main() {
+void main() async {
+  await initializeDateFormatting();
   initDashWidgetRegistry();
   runApp(
     MultiProvider(
@@ -39,6 +42,7 @@ class BoatOSApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lang = context.watch<SettingsService>().raw['language'] as String? ?? 'de';
+    Intl.defaultLocale = lang;
     return MaterialApp(
       title: 'BoatOS',
       debugShowCheckedModeBanner: false,

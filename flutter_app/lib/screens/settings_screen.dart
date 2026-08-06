@@ -33,7 +33,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     (Icons.storage, l.settingsSectionData),
     (Icons.brightness_2, l.settingsSectionDisplay),
     (Icons.system_update_alt, l.settingsSectionSystem),
-    (Icons.info_outline, 'Über'),
+    (Icons.info_outline, l.settingsSectionAbout),
   ];
 
   int _sel = 0;
@@ -261,7 +261,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final l = context.l10n;
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ok ? l.settingsSaved : 'Fehler beim Speichern'),
+        content: Text(ok ? l.settingsSaved : l.settingsSaveFailed),
         duration: const Duration(seconds: 2),
         backgroundColor: ok ? const Color(0xFF1A472A) : const Color(0xFF7D1A1A),
       ));
@@ -446,9 +446,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final boatIcons = _buildBoatIcons(l);
     return [
       _header(l.settingsSectionShip),
-      _textRow('Name', _boatName),
+      _textRow(context.l10n.crewName, _boatName),
       _dropRow<String>(
-        label: 'Typ',
+        label: context.l10n.boatType,
         value: (boat['type'] as String?) ?? 'motorboat',
         items: const ['motorboat', 'sailboat', 'kayak'],
         labels: [l.shipMotorboat, l.shipSailboat, l.shipKayak],
@@ -517,7 +517,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return [
       _header(l.settingsSectionMap),
       _switchRow(l.mapSettingsOpenSeaMap,   b('openSeaMap', true),  (v) { s.set('map', 'openSeaMap', v);  s.save(); }),
-      _switchRow('Amtliche Karten (IENC)',  b('showIENC',   true),  (v) { s.set('map', 'showIENC',   v);  s.save(); }),
+      _switchRow(context.l10n.settingsShowIENC,  b('showIENC',   true),  (v) { s.set('map', 'showIENC',   v);  s.save(); }),
       _switchRow(l.mapSettingsShowLocks,    b('showLocks',  true),  (v) { s.set('map', 'showLocks',  v);  s.save(); }),
       _switchRow(l.mapSettingsShowGauges,   b('showPegel',  false), (v) { s.set('map', 'showPegel',  v);  s.save(); }),
       _switchRow(l.mapSettingsShowTrack,    b('showTrack',  true),  (v) { s.set('map', 'showTrack',  v);  s.save(); }),
@@ -639,7 +639,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             if (mounted) {
               final l2 = context.l10n;
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(ok ? l2.gpsSettingsConfigSaved : 'Fehler beim Speichern'),
+                content: Text(ok ? l2.gpsSettingsConfigSaved : l2.settingsSaveFailed),
                 duration: const Duration(seconds: 2),
                 backgroundColor: ok ? const Color(0xFF1A472A) : const Color(0xFF7D1A1A),
               ));
@@ -653,7 +653,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         label: l.gpsSettingsSource,
         value: (gps['source'] as String?) ?? 'signalk',
         items: const ['signalk', 'gpsd', 'manual'],
-        labels: const ['SignalK', 'GPSD', 'Manuell'],
+        labels: ['SignalK', 'GPSD', context.l10n.commonManual],
         onChanged: (v) { if (v != null) { s.set('gps', 'source', v); s.save(); } },
       ),
       _textRow(l.gpsSettingsMinSat, _lowSatThreshold, numeric: true),
@@ -704,7 +704,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return [
       _header(l.settingsSectionUnits),
       _segRow(l.unitsSpeed, v('speed', 'kmh'),
-          const [('kmh', 'km/h'), ('kn', 'Knoten')],
+          [('kmh', 'km/h'), ('kn', context.l10n.unitKnots)],
           (x) { s.set('units', 'speed', x); s.save(); }),
       _segRow(l.unitsDistance, v('distance', 'km'),
           const [('km', 'km'), ('nm', 'NM')],
@@ -878,8 +878,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) {
         final ok = response.statusCode == 200;
         final msg = ok
-            ? (successMsg ?? '$label erfolgreich')
-            : (failMsg != null ? '$failMsg (${response.statusCode})' : '$label fehlgeschlagen (${response.statusCode})');
+            ? (successMsg ?? context.l10n.settingsSuccessLabel(label))
+            : (failMsg != null ? '$failMsg (${response.statusCode})' : context.l10n.settingsFailedLabel(label, '${response.statusCode}'));
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(msg),
           duration: const Duration(seconds: 3),
@@ -889,7 +889,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('$label: Verbindungsfehler'),
+          content: Text(context.l10n.settingsConnErrorLabel(label)),
           backgroundColor: const Color(0xFF7D1A1A),
         ));
       }
@@ -929,9 +929,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Verbindungsfehler'),
-          backgroundColor: Color(0xFF7D1A1A),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(context.l10n.settingsConnError),
+          backgroundColor: const Color(0xFF7D1A1A),
         ));
       }
     }
@@ -1037,19 +1037,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       // Update-Kanal (Stable / Beta)
       const SizedBox(height: 16),
-      const Text('Update-Kanal',
-          style: TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
+      Text(context.l10n.settingsUpdateChannel,
+          style: const TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
       const SizedBox(height: 8),
       Row(children: [
-        _channelBtn('Stabil', channel == 'stable',
+        _channelBtn(context.l10n.settingsStable, channel == 'stable',
             () => _setChannel(s, 'stable')),
         const SizedBox(width: 8),
         _channelBtn('Beta', channel == 'beta',
             () => _setChannel(s, 'beta')),
       ]),
       const SizedBox(height: 6),
-      const Text('Beta liefert Vorabversionen (rc) zum Testen — kann instabil sein.',
-          style: TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
+      Text(context.l10n.settingsBetaDesc,
+          style: const TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
 
       if (_updateRunning || _updateLog.isNotEmpty) ...[
         _header(l.updateProgress),
@@ -1203,7 +1203,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextButton(onPressed: () => Navigator.pop(context, false),
               child: Text(l.btnCancel)),
           TextButton(onPressed: () => Navigator.pop(context, true),
-              child: const Text('Aktualisieren',
+              child: Text(context.l10n.commonRefresh,
                   style: TextStyle(color: Color(0xFF4FC3F7)))),
         ],
       ),
@@ -1213,7 +1213,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // Badge sofort ausblenden — wird nach Reboot ohnehin neu geprüft
     context.findAncestorStateOfType<MainShellState>()?.dismissUpdateBadge();
 
-    setState(() { _updateRunning = true; _updateLog = ['[System] Update wird gestartet…']; });
+    setState(() { _updateRunning = true; _updateLog = [context.l10n.settingsUpdateStarting]; });
     try {
       await http.post(
         Uri.parse('http://localhost:8000/api/system/update'),
@@ -1268,7 +1268,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextButton(onPressed: () => Navigator.pop(context, false),
               child: Text(l.btnCancel)),
           TextButton(onPressed: () => Navigator.pop(context, true),
-              child: const Text('Herunterfahren',
+              child: Text(context.l10n.settingsShutdown,
                   style: TextStyle(color: Color(0xFFEF5350)))),
         ],
       ),
@@ -1376,6 +1376,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
 
     final hasSponsors = firstMates.isNotEmpty || crew.isNotEmpty;
+    final l = context.l10n;
 
     return [
       const SizedBox(height: 12),
@@ -1399,14 +1400,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: TextStyle(fontSize: 13, color: dim)),
         ]),
       ),
-      _header('Danke an'),
+      _header(l.aboutThanks),
       card(hasSponsors
           ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               tierBlock('First Mate', firstMates),
               tierBlock('Crew', crew),
             ])
-          : const Text('Noch keine Einträge — oder offline.',
-              style: TextStyle(fontSize: 13, color: dim))),
+          : Text(l.aboutNoSponsors,
+              style: const TextStyle(fontSize: 13, color: dim))),
       // Partner (Hardware-Sponsor) — eigene Sektion, nicht in die persönlichen
       // Sponsoren gemischt. Gegenstück im Deck: about.js (about-partner).
       _header('Partner'),
@@ -1414,35 +1415,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const Text('PCBWay',
             style: TextStyle(fontSize: 15, color: text, fontWeight: FontWeight.w700)),
         const SizedBox(height: 2),
-        const Text('Sponsert die Platinenfertigung für BoatOpenIO.',
-            style: TextStyle(fontSize: 12, height: 1.4, color: dim)),
+        Text(l.aboutPcbwayDesc,
+            style: const TextStyle(fontSize: 12, height: 1.4, color: dim)),
         const SizedBox(height: 8),
         linkRow('🌐', 'pcbway.com', 'pcbway.com'),
-        linkRow('🛒', 'Platinen direkt bestellen',
+        linkRow('🛒', l.aboutOrderPcb,
             'pcbway.com/project/member/?bmbno=0EDF2E80-7ABD-44'),
       ])),
       _header('Links'),
       card(Column(children: [
         linkRow('🐙', 'GitHub', 'github.com/bigbrainlabs/BoatOS'),
-        linkRow('📕', 'Buchreihe (DE)', 'amzn.to/4e5swN6'),
-        linkRow('📗', 'Buchreihe (EN)', 'amzn.to/4vxWr5W'),
+        linkRow('📕', l.aboutBookDe, 'amzn.to/4e5swN6'),
+        linkRow('📗', l.aboutBookEn, 'amzn.to/4vxWr5W'),
         linkRow('🎗️', 'Patreon', 'patreon.com/cw/logbook_without_posing'),
       ])),
-      _header('Unterstützen'),
+      _header(l.aboutSupport),
       card(Column(children: [
         linkRow('💜', 'GitHub Sponsors', 'github.com/sponsors/bigbrainlabs'),
         linkRow('🎗️', 'Patreon', 'patreon.com/cw/logbook_without_posing'),
       ])),
-      _header('Haftungsausschluss'),
-      card(const Text(
-        'BoatOS wird ohne jede Gewähr bereitgestellt („as is"), die Nutzung erfolgt auf eigenes Risiko. '
-        'Für Schäden an Hard- oder Software, am Boot, an Personen oder für Folgeschäden wird keine Haftung '
-        'übernommen. BoatOS ersetzt keine amtlichen Seekarten und keine sorgfältige Navigation — verlasse '
-        'dich niemals allein auf diese Software.',
-        style: TextStyle(fontSize: 12, height: 1.5, color: dim),
+      _header(l.aboutDisclaimerHeader),
+      card(Text(
+        l.aboutDisclaimer,
+        style: const TextStyle(fontSize: 12, height: 1.5, color: dim),
       )),
       const SizedBox(height: 14),
-      const Center(child: Text('Lizenz: GPL-3.0 · 🐾', style: TextStyle(fontSize: 12, color: dim))),
+      Center(child: Text(l.aboutLicense, style: const TextStyle(fontSize: 12, color: dim))),
       const SizedBox(height: 8),
     ];
   }
@@ -1646,14 +1644,14 @@ class _SchleusenSectionState extends State<_SchleusenSection> {
   bool _statusOk = true;
 
   Future<void> _run(String path, String label, {bool confirm = true}) async {
+    final l = context.l10n;
     if (confirm) {
-      final l = context.l10n;
       final ok = await showDialog<bool>(
         context: context,
         builder: (_) => AlertDialog(
           backgroundColor: const Color(0xFF161B22),
           title: Text(label, style: const TextStyle(color: Color(0xFFE6EDF3))),
-          content: const Text('Vorgang starten?',
+          content: Text(context.l10n.settingsStartJobQ,
               style: TextStyle(color: Color(0xFF8B949E))),
           actions: [
             TextButton(
@@ -1662,33 +1660,30 @@ class _SchleusenSectionState extends State<_SchleusenSection> {
             ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1565C0)),
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Starten')),
+                child: Text(context.l10n.btnStart)),
           ],
         ),
       );
       if (ok != true) return;
     }
 
-    setState(() { _busy = true; _status = '$label läuft…'; _statusOk = true; });
+    setState(() { _busy = true; _status = l.settingsJobRunning(label); _statusOk = true; });
     try {
       final r = await http.post(Uri.parse('$_base$path'))
           .timeout(const Duration(minutes: 5));
       final body = json.decode(r.body) as Map<String, dynamic>? ?? {};
       final ok = body['success'] == true || r.statusCode == 200;
       String msg = '';
-      if (body['imported'] != null) msg = '${body['imported']} importiert, ${body['updated'] ?? 0} aktualisiert';
-      else if (body['enriched'] != null) msg = '${body['enriched']} angereichert — VHF: ${body['vhf_coverage'] ?? '?'}';
-      else if (body['checked'] != null) msg = '${body['checked']} geprüft, ${body['fixed'] ?? 0} korrigiert';
+      if (body['imported'] != null) msg = l.settingsJobImported('${body['imported']}', '${body['updated'] ?? 0}');
+      else if (body['enriched'] != null) msg = l.settingsJobEnriched('${body['enriched']}', '${body['vhf_coverage'] ?? '?'}');
+      else if (body['checked'] != null) msg = l.settingsJobChecked('${body['checked']}', '${body['fixed'] ?? 0}');
       else if (body['total'] != null) {
-        msg = 'Gesamt: ${body['total']} Schleusen\n'
-            'VHF: ${body['vhf_count']}/${body['total']} (${body['vhf_percentage']})\n'
-            'Telefon: ${body['phone_count']}/${body['total']}\n'
-            'Abmessungen: ${body['dimensions_count']}/${body['total']}';
+        msg = l.settingsJobQuality('${body['total']}', '${body['vhf_count']}', '${body['vhf_percentage']}', '${body['phone_count']}', '${body['dimensions_count']}');
       }
-      else msg = ok ? 'Erfolgreich' : (body['error']?.toString() ?? 'Fehler');
+      else msg = ok ? l.settingsJobSuccess : (body['error']?.toString() ?? l.settingsError);
       setState(() { _status = '$label: $msg'; _statusOk = ok; });
     } catch (e) {
-      setState(() { _status = '$label: Fehler — $e'; _statusOk = false; });
+      setState(() { _status = l.settingsJobFailed(label, '$e'); _statusOk = false; });
     } finally {
       setState(() => _busy = false);
     }
@@ -1825,6 +1820,7 @@ class _ENCSectionState extends State<_ENCSection> {
   }
 
   Future<void> _loadCatalog() async {
+    final l = context.l10n;
     setState(() {
       _loadingCatalog = true;
       _catalogError = null;
@@ -1839,17 +1835,16 @@ class _ENCSectionState extends State<_ENCSection> {
             .map((e) => e as Map<String, dynamic>)
             .toList();
         if (list.isEmpty) {
-          _catalogError =
-              'ELWIS aktuell nicht erreichbar — später erneut versuchen.';
+          _catalogError = l.encElwisUnreachable;
         } else {
           _catalog = list;
           _catalogLoaded = true;
         }
       } else {
-        _catalogError = 'Fehler ${r.statusCode} beim Laden des Katalogs.';
+        _catalogError = l.encCatalogLoadError('${r.statusCode}');
       }
     } catch (_) {
-      _catalogError = 'ELWIS-Katalog konnte nicht geladen werden (Zeitüberschreitung).';
+      _catalogError = l.encCatalogTimeout;
     }
     if (mounted) setState(() => _loadingCatalog = false);
   }
@@ -1884,7 +1879,7 @@ class _ENCSectionState extends State<_ENCSection> {
         .toList();
     setState(() {
       _jobRunning = true;
-      _jobProgress = 'Starte…';
+      _jobProgress = context.l10n.settingsStarting;
       _jobPercent = 0;
     });
     try {
@@ -1902,7 +1897,7 @@ class _ENCSectionState extends State<_ENCSection> {
         setState(() {
           _jobRunning = false;
           _catalogError = start?['error'] as String? ??
-              'Download konnte nicht gestartet werden.';
+              context.l10n.settingsDownloadNotStarted;
         });
         return;
       }
@@ -1914,7 +1909,7 @@ class _ENCSectionState extends State<_ENCSection> {
       if (mounted) {
         setState(() {
           _jobRunning = false;
-          _catalogError = 'Download fehlgeschlagen: $e';
+          _catalogError = context.l10n.settingsDownloadFailed('$e');
         });
       }
     }
@@ -1961,7 +1956,7 @@ class _ENCSectionState extends State<_ENCSection> {
           // Konvertierung als Job starten und abwarten
           setState(() {
             _jobRunning = true;
-            _jobProgress = 'Konvertiere…';
+            _jobProgress = context.l10n.settingsConverting;
             _jobPercent = 0;
           });
           await http
@@ -1986,10 +1981,10 @@ class _ENCSectionState extends State<_ENCSection> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
-        title: Text('$name löschen?',
+        title: Text(context.l10n.settingsDeleteQ(name),
             style: const TextStyle(color: Color(0xFFE6EDF3))),
-        content: const Text('Karte wird dauerhaft entfernt.',
-            style: TextStyle(color: Color(0xFF8B949E))),
+        content: Text(context.l10n.mapDeletePermanent,
+            style: const TextStyle(color: Color(0xFF8B949E))),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -2065,7 +2060,7 @@ class _ENCSectionState extends State<_ENCSection> {
                 foregroundColor: const Color(0xFF4FC3F7),
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 minimumSize: const Size(0, 32)),
-            child: const Text('Alle', style: TextStyle(fontSize: 12)),
+            child: Text(context.l10n.commonAll, style: const TextStyle(fontSize: 12)),
           ),
           TextButton(
             onPressed: _selected.isEmpty ? null : _selectNone,
@@ -2073,7 +2068,7 @@ class _ENCSectionState extends State<_ENCSection> {
                 foregroundColor: const Color(0xFF8B949E),
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 minimumSize: const Size(0, 32)),
-            child: const Text('Keine', style: TextStyle(fontSize: 12)),
+            child: Text(context.l10n.commonNone, style: const TextStyle(fontSize: 12)),
           ),
           const Spacer(),
           IconButton(
@@ -2099,8 +2094,8 @@ class _ENCSectionState extends State<_ENCSection> {
             ),
             icon: const Icon(Icons.download, size: 18),
             label: Text(_selected.isEmpty
-                ? 'Ausgewählte herunterladen'
-                : 'Ausgewählte herunterladen (${_selected.length})'),
+                ? context.l10n.encDownloadSelected
+                : context.l10n.encDownloadSelectedN('${_selected.length}')),
             onPressed:
                 (_selected.isEmpty || _jobRunning) ? null : _downloadSelected,
           ),
@@ -2114,7 +2109,7 @@ class _ENCSectionState extends State<_ENCSection> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Expanded(
-              child: Text(_jobProgress.isEmpty ? 'Läuft…' : _jobProgress,
+              child: Text(_jobProgress.isEmpty ? context.l10n.settingsRunning : _jobProgress,
                   style: const TextStyle(fontSize: 12, color: Color(0xFF64FFDA)),
                   overflow: TextOverflow.ellipsis),
             ),
@@ -2155,8 +2150,8 @@ class _ENCSectionState extends State<_ENCSection> {
     final busy      = _toggling.contains(id);
     final subtitle = <String>[
       if (type.isNotEmpty) type,
-      if (files > 0) '$files Zellen',
-      converted ? 'aktiv nutzbar' : 'nicht konvertiert',
+      if (files > 0) context.l10n.settingsCells('$files'),
+      converted ? context.l10n.settingsUsable : context.l10n.settingsNotConverted,
     ].join(' · ');
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -2402,10 +2397,10 @@ class _DashboardSectionState extends State<_DashboardSection> {
           _sensorsLoading = false;
         });
       } else {
-        setState(() { _sensorsError = 'Fehler ${r.statusCode}'; _sensorsLoading = false; });
+        setState(() { _sensorsError = context.l10n.settingsErrorCode('${r.statusCode}'); _sensorsLoading = false; });
       }
     } catch (e) {
-      if (mounted) setState(() { _sensorsError = 'Fehler: $e'; _sensorsLoading = false; });
+      if (mounted) setState(() { _sensorsError = context.l10n.errorWith('$e'); _sensorsLoading = false; });
     }
   }
 
@@ -2451,8 +2446,8 @@ class _DashboardSectionState extends State<_DashboardSection> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
-        title: const Text('Sensor löschen', style: TextStyle(color: Color(0xFFE6EDF3), fontSize: 16)),
-        content: Text('Topic "$topic" wirklich entfernen?',
+        title: Text(context.l10n.dashSensorDelete, style: const TextStyle(color: Color(0xFFE6EDF3), fontSize: 16)),
+        content: Text(context.l10n.settingsRemoveTopicQ(topic),
             style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
         actions: [
           TextButton(
@@ -2691,7 +2686,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
         body: json.encode({'layout': dsl}),
       );
       setState(() {
-        _saveMsg = r.statusCode == 200 ? 'Layout gespeichert' : 'Fehler (${r.statusCode})';
+        _saveMsg = r.statusCode == 200 ? context.l10n.settingsLayoutSaved : context.l10n.settingsErrorCodeP('${r.statusCode}');
         _saveOk  = r.statusCode == 200;
         if (_saveOk) {
           _dslCtrl.text = dsl;
@@ -2700,7 +2695,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
         }
       });
     } catch (e) {
-      setState(() { _saveMsg = 'Fehler: $e'; _saveOk = false; });
+      setState(() { _saveMsg = context.l10n.errorWith('$e'); _saveOk = false; });
     }
     if (mounted) setState(() => _saving = false);
   }
@@ -2716,10 +2711,10 @@ class _DashboardSectionState extends State<_DashboardSection> {
       );
       setState(() {
         _parseOk  = r.statusCode == 200;
-        _parseMsg = r.statusCode == 200 ? 'DSL gültig' : 'Fehler: ${r.body}';
+        _parseMsg = r.statusCode == 200 ? context.l10n.dashDslValid : context.l10n.dashDslError('${r.body}');
       });
     } catch (e) {
-      setState(() { _parseOk = false; _parseMsg = 'Fehler: $e'; });
+      setState(() { _parseOk = false; _parseMsg = context.l10n.errorWith('$e'); });
     }
   }
 
@@ -2729,17 +2724,17 @@ class _DashboardSectionState extends State<_DashboardSection> {
   Widget build(BuildContext context) {
     final l = context.l10n;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _h('Dashboard-Editor'),
+      _h(context.l10n.settingsDashEditor),
       if (_loading)
         const Center(child: CircularProgressIndicator(color: Color(0xFF4FC3F7), strokeWidth: 2))
       else ...[
         // Tab bar
         Row(children: [
-          _tabBtn(0, Icons.grid_view, 'Visuell'),
+          _tabBtn(0, Icons.grid_view, context.l10n.settingsVisual),
           const SizedBox(width: 8),
-          _tabBtn(1, Icons.code, 'DSL-Code'),
+          _tabBtn(1, Icons.code, context.l10n.settingsDslCode),
           const SizedBox(width: 8),
-          _tabBtn(2, Icons.sensors, 'Sensoren'),
+          _tabBtn(2, Icons.sensors, context.l10n.settingsSensors),
           const Spacer(),
           if (_tab != 2) ...[
             if (_saving)
@@ -2760,7 +2755,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
           ] else
             IconButton(
               icon: const Icon(Icons.refresh, color: Color(0xFF4FC3F7)),
-              tooltip: 'Neu laden',
+              tooltip: context.l10n.commonReload,
               onPressed: _loadSensorGroups,
             ),
         ]),
@@ -2860,9 +2855,9 @@ class _DashboardSectionState extends State<_DashboardSection> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
           icon: const Icon(Icons.add, size: 18),
-          label: const Text('Zeile hinzufügen'),
+          label: Text(context.l10n.dashAddRow),
           onPressed: () => setState(() {
-            _rows.add(DashRow(name: 'Zeile ${_rows.length + 1}', widgets: []));
+            _rows.add(DashRow(name: context.l10n.settingsRowN('${_rows.length + 1}'), widgets: []));
           }),
         ),
       ),
@@ -2892,7 +2887,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
 
   Widget _buildScreenVisual() {
     if (_screens.isEmpty) {
-      return const Center(child: Text('Kein Layout', style: TextStyle(color: Color(0xFF8B949E))));
+      return Center(child: Text(context.l10n.settingsNoLayout, style: const TextStyle(color: Color(0xFF8B949E))));
     }
     final screen = _screens[_curScreen];
     final slots = _getTemplateSlots(screen.layoutId);
@@ -2948,7 +2943,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
         ),
       ]),
       const SizedBox(height: 14),
-      const Text('VORLAGE', style: TextStyle(
+      Text(context.l10n.settingsTemplateCaps, style: const TextStyle(
           fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF4FC3F7), letterSpacing: 0.8)),
       const SizedBox(height: 8),
       _buildTemplatePicker(screen),
@@ -2961,19 +2956,20 @@ class _DashboardSectionState extends State<_DashboardSection> {
   }
 
   Widget _buildTemplatePicker(_ScreenEditorData screen) {
-    const templates = [
-      ('full',        'Vollbild',   'A'),
-      ('split-h',     'Split H',    'A B'),
-      ('split-v',     'Split V',    'A\nB'),
-      ('thirds-h',    '3 Spalten',  'A B C'),
-      ('hero-right',  'Hero R',     'A B\nA C'),
-      ('hero-left',   'Hero L',     'B A\nC A'),
-      ('hero-top',    'Hero O',     'A A\nB C'),
-      ('hero-bottom', 'Hero U',     'B C\nA A'),
-      ('grid-4',      'Grid 2×2',   'A B\nC D'),
-      ('mosaic-4',    'Mosaik 4',   'A B\nA C\nA D'),
-      ('grid-6',      'Grid 2×3',   'A B C\nD E F'),
-      ('mosaic-5',    'Mosaik 5',   'A B C\nA D E'),
+    final l = context.l10n;
+    final templates = [
+      ('full',        l.layoutFull,        'A'),
+      ('split-h',     'Split H',           'A B'),
+      ('split-v',     'Split V',           'A\nB'),
+      ('thirds-h',    l.layout3Cols,       'A B C'),
+      ('hero-right',  'Hero R',            'A B\nA C'),
+      ('hero-left',   'Hero L',            'B A\nC A'),
+      ('hero-top',    l.layoutHeroTop,     'A A\nB C'),
+      ('hero-bottom', l.layoutHeroBottom,  'B C\nA A'),
+      ('grid-4',      'Grid 2×2',          'A B\nC D'),
+      ('mosaic-4',    l.layoutMosaic4,     'A B\nA C\nA D'),
+      ('grid-6',      'Grid 2×3',          'A B C\nD E F'),
+      ('mosaic-5',    l.layoutMosaic5,     'A B C\nA D E'),
     ];
     return Wrap(
       spacing: 6,
@@ -3074,11 +3070,11 @@ class _DashboardSectionState extends State<_DashboardSection> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               child: w == null
-                  ? const Row(children: [
-                      Icon(Icons.add_circle_outline, size: 18, color: Color(0xFF8B949E)),
-                      SizedBox(width: 8),
-                      Text('Widget hinzufügen',
-                          style: TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
+                  ? Row(children: [
+                      const Icon(Icons.add_circle_outline, size: 18, color: Color(0xFF8B949E)),
+                      const SizedBox(width: 8),
+                      Text(context.l10n.dashAddWidget,
+                          style: const TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
                     ])
                   : _buildWidgetPreview(w),
             ),
@@ -3154,7 +3150,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
               child: GestureDetector(
                 onTap: () => _renameRow(rowIdx),
                 child: Text(
-                  row.name.isNotEmpty ? row.name : '(ohne Titel)',
+                  row.name.isNotEmpty ? row.name : context.l10n.settingsUntitled,
                   style: TextStyle(
                     fontSize: 13, fontWeight: FontWeight.w600,
                     color: row.name.isNotEmpty
@@ -3216,10 +3212,10 @@ class _DashboardSectionState extends State<_DashboardSection> {
 
         // Widget list
         if (row.widgets.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: Text('Keine Widgets — tippe auf "Widget +" um eines hinzuzufügen',
-                style: TextStyle(fontSize: 12, color: Color(0xFF8B949E))),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Text(context.l10n.dashNoWidgetsHint,
+                style: const TextStyle(fontSize: 12, color: Color(0xFF8B949E))),
           )
         else
           Padding(
@@ -3404,7 +3400,7 @@ class _DashboardSectionState extends State<_DashboardSection> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
           icon: const Icon(Icons.check_circle_outline, size: 16),
-          label: const Text('Prüfen'),
+          label: Text(context.l10n.btnCheck),
           onPressed: _parseDsl,
         ),
       ]),
@@ -3430,10 +3426,10 @@ class _DashboardSectionState extends State<_DashboardSection> {
       return _statusBanner(_sensorsError!, false);
     }
     if (_sensorGroups.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(24),
-        child: Text('Keine Sensoren gefunden.',
-            style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(context.l10n.settingsNoSensorsFound,
+            style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13)),
       );
     }
     return Column(
@@ -3741,7 +3737,7 @@ class _AddWidgetSheet extends StatelessWidget {
             _specialBtn(ctx, 'SPACER',  Icons.space_bar,    'Spacer'),
             _specialBtn(ctx, 'CLOCK',   Icons.access_time,  'Uhr'),
             _specialBtn(ctx, 'TEXT',    Icons.title,        'Text'),
-            _specialBtn(ctx, 'COMPASS', Icons.explore,      'Kompass'),
+            _specialBtn(ctx, 'COMPASS', Icons.explore,      ctx.l10n.widgetCompass),
             _specialBtn(ctx, 'HORIZON', Icons.landscape,    'Horizont'),
           ]),
         ),
@@ -3752,9 +3748,9 @@ class _AddWidgetSheet extends StatelessWidget {
         // Sensor groups
         Expanded(
           child: sensorGroups.isEmpty
-              ? const Center(
-                  child: Text('Keine Sensoren geladen.',
-                      style: TextStyle(color: Color(0xFF8B949E), fontSize: 13)))
+              ? Center(
+                  child: Text(context.l10n.settingsNoSensorsLoaded,
+                      style: const TextStyle(color: Color(0xFF8B949E), fontSize: 13)))
               : ListView(
                   controller: scrollCtrl,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -4014,7 +4010,7 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                     Expanded(child: _inputRow('Max', _maxCtrl, numeric: true)),
                   ]),
                   const SizedBox(height: 10),
-                  _inputRow('Einheit', _unitCtrl),
+                  _inputRow(context.l10n.settingsUnit, _unitCtrl),
                   const SizedBox(height: 10),
                   _inputRow('Label', _labelCtrl),
                   const SizedBox(height: 10),
@@ -4038,7 +4034,7 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  _label('Dezimalstellen'),
+                  _label(context.l10n.settingsDecimals),
                   const SizedBox(height: 6),
                   _decimalsPicker(),
                 ],
@@ -4101,13 +4097,13 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                         );
 
                     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      _label('Roll-Topic'),
+                      _label(context.l10n.settingsRollTopic),
                       const SizedBox(height: 6),
-                      pathDropdown('roll', rollFull, 'Roll-Topic wählen…'),
+                      pathDropdown('roll', rollFull, context.l10n.dashChooseRoll),
                       const SizedBox(height: 14),
-                      _label('Pitch-Topic'),
+                      _label(context.l10n.settingsPitchTopic),
                       const SizedBox(height: 6),
-                      pathDropdown('pitch', pitchFull, 'Pitch-Topic wählen…'),
+                      pathDropdown('pitch', pitchFull, context.l10n.dashChoosePitch),
                       const SizedBox(height: 14),
                       Container(
                         decoration: BoxDecoration(
@@ -4118,10 +4114,10 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                         child: SwitchListTile(
                           dense: true,
                           activeColor: const Color(0xFF4FC3F7),
-                          title: const Text('Impact-Alarm',
+                          title: Text(context.l10n.settingsImpactAlarm,
                               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
                                   color: Color(0xFFE6EDF3))),
-                          subtitle: const Text('Horizont blinkt rot bei Erschütterung',
+                          subtitle: Text(context.l10n.dashImpactHint,
                               style: TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
                           value: _w.impactSensor != null,
                           onChanged: (on) => setState(() {
@@ -4132,15 +4128,15 @@ class _WidgetEditDialogState extends State<_WidgetEditDialog> {
                       ),
                       if (_w.impactSensor != null) ...[
                         const SizedBox(height: 10),
-                        _label('Impact-Topic'),
+                        _label(context.l10n.settingsImpactTopic),
                         const SizedBox(height: 6),
-                        pathDropdown('impact', impactFull, 'Impact-Topic wählen…'),
+                        pathDropdown('impact', impactFull, context.l10n.dashChooseImpact),
                       ],
                     ]);
                   }),
                 ],
                 if (_w.type == 'CLOCK' || _w.type == 'COMPASS' || _w.type == 'SPACER') ...[
-                  _label('Breite (Spalten)'),
+                  _label(context.l10n.settingsWidthCols),
                   const SizedBox(height: 6),
                   _sizePicker(),
                 ],
@@ -4447,7 +4443,7 @@ class _DatenSectionState extends State<_DatenSection> {
         try {
           _exportText = const JsonEncoder.withIndent('  ').convert(widget.svc.raw);
         } catch (_) {
-          _exportText = 'Fehler beim Exportieren';
+          _exportText = context.l10n.settingsExportError;
         }
       }
     });
@@ -4459,12 +4455,10 @@ class _DatenSectionState extends State<_DatenSection> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
-        title: const Text('Auf Werkseinstellungen zurücksetzen?',
-            style: TextStyle(color: Color(0xFFE6EDF3))),
-        content: const Text(
-            'Alle Einstellungen werden auf die Standardwerte zurückgesetzt. '
-            'Dieser Vorgang kann nicht rückgängig gemacht werden.',
-            style: TextStyle(color: Color(0xFF8B949E))),
+        title: Text(l.settingsResetTitle,
+            style: const TextStyle(color: Color(0xFFE6EDF3))),
+        content: Text(l.settingsResetBody,
+            style: const TextStyle(color: Color(0xFF8B949E))),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -4472,7 +4466,7 @@ class _DatenSectionState extends State<_DatenSection> {
           ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7D1A1A)),
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Zurücksetzen')),
+              child: Text(l.btnReset)),
         ],
       ),
     );
@@ -4482,16 +4476,16 @@ class _DatenSectionState extends State<_DatenSection> {
       await http.post(Uri.parse('$_base/api/settings/reset'));
       await widget.svc.load();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Einstellungen zurückgesetzt'),
-          duration: Duration(seconds: 2),
-          backgroundColor: Color(0xFF1A472A),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(l.settingsResetDone),
+          duration: const Duration(seconds: 2),
+          backgroundColor: const Color(0xFF1A472A),
         ));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Fehler: $e'),
+          content: Text(l.errorWith('$e')),
           backgroundColor: const Color(0xFF7D1A1A),
         ));
       }
@@ -4502,8 +4496,8 @@ class _DatenSectionState extends State<_DatenSection> {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _h('Einstellungen exportieren'),
-      const Text('Aktuelle Konfiguration als JSON anzeigen.',
+      _h(context.l10n.settingsExportSettings),
+      Text(context.l10n.settingsExportDesc,
           style: TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
       const SizedBox(height: 12),
       SizedBox(
@@ -4516,7 +4510,7 @@ class _DatenSectionState extends State<_DatenSection> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
           icon: Icon(_showExport ? Icons.visibility_off : Icons.visibility, size: 16),
-          label: Text(_showExport ? 'Ausblenden' : 'JSON anzeigen'),
+          label: Text(_showExport ? context.l10n.commonHide : context.l10n.settingsShowJson),
           onPressed: _toggleExport,
         ),
       ),
@@ -4539,9 +4533,9 @@ class _DatenSectionState extends State<_DatenSection> {
           ),
         ),
       ],
-      _h('Zurücksetzen'),
-      const Text('Alle Einstellungen auf Standardwerte zurücksetzen.',
-          style: TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
+      _h(context.l10n.settingsResetHeader),
+      Text(context.l10n.settingsResetDesc,
+          style: const TextStyle(fontSize: 13, color: Color(0xFF8B949E))),
       const SizedBox(height: 12),
       SizedBox(
         width: double.infinity,
@@ -4556,7 +4550,7 @@ class _DatenSectionState extends State<_DatenSection> {
               ? const SizedBox(width: 16, height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFEF5350)))
               : const Icon(Icons.restore, size: 16),
-          label: Text(_resetting ? 'Setzt zurück…' : 'Auf Werkseinstellungen zurücksetzen'),
+          label: Text(_resetting ? context.l10n.settingsResetting : context.l10n.settingsFactoryReset),
           onPressed: _resetting ? null : _resetToDefaults,
         ),
       ),

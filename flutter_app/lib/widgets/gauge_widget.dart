@@ -2,6 +2,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import '../l10n/l10n_ext.dart';
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
@@ -908,7 +909,7 @@ class _HorizonDisplay extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Lage',
+                    Text(context.l10n.attitudeTitle,
                         style:
                             TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
                     const SizedBox(height: 10),
@@ -927,7 +928,7 @@ class _HorizonDisplay extends StatelessWidget {
         final showVals = box.maxHeight > 150;
         return Column(
           children: [
-            const Text('Lage',
+            Text(context.l10n.attitudeTitle,
                 style: TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
             const SizedBox(height: 4),
             Expanded(child: graphic()),

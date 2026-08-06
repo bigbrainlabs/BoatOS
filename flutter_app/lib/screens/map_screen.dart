@@ -181,34 +181,34 @@ class _RouteHazard {
     }
   }
 
-  String get title {
+  String title(AppLocalizations l) {
     if (name.isNotEmpty) return name;
     switch (type) {
       case 'bridge':
-        return 'Brücke';
+        return l.mapHazardBridge;
       case 'cable':
-        return 'Freileitung';
+        return l.mapHazardCable;
       case 'depth':
-        return 'Flachstelle';
+        return l.mapHazardDepth;
       case 'weir':
-        return 'Wehr / Sperrtor';
+        return l.mapHazardWeir;
       default:
         return type;
     }
   }
 
-  String get detail {
+  String detail(AppLocalizations l) {
     if (type == 'depth') {
-      var s = 'Kartentiefe bis ${depth ?? '?'} m — benötigt ${required_ ?? '?'} m';
+      var s = l.mapHazardDepthDetail((depth ?? '?').toString(), (required_ ?? '?').toString());
       if (currentDepth != null) {
         final off = levelOffsetM ?? 0;
         final sign = off >= 0 ? '+' : '';
-        s += '\naktuell ≈ $currentDepth m ($gauge $sign$off m)';
+        s += '\n${l.mapHazardCurrentApprox(currentDepth.toString(), gauge.toString(), '$sign$off')}';
       }
       return s;
     }
     if (clearance != null) {
-      return 'Durchfahrtshöhe $clearance m — benötigt ${required_ ?? '?'} m';
+      return l.mapHazardClearanceDetail(clearance.toString(), (required_ ?? '?').toString());
     }
     return '';
   }
@@ -1197,10 +1197,10 @@ class _MapScreenState extends State<MapScreen> {
           duration: const Duration(seconds: 4),
         ));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('✓ Route geprüft (IENC) — keine Hindernisse'),
-          backgroundColor: Color(0xFF27AE60),
-          duration: Duration(seconds: 3),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(context.l10n.mapHazardsNoneChecked),
+          backgroundColor: const Color(0xFF27AE60),
+          duration: const Duration(seconds: 3),
         ));
       }
     } catch (e) {
@@ -2611,7 +2611,7 @@ class _HazardDetailPanel extends StatelessWidget {
                 SizedBox(width: 8 * sc),
                 Expanded(
                   child: Text(
-                    hazard.title,
+                    hazard.title(context.l10n),
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 16 * sc,
@@ -2628,7 +2628,7 @@ class _HazardDetailPanel extends StatelessWidget {
             ),
             SizedBox(height: 8 * sc),
             Text(
-              hazard.detail,
+              hazard.detail(context.l10n),
               style: TextStyle(
                   fontSize: 13 * sc, color: const Color(0xFFCCD6F6)),
             ),
@@ -2797,11 +2797,12 @@ class _PoiDetailPanelState extends State<_PoiDetailPanel> {
     final poi = widget.poi;
     final p = poi.properties;
 
+    final l = context.l10n;
     final label = switch (poi.type) {
-      'lock'   => 'Schleuse',
-      'bridge' => 'Brücke',
-      'harbor' => 'Hafen',
-      'weir'   => 'Wehr',
+      'lock'   => l.favoritesLock,
+      'bridge' => l.favoritesBridge,
+      'harbor' => l.mapPoiHarbor,
+      'weir'   => l.mapPoiWeir,
       _        => poi.type,
     };
 
@@ -2893,11 +2894,11 @@ class _PoiDetailPanelState extends State<_PoiDetailPanel> {
                   if (numVal('max_height', 'm') != null)
                     _detail('Durchfahrtsh.', numVal('max_height', 'm')!, sc),
                   if (strVal('vhf_channel') != null)
-                    _detail('VHF', 'Kanal ${strVal('vhf_channel')}', sc),
+                    _detail('VHF', l.mapPoiVhfChannel(strVal('vhf_channel')!), sc),
                   if (strVal('phone') != null)
-                    _detail('Telefon', strVal('phone')!, sc),
+                    _detail(l.mapPoiPhone, strVal('phone')!, sc),
                   if (p['avg_duration'] != null && (p['avg_duration'] as num?) != null && (p['avg_duration'] as num) > 0)
-                    _detail('Ø Wartezeit', '${p['avg_duration']} min', sc),
+                    _detail(l.mapPoiAvgWait, '${p['avg_duration']} min', sc),
                 ],
               ),
             ],
@@ -2923,13 +2924,13 @@ class _PoiDetailPanelState extends State<_PoiDetailPanel> {
           color: const Color(0xFF30363D),
           borderRadius: BorderRadius.circular(6 * sc),
         ),
-        child: Text('Status wird geladen…',
+        child: Text(context.l10n.mapLockStatusLoading,
             style: TextStyle(fontSize: 11 * sc, color: const Color(0xFF888888))),
       );
     }
     final isOpen = _lockStatus!['is_open'] == true;
     final color = isOpen ? const Color(0xFF2ECC71) : const Color(0xFFE74C3C);
-    final statusText = isOpen ? 'OFFEN' : 'GESCHLOSSEN';
+    final statusText = isOpen ? context.l10n.mapLockOpen : context.l10n.mapLockClosed;
     final opensAt  = _lockStatus!['opens_at']  as String?;
     final closesAt = _lockStatus!['closes_at'] as String?;
 
@@ -2953,13 +2954,13 @@ class _PoiDetailPanelState extends State<_PoiDetailPanel> {
                 fontWeight: FontWeight.bold)),
         if (opensAt != null) ...[
           SizedBox(width: 10 * sc),
-          Text('öffnet $opensAt',
+          Text(context.l10n.mapLockOpensAt(opensAt),
               style: TextStyle(
                   fontSize: 11 * sc, color: const Color(0xFF64FFDA))),
         ],
         if (closesAt != null) ...[
           SizedBox(width: 10 * sc),
-          Text('schließt $closesAt',
+          Text(context.l10n.mapLockClosesAt(closesAt),
               style: TextStyle(
                   fontSize: 11 * sc, color: const Color(0xFFFFB74D))),
         ],

@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import '../gauge_widget.dart' show SensorCard, SensorCardStyle, parseDashColor;
 import 'dash_widget.dart';
+import '../../l10n/l10n_ext.dart';
 import 'registry.dart';
 import 'gauge_widget.dart';
 
@@ -127,7 +128,7 @@ class _SensorEditorFieldsState extends State<_SensorEditorFields> {
       ),
       if (widget.w.sensor != null && availableFields.isNotEmpty) ...[
         const SizedBox(height: 12),
-        _lbl('Angezeigte Werte'), const SizedBox(height: 6),
+        _lbl(context.l10n.widgetShownValues), const SizedBox(height: 6),
         Container(
           decoration: BoxDecoration(
             color: const Color(0xFF0D1117),
@@ -189,7 +190,7 @@ class _SensorEditorFieldsState extends State<_SensorEditorFields> {
                         if (v.isEmpty) aliases.remove(field); else aliases[field] = v;
                         widget.w.fieldAliases = aliases.isEmpty ? null : aliases;
                       }),
-                      decoration: _inputDec('Anzeigename'),
+                      decoration: _inputDec(context.l10n.widgetDisplayName),
                     ),
                   ),
                 ]),
@@ -199,7 +200,7 @@ class _SensorEditorFieldsState extends State<_SensorEditorFields> {
         ),
       ],
       const SizedBox(height: 12),
-      _lbl('Anzeigename (Titel)'), const SizedBox(height: 4),
+      _lbl(context.l10n.widgetDisplayNameTitle), const SizedBox(height: 4),
       TextField(
         controller: _aliasCtrl,
         style: const TextStyle(fontSize: 13, color: Color(0xFFE6EDF3)),

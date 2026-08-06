@@ -126,8 +126,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get wifiDisconnect => 'Disconnect';
 
   @override
-  String wifiSignal(int percent) {
-    return 'Signal: $percent%';
+  String wifiSignal(String signal) {
+    return 'Signal: $signal%';
   }
 
   @override
@@ -980,4 +980,511 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dashWidgetLogHint => 'Value is saved per track point';
+
+  @override
+  String get mapHazardBridge => 'Bridge';
+
+  @override
+  String get mapHazardCable => 'Overhead line';
+
+  @override
+  String get mapHazardDepth => 'Shoal';
+
+  @override
+  String get mapHazardWeir => 'Weir / barrage';
+
+  @override
+  String mapHazardDepthDetail(String depth, String required) {
+    return 'Charted depth to $depth m — requires $required m';
+  }
+
+  @override
+  String mapHazardCurrentApprox(String current, String gauge, String offset) {
+    return 'current ≈ $current m ($gauge $offset m)';
+  }
+
+  @override
+  String mapHazardClearanceDetail(String clearance, String required) {
+    return 'Clearance $clearance m — requires $required m';
+  }
+
+  @override
+  String get mapHazardsNoneChecked => '✓ Route checked (IENC) — no hazards';
+
+  @override
+  String get mapPoiHarbor => 'Harbour';
+
+  @override
+  String get mapPoiWeir => 'Weir';
+
+  @override
+  String get mapPoiPhone => 'Phone';
+
+  @override
+  String mapPoiVhfChannel(String channel) {
+    return 'Channel $channel';
+  }
+
+  @override
+  String get mapPoiAvgWait => 'Avg. wait';
+
+  @override
+  String get mapLockStatusLoading => 'Loading status…';
+
+  @override
+  String get mapLockOpen => 'OPEN';
+
+  @override
+  String get mapLockClosed => 'CLOSED';
+
+  @override
+  String mapLockOpensAt(String time) {
+    return 'opens $time';
+  }
+
+  @override
+  String mapLockClosesAt(String time) {
+    return 'closes $time';
+  }
+
+  @override
+  String get settingsSectionAbout => 'About';
+
+  @override
+  String get aboutThanks => 'Thanks to';
+
+  @override
+  String get aboutNoSponsors => 'No entries yet — or offline.';
+
+  @override
+  String get aboutPcbwayDesc => 'Sponsors PCB manufacturing for BoatOpenIO.';
+
+  @override
+  String get aboutOrderPcb => 'Order PCBs directly';
+
+  @override
+  String get aboutBookDe => 'Book series (DE)';
+
+  @override
+  String get aboutBookEn => 'Book series (EN)';
+
+  @override
+  String get aboutSupport => 'Support';
+
+  @override
+  String get aboutDisclaimerHeader => 'Disclaimer';
+
+  @override
+  String get aboutDisclaimer =>
+      'BoatOS is provided without any warranty (\"as is\"); use is at your own risk. No liability is accepted for damage to hardware or software, to the boat, to persons, or for consequential damage. BoatOS does not replace official nautical charts or careful navigation — never rely on this software alone.';
+
+  @override
+  String get aboutLicense => 'License: GPL-3.0 · 🐾';
+
+  @override
+  String get btnStart => 'Start';
+
+  @override
+  String get btnReset => 'Reset';
+
+  @override
+  String get btnCheck => 'Check';
+
+  @override
+  String get settingsSaveFailed => 'Error while saving';
+
+  @override
+  String get settingsConnError => 'Connection error';
+
+  @override
+  String settingsConnErrorLabel(String label) {
+    return '$label: connection error';
+  }
+
+  @override
+  String settingsJobRunning(String label) {
+    return '$label running…';
+  }
+
+  @override
+  String settingsJobChecked(String checked, String fixed) {
+    return '$checked checked, $fixed fixed';
+  }
+
+  @override
+  String get settingsRunning => 'Running…';
+
+  @override
+  String settingsDeleteQ(String name) {
+    return 'Delete $name?';
+  }
+
+  @override
+  String get encElwisUnreachable =>
+      'ELWIS currently unreachable — try again later.';
+
+  @override
+  String encCatalogLoadError(String code) {
+    return 'Error $code while loading the catalog.';
+  }
+
+  @override
+  String get encCatalogTimeout => 'Could not load the ELWIS catalog (timeout).';
+
+  @override
+  String get encDownloadSelected => 'Download selected';
+
+  @override
+  String encDownloadSelectedN(String count) {
+    return 'Download selected ($count)';
+  }
+
+  @override
+  String get dashSensorDelete => 'Delete sensor';
+
+  @override
+  String get dashDslValid => 'DSL valid';
+
+  @override
+  String dashDslError(String body) {
+    return 'Error: $body';
+  }
+
+  @override
+  String get dashAddRow => 'Add row';
+
+  @override
+  String get dashAddWidget => 'Add widget';
+
+  @override
+  String get dashNoWidgetsHint => 'No widgets — tap \"Widget +\" to add one';
+
+  @override
+  String get dashChooseRoll => 'Choose roll topic…';
+
+  @override
+  String get dashChoosePitch => 'Choose pitch topic…';
+
+  @override
+  String get dashChooseImpact => 'Choose impact topic…';
+
+  @override
+  String get dashImpactHint => 'Horizon flashes red on impact';
+
+  @override
+  String get settingsResetTitle => 'Reset to factory settings?';
+
+  @override
+  String get settingsResetBody =>
+      'All settings will be reset to their default values. This action cannot be undone.';
+
+  @override
+  String get settingsResetDone => 'Settings reset';
+
+  @override
+  String get settingsResetHeader => 'Reset';
+
+  @override
+  String get settingsResetDesc => 'Reset all settings to their default values.';
+
+  @override
+  String get settingsResetting => 'Resetting…';
+
+  @override
+  String get settingsFactoryReset => 'Reset to factory settings';
+
+  @override
+  String get mapDeletePermanent => 'The chart will be permanently removed.';
+
+  @override
+  String errorWith(String msg) {
+    return 'Error: $msg';
+  }
+
+  @override
+  String settingsJobImported(String imported, String updated) {
+    return '$imported imported, $updated updated';
+  }
+
+  @override
+  String settingsJobEnriched(String enriched, String coverage) {
+    return '$enriched enriched — VHF: $coverage';
+  }
+
+  @override
+  String settingsJobQuality(
+    String total,
+    String vhf,
+    String pct,
+    String phone,
+    String dim,
+  ) {
+    return 'Total: $total locks\nVHF: $vhf/$total ($pct)\nPhone: $phone/$total\nDimensions: $dim/$total';
+  }
+
+  @override
+  String get settingsJobSuccess => 'Success';
+
+  @override
+  String get settingsError => 'Error';
+
+  @override
+  String settingsJobFailed(String label, String e) {
+    return '$label: error — $e';
+  }
+
+  @override
+  String get commonAll => 'All';
+
+  @override
+  String get commonNone => 'None';
+
+  @override
+  String get commonManual => 'Manual';
+
+  @override
+  String get commonRefresh => 'Refresh';
+
+  @override
+  String get commonReload => 'Reload';
+
+  @override
+  String get commonHide => 'Hide';
+
+  @override
+  String get unitKnots => 'Knots';
+
+  @override
+  String get boatType => 'Type';
+
+  @override
+  String get settingsShowIENC => 'Official charts (IENC)';
+
+  @override
+  String settingsSuccessLabel(String label) {
+    return '$label succeeded';
+  }
+
+  @override
+  String settingsFailedLabel(String label, String code) {
+    return '$label failed ($code)';
+  }
+
+  @override
+  String get settingsUpdateChannel => 'Update channel';
+
+  @override
+  String get settingsBetaDesc =>
+      'Beta provides pre-releases (rc) for testing — may be unstable.';
+
+  @override
+  String get settingsUpdateStarting => '[System] Starting update…';
+
+  @override
+  String get settingsShutdown => 'Shut down';
+
+  @override
+  String get settingsStartJobQ => 'Start operation?';
+
+  @override
+  String get settingsStarting => 'Starting…';
+
+  @override
+  String get settingsDownloadNotStarted => 'Could not start the download.';
+
+  @override
+  String settingsDownloadFailed(String e) {
+    return 'Download failed: $e';
+  }
+
+  @override
+  String get settingsConverting => 'Converting…';
+
+  @override
+  String settingsCells(String files) {
+    return '$files cells';
+  }
+
+  @override
+  String get settingsUsable => 'ready to use';
+
+  @override
+  String get settingsNotConverted => 'not converted';
+
+  @override
+  String settingsErrorCode(String code) {
+    return 'Error $code';
+  }
+
+  @override
+  String settingsErrorCodeP(String code) {
+    return 'Error ($code)';
+  }
+
+  @override
+  String settingsRemoveTopicQ(String topic) {
+    return 'Really remove topic \"$topic\"?';
+  }
+
+  @override
+  String get settingsLayoutSaved => 'Layout saved';
+
+  @override
+  String get settingsDashEditor => 'Dashboard editor';
+
+  @override
+  String get settingsVisual => 'Visual';
+
+  @override
+  String get settingsDslCode => 'DSL code';
+
+  @override
+  String get settingsSensors => 'Sensors';
+
+  @override
+  String settingsRowN(String n) {
+    return 'Row $n';
+  }
+
+  @override
+  String get settingsNoLayout => 'No layout';
+
+  @override
+  String get settingsTemplateCaps => 'TEMPLATE';
+
+  @override
+  String get layout3Cols => '3 columns';
+
+  @override
+  String get layoutHeroTop => 'Hero T';
+
+  @override
+  String get layoutHeroBottom => 'Hero B';
+
+  @override
+  String get layoutMosaic4 => 'Mosaic 4';
+
+  @override
+  String get layoutMosaic5 => 'Mosaic 5';
+
+  @override
+  String get settingsUntitled => '(untitled)';
+
+  @override
+  String get settingsNoSensorsFound => 'No sensors found.';
+
+  @override
+  String get settingsNoSensorsLoaded => 'No sensors loaded.';
+
+  @override
+  String get widgetCompass => 'Compass';
+
+  @override
+  String get settingsUnit => 'Unit';
+
+  @override
+  String get settingsDecimals => 'Decimals';
+
+  @override
+  String get settingsRollTopic => 'Roll topic';
+
+  @override
+  String get settingsPitchTopic => 'Pitch topic';
+
+  @override
+  String get settingsImpactTopic => 'Impact topic';
+
+  @override
+  String get settingsImpactAlarm => 'Impact alarm';
+
+  @override
+  String get settingsWidthCols => 'Width (columns)';
+
+  @override
+  String get settingsExportError => 'Error while exporting';
+
+  @override
+  String get settingsExportSettings => 'Export settings';
+
+  @override
+  String get settingsExportDesc => 'Show the current configuration as JSON.';
+
+  @override
+  String get settingsShowJson => 'Show JSON';
+
+  @override
+  String get settingsStable => 'Stable';
+
+  @override
+  String get layoutFull => 'Fullscreen';
+
+  @override
+  String get commonLoad => 'Load';
+
+  @override
+  String get commonSearch => 'Search…';
+
+  @override
+  String wifiForgetQ(String ssid) {
+    return 'Forget \"$ssid\"?';
+  }
+
+  @override
+  String get wifiRestartAdapter => 'Restart adapter';
+
+  @override
+  String get wifiStop => 'Stop';
+
+  @override
+  String get wifiEnterPassword => 'Enter password…';
+
+  @override
+  String get attitudeTitle => 'Attitude';
+
+  @override
+  String get compassDesc =>
+      'Nav instrument: SOG/COG, fairway depth (+ look-ahead warning), water level, current. No further settings needed.';
+
+  @override
+  String get compassDeepChannel => 'Deep channel';
+
+  @override
+  String compassShallowAhead(String dist) {
+    return '⚠ shallow in $dist m';
+  }
+
+  @override
+  String compassGauge(String name) {
+    return 'Gauge ($name)';
+  }
+
+  @override
+  String get compassGaugeShort => 'Gauge';
+
+  @override
+  String get compassEcho => 'Echo sounder';
+
+  @override
+  String get compassCurrent => 'Current';
+
+  @override
+  String get widgetStyle => 'Style';
+
+  @override
+  String get widgetShownValues => 'Shown values';
+
+  @override
+  String get widgetDisplayName => 'Display name';
+
+  @override
+  String get widgetDisplayNameTitle => 'Display name (title)';
+
+  @override
+  String get clockDesc => 'Shows system time and date.';
+
+  @override
+  String get spacerDesc => 'Invisible placeholder. Only size matters.';
+
+  @override
+  String get favCategoryOther => 'Other';
 }

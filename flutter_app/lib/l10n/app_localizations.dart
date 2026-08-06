@@ -332,11 +332,11 @@ abstract class AppLocalizations {
   /// **'Trennen'**
   String get wifiDisconnect;
 
-  /// WiFi signal strength
+  /// No description provided for @wifiSignal.
   ///
   /// In de, this message translates to:
-  /// **'Signal: {percent}%'**
-  String wifiSignal(int percent);
+  /// **'Signal: {signal}%'**
+  String wifiSignal(String signal);
 
   /// Forget saved network button
   ///
@@ -356,7 +356,7 @@ abstract class AppLocalizations {
   /// **'Das gespeicherte Profil wird gelöscht.'**
   String get wifiForgetBody;
 
-  /// Password dialog title
+  /// No description provided for @wifiConnectTo.
   ///
   /// In de, this message translates to:
   /// **'Verbinden mit \"{ssid}\"'**
@@ -2005,6 +2005,888 @@ abstract class AppLocalizations {
   /// In de, this message translates to:
   /// **'Wert wird pro Track-Punkt mitgespeichert'**
   String get dashWidgetLogHint;
+
+  /// No description provided for @mapHazardBridge.
+  ///
+  /// In de, this message translates to:
+  /// **'Brücke'**
+  String get mapHazardBridge;
+
+  /// No description provided for @mapHazardCable.
+  ///
+  /// In de, this message translates to:
+  /// **'Freileitung'**
+  String get mapHazardCable;
+
+  /// No description provided for @mapHazardDepth.
+  ///
+  /// In de, this message translates to:
+  /// **'Flachstelle'**
+  String get mapHazardDepth;
+
+  /// No description provided for @mapHazardWeir.
+  ///
+  /// In de, this message translates to:
+  /// **'Wehr / Sperrtor'**
+  String get mapHazardWeir;
+
+  /// No description provided for @mapHazardDepthDetail.
+  ///
+  /// In de, this message translates to:
+  /// **'Kartentiefe bis {depth} m — benötigt {required} m'**
+  String mapHazardDepthDetail(String depth, String required);
+
+  /// No description provided for @mapHazardCurrentApprox.
+  ///
+  /// In de, this message translates to:
+  /// **'aktuell ≈ {current} m ({gauge} {offset} m)'**
+  String mapHazardCurrentApprox(String current, String gauge, String offset);
+
+  /// No description provided for @mapHazardClearanceDetail.
+  ///
+  /// In de, this message translates to:
+  /// **'Durchfahrtshöhe {clearance} m — benötigt {required} m'**
+  String mapHazardClearanceDetail(String clearance, String required);
+
+  /// No description provided for @mapHazardsNoneChecked.
+  ///
+  /// In de, this message translates to:
+  /// **'✓ Route geprüft (IENC) — keine Hindernisse'**
+  String get mapHazardsNoneChecked;
+
+  /// No description provided for @mapPoiHarbor.
+  ///
+  /// In de, this message translates to:
+  /// **'Hafen'**
+  String get mapPoiHarbor;
+
+  /// No description provided for @mapPoiWeir.
+  ///
+  /// In de, this message translates to:
+  /// **'Wehr'**
+  String get mapPoiWeir;
+
+  /// No description provided for @mapPoiPhone.
+  ///
+  /// In de, this message translates to:
+  /// **'Telefon'**
+  String get mapPoiPhone;
+
+  /// No description provided for @mapPoiVhfChannel.
+  ///
+  /// In de, this message translates to:
+  /// **'Kanal {channel}'**
+  String mapPoiVhfChannel(String channel);
+
+  /// No description provided for @mapPoiAvgWait.
+  ///
+  /// In de, this message translates to:
+  /// **'Ø Wartezeit'**
+  String get mapPoiAvgWait;
+
+  /// No description provided for @mapLockStatusLoading.
+  ///
+  /// In de, this message translates to:
+  /// **'Status wird geladen…'**
+  String get mapLockStatusLoading;
+
+  /// No description provided for @mapLockOpen.
+  ///
+  /// In de, this message translates to:
+  /// **'OFFEN'**
+  String get mapLockOpen;
+
+  /// No description provided for @mapLockClosed.
+  ///
+  /// In de, this message translates to:
+  /// **'GESCHLOSSEN'**
+  String get mapLockClosed;
+
+  /// No description provided for @mapLockOpensAt.
+  ///
+  /// In de, this message translates to:
+  /// **'öffnet {time}'**
+  String mapLockOpensAt(String time);
+
+  /// No description provided for @mapLockClosesAt.
+  ///
+  /// In de, this message translates to:
+  /// **'schließt {time}'**
+  String mapLockClosesAt(String time);
+
+  /// No description provided for @settingsSectionAbout.
+  ///
+  /// In de, this message translates to:
+  /// **'Über'**
+  String get settingsSectionAbout;
+
+  /// No description provided for @aboutThanks.
+  ///
+  /// In de, this message translates to:
+  /// **'Danke an'**
+  String get aboutThanks;
+
+  /// No description provided for @aboutNoSponsors.
+  ///
+  /// In de, this message translates to:
+  /// **'Noch keine Einträge — oder offline.'**
+  String get aboutNoSponsors;
+
+  /// No description provided for @aboutPcbwayDesc.
+  ///
+  /// In de, this message translates to:
+  /// **'Sponsert die Platinenfertigung für BoatOpenIO.'**
+  String get aboutPcbwayDesc;
+
+  /// No description provided for @aboutOrderPcb.
+  ///
+  /// In de, this message translates to:
+  /// **'Platinen direkt bestellen'**
+  String get aboutOrderPcb;
+
+  /// No description provided for @aboutBookDe.
+  ///
+  /// In de, this message translates to:
+  /// **'Buchreihe (DE)'**
+  String get aboutBookDe;
+
+  /// No description provided for @aboutBookEn.
+  ///
+  /// In de, this message translates to:
+  /// **'Buchreihe (EN)'**
+  String get aboutBookEn;
+
+  /// No description provided for @aboutSupport.
+  ///
+  /// In de, this message translates to:
+  /// **'Unterstützen'**
+  String get aboutSupport;
+
+  /// No description provided for @aboutDisclaimerHeader.
+  ///
+  /// In de, this message translates to:
+  /// **'Haftungsausschluss'**
+  String get aboutDisclaimerHeader;
+
+  /// No description provided for @aboutDisclaimer.
+  ///
+  /// In de, this message translates to:
+  /// **'BoatOS wird ohne jede Gewähr bereitgestellt (\"as is\"), die Nutzung erfolgt auf eigenes Risiko. Für Schäden an Hard- oder Software, am Boot, an Personen oder für Folgeschäden wird keine Haftung übernommen. BoatOS ersetzt keine amtlichen Seekarten und keine sorgfältige Navigation — verlasse dich niemals allein auf diese Software.'**
+  String get aboutDisclaimer;
+
+  /// No description provided for @aboutLicense.
+  ///
+  /// In de, this message translates to:
+  /// **'Lizenz: GPL-3.0 · 🐾'**
+  String get aboutLicense;
+
+  /// No description provided for @btnStart.
+  ///
+  /// In de, this message translates to:
+  /// **'Starten'**
+  String get btnStart;
+
+  /// No description provided for @btnReset.
+  ///
+  /// In de, this message translates to:
+  /// **'Zurücksetzen'**
+  String get btnReset;
+
+  /// No description provided for @btnCheck.
+  ///
+  /// In de, this message translates to:
+  /// **'Prüfen'**
+  String get btnCheck;
+
+  /// No description provided for @settingsSaveFailed.
+  ///
+  /// In de, this message translates to:
+  /// **'Fehler beim Speichern'**
+  String get settingsSaveFailed;
+
+  /// No description provided for @settingsConnError.
+  ///
+  /// In de, this message translates to:
+  /// **'Verbindungsfehler'**
+  String get settingsConnError;
+
+  /// No description provided for @settingsConnErrorLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'{label}: Verbindungsfehler'**
+  String settingsConnErrorLabel(String label);
+
+  /// No description provided for @settingsJobRunning.
+  ///
+  /// In de, this message translates to:
+  /// **'{label} läuft…'**
+  String settingsJobRunning(String label);
+
+  /// No description provided for @settingsJobChecked.
+  ///
+  /// In de, this message translates to:
+  /// **'{checked} geprüft, {fixed} korrigiert'**
+  String settingsJobChecked(String checked, String fixed);
+
+  /// No description provided for @settingsRunning.
+  ///
+  /// In de, this message translates to:
+  /// **'Läuft…'**
+  String get settingsRunning;
+
+  /// No description provided for @settingsDeleteQ.
+  ///
+  /// In de, this message translates to:
+  /// **'{name} löschen?'**
+  String settingsDeleteQ(String name);
+
+  /// No description provided for @encElwisUnreachable.
+  ///
+  /// In de, this message translates to:
+  /// **'ELWIS aktuell nicht erreichbar — später erneut versuchen.'**
+  String get encElwisUnreachable;
+
+  /// No description provided for @encCatalogLoadError.
+  ///
+  /// In de, this message translates to:
+  /// **'Fehler {code} beim Laden des Katalogs.'**
+  String encCatalogLoadError(String code);
+
+  /// No description provided for @encCatalogTimeout.
+  ///
+  /// In de, this message translates to:
+  /// **'ELWIS-Katalog konnte nicht geladen werden (Zeitüberschreitung).'**
+  String get encCatalogTimeout;
+
+  /// No description provided for @encDownloadSelected.
+  ///
+  /// In de, this message translates to:
+  /// **'Ausgewählte herunterladen'**
+  String get encDownloadSelected;
+
+  /// No description provided for @encDownloadSelectedN.
+  ///
+  /// In de, this message translates to:
+  /// **'Ausgewählte herunterladen ({count})'**
+  String encDownloadSelectedN(String count);
+
+  /// No description provided for @dashSensorDelete.
+  ///
+  /// In de, this message translates to:
+  /// **'Sensor löschen'**
+  String get dashSensorDelete;
+
+  /// No description provided for @dashDslValid.
+  ///
+  /// In de, this message translates to:
+  /// **'DSL gültig'**
+  String get dashDslValid;
+
+  /// No description provided for @dashDslError.
+  ///
+  /// In de, this message translates to:
+  /// **'Fehler: {body}'**
+  String dashDslError(String body);
+
+  /// No description provided for @dashAddRow.
+  ///
+  /// In de, this message translates to:
+  /// **'Zeile hinzufügen'**
+  String get dashAddRow;
+
+  /// No description provided for @dashAddWidget.
+  ///
+  /// In de, this message translates to:
+  /// **'Widget hinzufügen'**
+  String get dashAddWidget;
+
+  /// No description provided for @dashNoWidgetsHint.
+  ///
+  /// In de, this message translates to:
+  /// **'Keine Widgets — tippe auf \"Widget +\" um eines hinzuzufügen'**
+  String get dashNoWidgetsHint;
+
+  /// No description provided for @dashChooseRoll.
+  ///
+  /// In de, this message translates to:
+  /// **'Roll-Topic wählen…'**
+  String get dashChooseRoll;
+
+  /// No description provided for @dashChoosePitch.
+  ///
+  /// In de, this message translates to:
+  /// **'Pitch-Topic wählen…'**
+  String get dashChoosePitch;
+
+  /// No description provided for @dashChooseImpact.
+  ///
+  /// In de, this message translates to:
+  /// **'Impact-Topic wählen…'**
+  String get dashChooseImpact;
+
+  /// No description provided for @dashImpactHint.
+  ///
+  /// In de, this message translates to:
+  /// **'Horizont blinkt rot bei Erschütterung'**
+  String get dashImpactHint;
+
+  /// No description provided for @settingsResetTitle.
+  ///
+  /// In de, this message translates to:
+  /// **'Auf Werkseinstellungen zurücksetzen?'**
+  String get settingsResetTitle;
+
+  /// No description provided for @settingsResetBody.
+  ///
+  /// In de, this message translates to:
+  /// **'Alle Einstellungen werden auf die Standardwerte zurückgesetzt. Dieser Vorgang kann nicht rückgängig gemacht werden.'**
+  String get settingsResetBody;
+
+  /// No description provided for @settingsResetDone.
+  ///
+  /// In de, this message translates to:
+  /// **'Einstellungen zurückgesetzt'**
+  String get settingsResetDone;
+
+  /// No description provided for @settingsResetHeader.
+  ///
+  /// In de, this message translates to:
+  /// **'Zurücksetzen'**
+  String get settingsResetHeader;
+
+  /// No description provided for @settingsResetDesc.
+  ///
+  /// In de, this message translates to:
+  /// **'Alle Einstellungen auf Standardwerte zurücksetzen.'**
+  String get settingsResetDesc;
+
+  /// No description provided for @settingsResetting.
+  ///
+  /// In de, this message translates to:
+  /// **'Setzt zurück…'**
+  String get settingsResetting;
+
+  /// No description provided for @settingsFactoryReset.
+  ///
+  /// In de, this message translates to:
+  /// **'Auf Werkseinstellungen zurücksetzen'**
+  String get settingsFactoryReset;
+
+  /// No description provided for @mapDeletePermanent.
+  ///
+  /// In de, this message translates to:
+  /// **'Karte wird dauerhaft entfernt.'**
+  String get mapDeletePermanent;
+
+  /// No description provided for @errorWith.
+  ///
+  /// In de, this message translates to:
+  /// **'Fehler: {msg}'**
+  String errorWith(String msg);
+
+  /// No description provided for @settingsJobImported.
+  ///
+  /// In de, this message translates to:
+  /// **'{imported} importiert, {updated} aktualisiert'**
+  String settingsJobImported(String imported, String updated);
+
+  /// No description provided for @settingsJobEnriched.
+  ///
+  /// In de, this message translates to:
+  /// **'{enriched} angereichert — VHF: {coverage}'**
+  String settingsJobEnriched(String enriched, String coverage);
+
+  /// No description provided for @settingsJobQuality.
+  ///
+  /// In de, this message translates to:
+  /// **'Gesamt: {total} Schleusen\nVHF: {vhf}/{total} ({pct})\nTelefon: {phone}/{total}\nAbmessungen: {dim}/{total}'**
+  String settingsJobQuality(
+    String total,
+    String vhf,
+    String pct,
+    String phone,
+    String dim,
+  );
+
+  /// No description provided for @settingsJobSuccess.
+  ///
+  /// In de, this message translates to:
+  /// **'Erfolgreich'**
+  String get settingsJobSuccess;
+
+  /// No description provided for @settingsError.
+  ///
+  /// In de, this message translates to:
+  /// **'Fehler'**
+  String get settingsError;
+
+  /// No description provided for @settingsJobFailed.
+  ///
+  /// In de, this message translates to:
+  /// **'{label}: Fehler — {e}'**
+  String settingsJobFailed(String label, String e);
+
+  /// No description provided for @commonAll.
+  ///
+  /// In de, this message translates to:
+  /// **'Alle'**
+  String get commonAll;
+
+  /// No description provided for @commonNone.
+  ///
+  /// In de, this message translates to:
+  /// **'Keine'**
+  String get commonNone;
+
+  /// No description provided for @commonManual.
+  ///
+  /// In de, this message translates to:
+  /// **'Manuell'**
+  String get commonManual;
+
+  /// No description provided for @commonRefresh.
+  ///
+  /// In de, this message translates to:
+  /// **'Aktualisieren'**
+  String get commonRefresh;
+
+  /// No description provided for @commonReload.
+  ///
+  /// In de, this message translates to:
+  /// **'Neu laden'**
+  String get commonReload;
+
+  /// No description provided for @commonHide.
+  ///
+  /// In de, this message translates to:
+  /// **'Ausblenden'**
+  String get commonHide;
+
+  /// No description provided for @unitKnots.
+  ///
+  /// In de, this message translates to:
+  /// **'Knoten'**
+  String get unitKnots;
+
+  /// No description provided for @boatType.
+  ///
+  /// In de, this message translates to:
+  /// **'Typ'**
+  String get boatType;
+
+  /// No description provided for @settingsShowIENC.
+  ///
+  /// In de, this message translates to:
+  /// **'Amtliche Karten (IENC)'**
+  String get settingsShowIENC;
+
+  /// No description provided for @settingsSuccessLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'{label} erfolgreich'**
+  String settingsSuccessLabel(String label);
+
+  /// No description provided for @settingsFailedLabel.
+  ///
+  /// In de, this message translates to:
+  /// **'{label} fehlgeschlagen ({code})'**
+  String settingsFailedLabel(String label, String code);
+
+  /// No description provided for @settingsUpdateChannel.
+  ///
+  /// In de, this message translates to:
+  /// **'Update-Kanal'**
+  String get settingsUpdateChannel;
+
+  /// No description provided for @settingsBetaDesc.
+  ///
+  /// In de, this message translates to:
+  /// **'Beta liefert Vorabversionen (rc) zum Testen — kann instabil sein.'**
+  String get settingsBetaDesc;
+
+  /// No description provided for @settingsUpdateStarting.
+  ///
+  /// In de, this message translates to:
+  /// **'[System] Update wird gestartet…'**
+  String get settingsUpdateStarting;
+
+  /// No description provided for @settingsShutdown.
+  ///
+  /// In de, this message translates to:
+  /// **'Herunterfahren'**
+  String get settingsShutdown;
+
+  /// No description provided for @settingsStartJobQ.
+  ///
+  /// In de, this message translates to:
+  /// **'Vorgang starten?'**
+  String get settingsStartJobQ;
+
+  /// No description provided for @settingsStarting.
+  ///
+  /// In de, this message translates to:
+  /// **'Starte…'**
+  String get settingsStarting;
+
+  /// No description provided for @settingsDownloadNotStarted.
+  ///
+  /// In de, this message translates to:
+  /// **'Download konnte nicht gestartet werden.'**
+  String get settingsDownloadNotStarted;
+
+  /// No description provided for @settingsDownloadFailed.
+  ///
+  /// In de, this message translates to:
+  /// **'Download fehlgeschlagen: {e}'**
+  String settingsDownloadFailed(String e);
+
+  /// No description provided for @settingsConverting.
+  ///
+  /// In de, this message translates to:
+  /// **'Konvertiere…'**
+  String get settingsConverting;
+
+  /// No description provided for @settingsCells.
+  ///
+  /// In de, this message translates to:
+  /// **'{files} Zellen'**
+  String settingsCells(String files);
+
+  /// No description provided for @settingsUsable.
+  ///
+  /// In de, this message translates to:
+  /// **'aktiv nutzbar'**
+  String get settingsUsable;
+
+  /// No description provided for @settingsNotConverted.
+  ///
+  /// In de, this message translates to:
+  /// **'nicht konvertiert'**
+  String get settingsNotConverted;
+
+  /// No description provided for @settingsErrorCode.
+  ///
+  /// In de, this message translates to:
+  /// **'Fehler {code}'**
+  String settingsErrorCode(String code);
+
+  /// No description provided for @settingsErrorCodeP.
+  ///
+  /// In de, this message translates to:
+  /// **'Fehler ({code})'**
+  String settingsErrorCodeP(String code);
+
+  /// No description provided for @settingsRemoveTopicQ.
+  ///
+  /// In de, this message translates to:
+  /// **'Topic \"{topic}\" wirklich entfernen?'**
+  String settingsRemoveTopicQ(String topic);
+
+  /// No description provided for @settingsLayoutSaved.
+  ///
+  /// In de, this message translates to:
+  /// **'Layout gespeichert'**
+  String get settingsLayoutSaved;
+
+  /// No description provided for @settingsDashEditor.
+  ///
+  /// In de, this message translates to:
+  /// **'Dashboard-Editor'**
+  String get settingsDashEditor;
+
+  /// No description provided for @settingsVisual.
+  ///
+  /// In de, this message translates to:
+  /// **'Visuell'**
+  String get settingsVisual;
+
+  /// No description provided for @settingsDslCode.
+  ///
+  /// In de, this message translates to:
+  /// **'DSL-Code'**
+  String get settingsDslCode;
+
+  /// No description provided for @settingsSensors.
+  ///
+  /// In de, this message translates to:
+  /// **'Sensoren'**
+  String get settingsSensors;
+
+  /// No description provided for @settingsRowN.
+  ///
+  /// In de, this message translates to:
+  /// **'Zeile {n}'**
+  String settingsRowN(String n);
+
+  /// No description provided for @settingsNoLayout.
+  ///
+  /// In de, this message translates to:
+  /// **'Kein Layout'**
+  String get settingsNoLayout;
+
+  /// No description provided for @settingsTemplateCaps.
+  ///
+  /// In de, this message translates to:
+  /// **'VORLAGE'**
+  String get settingsTemplateCaps;
+
+  /// No description provided for @layout3Cols.
+  ///
+  /// In de, this message translates to:
+  /// **'3 Spalten'**
+  String get layout3Cols;
+
+  /// No description provided for @layoutHeroTop.
+  ///
+  /// In de, this message translates to:
+  /// **'Hero O'**
+  String get layoutHeroTop;
+
+  /// No description provided for @layoutHeroBottom.
+  ///
+  /// In de, this message translates to:
+  /// **'Hero U'**
+  String get layoutHeroBottom;
+
+  /// No description provided for @layoutMosaic4.
+  ///
+  /// In de, this message translates to:
+  /// **'Mosaik 4'**
+  String get layoutMosaic4;
+
+  /// No description provided for @layoutMosaic5.
+  ///
+  /// In de, this message translates to:
+  /// **'Mosaik 5'**
+  String get layoutMosaic5;
+
+  /// No description provided for @settingsUntitled.
+  ///
+  /// In de, this message translates to:
+  /// **'(ohne Titel)'**
+  String get settingsUntitled;
+
+  /// No description provided for @settingsNoSensorsFound.
+  ///
+  /// In de, this message translates to:
+  /// **'Keine Sensoren gefunden.'**
+  String get settingsNoSensorsFound;
+
+  /// No description provided for @settingsNoSensorsLoaded.
+  ///
+  /// In de, this message translates to:
+  /// **'Keine Sensoren geladen.'**
+  String get settingsNoSensorsLoaded;
+
+  /// No description provided for @widgetCompass.
+  ///
+  /// In de, this message translates to:
+  /// **'Kompass'**
+  String get widgetCompass;
+
+  /// No description provided for @settingsUnit.
+  ///
+  /// In de, this message translates to:
+  /// **'Einheit'**
+  String get settingsUnit;
+
+  /// No description provided for @settingsDecimals.
+  ///
+  /// In de, this message translates to:
+  /// **'Dezimalstellen'**
+  String get settingsDecimals;
+
+  /// No description provided for @settingsRollTopic.
+  ///
+  /// In de, this message translates to:
+  /// **'Roll-Topic'**
+  String get settingsRollTopic;
+
+  /// No description provided for @settingsPitchTopic.
+  ///
+  /// In de, this message translates to:
+  /// **'Pitch-Topic'**
+  String get settingsPitchTopic;
+
+  /// No description provided for @settingsImpactTopic.
+  ///
+  /// In de, this message translates to:
+  /// **'Impact-Topic'**
+  String get settingsImpactTopic;
+
+  /// No description provided for @settingsImpactAlarm.
+  ///
+  /// In de, this message translates to:
+  /// **'Impact-Alarm'**
+  String get settingsImpactAlarm;
+
+  /// No description provided for @settingsWidthCols.
+  ///
+  /// In de, this message translates to:
+  /// **'Breite (Spalten)'**
+  String get settingsWidthCols;
+
+  /// No description provided for @settingsExportError.
+  ///
+  /// In de, this message translates to:
+  /// **'Fehler beim Exportieren'**
+  String get settingsExportError;
+
+  /// No description provided for @settingsExportSettings.
+  ///
+  /// In de, this message translates to:
+  /// **'Einstellungen exportieren'**
+  String get settingsExportSettings;
+
+  /// No description provided for @settingsExportDesc.
+  ///
+  /// In de, this message translates to:
+  /// **'Aktuelle Konfiguration als JSON anzeigen.'**
+  String get settingsExportDesc;
+
+  /// No description provided for @settingsShowJson.
+  ///
+  /// In de, this message translates to:
+  /// **'JSON anzeigen'**
+  String get settingsShowJson;
+
+  /// No description provided for @settingsStable.
+  ///
+  /// In de, this message translates to:
+  /// **'Stabil'**
+  String get settingsStable;
+
+  /// No description provided for @layoutFull.
+  ///
+  /// In de, this message translates to:
+  /// **'Vollbild'**
+  String get layoutFull;
+
+  /// No description provided for @commonLoad.
+  ///
+  /// In de, this message translates to:
+  /// **'Laden'**
+  String get commonLoad;
+
+  /// No description provided for @commonSearch.
+  ///
+  /// In de, this message translates to:
+  /// **'Suchen…'**
+  String get commonSearch;
+
+  /// No description provided for @wifiForgetQ.
+  ///
+  /// In de, this message translates to:
+  /// **'\"{ssid}\" vergessen?'**
+  String wifiForgetQ(String ssid);
+
+  /// No description provided for @wifiRestartAdapter.
+  ///
+  /// In de, this message translates to:
+  /// **'Adapter neu starten'**
+  String get wifiRestartAdapter;
+
+  /// No description provided for @wifiStop.
+  ///
+  /// In de, this message translates to:
+  /// **'Stoppen'**
+  String get wifiStop;
+
+  /// No description provided for @wifiEnterPassword.
+  ///
+  /// In de, this message translates to:
+  /// **'Passwort eingeben…'**
+  String get wifiEnterPassword;
+
+  /// No description provided for @attitudeTitle.
+  ///
+  /// In de, this message translates to:
+  /// **'Lage'**
+  String get attitudeTitle;
+
+  /// No description provided for @compassDesc.
+  ///
+  /// In de, this message translates to:
+  /// **'Navi-Instrument: SOG/COG, Fahrrinnen-Tiefe (+ Vorausschau-Warnung), Pegel, Strömung. Keine weiteren Einstellungen nötig.'**
+  String get compassDesc;
+
+  /// No description provided for @compassDeepChannel.
+  ///
+  /// In de, this message translates to:
+  /// **'Tiefe Rinne'**
+  String get compassDeepChannel;
+
+  /// No description provided for @compassShallowAhead.
+  ///
+  /// In de, this message translates to:
+  /// **'⚠ flach in {dist} m'**
+  String compassShallowAhead(String dist);
+
+  /// No description provided for @compassGauge.
+  ///
+  /// In de, this message translates to:
+  /// **'Pegel ({name})'**
+  String compassGauge(String name);
+
+  /// No description provided for @compassGaugeShort.
+  ///
+  /// In de, this message translates to:
+  /// **'Pegel'**
+  String get compassGaugeShort;
+
+  /// No description provided for @compassEcho.
+  ///
+  /// In de, this message translates to:
+  /// **'Echolot'**
+  String get compassEcho;
+
+  /// No description provided for @compassCurrent.
+  ///
+  /// In de, this message translates to:
+  /// **'Strömung'**
+  String get compassCurrent;
+
+  /// No description provided for @widgetStyle.
+  ///
+  /// In de, this message translates to:
+  /// **'Stil'**
+  String get widgetStyle;
+
+  /// No description provided for @widgetShownValues.
+  ///
+  /// In de, this message translates to:
+  /// **'Angezeigte Werte'**
+  String get widgetShownValues;
+
+  /// No description provided for @widgetDisplayName.
+  ///
+  /// In de, this message translates to:
+  /// **'Anzeigename'**
+  String get widgetDisplayName;
+
+  /// No description provided for @widgetDisplayNameTitle.
+  ///
+  /// In de, this message translates to:
+  /// **'Anzeigename (Titel)'**
+  String get widgetDisplayNameTitle;
+
+  /// No description provided for @clockDesc.
+  ///
+  /// In de, this message translates to:
+  /// **'Zeigt Systemzeit und Datum an.'**
+  String get clockDesc;
+
+  /// No description provided for @spacerDesc.
+  ///
+  /// In de, this message translates to:
+  /// **'Unsichtbarer Platzhalter. Nur Größe relevant.'**
+  String get spacerDesc;
+
+  /// No description provided for @favCategoryOther.
+  ///
+  /// In de, this message translates to:
+  /// **'Sonstiges'**
+  String get favCategoryOther;
 }
 
 class _AppLocalizationsDelegate

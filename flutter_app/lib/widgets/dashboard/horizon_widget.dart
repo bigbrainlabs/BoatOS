@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import '../gauge_widget.dart' show HorizonWidget;
 import 'dash_widget.dart';
+import '../../l10n/l10n_ext.dart';
 import 'registry.dart';
 
 class HorizonDashWidget {
@@ -142,11 +143,11 @@ class _HorizonEditorFields extends StatelessWidget {
         );
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _lbl('Roll-Topic'),
+      _lbl(context.l10n.settingsRollTopic),
       const SizedBox(height: 6),
       pathDrop('roll', rollFull, 'Roll-Topic wählen…'),
       const SizedBox(height: 14),
-      _lbl('Pitch-Topic'),
+      _lbl(context.l10n.settingsPitchTopic),
       const SizedBox(height: 6),
       pathDrop('pitch', pitchFull, 'Pitch-Topic wählen…'),
       const SizedBox(height: 14),
@@ -159,10 +160,10 @@ class _HorizonEditorFields extends StatelessWidget {
         child: SwitchListTile(
           dense: true,
           activeColor: const Color(0xFF4FC3F7),
-          title: const Text('Impact-Alarm',
+          title: Text(context.l10n.settingsImpactAlarm,
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
                   color: Color(0xFFE6EDF3))),
-          subtitle: const Text('Horizont blinkt rot bei Erschütterung',
+          subtitle: Text(context.l10n.dashImpactHint,
               style: TextStyle(fontSize: 11, color: Color(0xFF8B949E))),
           value: w.impactSensor != null,
           onChanged: (on) => setState(() {
@@ -173,7 +174,7 @@ class _HorizonEditorFields extends StatelessWidget {
       ),
       if (w.impactSensor != null) ...[
         const SizedBox(height: 10),
-        _lbl('Impact-Topic'),
+        _lbl(context.l10n.settingsImpactTopic),
         const SizedBox(height: 6),
         pathDrop('impact', impactFull, 'Impact-Topic wählen…'),
       ],
