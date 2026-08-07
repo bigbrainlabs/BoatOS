@@ -349,6 +349,19 @@ sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t || error "Nginx-Konfiguration fehlerhaft"
 success "Nginx konfiguriert"
 
+# ── Helm-Touchscreen-Erkennung (headless-safe) ─────────────────────────────
+# Helm (flutter-pi via lightdm) startet nur, wenn ein Touchscreen erkannt wird.
+# Ohne Touchscreen — headless oder reiner HDMI-Monitor ohne Touch — bleibt Helm
+# aus. Der lightdm-Drop-in ist harmlos, falls lightdm erst beim Helm-Setup dazukommt.
+info "Richte Helm-Touchscreen-Erkennung ein..."
+sudo install -m 755 "$INSTALL_DIR/scripts/boatos-detect-display.sh" /usr/local/bin/boatos-detect-display.sh
+sudo install -m 644 "$INSTALL_DIR/scripts/boatos-detect-display.service" /etc/systemd/system/boatos-detect-display.service
+sudo mkdir -p /etc/systemd/system/lightdm.service.d
+sudo install -m 644 "$INSTALL_DIR/scripts/lightdm-helm-condition.conf" /etc/systemd/system/lightdm.service.d/helm-condition.conf
+sudo systemctl daemon-reload
+sudo systemctl enable boatos-detect-display
+success "Helm-Touchscreen-Erkennung eingerichtet (Helm startet nur mit Touchscreen)"
+
 # ── 13. Services starten ───────────────────────────────────────────────────
 info "Starte Services..."
 sudo systemctl start mosquitto

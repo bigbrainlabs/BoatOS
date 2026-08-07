@@ -1,8 +1,9 @@
 [Unit]
-Description=BoatOS Display Detection
+Description=BoatOS Touchscreen Detection (headless-safe Helm gate)
 DefaultDependencies=no
 Before=lightdm.service
-After=local-fs.target
+After=local-fs.target systemd-udevd.service
+Wants=systemd-udevd.service
 
 [Service]
 Type=oneshot
