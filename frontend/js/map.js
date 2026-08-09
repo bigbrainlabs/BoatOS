@@ -1609,11 +1609,15 @@ export function toggleMap3D(active) {
         const following = autoFollow;
         if (active) {
             _zoomBefore3D = map.getZoom();
+            // 3D-Look-ahead ist IMMER Kurs-oben — unabhaengig vom Follow-Zustand.
+            // Sonst dreht Head-Up beim Fahren NICHT, wenn 3D beim Laden aus
+            // localStorage restauriert wurde (autoFollow noch false) und der Nutzer
+            // erst danach zu folgen beginnt (centerOnBoat/Sim setzt courseUpMode nicht).
+            _courseUpBefore3D = courseUpMode;
+            courseUpMode = true;
+            _updateCourseUpButton();
             const opts = { pitch: _pitch3D, duration: 600 };
             if (following) {
-                _courseUpBefore3D = courseUpMode;
-                courseUpMode = true;            // Look-ahead braucht Kurs oben
-                _updateCourseUpButton();
                 updateFollowButton(true);
                 const h = (map.getContainer() && map.getContainer().clientHeight) || 600;
                 opts.zoom = Math.min(20, Math.max(_zoomBefore3D, _zoom3dTarget()));
@@ -1631,10 +1635,12 @@ export function toggleMap3D(active) {
             _beginCameraTransition(opts.duration);
             map.easeTo(opts);
         } else {
+            // Kurs-oben-Zustand von vor dem 3D-Wechsel wiederherstellen — symmetrisch
+            // zum Erzwingen beim Aktivieren, ebenfalls follow-unabhaengig.
+            courseUpMode = _courseUpBefore3D;
+            _updateCourseUpButton();
             const opts = { pitch: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 600 };
             if (following) {
-                courseUpMode = _courseUpBefore3D;
-                _updateCourseUpButton();
                 if (_zoomBefore3D != null) opts.zoom = _zoomBefore3D;
                 if (!courseUpMode) { opts.bearing = 0; _smoothHeading = null; }
                 if (_dispLat != null && _dispLon != null) opts.center = [_dispLon, _dispLat];
