@@ -335,6 +335,7 @@ class _MapScreenState extends State<MapScreen> {
   double _simSegFraction = 0.0;
   LatLng? _simSavedPos;
   Timer? _simTimer;
+  DateTime _simLastGpsPost = DateTime.fromMillisecondsSinceEpoch(0);
 
   // ── Saved routes ─────────────────────────────────────────────────────────
   bool _showSavedRoutes = false;
@@ -1284,6 +1285,18 @@ class _MapScreenState extends State<MapScreen> {
       }
       _simSavedPos = null;
     });
+
+    // Sim-GPS-Override im Backend aufheben → zurück zu echtem GPS. Zweimal mit
+    // Abstand: der letzte Sim-POST (bis 500 ms alt) kann das disable ueberholen,
+    // sonst broadcastet das Backend ewig die letzte Sim-Position (wie in Deck).
+    void disableSimGps() {
+      http
+          .post(Uri.parse('$_apiBase/api/gps/external/disable'))
+          .then((_) {})
+          .catchError((_) {});
+    }
+    disableSimGps();
+    Future.delayed(const Duration(milliseconds: 900), disableSimGps);
   }
 
   void _simTick(Timer t) {
@@ -1338,6 +1351,31 @@ class _MapScreenState extends State<MapScreen> {
       _simSegFraction = frac;
       _lastBoatPos = simPos;
     });
+
+    // Sim-Position (throttled) ans Backend broadcasten — wie die Deck-Sim. Das
+    // Backend verteilt sie per WebSocket an ALLE Clients (auch an Helm selbst),
+    // sodass WebSocketService.gps die Fahrt bekommt und das Navi-Instrument
+    // (Compass) Kurs, Pegel und die Fahrrinnentiefe voraus in Echtzeit anzeigt.
+    // Ohne das bliebe gps auf echtem/leerem GPS und das Widget leer.
+    final nowMs = DateTime.now();
+    if (nowMs.difference(_simLastGpsPost).inMilliseconds > 500) {
+      _simLastGpsPost = nowMs;
+      final headingDeg = _bearingDeg(from.latitude, from.longitude, to.latitude, to.longitude);
+      final speedKn = _simSpeed * 10.0; // Zeitraffer-SOG wie Deck (Basis ×10)
+      http
+          .post(
+            Uri.parse('$_apiBase/api/gps/external'),
+            headers: const {'Content-Type': 'application/json'},
+            body: json.encode({
+              'lat': simPos.latitude,
+              'lon': simPos.longitude,
+              'speed': speedKn,
+              'heading': headingDeg,
+            }),
+          )
+          .then((_) {})
+          .catchError((_) {});
+    }
 
     if (_navActive) {
       _updateNavigation(simPos.latitude, simPos.longitude);
