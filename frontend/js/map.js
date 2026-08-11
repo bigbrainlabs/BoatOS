@@ -245,6 +245,13 @@ function _animateBoatMarker(ts) {
                 // Head-up: Fahrtrichtung nach oben → bearing = +heading (geglättet)
                 jt.bearing = _updateSmoothedHeading(currentBoatHeading);
             }
+            if (perspective3D) {
+                // Boot in die untere Bildhälfte (mehr Fahrrinne voraus). Muss HIER
+                // pro Tick gesetzt werden — das Padding vom 3D-Einstieg überlebt die
+                // Follow-jumpTo sonst nicht, und das Boot bliebe mittig.
+                const ph = (map.getContainer() && map.getContainer().clientHeight) || 600;
+                jt.padding = { top: Math.round(ph * 0.60), bottom: 0, left: 0, right: 0 };
+            }
             map.jumpTo(jt);
             boatMarker.setLngLat([_dispLon, _dispLat]);
             if (perspective3D) _updateBoat3dMarker(_dispLon, _dispLat, currentBoatHeading);
@@ -1611,7 +1618,14 @@ function _set2dOverlaysHidden(hidden) {
 // riesig. Anhand der kleineren Viewport-Kante: Handy < 500, Pi/Tablet darüber.
 function _boat3dSizePx() {
     const small = Math.min(window.innerWidth, window.innerHeight) < 500;
-    return small ? { w: 40, h: 88 } : { w: 60, h: 132 };  // klein = 1/3 kleiner
+    // Breite skaliert mit dem Zoom, damit die Silhouette am Wasser „klebt" und
+    // beim Rauszoomen nicht relativ zur schrumpfenden Karte größer wirkt.
+    // Referenz z15 ≈ 60 px, sanfter als die echte Kartenskalierung (×2/Stufe).
+    const z = (map && map.getZoom) ? map.getZoom() : 15;
+    let w = 30 * Math.pow(1.38, z - 15);
+    w = Math.max(15, Math.min(60, w));
+    if (small) w *= 2 / 3;                 // Handy: 1/3 kleiner
+    return { w, h: w * 2.2 };              // Seitenverhältnis 60:132
 }
 
 function _applyBoat3dSize() {
@@ -1660,6 +1674,7 @@ function _setupBoat3dMarker() {
     boat3dEl.style.display = 'none';   // nur in 3D sichtbar
     _applyBoat3dSize();
     window.addEventListener('resize', _applyBoat3dSize);
+    map.on('zoom', _applyBoat3dSize);   // mit dem Zoom mitskalieren (klebt am Wasser)
     const ll = (boatMarker && boatMarker.getLngLat) ? boatMarker.getLngLat() : null;
     const lon = ll ? ll.lng : (window.currentPosition?.lon ?? 12.046);
     const lat = ll ? ll.lat : (window.currentPosition?.lat ?? 51.855);
@@ -1715,7 +1730,7 @@ export function toggleMap3D(active) {
                 updateFollowButton(true);
                 const h = (map.getContainer() && map.getContainer().clientHeight) || 600;
                 opts.zoom = Math.min(20, Math.max(_zoomBefore3D, _zoom3dTarget()));
-                opts.padding = { top: Math.round(h * 0.45), bottom: 0, left: 0, right: 0 };
+                opts.padding = { top: Math.round(h * 0.60), bottom: 0, left: 0, right: 0 };
                 if (currentBoatHeading) opts.bearing = _updateSmoothedHeading(currentBoatHeading);
                 // Boot mitnehmen: waehrend der Kamerafahrt pausiert Follow (siehe
                 // _beginCameraTransition), sonst wuerde die Fahrt sofort abgebrochen.
