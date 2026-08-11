@@ -29,6 +29,8 @@ export { toggleIENCLayer, isIENCVisible };
 let map = null;
 let boatMarker = null;
 let boatMarkerElement = null;
+let boat3dMarker = null;      // pitch-aligned Bootssilhouette für die 3D-Ansicht
+let boat3dEl = null;
 
 /**
  * Haelt den Boot-Marker an seiner Stelle fest, obwohl GPS weiterlaeuft.
@@ -245,6 +247,7 @@ function _animateBoatMarker(ts) {
             }
             map.jumpTo(jt);
             boatMarker.setLngLat([_dispLon, _dispLat]);
+            if (perspective3D) _updateBoat3dMarker(_dispLon, _dispLat, currentBoatHeading);
             _lastMapFollow = ts;
             if (courseUpMode && currentBoatHeading !== 0 && boatMarkerElement) {
                 boatMarkerElement.style.transform = `rotate(${currentBoatHeading - map.getBearing()}deg)`;
@@ -252,6 +255,7 @@ function _animateBoatMarker(ts) {
         }
     } else {
         boatMarker.setLngLat([_dispLon, _dispLat]);   // ohne Follow: Marker frei, voll flüssig
+        if (perspective3D) _updateBoat3dMarker(_dispLon, _dispLat, currentBoatHeading);
     }
 
     if (t < 1) {
@@ -681,6 +685,7 @@ export async function initMap(options = {}) {
         }
 
         initMapMarkers();
+        _setupBoat3dMarker();   // Boot-Silhouette (pitch-aligned Marker) für die 3D-Ansicht
 
         // Periodisch prüfen ob Tileserver wieder verfügbar (z.B. nach Backend-Restart)
         // Nur wenn aktuell im Fallback-Modus. Stoppt automatisch wenn wieder online.
@@ -1062,6 +1067,7 @@ export function setBoatPositionImmediate(lat, lon, heading) {
 
     window.currentPosition = { lat, lon };   // bewusst OHNE addToTrackHistory()
     boatMarker.setLngLat([lon, lat]);
+    if (perspective3D) _updateBoat3dMarker(lon, lat, typeof heading === 'number' ? heading : currentBoatHeading);
 
     if (typeof heading === 'number') {
         currentBoatHeading = heading;
@@ -1592,6 +1598,78 @@ function _set2dOverlaysHidden(hidden) {
     }
 }
 
+// ── Boot-Silhouette für die 3D-Ansicht ──────────────────────────────────────
+// Ein maplibregl.Marker mit pitchAlignment:'map' + rotationAlignment:'map': die
+// Silhouette liegt geneigt auf der Kartenebene (kippt mit der Perspektive) und
+// zeigt via setRotation(heading) mit dem Bug in Fahrtrichtung. Warum Marker und
+// nicht ein GeoJSON-Symbol: dessen setData greift erst im NÄCHSTEN Frame, während
+// map.jumpTo sofort rendert → die Silhouette hinkt der Karte einen Frame hinterher
+// und zappelt sichtbar vor/zurück. Ein Marker reprojiziert synchron mit der Kamera
+// → glatt, und überlebt zudem Basiskarten-Wechsel (kein Re-Add nötig). Nur in 3D
+// sichtbar; der flache DOM-Emoji-Marker wird dort ausgeblendet.
+function _makeBoat3dEl() {
+    const r = 3, w = 60, h = 132;      // logische Bildschirmgröße; r = Zeichenauflösung
+    const c = document.createElement('canvas');
+    c.width = w * r; c.height = h * r;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    c.style.pointerEvents = 'none';
+    const x = c.getContext('2d');
+    x.scale(r, r);
+    // Rumpf, Bug oben (0° = Norden; setRotation dreht auf den Kurs)
+    x.beginPath();
+    x.moveTo(w * 0.50, h * 0.02);
+    x.bezierCurveTo(w * 0.93, h * 0.20, w * 0.90, h * 0.55, w * 0.83, h * 0.82);
+    x.quadraticCurveTo(w * 0.80, h * 0.98, w * 0.50, h * 0.98);
+    x.quadraticCurveTo(w * 0.20, h * 0.98, w * 0.17, h * 0.82);
+    x.bezierCurveTo(w * 0.10, h * 0.55, w * 0.07, h * 0.20, w * 0.50, h * 0.02);
+    x.closePath();
+    x.fillStyle = 'rgba(255,255,255,0.96)';
+    x.fill();
+    x.lineWidth = 2;
+    x.strokeStyle = '#12212e';
+    x.stroke();
+    // Cockpit/Windschild Richtung Bug → Fahrtrichtung klar erkennbar
+    x.beginPath();
+    x.moveTo(w * 0.50, h * 0.28);
+    x.lineTo(w * 0.66, h * 0.44);
+    x.lineTo(w * 0.60, h * 0.58);
+    x.lineTo(w * 0.40, h * 0.58);
+    x.lineTo(w * 0.34, h * 0.44);
+    x.closePath();
+    x.fillStyle = '#2f7fb8';
+    x.fill();
+    return c;
+}
+
+function _setupBoat3dMarker() {
+    if (!map || boat3dMarker) return;
+    boat3dEl = _makeBoat3dEl();
+    boat3dEl.style.display = 'none';   // nur in 3D sichtbar
+    const ll = (boatMarker && boatMarker.getLngLat) ? boatMarker.getLngLat() : null;
+    const lon = ll ? ll.lng : (window.currentPosition?.lon ?? 12.046);
+    const lat = ll ? ll.lat : (window.currentPosition?.lat ?? 51.855);
+    boat3dMarker = new maplibregl.Marker({
+        element: boat3dEl, anchor: 'center',
+        pitchAlignment: 'map', rotationAlignment: 'map',
+    }).setLngLat([lon, lat]).setRotation(currentBoatHeading || 0).addTo(map);
+}
+
+function _updateBoat3dMarker(lon, lat, heading) {
+    if (!boat3dMarker || lon == null || lat == null) return;
+    boat3dMarker.setLngLat([lon, lat]);
+    if (typeof heading === 'number') boat3dMarker.setRotation(heading);
+}
+
+function _setBoat3dVisible(on) {
+    if (boat3dEl) boat3dEl.style.display = on ? '' : 'none';
+    // In 3D übernimmt die Silhouette — den flachen DOM-Emoji ausblenden.
+    if (boatMarkerElement) boatMarkerElement.style.display = on ? 'none' : '';
+    if (on && boat3dMarker) {
+        const ll = (boatMarker && boatMarker.getLngLat) ? boatMarker.getLngLat() : null;
+        if (ll) { boat3dMarker.setLngLat(ll); boat3dMarker.setRotation(currentBoatHeading || 0); }
+    }
+}
+
 // 3D-/Look-ahead-Perspektive: Karte gekippt + head-up + Boot in die untere
 // Bildhälfte (mehr Fahrrinne voraus sichtbar), auf den bestehenden IENC-Daten.
 export function toggleMap3D(active) {
@@ -1599,6 +1677,7 @@ export function toggleMap3D(active) {
     perspective3D = active;
     if (window.BoatOS3D) window.BoatOS3D.setActive(active);  // echte 3D-Seezeichen ein/aus
     _set2dOverlaysHidden(active);   // flache 2D-Overlays in 3D ausblenden, in 2D zurueck
+    _setBoat3dVisible(active);       // Bootssilhouette in 3D ein / DOM-Emoji aus (in 2D umgekehrt)
 
     if (map) {
         // Dem Boot folgt die Kamera beim Moduswechsel NUR, wenn der Nutzer es
