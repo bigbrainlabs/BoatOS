@@ -1607,11 +1607,24 @@ function _set2dOverlaysHidden(hidden) {
 // und zappelt sichtbar vor/zurück. Ein Marker reprojiziert synchron mit der Kamera
 // → glatt, und überlebt zudem Basiskarten-Wechsel (kein Re-Add nötig). Nur in 3D
 // sichtbar; der flache DOM-Emoji-Marker wird dort ausgeblendet.
+// Kleinere Silhouette auf schmalen Bildschirmen (Handy) — sonst wirkt sie dort
+// riesig. Anhand der kleineren Viewport-Kante: Handy < 500, Pi/Tablet darüber.
+function _boat3dSizePx() {
+    const small = Math.min(window.innerWidth, window.innerHeight) < 500;
+    return small ? { w: 40, h: 88 } : { w: 60, h: 132 };  // klein = 1/3 kleiner
+}
+
+function _applyBoat3dSize() {
+    if (!boat3dEl) return;
+    const s = _boat3dSizePx();
+    boat3dEl.style.width = s.w + 'px';
+    boat3dEl.style.height = s.h + 'px';   // anchor 'center' zentriert per translate(-50%) mit
+}
+
 function _makeBoat3dEl() {
-    const r = 3, w = 60, h = 132;      // logische Bildschirmgröße; r = Zeichenauflösung
+    const r = 3, w = 60, h = 132;      // Zeichen-Basis (immer groß → scharf beim Runterskalieren)
     const c = document.createElement('canvas');
     c.width = w * r; c.height = h * r;
-    c.style.width = w + 'px'; c.style.height = h + 'px';
     c.style.pointerEvents = 'none';
     const x = c.getContext('2d');
     x.scale(r, r);
@@ -1645,6 +1658,8 @@ function _setupBoat3dMarker() {
     if (!map || boat3dMarker) return;
     boat3dEl = _makeBoat3dEl();
     boat3dEl.style.display = 'none';   // nur in 3D sichtbar
+    _applyBoat3dSize();
+    window.addEventListener('resize', _applyBoat3dSize);
     const ll = (boatMarker && boatMarker.getLngLat) ? boatMarker.getLngLat() : null;
     const lon = ll ? ll.lng : (window.currentPosition?.lon ?? 12.046);
     const lat = ll ? ll.lat : (window.currentPosition?.lat ?? 51.855);
