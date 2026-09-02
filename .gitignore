@@ -86,6 +86,32 @@ tools/wlan.txt
 *.swp
 *.swo
 
+# Claude-Code-Artefakte im Repo-Root
+# (landeten dort bei der Profil-Migration 22.08.2026; .credentials.json enthaelt
+#  OAuth-Tokens und wird von der Regel "credentials.json" NICHT erfasst)
+.credentials.json
+.claude.json
+.claude.json.backup*
+.last-cleanup
+.last-update-result.json
+/history.jsonl
+/settings.json
+/settings.local.json
+/stats-cache.json
+/backups/
+/cache/
+/chrome/
+/context-mode/
+/debug/
+/downloads/
+/file-history/
+/paste-cache/
+/plugins/
+/projects/
+/session-env/
+/sessions/
+/shell-snapshots/
+
 # Temp files
 *.tmp
 .cache/
