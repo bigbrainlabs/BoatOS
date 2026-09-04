@@ -25,7 +25,7 @@ Ein vollständiges Marine-Navigationssystem für Binnenschifffahrt und Küstenna
 
 ### 💾 Fertig-Image — einfach flashen, sofort lossegeln
 
-**[⬇️ Download v1.7.0 (~7,5 GB)](https://archive.org/download/boatos-distri-image/boatos_v1.7.0.img.gz)**
+**[⬇️ Download v1.9.0 (~8,8 GB)](https://archive.org/download/boatos-distri-image/boatos_v1.9.0.img.gz)**
 
 *balenaEtcher oder Raspberry Pi Imager → ISO-Image auswählen → Flashen → fertig*
 
@@ -275,7 +275,7 @@ Beide UIs teilen dasselbe Backend und die gleiche REST/WebSocket-API.
 
 Das schnellste Setup — einfach flashen, fertig:
 
-1. **Image herunterladen** (v1.7.0): [boatos_v1.7.0.img.gz](https://archive.org/download/boatos-distri-image/boatos_v1.7.0.img.gz) (~7,5 GB)
+1. **Image herunterladen** (v1.9.0): [boatos_v1.9.0.img.gz](https://archive.org/download/boatos-distri-image/boatos_v1.9.0.img.gz) (~8,8 GB)
 2. **balenaEtcher** oder **Raspberry Pi Imager** öffnen → ISO-Image auswählen
 3. Flashen → Pi booten → Helm startet automatisch
 
@@ -478,7 +478,7 @@ mosquitto_pub -h <pi-ip> -t 'boot/sensoren/motor/drehzahl' -m '2500'
 
 ### 🚧 In Arbeit
 - Helm Feature-Parität mit Deck
-- ~~Verteilbares Pi-Image~~ ✅ [Fertig-Image verfügbar](https://archive.org/download/boatos-distri-image/boatos_v1.7.0.img.gz)
+- ~~Verteilbares Pi-Image~~ ✅ [Fertig-Image verfügbar](https://archive.org/download/boatos-distri-image/boatos_v1.9.0.img.gz)
 
 ### 🔮 Geplant
 - Anker-Alarm mit Geofencing
